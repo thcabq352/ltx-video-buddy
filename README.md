@@ -125,9 +125,9 @@ kimi ltx/
 
 ## Documentation
 
-- [White paper](kimi%20ltx/docs/WHITEPAPER.md) — architecture, quality loop, and design rationale
 - [Operator manual](kimi%20ltx/README.md) — full CLI/web/MCP reference and changelog
-- [Movie Builder guide](kimi%20ltx/workflows/260507_MICKMUMPITZ_MOVIE-BUILDER_GUIDE.md) — shot-by-shot film production
+- [Movie Builder guide](kimi%20ltx/workflows/260507_VIDEO-BUDDY_MOVIE-BUILDER_GUIDE.md) — shot-by-shot film production
+- White paper & investor materials — `docs/` (not published in this repo; available on request)
 
 ## Status
 

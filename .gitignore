@@ -49,3 +49,6 @@ Thumbs.db
 .idea/
 .vscode/
 *.log
+
+# Investor docs are local-only (not pushed)
+kimi ltx/docs/
