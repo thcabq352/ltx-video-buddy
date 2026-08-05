@@ -108,7 +108,7 @@ python -m master_agent ui --port 8189        # web studio
 
 Model weights (~450GB curated) are reproduced on any machine with
 `python state/download_models.py`. Full operator docs live in
-[`kimi ltx/README.md`](kimi%20ltx/README.md).
+[`kimi ltx/README.md`](video_buddy/README.md).
 
 ## Repository layout
 
@@ -125,8 +125,8 @@ kimi ltx/
 
 ## Documentation
 
-- [Operator manual](kimi%20ltx/README.md) — full CLI/web/MCP reference and changelog
-- [Movie Builder guide](kimi%20ltx/workflows/260507_VIDEO-BUDDY_MOVIE-BUILDER_GUIDE.md) — shot-by-shot film production
+- [Operator manual](video_buddy/README.md) — full CLI/web/MCP reference and changelog
+- [Movie Builder guide](video_buddy/workflows/260507_VIDEO-BUDDY_MOVIE-BUILDER_GUIDE.md) — shot-by-shot film production
 - White paper & investor materials — `docs/` (not published in this repo; available on request)
 
 ## Status
@@ -135,7 +135,7 @@ Actively developed. 16 API workflows validate clean against a live server;
 104 tests green. Latest milestone: **LTX 2.3 Movie Builder** — shot-by-shot
 film production with voice cloning and 360° environments — integrated,
 live-validated, and documented. See the
-[technical README](kimi%20ltx/README.md#status-2026-08-05) for the full
+[technical README](video_buddy/README.md#status-2026-08-05) for the full
 changelog.
 
 ## Legal & licensing

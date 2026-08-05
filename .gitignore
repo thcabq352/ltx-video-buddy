@@ -13,13 +13,13 @@ venv/
 .ruff_cache/
 
 # Agent / runtime state
-kimi ltx/state/*.sqlite
-kimi ltx/state/*.db
-kimi ltx/state/chroma/
-kimi ltx/state/tools/
-kimi ltx/state/uploads/
-kimi ltx/outputs/**
-!kimi ltx/outputs/.gitkeep
+video_buddy/state/*.sqlite
+video_buddy/state/*.db
+video_buddy/state/chroma/
+video_buddy/state/tools/
+video_buddy/state/uploads/
+video_buddy/outputs/**
+!video_buddy/outputs/.gitkeep
 
 # Large model weights (reproduced via state/download_models.py)
 **/*.safetensors
@@ -30,15 +30,15 @@ kimi ltx/outputs/**
 **/*.pth
 
 # Third-party / downloaded apps
-kimi ltx/ComfyUI_windows_portable/
-kimi ltx/ai-toolkit/
-kimi ltx/blender-*/
-kimi ltx/downloads/
+video_buddy/ComfyUI_windows_portable/
+video_buddy/ai-toolkit/
+video_buddy/blender-*/
+video_buddy/downloads/
 
 # Example media archives
-kimi ltx/workflows/AI-RENDERING-EXAMPLE FILES/
-kimi ltx/workflows/*.rar
-kimi ltx/workflows/*.zip
+video_buddy/workflows/AI-RENDERING-EXAMPLE FILES/
+video_buddy/workflows/*.rar
+video_buddy/workflows/*.zip
 
 # Partial downloads
 **/*.part
@@ -51,4 +51,4 @@ Thumbs.db
 *.log
 
 # Investor docs are local-only (not pushed)
-kimi ltx/docs/
+video_buddy/docs/
