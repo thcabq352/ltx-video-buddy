@@ -1,9 +1,13 @@
 """LLM panel — fan one prompt out to several providers, collect candidates.
 
-Local-only first (user pivot): the default panel is the local
-``qwen3.6-27b-fable``; ``duo`` adds gemma4 as a second local opinion.
-``kimi`` (OAuth), ``grok`` and ``claude`` remain available as custom
-members but are not in any default preset.
+Local-first (default): the local ``qwen3.6-27b-fable`` alone.
+Named presets:
+  - ``default`` / ``local`` — local only
+  - ``grok`` — Grok solo (cloud)
+  - ``both`` / ``panel`` / ``grok+local`` — Grok + local (judge picks)
+  - ``grok+claude`` — Grok + Claude (judge picks)
+  - ``duo`` — two local models (27B + gemma4), legacy
+Custom comma lists still work (``kimi``, ``claude``, ``ollama:<model>``, …).
 Unavailable or failing members are skipped with a log line, never fatal.
 """
 
@@ -26,9 +30,25 @@ from master_agent.llm import get_llm, provider_available
 
 def _presets() -> dict[str, str]:
     main = f"ollama:{OLLAMA_MODEL}"
+    grok_local = f"grok,{main}"
+    grok_claude = "grok,claude"
     return {
-        # local-only: the 27B fable model is the LLM
+        # local-first defaults
         "default": main,
+        "local": main,
+        # Grok solo (cloud)
+        "grok": "grok",
+        # Grok + local panel (judge picks)
+        "both": grok_local,
+        "panel": grok_local,
+        "grok+local": grok_local,
+        "grok-local": grok_local,
+        "grok_local": grok_local,
+        # Grok + Claude panel
+        "grok+claude": grok_claude,
+        "grok-claude": grok_claude,
+        "grok_claude": grok_claude,
+        # legacy: two local models
         "duo": f"{main},ollama:gemma4:latest",
     }
 
@@ -51,6 +71,19 @@ class PanelResolution:
     skipped: list[tuple[str, str]] = field(default_factory=list)  # (spec, reason)
 
 
+def _skip_reason(spec: str) -> str:
+    name = spec.split(":", 1)[0].strip().lower()
+    if name == "claude":
+        return "ANTHROPIC_API_KEY not set"
+    if name == "ollama":
+        return "Ollama not reachable"
+    if name == "grok":
+        return "Grok auth missing (xai-oauth or XAI_API_KEY)"
+    if name == "kimi":
+        return "Kimi auth missing (kimi-oauth or KIMI_API_KEY)"
+    return "provider unavailable"
+
+
 def resolve_panel(spec: str | None) -> PanelResolution:
     """Preset name or comma list -> available members (+ skipped with reasons)."""
     raw = (spec or LLM_PANEL or "default").strip()
@@ -65,12 +98,7 @@ def resolve_panel(spec: str | None) -> PanelResolution:
         if provider_available(member):
             out.members.append(member)
         else:
-            reason = (
-                "ANTHROPIC_API_KEY not set"
-                if member.split(":", 1)[0].lower() == "claude"
-                else "provider unavailable"
-            )
-            out.skipped.append((member, reason))
+            out.skipped.append((member, _skip_reason(member)))
     return out
 
 

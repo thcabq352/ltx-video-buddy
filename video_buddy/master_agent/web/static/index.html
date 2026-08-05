@@ -14,30 +14,39 @@
   body { margin: 0; background: var(--bg); color: var(--text);
          font: 14px/1.5 -apple-system, "Segoe UI", Roboto, sans-serif; }
   header { display: flex; align-items: center; gap: 18px; padding: 12px 22px;
-           background: var(--panel); border-bottom: 1px solid var(--line); }
+           background: var(--panel); border-bottom: 1px solid var(--line);
+           position: sticky; top: 0; z-index: 20; }
   header h1 { font-size: 17px; margin: 0; letter-spacing: .4px; }
   header h1 span { color: var(--accent); }
-  .dots { display: flex; gap: 14px; margin-left: auto; font-size: 12px; color: var(--dim); }
+  .dots { display: flex; flex-wrap: wrap; gap: 12px 14px; margin-left: auto;
+          font-size: 12px; color: var(--dim); justify-content: flex-end; }
   .dot::before { content: "●"; margin-right: 5px; color: var(--err); }
   .dot.on::before { color: var(--ok); }
   nav { display: flex; gap: 4px; padding: 8px 22px 0; background: var(--panel);
-        border-bottom: 1px solid var(--line); }
+        border-bottom: 1px solid var(--line); overflow-x: auto; }
   nav button { background: none; border: none; color: var(--dim); padding: 8px 16px;
-               font-size: 14px; cursor: pointer; border-bottom: 2px solid transparent; }
+               font-size: 14px; cursor: pointer; border-bottom: 2px solid transparent;
+               white-space: nowrap; }
   nav button.active { color: var(--text); border-bottom-color: var(--accent); }
   main { padding: 22px; max-width: 1100px; margin: 0 auto; }
   .tab { display: none; } .tab.active { display: block; }
   .card { background: var(--panel); border: 1px solid var(--line); border-radius: 8px;
           padding: 16px; margin-bottom: 16px; }
+  .card h2 { margin: 0 0 4px; font-size: 15px; font-weight: 600; }
+  .card .sub { color: var(--dim); font-size: 12px; margin-bottom: 8px; }
   label { display: block; font-size: 12px; color: var(--dim); margin: 10px 0 4px; }
   textarea, select, input[type=text], input[type=number] {
     width: 100%; background: var(--panel2); color: var(--text);
     border: 1px solid var(--line); border-radius: 6px; padding: 8px 10px; font: inherit; }
   textarea { min-height: 90px; resize: vertical; }
-  .row { display: flex; gap: 12px; } .row > div { flex: 1; }
+  input[type=number] { -moz-appearance: textfield; }
+  .row { display: flex; gap: 12px; flex-wrap: wrap; }
+  .row > div { flex: 1; min-width: 140px; }
+  .actions { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; margin-top: 14px; }
   .btn { background: var(--accent); color: #1a1410; border: none; border-radius: 6px;
-         padding: 9px 20px; font-weight: 600; cursor: pointer; margin-top: 14px; }
+         padding: 9px 20px; font-weight: 600; cursor: pointer; margin-top: 0; }
   .btn.ghost { background: var(--panel2); color: var(--text); border: 1px solid var(--line); }
+  .btn.sm { padding: 5px 12px; font-size: 12px; }
   .btn:disabled { opacity: .5; cursor: default; }
   .badge { display: inline-block; padding: 2px 10px; border-radius: 10px; font-size: 11px;
            font-weight: 700; text-transform: uppercase; }
@@ -56,7 +65,8 @@
           background: var(--panel2); border-radius: 0 6px 6px 0; }
   .shot b { color: var(--accent); }
   .shot .meta { color: var(--dim); font-size: 12px; }
-  video { max-width: 100%; border-radius: 6px; margin-top: 10px; background: #000; }
+  video, audio { max-width: 100%; border-radius: 6px; margin-top: 10px; background: #000; }
+  audio { width: 100%; }
   .score { font-weight: 700; } .score.hi { color: var(--ok); } .score.lo { color: var(--err); }
   .hit { padding: 10px 12px; border-bottom: 1px solid var(--line); font-size: 13px; }
   .hit .dist { color: var(--accent2); font-size: 11px; }
@@ -73,7 +83,108 @@
   .skip:hover { color: var(--text); }
   #toast { position: fixed; bottom: 20px; right: 20px; background: var(--panel2);
            border: 1px solid var(--accent); border-radius: 8px; padding: 10px 18px;
-           display: none; }
+           display: none; z-index: 50; max-width: min(420px, 90vw); box-shadow: 0 8px 24px #0008; }
+
+  /* media dropzones */
+  .media-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+                gap: 12px; margin-top: 12px; }
+  .drop {
+    position: relative; border: 1.5px dashed var(--line); border-radius: 10px;
+    background: var(--panel2); min-height: 110px; padding: 12px; cursor: pointer;
+    transition: border-color .15s, background .15s; overflow: hidden;
+    display: flex; flex-direction: column; gap: 6px;
+  }
+  .drop:hover, .drop.drag { border-color: var(--accent); background: #1e2633; }
+  .drop.has-file { border-style: solid; border-color: #3d4a5c; }
+  .drop input[type=file] { display: none; }
+  .drop-title { font-size: 12px; font-weight: 600; color: var(--text); }
+  .drop-hint { font-size: 11px; color: var(--dim); }
+  .drop-name { font-size: 12px; color: var(--accent2); word-break: break-all; }
+  .drop-preview {
+    margin-top: 4px; max-height: 120px; max-width: 100%; border-radius: 6px;
+    object-fit: contain; background: #000; display: none;
+  }
+  .drop-preview.show { display: block; }
+  .drop-clear {
+    position: absolute; top: 8px; right: 8px; background: #000a; color: var(--text);
+    border: 1px solid var(--line); border-radius: 4px; font-size: 11px; padding: 2px 8px;
+    cursor: pointer; display: none;
+  }
+  .drop.has-file .drop-clear { display: inline-block; }
+  .drop.required:not(.has-file) { border-color: #5a3a20; }
+  .pill { display: inline-flex; align-items: center; gap: 6px; padding: 3px 10px;
+          border-radius: 999px; background: var(--panel2); border: 1px solid var(--line);
+          font-size: 11px; color: var(--dim); margin: 4px 4px 0 0; }
+  .pill b { color: var(--text); font-weight: 600; }
+  .section-label {
+    font-size: 11px; text-transform: uppercase; letter-spacing: .06em;
+    color: var(--dim); margin: 16px 0 0; padding-top: 12px; border-top: 1px solid var(--line);
+  }
+  .job-head { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
+  .job-meta { color: var(--dim); font-size: 12px; }
+  details.adv { margin-top: 8px; }
+  details.adv > summary {
+    cursor: pointer; color: var(--dim); font-size: 12px; user-select: none; list-style: none;
+  }
+  details.adv > summary::-webkit-details-marker { display: none; }
+  details.adv > summary::before { content: "▸ "; color: var(--accent); }
+  details.adv[open] > summary::before { content: "▾ "; }
+
+  /* voice chat */
+  .btn.mic {
+    background: var(--panel2); color: var(--text); border: 1px solid var(--line);
+    min-width: 44px; padding: 9px 12px; font-size: 16px; line-height: 1;
+  }
+  .btn.mic.listening {
+    background: #3d1414; border-color: var(--err); color: #ffb4b0;
+    animation: pulse-mic 1.1s ease-in-out infinite;
+  }
+  .btn.mic.speaking { border-color: var(--accent2); color: var(--accent2); }
+  @keyframes pulse-mic {
+    0%, 100% { box-shadow: 0 0 0 0 rgba(248, 81, 73, .45); }
+    50% { box-shadow: 0 0 0 8px rgba(248, 81, 73, 0); }
+  }
+  .voice-bar {
+    display: flex; flex-wrap: wrap; gap: 10px; align-items: center;
+    margin-top: 8px; padding-top: 8px; border-top: 1px solid var(--line);
+  }
+  .voice-status {
+    font-size: 12px; color: var(--dim); min-height: 1.2em; flex: 1;
+  }
+  .voice-status.live { color: var(--accent2); }
+  .voice-status.err { color: var(--err); }
+  .voice-toggle {
+    display: inline-flex; align-items: center; gap: 6px; font-size: 12px;
+    color: var(--dim); cursor: pointer; user-select: none;
+  }
+  .voice-toggle input { accent-color: var(--accent); }
+  .msg.interim { opacity: .65; font-style: italic; border-style: dashed; }
+  .voice-hero {
+    text-align: center; padding: 28px 16px 12px;
+  }
+  .voice-orb {
+    width: 96px; height: 96px; margin: 0 auto 14px; border-radius: 50%;
+    background: radial-gradient(circle at 35% 30%, #3a4a62, #161b22 70%);
+    border: 2px solid var(--line); display: flex; align-items: center;
+    justify-content: center; font-size: 36px; color: var(--dim);
+    transition: border-color .2s, box-shadow .2s, color .2s;
+  }
+  .voice-orb.listening {
+    border-color: var(--err); color: #ffb4b0;
+    box-shadow: 0 0 0 10px rgba(248, 81, 73, .12);
+    animation: pulse-mic 1.1s ease-in-out infinite;
+  }
+  .voice-orb.speaking {
+    border-color: var(--accent); color: var(--accent);
+    box-shadow: 0 0 24px rgba(210, 166, 90, .25);
+  }
+  .chat.voice-tall { max-height: 380px; min-height: 180px; }
+
+  @media (max-width: 640px) {
+    main { padding: 14px; }
+    header { padding: 10px 14px; }
+    .dots { gap: 8px; }
+  }
 </style>
 </head>
 <body>
@@ -82,12 +193,14 @@
   <div class="dots" id="health">
     <span class="dot" id="d-comfy">ComfyUI</span>
     <span class="dot" id="d-ollama">Ollama</span>
+    <span class="dot" id="d-grok">Grok</span>
     <span class="dot" id="d-kb">KB</span>
     <span class="dot" id="d-gpu">GPU</span>
   </div>
 </header>
 <nav>
   <button data-tab="create" class="active">Create</button>
+  <button data-tab="voice">Voice</button>
   <button data-tab="fractal">Fractal</button>
   <button data-tab="music">Music</button>
   <button data-tab="jobs">Jobs</button>
@@ -103,28 +216,91 @@
       <div class="chat" id="c-intake-chat"></div>
       <div class="chatbar">
         <input type="text" id="c-intake-input" placeholder="answer her… (or type: just go)">
+        <button class="btn mic" id="c-intake-mic" type="button" title="Hold or click to talk (Chrome)">🎤</button>
         <button class="btn ghost" id="c-intake-send">Send</button>
+      </div>
+      <div class="voice-bar">
+        <label class="voice-toggle"><input type="checkbox" id="c-intake-tts" checked> Speak replies</label>
+        <label class="voice-toggle"><input type="checkbox" id="c-intake-handsfree"> Hands-free</label>
+        <span class="voice-status" id="c-intake-vstatus"></span>
       </div>
     </div>
     <div class="card">
+      <h2>Create video</h2>
+      <div class="sub">Local-first storyboard · optional start image, audio, or source video</div>
       <label>Brief</label>
       <textarea id="c-request" placeholder="premium cold-brew coffee commercial, condensation on the bottle, slow pour over ice"></textarea>
       <div class="row">
-        <div><label>Duration (s)</label><input type="number" id="c-duration" value="8" min="1" max="30"></div>
+        <div><label>Duration (s)</label><input type="number" id="c-duration" value="8" min="1" max="120" step="0.5"></div>
         <div><label>Quality</label><select id="c-quality">
           <option>draft</option><option>balanced</option><option>quality</option></select></div>
         <div><label>Variant</label><select id="c-variant">
           <option value="">auto (director)</option><option>base</option><option>directors</option>
           <option>eros</option><option>lipsync</option><option>wan22</option></select></div>
         <div><label>LLM panel</label><select id="c-panel">
-          <option value="">default (27B)</option><option>duo</option>
+          <option value="">local (27B)</option>
+          <option value="grok">grok</option>
+          <option value="grok+local">grok + local</option>
+          <option value="grok+claude">grok + claude</option>
+          <option value="duo">duo (2 local)</option>
           <option value="custom">custom…</option></select>
-          <input type="text" id="c-panel-custom" placeholder="ollama:gemma4:latest,kimi" style="display:none;margin-top:6px"></div>
+          <input type="text" id="c-panel-custom" placeholder="grok,claude,ollama:gemma4:latest" style="display:none;margin-top:6px"></div>
       </div>
-      <button class="btn ghost" id="c-preview">Preview storyboard</button>
-      <button class="btn ghost" id="c-interview">Talk it through first</button>
-      <button class="btn" id="c-generate">Generate</button>
-      <span class="muted" id="c-status"></span>
+
+      <div class="section-label">Media (optional)</div>
+      <div class="media-grid">
+        <div class="drop" id="c-image-drop" data-for="c-image" data-kind="image"
+             title="Start frame for image-to-video">
+          <button type="button" class="drop-clear" data-clear="c-image">clear</button>
+          <input type="file" id="c-image" accept="image/*">
+          <span class="drop-title">Start image</span>
+          <span class="drop-hint">i2v · drop or click · PNG/JPG/WebP</span>
+          <span class="drop-name" id="c-image-name"></span>
+          <img class="drop-preview" id="c-image-preview" alt="">
+        </div>
+        <div class="drop" id="c-audio-drop" data-for="c-audio" data-kind="audio"
+             title="Dialogue or music for lipsync / audio conditioning">
+          <button type="button" class="drop-clear" data-clear="c-audio">clear</button>
+          <input type="file" id="c-audio" accept="audio/*,.mp3,.wav,.m4a,.flac,.ogg">
+          <span class="drop-title">Audio</span>
+          <span class="drop-hint">lipsync / VO · MP3 WAV M4A</span>
+          <span class="drop-name" id="c-audio-name"></span>
+          <audio class="drop-preview" id="c-audio-preview" controls></audio>
+        </div>
+        <div class="drop" id="c-video-drop" data-for="c-video" data-kind="video"
+             title="Source video for lipsync / reference">
+          <button type="button" class="drop-clear" data-clear="c-video">clear</button>
+          <input type="file" id="c-video" accept="video/*,.mp4,.mov,.webm">
+          <span class="drop-title">Source video</span>
+          <span class="drop-hint">lipsync ref · MP4 MOV WebM</span>
+          <span class="drop-name" id="c-video-name"></span>
+          <video class="drop-preview" id="c-video-preview" muted controls></video>
+        </div>
+      </div>
+      <div id="c-media-pills"></div>
+
+      <details class="adv">
+        <summary>Advanced</summary>
+        <div class="row">
+          <div><label>Storyboard</label><select id="c-storyboard">
+            <option value="">smart (default)</option>
+            <option value="always">always</option>
+            <option value="multi_only">multi only</option>
+            <option value="off">off</option></select></div>
+          <div><label>Upscale</label><select id="c-upscale">
+            <option value="">none</option>
+            <option value="rtx">RTX (fast, 4K)</option>
+            <option value="seedvr2">SeedVR2 (slow)</option></select></div>
+          <div><label>Seed</label><input type="number" id="c-seed" placeholder="random" min="0" step="1"></div>
+        </div>
+      </details>
+
+      <div class="actions">
+        <button class="btn ghost" id="c-preview">Preview storyboard</button>
+        <button class="btn ghost" id="c-interview">Talk it through first</button>
+        <button class="btn" id="c-generate">Generate</button>
+        <span class="muted" id="c-status"></span>
+      </div>
     </div>
     <div class="card" id="c-board" style="display:none">
       <b>Storyboard preview</b> <span class="muted" id="c-board-meta"></span>
@@ -134,9 +310,15 @@
 
   <section id="tab-fractal" class="tab">
     <div class="card">
+      <h2>Fractal</h2>
+      <div class="sub">CPU · deep-zoom, inpaint a hole, or outpaint borders with animated fractal</div>
       <label>Brief (optional — goes into the run record)</label>
       <textarea id="f-request" placeholder="title sequence zoom, infinite seahorse valley"></textarea>
       <div class="row">
+        <div><label>Mode</label><select id="f-mode">
+          <option value="zoom">zoom (deep dive)</option>
+          <option value="inpaint">inpaint (fill a hole)</option>
+          <option value="outpaint">outpaint (expand borders)</option></select></div>
         <div><label>Duration (s)</label><input type="number" id="f-duration" value="20" min="1" max="600"></div>
         <div><label>Target</label><select id="f-target">
           <option>seahorse</option><option>elephant</option><option>minibrot</option><option>spiral</option></select></div>
@@ -144,15 +326,90 @@
           <option>fire</option><option>ocean</option><option>monochrome</option><option>neon</option><option>sunset</option></select></div>
       </div>
       <div class="row">
-        <div><label>Audio (optional — beat-reactive + mux)</label>
-          <input type="file" id="f-audio" accept="audio/*"></div>
         <div><label>Upscale</label><select id="f-upscale">
           <option value="">none</option><option value="rtx">RTX (fast, 4K)</option>
           <option value="seedvr2">SeedVR2 (slow, production)</option></select></div>
-        <div><label>&nbsp;</label><label style="margin:0"><input type="checkbox" id="f-julia"> Julia mode</label></div>
+        <div id="f-expand-wrap"><label>Outpaint expand (px)</label>
+          <input type="number" id="f-expand" value="128" min="8" max="1024" step="8"></div>
+        <div id="f-cover-wrap"><label>Inpaint hole cover</label>
+          <input type="number" id="f-cover" value="0.4" min="0.1" max="0.9" step="0.05"></div>
+        <div id="f-feather-wrap"><label>Feather (px)</label>
+          <input type="number" id="f-feather" value="28" min="0" max="128"></div>
       </div>
-      <button class="btn" id="f-generate">Render fractal</button>
-      <span class="muted" id="f-status"></span>
+
+      <div class="section-label">Media</div>
+      <div class="media-grid">
+        <div class="drop" id="f-image-drop" data-for="f-image" data-kind="image">
+          <button type="button" class="drop-clear" data-clear="f-image">clear</button>
+          <input type="file" id="f-image" accept="image/*">
+          <span class="drop-title">Source image</span>
+          <span class="drop-hint" id="f-image-hint">required for inpaint / outpaint</span>
+          <span class="drop-name" id="f-image-name"></span>
+          <img class="drop-preview" id="f-image-preview" alt="">
+        </div>
+        <div class="drop" id="f-mask-drop" data-for="f-mask" data-kind="image">
+          <button type="button" class="drop-clear" data-clear="f-mask">clear</button>
+          <input type="file" id="f-mask" accept="image/*">
+          <span class="drop-title">Inpaint mask</span>
+          <span class="drop-hint">optional · white = fill · default center hole</span>
+          <span class="drop-name" id="f-mask-name"></span>
+          <img class="drop-preview" id="f-mask-preview" alt="">
+        </div>
+        <div class="drop" id="f-audio-drop" data-for="f-audio" data-kind="audio">
+          <button type="button" class="drop-clear" data-clear="f-audio">clear</button>
+          <input type="file" id="f-audio" accept="audio/*,.mp3,.wav,.m4a,.flac,.ogg">
+          <span class="drop-title">Audio (optional)</span>
+          <span class="drop-hint">beat-reactive fractal + mux</span>
+          <span class="drop-name" id="f-audio-name"></span>
+          <audio class="drop-preview" id="f-audio-preview" controls></audio>
+        </div>
+      </div>
+      <div style="margin-top:10px">
+        <label style="margin:0;display:inline-flex;align-items:center;gap:8px;color:var(--text);font-size:14px;cursor:pointer">
+          <input type="checkbox" id="f-julia"> Julia mode (c wobbles with the beat)
+        </label>
+      </div>
+      <div class="actions">
+        <button class="btn" id="f-generate">Render fractal</button>
+        <span class="muted" id="f-status"></span>
+      </div>
+    </div>
+  </section>
+
+  <section id="tab-voice" class="tab">
+    <div class="card">
+      <h2>Voice chat</h2>
+      <div class="sub">Talk to the agent in Chrome — mic listens, she answers out loud (Web Speech API)</div>
+      <label>What do you want to make?</label>
+      <textarea id="v-request" placeholder="a neon sneaker commercial in the rain…"></textarea>
+      <div class="actions">
+        <button class="btn" id="v-start">Start voice interview</button>
+        <button class="btn ghost" id="v-stop" disabled>End listening</button>
+        <span class="muted" id="v-support"></span>
+      </div>
+    </div>
+    <div class="card" id="v-intake-panel" style="display:none">
+      <div class="voice-hero">
+        <div class="voice-orb" id="v-orb" title="Agent voice state">🎙</div>
+        <b id="v-intake-name">Ara</b>
+        <div class="muted" id="v-phase">ready</div>
+      </div>
+      <span class="skip" id="v-intake-skip">skip interview</span>
+      <div class="chat voice-tall" id="v-intake-chat"></div>
+      <div class="chatbar">
+        <input type="text" id="v-intake-input" placeholder="or type here…">
+        <button class="btn mic" id="v-intake-mic" type="button" title="Click to talk">🎤</button>
+        <button class="btn ghost" id="v-intake-send">Send</button>
+      </div>
+      <div class="voice-bar">
+        <label class="voice-toggle"><input type="checkbox" id="v-intake-tts" checked> Speak replies</label>
+        <label class="voice-toggle"><input type="checkbox" id="v-intake-handsfree" checked> Hands-free loop</label>
+        <span class="voice-status" id="v-intake-vstatus"></span>
+      </div>
+      <div class="actions" id="v-done-actions" style="display:none">
+        <button class="btn" id="v-to-create">Use brief on Create</button>
+        <span class="muted">brief filled — open Create to generate</span>
+      </div>
     </div>
   </section>
 
@@ -163,28 +420,51 @@
       <div class="chat" id="m-intake-chat"></div>
       <div class="chatbar">
         <input type="text" id="m-intake-input" placeholder="answer her… (or type: just go)">
+        <button class="btn mic" id="m-intake-mic" type="button" title="Hold or click to talk (Chrome)">🎤</button>
         <button class="btn ghost" id="m-intake-send">Send</button>
+      </div>
+      <div class="voice-bar">
+        <label class="voice-toggle"><input type="checkbox" id="m-intake-tts" checked> Speak replies</label>
+        <label class="voice-toggle"><input type="checkbox" id="m-intake-handsfree"> Hands-free</label>
+        <span class="voice-status" id="m-intake-vstatus"></span>
       </div>
     </div>
     <div class="card">
+      <h2>Music video</h2>
+      <div class="sub">Beat-synced cuts · audio track required</div>
       <label>Brief</label>
       <textarea id="m-request" placeholder="dreamy synthwave MV, chrome grids, neon horizons — cut on the beat"></textarea>
-      <div class="row">
-        <div><label>Audio track (required)</label>
-          <input type="file" id="m-audio" accept="audio/*"></div>
-        <div><label>Visual</label><select id="m-visual">
-          <option value="shots">AI shots (ComfyUI, GPU)</option>
-          <option value="fractal">Beat-reactive fractal (CPU)</option></select></div>
+      <div class="media-grid" style="grid-template-columns: 1.2fr 1fr;">
+        <div class="drop required" id="m-audio-drop" data-for="m-audio" data-kind="audio">
+          <button type="button" class="drop-clear" data-clear="m-audio">clear</button>
+          <input type="file" id="m-audio" accept="audio/*,.mp3,.wav,.m4a,.flac,.ogg">
+          <span class="drop-title">Audio track *</span>
+          <span class="drop-hint">required · drop or click · MP3 WAV FLAC</span>
+          <span class="drop-name" id="m-audio-name"></span>
+          <audio class="drop-preview" id="m-audio-preview" controls></audio>
+        </div>
+        <div>
+          <label>Visual</label>
+          <select id="m-visual">
+            <option value="shots">AI shots (ComfyUI, GPU)</option>
+            <option value="fractal">Beat-reactive fractal (CPU)</option>
+          </select>
+          <label>Quality</label>
+          <select id="m-quality">
+            <option>draft</option><option>balanced</option><option>quality</option>
+          </select>
+          <label>Upscale</label>
+          <select id="m-upscale">
+            <option value="">none</option>
+            <option value="rtx">RTX (fast, 4K)</option>
+            <option value="seedvr2">SeedVR2 (slow, production)</option>
+          </select>
+        </div>
       </div>
-      <div class="row">
-        <div><label>Quality</label><select id="m-quality">
-          <option>draft</option><option>balanced</option><option>quality</option></select></div>
-        <div><label>Upscale</label><select id="m-upscale">
-          <option value="">none</option><option value="rtx">RTX (fast, 4K)</option>
-          <option value="seedvr2">SeedVR2 (slow, production)</option></select></div>
+      <div class="actions">
+        <button class="btn" id="m-generate">Make music video</button>
+        <span class="muted" id="m-status"></span>
       </div>
-      <button class="btn" id="m-generate">Make music video</button>
-      <span class="muted" id="m-status"></span>
     </div>
   </section>
 
@@ -205,7 +485,7 @@
         <div><label>Collection</label><select id="kb-col">
           <option>runs</option><option>workflows</option></select></div>
       </div>
-      <button class="btn" id="kb-go">Search</button>
+      <div class="actions"><button class="btn" id="kb-go">Search</button></div>
     </div>
     <div class="card" id="kb-hits"></div>
   </section>
@@ -224,20 +504,47 @@ const api = async (path, opts) => {
     headers: {"Content-Type": "application/json"},
     body: JSON.stringify(opts.body || {}),
   });
-  if (!r.ok) throw new Error((await r.json().catch(() => ({}))).detail || r.statusText);
+  if (!r.ok) {
+    let detail = r.statusText;
+    try {
+      const j = await r.json();
+      detail = j.detail || detail;
+      if (Array.isArray(detail)) detail = detail.map(x => x.msg || JSON.stringify(x)).join("; ");
+    } catch (_) {}
+    throw new Error(detail);
+  }
   return r.json();
 };
 const esc = (s) => String(s ?? "").replace(/[&<>"]/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
-const toast = (msg) => { const t = $("toast"); t.textContent = msg; t.style.display = "block";
-  setTimeout(() => t.style.display = "none", 3500); };
+const toast = (msg) => {
+  const t = $("toast");
+  t.textContent = msg;
+  t.style.display = "block";
+  clearTimeout(toast._t);
+  toast._t = setTimeout(() => t.style.display = "none", 3800);
+};
+const fmtBytes = (n) => {
+  if (n == null || isNaN(n)) return "";
+  if (n < 1024) return n + " B";
+  if (n < 1e6) return (n / 1024).toFixed(1) + " KB";
+  if (n < 1e9) return (n / 1e6).toFixed(1) + " MB";
+  return (n / 1e9).toFixed(2) + " GB";
+};
+const fmtDur = (s) => {
+  if (s == null || isNaN(s)) return "";
+  if (s < 60) return s.toFixed(0) + "s";
+  return Math.floor(s / 60) + "m " + Math.round(s % 60) + "s";
+};
 
 // tabs
 document.querySelectorAll("nav button").forEach(b => b.onclick = () => {
   document.querySelectorAll("nav button").forEach(x => x.classList.remove("active"));
   document.querySelectorAll(".tab").forEach(x => x.classList.remove("active"));
-  b.classList.add("active"); $("tab-" + b.dataset.tab).classList.add("active");
+  b.classList.add("active");
+  $("tab-" + b.dataset.tab).classList.add("active");
   if (b.dataset.tab === "runs") loadRuns();
   if (b.dataset.tab === "models") loadModels();
+  if (b.dataset.tab === "jobs") refreshJobs();
 });
 
 // health
@@ -246,13 +553,125 @@ async function loadHealth() {
     const h = await api("/api/health");
     $("d-comfy").className = "dot" + (h.comfyui?.up ? " on" : "");
     $("d-ollama").className = "dot" + (h.ollama ? " on" : "");
+    $("d-grok").className = "dot" + (h.grok ? " on" : "");
     $("d-kb").className = "dot" + ((h.kb?.runs ?? 0) + (h.kb?.workflows ?? 0) > 0 ? " on" : "");
     $("d-kb").textContent = `KB ${h.kb?.runs ?? 0}r/${h.kb?.workflows ?? 0}w`;
     const g = h.comfyui?.gpus?.[0];
     $("d-gpu").className = "dot" + (g ? " on" : "");
     if (g) $("d-gpu").textContent = `GPU ${g.vram_free_gb}G free`;
+    else $("d-gpu").textContent = "GPU";
   } catch (e) { /* leave dots red */ }
 }
+
+// ── dropzones ──────────────────────────────────────────
+function wireDrop(dropId) {
+  const drop = $(dropId);
+  if (!drop) return;
+  const inputId = drop.dataset.for;
+  const input = $(inputId);
+  const kind = drop.dataset.kind || "file";
+  const nameEl = $(inputId + "-name");
+  const preview = $(inputId + "-preview");
+  const clearBtn = drop.querySelector(".drop-clear");
+
+  const setFile = (file) => {
+    if (!file) return;
+    const dt = new DataTransfer();
+    dt.items.add(file);
+    input.files = dt.files;
+    onFileChange();
+  };
+  const onFileChange = () => {
+    const f = input.files?.[0];
+    if (!f) {
+      drop.classList.remove("has-file");
+      if (nameEl) nameEl.textContent = "";
+      if (preview) {
+        preview.classList.remove("show");
+        if (preview.src && preview.src.startsWith("blob:")) URL.revokeObjectURL(preview.src);
+        preview.removeAttribute("src");
+      }
+    } else {
+      drop.classList.add("has-file");
+      if (nameEl) nameEl.textContent = `${f.name} · ${fmtBytes(f.size)}`;
+      if (preview) {
+        if (preview.src && preview.src.startsWith("blob:")) URL.revokeObjectURL(preview.src);
+        const url = URL.createObjectURL(f);
+        preview.src = url;
+        preview.classList.add("show");
+      }
+    }
+    if (typeof updateCreateMediaPills === "function") updateCreateMediaPills();
+  };
+
+  drop.addEventListener("click", (e) => {
+    if (e.target === clearBtn || clearBtn?.contains(e.target)) return;
+    input.click();
+  });
+  drop.addEventListener("dragover", (e) => { e.preventDefault(); drop.classList.add("drag"); });
+  drop.addEventListener("dragleave", () => drop.classList.remove("drag"));
+  drop.addEventListener("drop", (e) => {
+    e.preventDefault();
+    drop.classList.remove("drag");
+    const f = e.dataTransfer?.files?.[0];
+    if (!f) return;
+    // light type check
+    if (kind === "image" && !f.type.startsWith("image/") && !/\.(png|jpe?g|webp|gif|bmp)$/i.test(f.name))
+      return toast("Need an image file");
+    if (kind === "audio" && !f.type.startsWith("audio/") && !/\.(mp3|wav|m4a|flac|ogg|aac)$/i.test(f.name))
+      return toast("Need an audio file");
+    if (kind === "video" && !f.type.startsWith("video/") && !/\.(mp4|mov|webm|mkv)$/i.test(f.name))
+      return toast("Need a video file");
+    setFile(f);
+  });
+  input.addEventListener("change", onFileChange);
+  if (clearBtn) clearBtn.addEventListener("click", (e) => {
+    e.stopPropagation();
+    input.value = "";
+    onFileChange();
+  });
+}
+
+["c-image-drop", "c-audio-drop", "c-video-drop",
+ "f-image-drop", "f-mask-drop", "f-audio-drop", "m-audio-drop"].forEach(wireDrop);
+
+function syncFractalModeUI() {
+  const mode = $("f-mode").value;
+  const needsImg = mode === "inpaint" || mode === "outpaint";
+  $("f-image-drop").classList.toggle("required", needsImg);
+  $("f-image-hint").textContent = needsImg
+    ? "required for " + mode
+    : "optional (unused in zoom mode)";
+  $("f-expand-wrap").style.display = mode === "outpaint" ? "" : "none";
+  $("f-cover-wrap").style.display = mode === "inpaint" ? "" : "none";
+  $("f-feather-wrap").style.display = needsImg ? "" : "none";
+  $("f-mask-drop").style.opacity = mode === "inpaint" ? "1" : "0.45";
+  $("f-mask-drop").style.pointerEvents = mode === "inpaint" ? "" : "none";
+}
+$("f-mode").onchange = syncFractalModeUI;
+syncFractalModeUI();
+
+function updateCreateMediaPills() {
+  const box = $("c-media-pills");
+  if (!box) return;
+  const pills = [];
+  const add = (id, label) => {
+    const f = $(id)?.files?.[0];
+    if (f) pills.push(`<span class="pill"><b>${label}</b> ${esc(f.name)}</span>`);
+  };
+  add("c-image", "image");
+  add("c-audio", "audio");
+  add("c-video", "video");
+  box.innerHTML = pills.join("");
+  // gentle variant hint when video/audio attached and still on auto
+  const v = $("c-variant");
+  if (v && !v.dataset.userSet) {
+    if ($("c-video")?.files?.length || $("c-audio")?.files?.length) {
+      // leave auto — director routes lipsync when media present
+    }
+  }
+}
+$("c-variant").addEventListener("change", () => { $("c-variant").dataset.userSet = "1"; });
 
 // create
 $("c-panel").onchange = () => {
@@ -261,13 +680,30 @@ $("c-panel").onchange = () => {
 function createParams() {
   let panel = $("c-panel").value;
   if (panel === "custom") panel = $("c-panel-custom").value.trim();
+  const seedRaw = $("c-seed").value.trim();
   return {
     request: $("c-request").value.trim(),
     duration_s: parseFloat($("c-duration").value) || 8,
     quality: $("c-quality").value,
     variant: $("c-variant").value || null,
     llm_panel: panel || null,
+    storyboard: $("c-storyboard").value || null,
+    upscale: $("c-upscale").value || null,
+    seed: seedRaw === "" ? null : parseInt(seedRaw, 10),
   };
+}
+async function uploadFile(inputId) {
+  const input = $(inputId);
+  if (!input?.files?.length) return null;
+  const fd = new FormData();
+  fd.append("file", input.files[0]);
+  const r = await fetch("/api/upload", {method: "POST", body: fd});
+  if (!r.ok) {
+    let detail = r.statusText;
+    try { detail = (await r.json()).detail || detail; } catch (_) {}
+    throw new Error(detail);
+  }
+  return (await r.json()).path;
 }
 async function submitJob(dryRun) {
   const p = createParams();
@@ -277,106 +713,426 @@ async function submitJob(dryRun) {
     return toast("Ara wants a quick chat first — Generate again when she's done, or skip");
   }
   p.dry_run = dryRun;
-  $("c-status").textContent = dryRun ? " planning…" : " queued on GPU…";
+  $("c-status").textContent = " uploading media…";
+  $("c-generate").disabled = true;
+  $("c-preview").disabled = true;
   try {
+    // dry-run is storyboard-only — still allow media paths for future, but no Comfy upload yet
+    if (!dryRun) {
+      p.image_path = await uploadFile("c-image");
+      p.audio_path = await uploadFile("c-audio");
+      p.video_path = await uploadFile("c-video");
+    } else {
+      // skip large uploads for preview; media not used in dry-run planning
+      p.image_path = p.audio_path = p.video_path = null;
+    }
+    $("c-status").textContent = dryRun ? " planning…" : " queued on GPU…";
     const job = await api("/api/jobs", {body: p});
     pollJob(job.id, dryRun);
     document.querySelector('nav button[data-tab="jobs"]').click();
-  } catch (e) { $("c-status").textContent = " " + e.message; }
+    $("c-status").textContent = dryRun ? " preview queued" : " job queued";
+  } catch (e) {
+    $("c-status").textContent = " " + e.message;
+    toast(e.message);
+  } finally {
+    $("c-generate").disabled = false;
+    $("c-preview").disabled = false;
+  }
 }
 $("c-preview").onclick = () => submitJob(true);
 $("c-generate").onclick = () => submitJob(false);
 $("c-interview").onclick = () => cIntake.start();
 
-// shared upload helper (audio files for fractal/music tabs)
-async function uploadFile(inputId) {
-  const input = $(inputId);
-  if (!input.files.length) return null;
-  const fd = new FormData();
-  fd.append("file", input.files[0]);
-  const r = await fetch("/api/upload", {method: "POST", body: fd});
-  if (!r.ok) throw new Error((await r.json().catch(() => ({}))).detail || r.statusText);
-  return (await r.json()).path;
+// ── Chrome voice (Web Speech API: STT + TTS) ────────────
+const SpeechRec = window.SpeechRecognition || window.webkitSpeechRecognition;
+const voiceSupported = Boolean(SpeechRec) && "speechSynthesis" in window;
+
+function pickVoice() {
+  const voices = speechSynthesis.getVoices?.() || [];
+  if (!voices.length) return null;
+  // Prefer a natural English female-ish voice for Ara, else any en-
+  const prefer = [/samantha/i, /zira/i, /google uk english female/i, /google us english/i, /aria/i, /jenny/i];
+  for (const re of prefer) {
+    const v = voices.find(x => re.test(x.name));
+    if (v) return v;
+  }
+  return voices.find(v => /^en(-|_)/i.test(v.lang)) || voices[0];
+}
+// Chrome loads voices async
+if ("speechSynthesis" in window) {
+  speechSynthesis.onvoiceschanged = () => { pickVoice(); };
+}
+
+function createVoiceEngine(opts = {}) {
+  const statusEl = opts.statusEl || null;
+  const micBtn = opts.micBtn || null;
+  const orbEl = opts.orbEl || null;
+  const phaseEl = opts.phaseEl || null;
+  let rec = null;
+  let listening = false;
+  let speaking = false;
+  let wantListen = false;
+  const eng = {
+    onFinal: null, // (text) => void
+    onInterim: null,
+  };
+
+  const setStatus = (msg, cls = "") => {
+    if (statusEl) {
+      statusEl.textContent = msg || "";
+      statusEl.className = "voice-status" + (cls ? " " + cls : "");
+    }
+    if (phaseEl) phaseEl.textContent = msg || "ready";
+  };
+  const paint = () => {
+    if (micBtn) {
+      micBtn.classList.toggle("listening", listening);
+      micBtn.classList.toggle("speaking", speaking && !listening);
+    }
+    if (orbEl) {
+      orbEl.classList.toggle("listening", listening);
+      orbEl.classList.toggle("speaking", speaking && !listening);
+      orbEl.textContent = listening ? "⏺" : speaking ? "🔊" : "🎙";
+    }
+  };
+
+  eng.supported = voiceSupported;
+  eng.stopSpeak = () => {
+    try { speechSynthesis.cancel(); } catch (_) {}
+    speaking = false;
+    paint();
+  };
+  eng.speak = (text, { onend } = {}) => {
+    if (!text || !("speechSynthesis" in window)) {
+      if (onend) onend();
+      return;
+    }
+    eng.stopSpeak();
+    const u = new SpeechSynthesisUtterance(String(text));
+    const v = pickVoice();
+    if (v) u.voice = v;
+    u.rate = 1.02;
+    u.pitch = 1.05;
+    speaking = true;
+    paint();
+    setStatus("speaking…", "live");
+    u.onend = () => {
+      speaking = false;
+      paint();
+      setStatus(listening ? "listening…" : "ready", listening ? "live" : "");
+      if (onend) onend();
+    };
+    u.onerror = () => {
+      speaking = false;
+      paint();
+      if (onend) onend();
+    };
+    speechSynthesis.speak(u);
+  };
+  eng.stopListen = () => {
+    wantListen = false;
+    try { rec && rec.stop(); } catch (_) {}
+    listening = false;
+    paint();
+  };
+  eng.startListen = () => {
+    if (!SpeechRec) {
+      setStatus("Voice needs Chrome (Web Speech API)", "err");
+      toast("Voice chat needs Chrome (or Edge) with microphone permission");
+      return;
+    }
+    eng.stopSpeak();
+    wantListen = true;
+    if (!rec) {
+      rec = new SpeechRec();
+      rec.lang = navigator.language || "en-US";
+      rec.interimResults = true;
+      rec.continuous = false;
+      rec.maxAlternatives = 1;
+      rec.onstart = () => {
+        listening = true;
+        paint();
+        setStatus("listening… speak now", "live");
+      };
+      rec.onresult = (ev) => {
+        let interim = "", final = "";
+        for (let i = ev.resultIndex; i < ev.results.length; i++) {
+          const t = ev.results[i][0].transcript;
+          if (ev.results[i].isFinal) final += t;
+          else interim += t;
+        }
+        if (interim && eng.onInterim) eng.onInterim(interim);
+        if (final.trim()) {
+          if (eng.onFinal) eng.onFinal(final.trim());
+        }
+      };
+      rec.onerror = (ev) => {
+        listening = false;
+        paint();
+        const err = ev.error || "error";
+        if (err === "not-allowed") {
+          setStatus("mic blocked — allow microphone for this site", "err");
+          toast("Allow the microphone in Chrome site settings");
+        } else if (err === "no-speech") {
+          setStatus("no speech heard — try again", "err");
+        } else if (err !== "aborted") {
+          setStatus("mic: " + err, "err");
+        }
+      };
+      rec.onend = () => {
+        listening = false;
+        paint();
+        // continuous hands-free restart is driven by caller after agent speaks
+        if (wantListen && !speaking) {
+          // push-to-talk ended without final — idle
+          setStatus("ready");
+        }
+      };
+    }
+    try {
+      rec.start();
+    } catch (e) {
+      // already started
+      setStatus("mic busy — click again", "err");
+    }
+  };
+  eng.toggleListen = () => {
+    if (listening) eng.stopListen();
+    else eng.startListen();
+  };
+  eng.isListening = () => listening;
+  eng.isSpeaking = () => speaking;
+  return eng;
 }
 
 // intake interview (persona chat) — default-on; Generate arms after done/skip
-function makeIntake(prefix, briefFieldId) {
+function makeIntake(prefix, briefFieldId, voiceOpts = {}) {
   let sid = null, personaName = "Ara";
   const panel = $(prefix + "-panel"), chat = $(prefix + "-chat");
-  const obj = { armed: false };
-  const add = (who, text) => {
+  const micBtn = $(prefix + "-mic");
+  const ttsEl = $(prefix + "-tts");
+  const handsEl = $(prefix + "-handsfree");
+  const statusEl = $(prefix + "-vstatus");
+  const obj = { armed: false, voice: null };
+  const voice = createVoiceEngine({
+    statusEl,
+    micBtn,
+    orbEl: voiceOpts.orbEl || null,
+    phaseEl: voiceOpts.phaseEl || null,
+  });
+  obj.voice = voice;
+
+  if (micBtn && !voiceSupported) {
+    micBtn.disabled = true;
+    micBtn.title = "Chrome / Edge required for voice";
+    if (statusEl) statusEl.textContent = "voice unavailable in this browser";
+  }
+
+  const add = (who, text, cls = "") => {
     const d = document.createElement("div");
-    d.className = "msg " + (who === "her" ? "her" : "me");
+    d.className = "msg " + (who === "her" ? "her" : "me") + (cls ? " " + cls : "");
     d.textContent = text;
     chat.appendChild(d); chat.scrollTop = chat.scrollHeight;
+    return d;
   };
-  obj.start = async () => {
-    const idea = $(briefFieldId).value.trim();
-    if (!idea) return toast("Write a rough idea in the brief first");
+  let interimEl = null;
+  const clearInterim = () => {
+    if (interimEl) { interimEl.remove(); interimEl = null; }
+  };
+
+  const maybeSpeak = (text, thenListen) => {
+    if (!(ttsEl && ttsEl.checked) || !text) {
+      if (thenListen && handsEl && handsEl.checked) voice.startListen();
+      return;
+    }
+    voice.speak(text, {
+      onend: () => {
+        if (thenListen && handsEl && handsEl.checked && sid) voice.startListen();
+      },
+    });
+  };
+
+  const onDone = (refined) => {
+    if (briefFieldId && $(briefFieldId)) $(briefFieldId).value = refined;
+    toast(personaName + " wrote your brief — review it, then Generate");
+    sid = null;
+    obj.armed = true;
+    voice.stopListen();
+    if (voiceOpts.onDone) voiceOpts.onDone(refined);
+  };
+
+  obj.start = async (ideaOverride) => {
+    const idea = (ideaOverride != null ? ideaOverride : $(briefFieldId)?.value || "").trim();
+    if (!idea) return toast("Write a rough idea first");
     panel.style.display = "block";
+    voice.stopSpeak();
+    voice.stopListen();
     try {
       const r = await api("/api/intake", {body: {request: idea}});
       sid = r.session_id; personaName = r.persona || "Ara";
-      $(prefix + "-name").textContent = personaName;
-      chat.innerHTML = ""; add("her", r.spoken);
-      $(prefix + "-input").focus();
-    } catch (e) { toast("interview unavailable: " + e.message); obj.armed = true; }
+      const nameEl = $(prefix + "-name");
+      if (nameEl) nameEl.textContent = personaName;
+      chat.innerHTML = "";
+      add("her", r.spoken);
+      $(prefix + "-input")?.focus();
+      maybeSpeak(r.spoken, true);
+    } catch (e) {
+      toast("interview unavailable: " + e.message);
+      obj.armed = true;
+    }
   };
-  obj.send = async () => {
-    if (!sid) return obj.start();
+
+  obj.send = async (forcedText) => {
+    if (!sid) {
+      // allow first message to bootstrap if idea field empty but text given
+      if (forcedText && briefFieldId) {
+        const f = $(briefFieldId);
+        if (f && !f.value.trim()) f.value = forcedText;
+      }
+      return obj.start();
+    }
     const inp = $(prefix + "-input");
-    const text = inp.value.trim(); if (!text) return;
-    inp.value = ""; add("me", text);
+    const text = (forcedText != null ? forcedText : inp?.value || "").trim();
+    if (!text) return;
+    if (inp) inp.value = "";
+    clearInterim();
+    add("me", text);
+    voice.stopListen();
     try {
       const r = await api("/api/intake", {body: {session_id: sid, message: text}});
       add("her", r.spoken);
       if (r.done && r.refined_request) {
-        $(briefFieldId).value = r.refined_request;
-        toast(personaName + " wrote your brief — review it, then Generate");
-        sid = null; obj.armed = true;
+        maybeSpeak(r.spoken, false);
+        onDone(r.refined_request);
+      } else {
+        maybeSpeak(r.spoken, true);
       }
-    } catch (e) { add("her", "(connection hiccup — try again)"); }
+    } catch (e) {
+      add("her", "(connection hiccup — try again)");
+    }
   };
+
   obj.skip = () => {
     sid = null; obj.armed = true;
+    voice.stopListen();
+    voice.stopSpeak();
     chat.innerHTML = '<div class="muted">interview skipped — your brief goes straight to generation.</div>';
+    if (voiceOpts.onSkip) voiceOpts.onSkip();
   };
-  $(prefix + "-send").onclick = obj.send;
+
+  voice.onFinal = (text) => {
+    clearInterim();
+    const inp = $(prefix + "-input");
+    if (inp) inp.value = text;
+    obj.send(text);
+  };
+  voice.onInterim = (text) => {
+    const inp = $(prefix + "-input");
+    if (inp) inp.value = text;
+    clearInterim();
+    interimEl = add("me", text + "…", "interim");
+  };
+
+  $(prefix + "-send").onclick = () => obj.send();
   $(prefix + "-skip").onclick = obj.skip;
-  $(prefix + "-input").addEventListener("keydown", e => { if (e.key === "Enter") obj.send(); });
+  $(prefix + "-input")?.addEventListener("keydown", e => {
+    if (e.key === "Enter") { e.preventDefault(); obj.send(); }
+  });
+  if (micBtn) {
+    micBtn.onclick = () => voice.toggleListen();
+  }
   return obj;
 }
+
 const cIntake = makeIntake("c-intake", "c-request");
 const mIntake = makeIntake("m-intake", "m-request");
+const vIntake = makeIntake("v-intake", "v-request", {
+  orbEl: $("v-orb"),
+  phaseEl: $("v-phase"),
+  onDone: (refined) => {
+    $("c-request").value = refined;
+    $("v-done-actions").style.display = "flex";
+    $("v-stop").disabled = true;
+  },
+  onSkip: () => {
+    $("v-done-actions").style.display = "none";
+  },
+});
+
+// Voice tab controls
+$("v-support").textContent = voiceSupported
+  ? "Chrome voice ready · allow mic when prompted"
+  : "Use Google Chrome or Edge for voice (Web Speech API)";
+$("v-start").onclick = () => {
+  const idea = $("v-request").value.trim();
+  if (!idea) return toast("Describe what you want to make first");
+  $("v-done-actions").style.display = "none";
+  $("v-stop").disabled = false;
+  vIntake.start(idea);
+};
+$("v-stop").onclick = () => {
+  vIntake.voice.stopListen();
+  vIntake.voice.stopSpeak();
+  $("v-intake-vstatus").textContent = "listening stopped";
+};
+$("v-to-create").onclick = () => {
+  document.querySelector('nav button[data-tab="create"]').click();
+  cIntake.armed = true;
+  toast("Brief loaded on Create — hit Generate when ready");
+};
 
 // fractal
 $("f-generate").onclick = async () => {
+  const mode = $("f-mode").value;
+  if ((mode === "inpaint" || mode === "outpaint") && !$("f-image").files.length) {
+    return toast("Pick a source image for " + mode);
+  }
   $("f-status").textContent = " uploading…";
+  $("f-generate").disabled = true;
   try {
-    const audio = await uploadFile("f-audio");
+    const [audio, image, mask] = await Promise.all([
+      uploadFile("f-audio"),
+      uploadFile("f-image"),
+      mode === "inpaint" ? uploadFile("f-mask") : Promise.resolve(null),
+    ]);
     const body = {
       request: $("f-request").value.trim(),
+      mode,
       duration_s: parseFloat($("f-duration").value) || 20,
       target: $("f-target").value,
       palette: $("f-palette").value,
       julia: $("f-julia").checked,
       audio_path: audio,
+      image_path: image,
+      mask_path: mask,
+      expand: parseInt($("f-expand").value, 10) || 128,
+      cover: parseFloat($("f-cover").value) || 0.4,
+      feather: parseInt($("f-feather").value, 10) || 28,
       upscale: $("f-upscale").value || null,
     };
     $("f-status").textContent = " rendering on CPU…";
     const job = await api("/api/fractal", {body});
     pollJob(job.id, false);
     document.querySelector('nav button[data-tab="jobs"]').click();
-    $("f-status").textContent = "";
-  } catch (e) { $("f-status").textContent = " " + e.message; }
+    $("f-status").textContent = " job queued";
+  } catch (e) {
+    $("f-status").textContent = " " + e.message;
+    toast(e.message);
+  } finally {
+    $("f-generate").disabled = false;
+  }
 };
 
 // music
 $("m-generate").onclick = async () => {
   if (!$("m-request").value.trim()) return toast("Write a brief first");
   if (!$("m-audio").files.length) return toast("Pick an audio track first");
-  if (!mIntake.armed) { mIntake.start(); return toast("Ara wants a quick chat first — Generate again when she's done, or skip"); }
+  if (!mIntake.armed) {
+    mIntake.start();
+    return toast("Ara wants a quick chat first — Generate again when she's done, or skip");
+  }
   $("m-status").textContent = " uploading…";
+  $("m-generate").disabled = true;
   try {
     const audio = await uploadFile("m-audio");
     const body = {
@@ -390,8 +1146,13 @@ $("m-generate").onclick = async () => {
     const job = await api("/api/music", {body});
     pollJob(job.id, false);
     document.querySelector('nav button[data-tab="jobs"]').click();
-    $("m-status").textContent = "";
-  } catch (e) { $("m-status").textContent = " " + e.message; }
+    $("m-status").textContent = " job queued";
+  } catch (e) {
+    $("m-status").textContent = " " + e.message;
+    toast(e.message);
+  } finally {
+    $("m-generate").disabled = false;
+  }
 };
 
 // jobs
@@ -404,22 +1165,39 @@ async function refreshJobs() {
   let jobs;
   try { jobs = await api("/api/jobs"); } catch (e) { return; }
   const box = $("jobs-list");
-  if (!jobs.length) { box.innerHTML = '<div class="card muted">no jobs yet</div>'; return; }
-  box.innerHTML = jobs.map(j => `
+  if (!jobs.length) {
+    box.innerHTML = '<div class="card muted">No jobs yet — generate from Create, Fractal, or Music.</div>';
+    return;
+  }
+  box.innerHTML = jobs.map(j => {
+    const media = [];
+    if (j.params?.image_path) media.push("image");
+    if (j.params?.audio_path) media.push("audio");
+    if (j.params?.video_path) media.push("video");
+    const mediaTag = media.length ? ` · media: ${media.join("+")}` : "";
+    const elapsed = j.started_at
+      ? fmtDur((j.finished_at || (Date.now() / 1000)) - j.started_at)
+      : "";
+    return `
     <div class="card">
-      <span class="badge b-${j.status}">${j.status}</span>
-      <b style="margin-left:8px">${esc(j.request.slice(0, 90))}</b>
-      <span class="muted"> · ${j.kind} · ${esc(j.params.quality || "")}</span>
-      ${j.error ? `<div class="muted" style="color:var(--err)">${esc(j.error)}</div>` : ""}
-      ${j.result?.video_url || j.result?.video_path ? "" : ""}
+      <div class="job-head">
+        <span class="badge b-${j.status}">${j.status}</span>
+        <b>${esc((j.request || "").slice(0, 90))}</b>
+        <span class="job-meta">${esc(j.kind)}${j.params?.quality ? " · " + esc(j.params.quality) : ""}${mediaTag}${elapsed ? " · " + elapsed : ""}</span>
+      </div>
+      ${j.error ? `<div class="muted" style="color:var(--err);margin-top:6px">${esc(j.error)}</div>` : ""}
       <div class="log" id="log-${j.id}">…</div>
       <div id="res-${j.id}"></div>
-    </div>`).join("");
+    </div>`;
+  }).join("");
   for (const j of jobs) {
     const full = await api(`/api/jobs/${j.id}`).catch(() => null);
     if (!full) continue;
     const log = $("log-" + j.id);
-    if (log) { log.textContent = (full.log || []).join("\n"); log.scrollTop = log.scrollHeight; }
+    if (log) {
+      log.textContent = (full.log || []).join("\n") || "(no log yet)";
+      log.scrollTop = log.scrollHeight;
+    }
     renderResult(j.id, full, seenJobs.get(j.id));
   }
 }
@@ -428,7 +1206,18 @@ function renderResult(id, job, showBoard) {
   if (!slot || !job.result) return;
   const r = job.result;
   let html = "";
-  if (r.video_path) {
+  if (r.media) {
+    const bits = [];
+    if (r.media.image_name) bits.push("img " + r.media.image_name);
+    if (r.media.audio_name) bits.push("aud " + r.media.audio_name);
+    if (r.media.video_name) bits.push("vid " + r.media.video_name);
+    if (bits.length) html += `<div class="muted" style="margin-top:8px">Comfy inputs: ${esc(bits.join(" · "))}</div>`;
+  }
+  if (r.panel_meta?.winner) {
+    html += `<div class="muted" style="margin-top:6px">panel winner: <b style="color:var(--text)">${esc(r.panel_meta.winner)}</b>
+      ${r.panel_meta.judge_reason ? " — " + esc(r.panel_meta.judge_reason) : ""}</div>`;
+  }
+  if (r.video_path || r.video_url) {
     const url = r.video_url || null;
     if (r.full_judge_score != null) {
       html += `<div style="margin-top:10px"><b>full judge:</b>
@@ -439,7 +1228,7 @@ function renderResult(id, job, showBoard) {
       ${(r.beat_map.beats || []).length} beats ·
       ${(r.beat_map.sections || []).map(s => s.label).join(" → ")}</div>`;
     if (url) html += `<video controls src="${url}"></video>`;
-    else html += `<div class="muted">${esc(r.video_path)}</div>`;
+    else html += `<div class="muted" style="margin-top:8px">${esc(r.video_path)}</div>`;
   }
   if (r.shots) {
     html += r.shots.map(s => `<div class="shot"><b>${s.index + 1}. ${esc(s.title)}</b>
@@ -464,16 +1253,20 @@ setInterval(refreshJobs, 2500);
 async function loadRuns() {
   const runs = await api("/api/runs").catch(() => []);
   const tb = document.querySelector("#runs-table tbody");
+  if (!runs.length) {
+    tb.innerHTML = '<tr><td colspan="6" class="muted">No run records yet</td></tr>';
+    return;
+  }
   tb.innerHTML = runs.map((r, i) => `<tr class="click" data-i="${i}">
-    <td class="muted">${esc(r.ts)}</td><td>${esc(r.request.slice(0, 60))}</td>
-    <td>${r.kind}</td><td>${esc(r.variant)}</td>
-    <td class="score ${r.passed ? "hi" : "lo"}">${r.score == null ? "–" : r.score.toFixed(2)}</td>
+    <td class="muted">${esc(r.ts)}</td><td>${esc((r.request || "").slice(0, 60))}</td>
+    <td>${esc(r.kind)}</td><td>${esc(r.variant)}</td>
+    <td class="score ${r.passed ? "hi" : "lo"}">${r.score == null ? "–" : Number(r.score).toFixed(2)}</td>
     <td>${esc(r.status)}</td></tr>`).join("");
   tb.querySelectorAll("tr").forEach(tr => tr.onclick = () => {
     const r = runs[tr.dataset.i];
     const d = $("run-detail");
     d.style.display = "block";
-    d.innerHTML = `<b>${esc(r.request)}</b> <span class="muted">(${r.kind} · ${esc(r.status)})</span>
+    d.innerHTML = `<b>${esc(r.request)}</b> <span class="muted">(${esc(r.kind)} · ${esc(r.status)})</span>
       ${r.judge_reason ? `<p class="muted">${esc(r.judge_reason)}</p>` : ""}
       ${r.video_url ? `<video controls src="${r.video_url}"></video>` : '<p class="muted">no video file</p>'}`;
   });
@@ -489,6 +1282,7 @@ $("kb-go").onclick = async () => {
     <pre>${esc((h.text || "").slice(0, 400))}</pre></div>`).join("")
     : '<span class="muted">no hits</span>';
 };
+$("kb-q").addEventListener("keydown", e => { if (e.key === "Enter") $("kb-go").click(); });
 
 // models
 async function loadModels() {
@@ -499,8 +1293,8 @@ async function loadModels() {
      <td class="muted">${esc((v.missing || []).join(", "))}</td></tr>`).join("");
   const files = (m.files || []).map(f => `<tr><td>${esc(f.name)}</td>
     <td>${f.size_gb} GB</td><td class="muted">${esc(f.dir)}</td></tr>`).join("");
-  $("models-body").innerHTML = `<b>Bundles</b><table>${bundles}</table>
-    <br><b>Files</b><table>${files}</table>`;
+  $("models-body").innerHTML = `<b>Bundles</b><table>${bundles || '<tr><td class="muted">none</td></tr>'}</table>
+    <br><b>Files</b><table>${files || '<tr><td class="muted">none</td></tr>'}</table>`;
 }
 
 loadHealth();

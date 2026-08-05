@@ -276,7 +276,9 @@ def _write_record(run_id: str, record: dict, *, log=print) -> None:
     ts = datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%SZ")
     path = RUNS_DIR / f"{ts}_{run_id}_music.json"
     try:
-        path.write_text(json.dumps(record, indent=1, default=str), encoding="utf-8")
+        path.write_text(
+            json.dumps(record, indent=1, default=str) + "\n", encoding="utf-8"
+        )
         log(f"run record: {path}")
     except OSError as e:
         log(f"could not write run record: {e}")

@@ -146,7 +146,7 @@ def _write_record(result: PipelineResult) -> None:
     record = RUNS_DIR / f"{ts}_{result.run_id}_pipeline.json"
     try:
         record.write_text(
-            json.dumps(result.to_dict(), indent=1, default=str), encoding="utf-8"
+            json.dumps(result.to_dict(), indent=1, default=str) + "\n", encoding="utf-8"
         )
         result.log(f"pipeline record: {record}")
     except OSError as e:
@@ -192,6 +192,7 @@ def run_pipeline(
     judge_threshold: float = JUDGE_SCORE_THRESHOLD,
     llm_panel: Optional[str] = None,
     panel_judge: Optional[str] = None,
+    power_mode: Optional[bool] = None,
     client: Optional[ComfyClient] = None,
 ) -> PipelineResult:
     run_id = uuid.uuid4().hex[:12]
@@ -220,6 +221,7 @@ def run_pipeline(
             audio_name=audio_name,
             judge_enabled=j_enabled,
             max_judge_rounds=max_judge_rounds,
+            power_mode=power_mode,
         )
         result.messages.extend(st.messages)
         result.status = "done" if st.state == "DONE" else "error"
@@ -272,6 +274,7 @@ def run_pipeline(
             audio_name=audio_name,
             judge_enabled=j_enabled,
             max_judge_rounds=max_judge_rounds,
+            power_mode=power_mode,
         )
 
     # Per-segment generation

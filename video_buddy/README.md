@@ -62,7 +62,10 @@ python -m master_agent run "..." --no-judge  # skip the judge loop
 python -m master_agent run "premium coffee commercial" --duration 8 --quality draft
 python -m master_agent run "..." --duration 8 --dry-run        # storyboard + validate, no GPU
 python -m master_agent run "..." --storyboard off              # skip shot cards
-python -m master_agent run "..." --llm-panel duo               # 2 local LLMs draft, judge picks
+python -m master_agent run "..." --llm-panel local             # local 27B only (default)
+python -m master_agent run "..." --llm-panel grok              # Grok solo
+python -m master_agent run "..." --llm-panel grok+local        # Grok + local, judge picks
+python -m master_agent run "..." --llm-panel grok+claude       # Grok + Claude, judge picks
 python -m master_agent run "..." --llm-panel ollama:gemma4:latest,kimi   # custom panel
 ```
 
@@ -70,6 +73,24 @@ The validator checks class types, required inputs, widget values, link type
 integrity (match-type passthroughs like `COMFY_MATCHTYPE_V3` count as
 wildcards), and that model filenames in loaders exist in the local inventory —
 before anything is queued.
+
+## Power mode (agent graph ops)
+
+Optional **power mode** lets the LLM propose ComfyUI API-graph ops after the
+heuristic patch, grounded in live `/object_info` snippets plus workflow/run
+RAG. Ops are validate-gated; invalid graphs fall back to the pre-power patch.
+
+```bash
+# Dry-run (no GPU): patch + propose ops + validate
+python -m master_agent power-tune "neon rain commercial" --variant base --json
+
+# Full run with power mode
+python -m master_agent run "..." --power-mode
+# or: POWER_MODE=1
+```
+
+Ops: `set_widget`, `set_widget_by_class`, `rewire`, `add_node`, `remove_node`,
+`delete_input`. Web: `POST /api/power-tune`.
 
 ## Orchestrator + Judge
 
@@ -105,13 +126,14 @@ profile) go through `orchestrator/pipeline.py`:
 1. **Storyboard** — an LLM panel plans one shot card per segment (camera,
    action, continuity language, per-shot LTX prompt); heuristic fallback when
    no LLM is available. Modes: `smart` (default) / `always` / `multi_only` /
-   `off`. Panel presets (`--llm-panel`, env `LLM_PANEL`): `default` = the
-   local 27B alone, `duo` = 27B + `gemma4:latest` with a judge LLM
-   (`--panel-judge`, env `PANEL_JUDGE`, default `ollama`) picking the winning
-   board (it may also blend shots). Custom comma lists work too
-   (`ollama:<model>`, `kimi`, `grok`, `claude`); unavailable or failing
-   members are skipped, never fatal. Panel details (members, latencies,
-   winner, judge reason) land in the run record as `panel_meta`.
+   `off`. Panel presets (`--llm-panel`, env `LLM_PANEL`): `default` /
+   `local` = local 27B alone (local-first), `grok` = Grok solo,
+   `grok+local` / `both` / `panel` = Grok + local 27B, `grok+claude` =
+   Grok + Claude. Multi-member panels use a judge LLM (`--panel-judge`,
+   env `PANEL_JUDGE`, default `ollama`) to pick or blend. Legacy `duo` =
+   27B + `gemma4:latest`. Custom CSV works (`ollama:<model>`, `kimi`,
+   `grok`, `claude`); unavailable members are skipped, never fatal.
+   Panel details land in the run record as `panel_meta`.
 2. **Per-segment generation** — each shot runs the full orchestrator loop
    (patch → validate → submit → judge) with a per-shot seed offset
    (`base + i*17`).
@@ -261,14 +283,13 @@ python -m master_agent ui --port 8189    # http://127.0.0.1:8189
 
 FastAPI + single-file dashboard (`master_agent/web/`). Tabs: **Create**
 (brief → storyboard preview or full GPU run, variant/panel pickers),
-**Fractal** (CPU deep-zoom renders, optional beat-reactive audio + upscale),
-**Music** (upload a track → beat-synced music video, AI shots or fractal
-visual), **Jobs** (live logs, 2.5s polling, video playback of results),
-**Runs** (history + judge scores), **Knowledge** (KB search), **Models**
-(inventory). Health strip: ComfyUI/GPU/Ollama/KB at a glance. Jobs run
-in-process; one GPU job at a time (`run` + music-shots), fractal/dry-run
-jobs may overlap. Audio uploads land in `state/uploads/`. Localhost
-single-user — no auth.
+**Voice** (Chrome/Edge mic interview via Web Speech API — speak to the
+agent, she answers out loud; hands-free loop optional), **Fractal**
+(CPU deep-zoom / inpaint / outpaint), **Music** (beat-synced MV), **Jobs**
+(live logs + playback), **Runs**, **Knowledge**, **Models**. Create and
+Music intake chat bars also get mic + speak-replies toggles. Health strip:
+ComfyUI/GPU/Ollama/Grok/KB. Jobs run in-process; one GPU job at a time.
+Localhost single-user — no auth. Voice needs Chrome or Edge + mic permission.
 
 ## Hermes MCP server
 
@@ -311,10 +332,13 @@ Ollama models (19-27GB) and can take several minutes — allow long timeouts.
 ## Status (2026-08-04, second pass)
 
 - **Fractal pipeline** (`master_agent/fractal/`): pure-numpy Mandelbrot/Julia
-  deep-zoom renderer (smooth coloring, 2x supersampling, active-subset
-  iteration, float64 depth cap) → ffmpeg H.264 pipe. Beat-reactive mode:
-  zoom eases into beats, palette flashes on onsets, Julia `c` wobbles with
-  energy. `python -m master_agent fractal`, `kind: "fractal"` run records.
+  renderer (smooth coloring, 2x supersampling, active-subset iteration,
+  float64 depth cap) → ffmpeg H.264 pipe. Modes: `zoom` (deep dive),
+  `inpaint` (fill a center hole or custom white mask with animated fractal),
+  `outpaint` (expand photo borders with fractal). Beat-reactive: zoom eases
+  into beats, palette flashes, Julia `c` wobbles. CLI
+  `python -m master_agent fractal --mode inpaint --image photo.jpg`,
+  web Fractal tab, `kind: "fractal"` run records.
 - **Beat-synced music videos** (`master_agent/music/`): dependency-free beat
   detection (numpy spectral flux + comb-filter tempo 60–200 BPM + phase-
   aligned grid + RMS energy sections). `run_music_video()` plans shots on

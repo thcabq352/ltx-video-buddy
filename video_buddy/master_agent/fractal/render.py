@@ -350,6 +350,8 @@ def render_zoom_video(
     log=print,
 ) -> Path:
     """Render the full zoom to an H.264 mp4."""
+    width = max(2, int(width) & ~1)
+    height = max(2, int(height) & ~1)
     with FfmpegEncoder(dest, width, height, fps) as enc:
         for f, frame in zoom_frames(
             duration_s=duration_s, fps=fps, width=width, height=height,
@@ -360,4 +362,267 @@ def render_zoom_video(
             if f % max(1, fps * 2) == 0:
                 log(f"fractal frame {f}/{int(duration_s * fps)}")
     log(f"fractal video: {enc.dest}")
+    return enc.dest
+
+
+# ── inpaint / outpaint (image + fractal fill) ─────────────
+
+MODES = ("zoom", "inpaint", "outpaint")
+
+
+def ensure_even_size(arr: np.ndarray) -> np.ndarray:
+    """libx264 / yuv420p needs even width and height — crop 1px if odd.
+
+    Works for HxW masks and HxWxC images.
+    """
+    h, w = arr.shape[:2]
+    nh, nw = max(h - (h % 2), 2), max(w - (w % 2), 2)
+    if nh == h and nw == w:
+        return arr
+    return arr[:nh, :nw]
+
+
+def load_rgb(path: str | Path, *, max_side: int = 1280) -> np.ndarray:
+    """Load an image as HxWx3 uint8 RGB, optionally downscaling long side."""
+    from PIL import Image
+
+    img = Image.open(path).convert("RGB")
+    w, h = img.size
+    if max(w, h) > max_side:
+        scale = max_side / float(max(w, h))
+        img = img.resize(
+            (max(1, int(round(w * scale))), max(1, int(round(h * scale)))),
+            Image.Resampling.LANCZOS,
+        )
+    # even dims for H.264 later
+    w, h = img.size
+    if w % 2 or h % 2:
+        img = img.crop((0, 0, w - (w % 2), h - (h % 2)))
+    return np.asarray(img, dtype=np.uint8)
+
+
+def load_mask(path: str | Path, shape: tuple[int, int]) -> np.ndarray:
+    """Load a mask image (white/light = fill) resized to (H, W), float 0..1."""
+    from PIL import Image
+
+    h, w = shape
+    m = Image.open(path).convert("L").resize((w, h), Image.Resampling.BILINEAR)
+    arr = np.asarray(m, dtype=np.float32) / 255.0
+    return np.clip(arr, 0.0, 1.0)
+
+
+def feather_binary_mask(hard: np.ndarray, radius: int) -> np.ndarray:
+    """Soft-edge a binary mask (1=fill) with a cheap box-blur ramp.
+
+    Pure numpy — no scipy. ``radius`` is in pixels; 0 returns hard edges.
+    Keeps strong fill in the interior while ramping only near the boundary.
+    """
+    hard = np.clip(hard.astype(np.float32), 0.0, 1.0)
+    if radius <= 0:
+        return hard
+    out = hard.copy()
+    k = np.array([1.0, 2.0, 1.0], dtype=np.float32)
+    k /= k.sum()
+    passes = max(1, int(radius))
+    for _ in range(passes):
+        pad = np.pad(out, ((0, 0), (1, 1)), mode="edge")
+        out = k[0] * pad[:, 0:-2] + k[1] * pad[:, 1:-1] + k[2] * pad[:, 2:]
+        pad = np.pad(out, ((1, 1), (0, 0)), mode="edge")
+        out = k[0] * pad[0:-2, :] + k[1] * pad[1:-1, :] + k[2] * pad[2:, :]
+    # Interior of the hard mask stays high; edge ramps via blur
+    return np.clip(np.where(hard > 0.5, np.maximum(out, hard), out), 0.0, 1.0)
+
+
+def soft_mask_from_gray(gray: np.ndarray, *, feather: int = 0) -> np.ndarray:
+    """Turn a continuous mask (0..1, white=fill) into a soft alpha.
+
+    If feather > 0, slightly dilate/blur the mid-tones so hard paint masks
+    don't leave a jagged cut.
+    """
+    m = np.clip(gray.astype(np.float32), 0.0, 1.0)
+    if feather <= 0:
+        return m
+    hard = (m > 0.5).astype(np.float32)
+    soft = feather_binary_mask(hard, feather)
+    # Prefer the smoother of continuous gray vs feathered hard edge
+    return np.clip(np.maximum(m * 0.55 + soft * 0.45, m * soft), 0.0, 1.0)
+
+
+def center_hole_mask(
+    height: int,
+    width: int,
+    *,
+    cover: float = 0.4,
+    feather: int = 24,
+    shape: str = "ellipse",
+) -> np.ndarray:
+    """Soft hole in the center for inpaint (1=fill with fractal).
+
+    Uses a smooth radial (or rect) falloff so the seam doesn't look cut out.
+    """
+    cover = float(np.clip(cover, 0.05, 0.95))
+    feather = max(0, int(feather))
+    yy, xx = np.mgrid[0:height, 0:width].astype(np.float64)
+    cy, cx = (height - 1) / 2.0, (width - 1) / 2.0
+    if shape == "rect":
+        half_h = max(height * cover / 2.0, 1.0)
+        half_w = max(width * cover / 2.0, 1.0)
+        # chebyshev distance outside the rect, 0 inside
+        dy = np.maximum(np.abs(yy - cy) - half_h, 0.0)
+        dx = np.maximum(np.abs(xx - cx) - half_w, 0.0)
+        dist = np.maximum(dx, dy)
+        # inside = full fill; ramp out over feather px
+        if feather <= 0:
+            return (dist <= 0).astype(np.float32)
+        return np.clip(1.0 - dist / float(feather), 0.0, 1.0).astype(np.float32)
+
+    ry = max(height * cover / 2.0, 1.0)
+    rx = max(width * cover / 2.0, 1.0)
+    # normalized radius (1.0 = hole edge)
+    r = np.sqrt(((yy - cy) / ry) ** 2 + ((xx - cx) / rx) ** 2)
+    if feather <= 0:
+        return (r <= 1.0).astype(np.float32)
+    # soft band: full fill until ~inner, ramp across feather as fraction of radius
+    band = max(feather / max(min(rx, ry), 1.0), 0.05)
+    inner, outer = 1.0 - band, 1.0 + band * 0.35
+    return np.clip((outer - r) / max(outer - inner, 1e-6), 0.0, 1.0).astype(np.float32)
+
+
+def _edge_extend_canvas(image: np.ndarray, expand: int) -> np.ndarray:
+    """Pad with edge-replicated pixels so soft outpaint blends into content."""
+    h, w = image.shape[:2]
+    canvas = np.zeros((h + 2 * expand, w + 2 * expand, 3), dtype=np.uint8)
+    canvas[expand : expand + h, expand : expand + w] = image
+    # top / bottom strips
+    canvas[:expand, expand : expand + w] = image[0:1, :, :]
+    canvas[expand + h :, expand : expand + w] = image[-1:, :, :]
+    # left / right strips (including corners from already-filled edges)
+    canvas[:, :expand] = canvas[:, expand : expand + 1]
+    canvas[:, expand + w :] = canvas[:, expand + w - 1 : expand + w]
+    return canvas
+
+
+def prepare_outpaint(
+    image: np.ndarray,
+    *,
+    expand: int = 128,
+    feather: int = 32,
+) -> tuple[np.ndarray, np.ndarray]:
+    """Pad image on all sides; return (canvas RGB, fill-mask float 0..1).
+
+    Canvas is edge-extended (not black) so the feathered fractal seam looks
+    natural. Mask ramps from 0 at the photo edge to 1 over ``feather`` px.
+    """
+    expand = max(0, int(expand))
+    feather = max(0, int(feather))
+    if expand == 0:
+        h, w = image.shape[:2]
+        return image.copy(), np.zeros((h, w), dtype=np.float32)
+
+    h, w = image.shape[:2]
+    H, W = h + 2 * expand, w + 2 * expand
+    canvas = _edge_extend_canvas(image, expand)
+
+    yy = np.arange(H, dtype=np.float64)[:, None]
+    xx = np.arange(W, dtype=np.float64)[None, :]
+    # Euclidean distance outside the original photo rect (0 on/inside edge)
+    top, left = float(expand), float(expand)
+    bot, right = float(expand + h - 1), float(expand + w - 1)
+    dy = np.where(yy < top, top - yy, np.where(yy > bot, yy - bot, 0.0))
+    dx = np.where(xx < left, left - xx, np.where(xx > right, xx - right, 0.0))
+    dist = np.sqrt(dx * dx + dy * dy)
+    inside = (yy >= top) & (yy <= bot) & (xx >= left) & (xx <= right)
+    if feather <= 0:
+        mask = np.where(inside, 0.0, 1.0).astype(np.float32)
+    else:
+        # 0 at photo edge → 1 at feather distance (and beyond)
+        mask = np.where(
+            inside,
+            0.0,
+            np.clip(dist / float(feather), 0.0, 1.0),
+        ).astype(np.float32)
+    return canvas, mask
+
+
+def composite_rgb(base: np.ndarray, fill: np.ndarray, mask: np.ndarray) -> np.ndarray:
+    """Alpha-composite fill over base using mask (1 = all fill)."""
+    if base.shape[:2] != fill.shape[:2]:
+        raise ValueError(f"base {base.shape[:2]} vs fill {fill.shape[:2]}")
+    m = np.clip(mask.astype(np.float32), 0.0, 1.0)[..., None]
+    out = base.astype(np.float32) * (1.0 - m) + fill.astype(np.float32) * m
+    return np.clip(out + 0.5, 0, 255).astype(np.uint8)
+
+
+def paint_frames(
+    *,
+    base_rgb: np.ndarray,
+    mask: np.ndarray,
+    duration_s: float,
+    fps: int,
+    target: str = "seahorse",
+    palette: str = "fire",
+    max_iter: int = 256,
+    zoom_secs_per_double: float = 4.0,
+    beat_map=None,
+    julia: bool = False,
+    seed: int | None = None,
+):
+    """Yield (frame_index, composited HxWx3) — fractal animates under the mask."""
+    height, width = base_rgb.shape[:2]
+    mask = np.clip(mask.astype(np.float32), 0.0, 1.0)
+    if mask.shape[:2] != (height, width):
+        raise ValueError(f"mask shape {mask.shape[:2]} != image {(height, width)}")
+    for f, frac in zoom_frames(
+        duration_s=duration_s,
+        fps=fps,
+        width=width,
+        height=height,
+        target=target,
+        palette=palette,
+        max_iter=max_iter,
+        zoom_secs_per_double=zoom_secs_per_double,
+        beat_map=beat_map,
+        julia=julia,
+        seed=seed,
+    ):
+        yield f, composite_rgb(base_rgb, frac, mask)
+
+
+def render_paint_video(
+    dest: Path,
+    *,
+    base_rgb: np.ndarray,
+    mask: np.ndarray,
+    duration_s: float,
+    fps: int = 24,
+    target: str = "seahorse",
+    palette: str = "fire",
+    max_iter: int = 256,
+    beat_map=None,
+    julia: bool = False,
+    seed: int | None = None,
+    log=print,
+) -> Path:
+    """Encode an inpaint/outpaint fractal composite video."""
+    base_rgb = ensure_even_size(base_rgb)
+    mask = ensure_even_size(mask)
+    height, width = base_rgb.shape[:2]
+    n = max(1, int(round(duration_s * fps)))
+    with FfmpegEncoder(dest, width, height, fps) as enc:
+        for f, frame in paint_frames(
+            base_rgb=base_rgb,
+            mask=mask,
+            duration_s=duration_s,
+            fps=fps,
+            target=target,
+            palette=palette,
+            max_iter=max_iter,
+            beat_map=beat_map,
+            julia=julia,
+            seed=seed,
+        ):
+            enc.write(frame)
+            if f % max(1, fps * 2) == 0:
+                log(f"fractal paint frame {f}/{n}")
+    log(f"fractal paint video: {enc.dest}")
     return enc.dest

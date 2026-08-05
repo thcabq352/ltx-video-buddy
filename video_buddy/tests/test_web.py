@@ -17,6 +17,20 @@ from master_agent.web.app import app
 from master_agent.web.jobs import MANAGER, Job
 
 
+class TestStudioHtml(unittest.TestCase):
+    def test_voice_chat_ui_present(self):
+        from master_agent.web.app import STATIC_DIR
+
+        html = (STATIC_DIR / "index.html").read_text(encoding="utf-8")
+        self.assertIn('data-tab="voice"', html)
+        self.assertIn("SpeechRecognition", html)
+        self.assertIn("webkitSpeechRecognition", html)
+        self.assertIn("speechSynthesis", html)
+        self.assertIn("c-intake-mic", html)
+        self.assertIn("v-start", html)
+        self.assertIn("Hands-free", html)
+
+
 class TestHealth(unittest.TestCase):
     def test_health_shape(self):
         with patch("master_agent.comfy.client.ComfyClient.health") as h, patch(
@@ -44,6 +58,58 @@ class TestJobs(unittest.TestCase):
         r = client.post("/api/jobs", json={"request": "x", "quality": "nope"})
         self.assertEqual(r.status_code, 400)
 
+    def test_rejects_media_outside_uploads(self):
+        client = TestClient(app)
+        r = client.post(
+            "/api/jobs",
+            json={"request": "rain", "image_path": "C:/Windows/notepad.exe"},
+        )
+        self.assertEqual(r.status_code, 400)
+        self.assertIn("uploads", (r.json().get("detail") or "").lower())
+
+    def test_accepts_media_under_uploads(self):
+        from master_agent.config import STATE_DIR
+
+        uploads = STATE_DIR / "uploads"
+        uploads.mkdir(parents=True, exist_ok=True)
+        img = uploads / "test_ui_img.png"
+        img.write_bytes(b"\x89PNG\r\n\x1a\n")
+        try:
+            with patch(
+                "master_agent.orchestrator.pipeline._plan_storyboard",
+                return_value=([], "style", {}),
+            ):
+                client = TestClient(app)
+                r = client.post(
+                    "/api/jobs",
+                    json={
+                        "request": "rain on neon",
+                        "dry_run": True,
+                        "image_path": str(img),
+                        "llm_panel": "local",
+                        "storyboard": "always",
+                    },
+                )
+            self.assertEqual(r.status_code, 200, r.text)
+            job = MANAGER.get(r.json()["id"])
+            self.assertEqual(job.params.get("image_path"), str(img.resolve()))
+            self.assertEqual(job.params.get("storyboard"), "always")
+        finally:
+            img.unlink(missing_ok=True)
+
+    def test_upload_endpoint(self):
+        client = TestClient(app)
+        r = client.post(
+            "/api/upload",
+            files={"file": ("clip.wav", b"RIFF....WAVE", "audio/wav")},
+        )
+        self.assertEqual(r.status_code, 200, r.text)
+        data = r.json()
+        self.assertTrue(data["path"])
+        self.assertEqual(data["name"], "clip.wav")
+        self.assertGreater(data["size_bytes"], 0)
+        Path(data["path"]).unlink(missing_ok=True)
+
     def test_dry_run_job_lifecycle(self):
         from master_agent.storyboard.storyboard import ShotCard
 
@@ -70,6 +136,7 @@ class TestJobs(unittest.TestCase):
 
     def test_run_job_lifecycle(self):
         fake = MagicMock()
+        fake.run_id = "x"
         fake.to_dict.return_value = {
             "run_id": "x",
             "status": "done",
@@ -78,7 +145,11 @@ class TestJobs(unittest.TestCase):
         }
         fake.status = "done"
         fake.error = None
-        with patch("master_agent.orchestrator.pipeline.run_pipeline", return_value=fake):
+        with patch("master_agent.orchestrator.pipeline.run_pipeline", return_value=fake), patch(
+            "master_agent.comfy.client.ComfyClient"
+        ) as mock_client:
+            mock_client.return_value.upload_image.return_value = "start.png"
+            mock_client.return_value.upload_audio.return_value = "vo.wav"
             client = TestClient(app)
             r = client.post("/api/jobs", json={"request": "rain", "duration_s": 3})
             job_id = r.json()["id"]
@@ -91,6 +162,60 @@ class TestJobs(unittest.TestCase):
                 time.sleep(0.05)
         self.assertEqual(job.status, "done", job.error)
         self.assertEqual(job.result["full_judge_score"], 0.9)
+
+    def test_run_job_uploads_media_to_comfy(self):
+        from master_agent.config import STATE_DIR
+
+        uploads = STATE_DIR / "uploads"
+        uploads.mkdir(parents=True, exist_ok=True)
+        img = uploads / "ui_start.png"
+        aud = uploads / "ui_vo.wav"
+        img.write_bytes(b"\x89PNG\r\n\x1a\n")
+        aud.write_bytes(b"RIFF")
+        fake = MagicMock()
+        fake.run_id = "m1"
+        fake.to_dict.return_value = {
+            "run_id": "m1",
+            "status": "done",
+            "video_path": str(STATE_DIR.parent / "outputs" / "m1.mp4"),
+            "full_judge_score": 0.8,
+        }
+        fake.status = "done"
+        fake.error = None
+        try:
+            with patch("master_agent.orchestrator.pipeline.run_pipeline", return_value=fake) as rp, patch(
+                "master_agent.comfy.client.ComfyClient"
+            ) as mock_client:
+                inst = mock_client.return_value
+                inst.upload_image.return_value = "start.png"
+                inst.upload_audio.return_value = "vo.wav"
+                client = TestClient(app)
+                r = client.post(
+                    "/api/jobs",
+                    json={
+                        "request": "talking head",
+                        "image_path": str(img),
+                        "audio_path": str(aud),
+                        "variant": "lipsync",
+                    },
+                )
+                self.assertEqual(r.status_code, 200, r.text)
+                job = MANAGER.get(r.json()["id"])
+                for _ in range(100):
+                    if job.status in ("done", "error"):
+                        break
+                    import time
+
+                    time.sleep(0.05)
+            self.assertEqual(job.status, "done", job.error)
+            kwargs = rp.call_args.kwargs
+            self.assertEqual(kwargs.get("image_name"), "start.png")
+            self.assertEqual(kwargs.get("audio_name"), "vo.wav")
+            self.assertEqual(kwargs.get("variant"), "lipsync")
+            self.assertEqual(job.result.get("media", {}).get("image_name"), "start.png")
+        finally:
+            img.unlink(missing_ok=True)
+            aud.unlink(missing_ok=True)
 
 
 class TestRunsAndGuards(unittest.TestCase):

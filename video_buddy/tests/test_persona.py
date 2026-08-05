@@ -97,7 +97,21 @@ _BRIEF_JSON = json.dumps(
 )
 
 
-class TestIntakeSession(unittest.TestCase):
+class _IsolatedRunsDir(unittest.TestCase):
+    """Redirect intake writes away from the real state/runs/ directory."""
+
+    def setUp(self):
+        self._runs_td = TemporaryDirectory()
+        self._runs_dir = Path(self._runs_td.name)
+        self._runs_patch = patch(
+            "master_agent.persona.intake.RUNS_DIR", self._runs_dir
+        )
+        self._runs_patch.start()
+        self.addCleanup(self._runs_patch.stop)
+        self.addCleanup(self._runs_td.cleanup)
+
+
+class TestIntakeSession(_IsolatedRunsDir):
     def _session(self, replies):
         session = IntakeSession("a sneaker commercial", persona=load_persona("ara"))
         fake = _FakeLLM(replies)
@@ -145,19 +159,17 @@ class TestIntakeSession(unittest.TestCase):
         self.assertIn("sneaker commercial", rep.brief.to_request())
 
     def test_intake_record_written(self):
-        with TemporaryDirectory() as td:
-            with patch("master_agent.persona.intake.RUNS_DIR", Path(td)):
-                session, _ = self._session([_BRIEF_JSON])
-                session.reply("wrap it up please — just go")
-                files = list(Path(td).glob("*_intake.json"))
-                self.assertEqual(1, len(files))
-                rec = json.loads(files[0].read_text(encoding="utf-8"))
-                self.assertEqual("intake", rec["kind"])
-                self.assertEqual("ara", rec["persona"])
-                self.assertIsNotNone(rec["brief"])
+        session, _ = self._session([_BRIEF_JSON])
+        session.reply("wrap it up please — just go")
+        files = list(self._runs_dir.glob("*_intake.json"))
+        self.assertEqual(1, len(files))
+        rec = json.loads(files[0].read_text(encoding="utf-8"))
+        self.assertEqual("intake", rec["kind"])
+        self.assertEqual("ara", rec["persona"])
+        self.assertIsNotNone(rec["brief"])
 
 
-class TestCliLoop(unittest.TestCase):
+class TestCliLoop(_IsolatedRunsDir):
     def test_run_interview_cli_completes(self):
         session_replies = [_BRIEF_JSON]
         outputs = []

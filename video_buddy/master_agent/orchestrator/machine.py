@@ -29,6 +29,9 @@ from master_agent.config import (
     MAX_JUDGE_ROUNDS,
     MAX_RETRIES,
     OUTPUTS_DIR,
+    POWER_MODE,
+    POWER_MODE_MAX_OPS,
+    POWER_MODE_REPAIR,
     RUNS_DIR,
     SEGMENT_MAX_S,
 )
@@ -96,7 +99,34 @@ class Orchestrator:
         st.workflow_meta = meta
         st.seed = meta.get("seed")
         self._workflow = workflow
+        if st.power_mode or POWER_MODE:
+            self._power_mode(st)
         return True
+
+    def _power_mode(self, st: RunState) -> None:
+        """LLM graph ops on the patched workflow; keep base graph if invalid."""
+        try:
+            from master_agent.comfy.power_mode import power_tune
+
+            object_info, _src = self.client.load_object_info(prefer_live=True)
+            pm = power_tune(
+                self._workflow,
+                request=st.request or st.prompt or "",
+                object_info=object_info,
+                repair=POWER_MODE_REPAIR,
+                max_ops=POWER_MODE_MAX_OPS,
+                log=st.log,
+            )
+            st.power_meta = pm.to_dict()
+            if pm.valid and pm.applied:
+                self._workflow = pm.workflow
+                st.log(f"power-mode applied {len(pm.applied)} op(s)")
+            elif pm.error:
+                st.log(f"power-mode skipped: {pm.error}")
+            else:
+                st.log("power-mode: no graph changes")
+        except Exception as e:
+            st.log(f"power-mode failed (continuing with heuristic patch): {e}")
 
     def _validate(self, st: RunState) -> bool:
         try:
@@ -259,6 +289,7 @@ class Orchestrator:
         audio_name: Optional[str] = None,
         judge_enabled: Optional[bool] = None,
         max_judge_rounds: int = MAX_JUDGE_ROUNDS,
+        power_mode: Optional[bool] = None,
     ) -> RunState:
         run_id = uuid.uuid4().hex[:12]
         st = RunState(
@@ -276,6 +307,7 @@ class Orchestrator:
             audio_name=audio_name,
             judge_enabled=JUDGE_ENABLED if judge_enabled is None else judge_enabled,
             max_judge_rounds=max_judge_rounds,
+            power_mode=POWER_MODE if power_mode is None else bool(power_mode),
         )
         try:
             st.variant = self._select_variant(st, variant)
@@ -304,7 +336,9 @@ class Orchestrator:
         ts = datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%SZ")
         record = RUNS_DIR / f"{ts}_{st.run_id}.json"
         try:
-            record.write_text(json.dumps(st.to_dict(), indent=1, default=str), encoding="utf-8")
+            record.write_text(
+                json.dumps(st.to_dict(), indent=1, default=str) + "\n", encoding="utf-8"
+            )
             st.log(f"run record: {record}")
         except OSError as e:
             st.log(f"could not write run record: {e}")

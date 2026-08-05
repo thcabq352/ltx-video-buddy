@@ -52,6 +52,8 @@ class RunState:
 
     # Workflow / ComfyUI
     workflow_meta: dict[str, Any] = field(default_factory=dict)
+    power_mode: bool = False
+    power_meta: dict[str, Any] = field(default_factory=dict)
     prompt_id: Optional[str] = None
     video_path: Optional[str] = None
 

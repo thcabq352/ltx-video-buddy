@@ -135,17 +135,53 @@ class JobManager:
             job.finished_at = time.time()
 
     def _do_run(self, job: Job) -> None:
+        from master_agent.comfy.client import ComfyClient
         from master_agent.orchestrator.pipeline import run_pipeline
+
+        p = job.params
+        client = ComfyClient()
+        image_name = audio_name = video_name = None
+        if p.get("image_path"):
+            image_name = client.upload_image(Path(p["image_path"]))
+            print(f"uploaded image -> ComfyUI: {image_name}")
+        if p.get("audio_path"):
+            audio_name = client.upload_audio(Path(p["audio_path"]))
+            print(f"uploaded audio -> ComfyUI: {audio_name}")
+        if p.get("video_path"):
+            # Comfy treats source video like an image upload into input/
+            video_name = client.upload_image(Path(p["video_path"]))
+            print(f"uploaded video -> ComfyUI: {video_name}")
 
         result = run_pipeline(
             job.request,
-            variant=job.params.get("variant"),
-            duration_s=float(job.params.get("duration_s") or 5.0),
-            quality=job.params.get("quality"),
-            llm_panel=job.params.get("llm_panel"),
+            variant=p.get("variant"),
+            duration_s=float(p.get("duration_s") or 5.0),
+            quality=p.get("quality"),
+            seed=p.get("seed"),
+            video_name=video_name,
+            image_name=image_name,
+            audio_name=audio_name,
+            storyboard_mode=p.get("storyboard"),
+            llm_panel=p.get("llm_panel"),
+            client=client,
         )
         d = result.to_dict()
         d.pop("messages", None)
+        video = d.get("video_path")
+        if p.get("upscale") and video and result.status != "error":
+            from master_agent.upscale import upscale_video
+
+            print(f"upscaling via {p['upscale']}…")
+            up_path = str(upscale_video(video, method=p["upscale"], run_id=result.run_id))
+            d["upscaled_path"] = up_path
+            video = up_path
+        d["video_url"] = _outputs_url(video)
+        if image_name or audio_name or video_name:
+            d["media"] = {
+                "image_name": image_name,
+                "audio_name": audio_name,
+                "video_name": video_name,
+            }
         job.result = d
         if result.status == "error":
             job.error = result.error
@@ -184,6 +220,7 @@ class JobManager:
         p = job.params
         rec = run_fractal(
             job.request,
+            mode=p.get("mode") or "zoom",
             duration_s=float(p.get("duration_s") or 20.0),
             fps=int(p.get("fps") or 24),
             width=int(p.get("width") or 768),
@@ -193,6 +230,11 @@ class JobManager:
             seed=p.get("seed"),
             julia=bool(p.get("julia")),
             audio_path=p.get("audio_path"),
+            image_path=p.get("image_path"),
+            mask_path=p.get("mask_path"),
+            expand=int(p.get("expand") or 128),
+            cover=float(p.get("cover") if p.get("cover") is not None else 0.4),
+            feather=int(p.get("feather") or 28),
         )
         if p.get("upscale"):
             from master_agent.upscale import upscale_video
