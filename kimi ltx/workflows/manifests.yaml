@@ -430,3 +430,19 @@ mick_rtx_superres:
   ui_source: AI-RENDERING-EXAMPLE FILES/260330_MICKMUMPITZ_NVIDIA-RTX-SUPER-RESOLUTION_1-0.json
   description: NVIDIA RTX Video Super Resolution upscale pass
   requires: [Comfy-Org/Nvidia_RTX_Nodes_ComfyUI + nvidia-vfx (pip, pypi.nvidia.com)]
+
+# --- batch 4 (converted 2026-08-05, via state/convert_ui_to_api.py) ---
+# Extra packs: ComfyUI-Olm-DragCrop, ComfyUI_preview360panorama (ProGamerGov),
+# comfyui-LatLong, fresh comfyui-mickmumpitz-nodes clone, plus local
+# movie_builder_shims (MickmumpitzShotOrder/ShotDuplicator no-op stand-ins —
+# organizational nodes not yet released upstream).
+# New model folder: latent_upscale_models mapped in extra_model_paths.yaml.
+# Private assets (front.png/face.png/brielle_ref.mp3) repointed to
+# placeholders — see state/repair_batch4_api.py.
+
+mick_movie_builder:
+  file: 260507_MICKMUMPITZ_MOVIE-BUILDER_1-1_ADV_api.json
+  format: api
+  ui_source: 260507_MICKMUMPITZ_MOVIE-BUILDER_1-1_ADV.json
+  description: LTX 2.3 Movie Builder ADV — shot-by-shot movie pipeline (Flux 2 Klein start-frames, LTX 2.3 video+audio, voice cloning, 360 environments, ShotAssembler)
+  requires: [ComfyUI-Mickmumpitz-Nodes (ShotAssembler/ShotVideoOutput/ResolutionPicker), movie_builder_shims (ShotOrder/ShotDuplicator), ComfyUI-LTXVideo, KJNodes, RES4LYF, VideoHelperSuite, ComfyUI-Easy-Use, rgthree-comfy, ComfyUI-Olm-DragCrop, ComfyUI_preview360panorama]

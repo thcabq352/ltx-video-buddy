@@ -316,6 +316,35 @@ Ollama models (19-27GB) and can take several minutes — allow long timeouts.
   `/api/upload` (state/uploads/); GPU gate covers music-shots jobs, fractal
   jobs overlap. 91 pytest green.
 
+## Status (2026-08-05)
+
+- **LTX 2.3 Movie Builder integrated (batch 4).**
+  `260507_MICKMUMPITZ_MOVIE-BUILDER_1-1_ADV_api.json` (189 nodes) converted and
+  **validates PASS live**; manifest entry `mick_movie_builder` (29 entries).
+  Shot-by-shot movie pipeline: Flux 2 Klein start-frames, LTX 2.3 video+audio
+  with voice cloning (5s reference), optional 2x spatial upscale, 360°
+  environment generation + shot-reverse-shot crops, ShotAssembler final cut.
+  Full usage guide: `workflows/260507_MICKMUMPITZ_MOVIE-BUILDER_GUIDE.md`
+  (KB-ingested — guides in `workflows/*.md` are now indexed alongside the
+  JSON digests).
+- **Reusable converter:** `state/convert_ui_to_api.py` converts any UI graph
+  export to API format (reroute/GetNode-SetNode unwrapping, subgraph inline
+  expansion, schema-accurate widget mapping); regression-checked against all
+  9 existing UI↔API pairs. Batch-4 repairs in `state/repair_batch4_api.py`
+  (3 private author assets repointed to placeholders).
+- **New packs:** ComfyUI-Olm-DragCrop, ComfyUI_preview360panorama
+  (ProGamerGov), comfyui-LatLong, fresh comfyui-mickmumpitz-nodes clone, and
+  local `movie_builder_shims` (no-op stand-ins for the unreleased
+  MickmumpitzShotOrder/ShotDuplicator organizational nodes).
+- **~34GB new weights** via `state/download_models.py` BATCH4 section:
+  flux-2-klein 360-erp outpaint LoRA, ltx-2.3-id-lora-talkvid-3k (voice
+  cloning), gemma_3_12B_it_fp8_scaled, LTX23 video VAE bf16, x2 spatial
+  upscaler (new `latent_upscale_models` folder mapped in
+  `extra_model_paths.yaml`), and the LTX-2.3-dev-Q4_K_S GGUF low-VRAM option.
+- **Code on GitHub:** initial push to the private repo
+  `thcabq352/ltx-video-buddy` (weights, ComfyUI portable, Blender, example
+  media, secrets excluded — see `.gitignore` at the repo root).
+
 ## Status (2026-08-04)
 
 - **Mickmumpitz batches 2+3 integrated.** 15 more UI workflows converted to

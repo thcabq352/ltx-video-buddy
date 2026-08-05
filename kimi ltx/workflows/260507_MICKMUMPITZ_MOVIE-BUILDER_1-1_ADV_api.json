@@ -595,7 +595,7 @@
   },
   "1284": {
     "inputs": {
-      "image": "front.png"
+      "image": "ComfyUI_01828_.png"
     },
     "class_type": "LoadImage",
     "_meta": {
@@ -1150,7 +1150,7 @@
   },
   "4867": {
     "inputs": {
-      "image": "face.png"
+      "image": "ComfyUI_01828_.png"
     },
     "class_type": "LoadImage",
     "_meta": {
@@ -1159,7 +1159,7 @@
   },
   "10343": {
     "inputs": {
-      "audio": "brielle_ref.mp3"
+      "audio": "BusinessWoman_AUDIO.mp3"
     },
     "class_type": "LoadAudio",
     "_meta": {
