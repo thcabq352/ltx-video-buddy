@@ -28,6 +28,21 @@ Start ComfyUI (leave the window open):
 ComfyUI_windows_portable\run_api_8188.bat
 ```
 
+## External dependencies (not pip-installable)
+
+- **ffmpeg** on PATH — frame extraction, concat, audio muxing (imageio-ffmpeg
+  or a system build both work).
+- **Ollama** — local LLMs + embeddings: `ollama pull nomic-embed-text` (KB),
+  the 27B director model via `ollama create` (see
+  `state/Modelfile.qwen36-fable`), `qwen3-vl:30b` for the vision judge.
+- **ComfyUI portable** (`ComfyUI_windows_portable/`) — self-contained embedded
+  python; custom node packs live in `ComfyUI/custom_nodes/` and its pip deps
+  are managed with its own `python_embeded\python.exe`, not the project venv.
+- **ai-toolkit** (LoRA training only) — separate clone + own venv, set up with
+  `python -m master_agent lora setup`. The project venv is untouched.
+- **Model weights** (~450GB curated, not in git) — reproduced with
+  `python state/download_models.py` (idempotent, skips existing files).
+
 ## CLI
 
 ```bash
@@ -319,12 +334,12 @@ Ollama models (19-27GB) and can take several minutes — allow long timeouts.
 ## Status (2026-08-05)
 
 - **LTX 2.3 Movie Builder integrated (batch 4).**
-  `260507_MICKMUMPITZ_MOVIE-BUILDER_1-1_ADV_api.json` (189 nodes) converted and
-  **validates PASS live**; manifest entry `mick_movie_builder` (29 entries).
+  `260507_VIDEO-BUDDY_MOVIE-BUILDER_1-1_ADV_api.json` (189 nodes) converted and
+  **validates PASS live**; manifest entry `vb_movie_builder` (29 entries).
   Shot-by-shot movie pipeline: Flux 2 Klein start-frames, LTX 2.3 video+audio
   with voice cloning (5s reference), optional 2x spatial upscale, 360°
   environment generation + shot-reverse-shot crops, ShotAssembler final cut.
-  Full usage guide: `workflows/260507_MICKMUMPITZ_MOVIE-BUILDER_GUIDE.md`
+  Full usage guide: `workflows/260507_VIDEO-BUDDY_MOVIE-BUILDER_GUIDE.md`
   (KB-ingested — guides in `workflows/*.md` are now indexed alongside the
   JSON digests).
 - **Reusable converter:** `state/convert_ui_to_api.py` converts any UI graph
@@ -390,7 +405,7 @@ Ollama models (19-27GB) and can take several minutes — allow long timeouts.
   Fixes along the way: `ltx_windows_fix` infinite flush recursion (latent —
   fired on any `logging` flush), LTXVideo kornia 0.8 `pad` import,
   impact-pack/seedvr2/was-ns missing deps (skimage, rotary-embedding-torch,
-  numba…), converter widget-misalignment repairs (`state/repair_mick_api.py`).
+  numba…), converter widget-misalignment repairs (`state/repair_vb_api.py`).
 - **New pipeline variant `wan22`** (Wan 2.2 two-stage T2V, 16fps, 4n+1 frames):
   full routing (director keywords + LLM prompt, CLI, web UI), dual-UNET
   weights via `MODEL_FILES["wan22"]`, per-variant frame math
@@ -399,7 +414,7 @@ Ollama models (19-27GB) and can take several minutes — allow long timeouts.
   were never published; the four public Wan LoRAs stay active.
 - `krea2_img` is a manifest/patcher template variant (like `flux`) — usable
   via `load_and_patch_workflow`, not video-pipeline routed (image graph).
-  `mick_ideogram` validates but needs an Ideogram API key to actually run.
+  `vb_ideogram` validates but needs an Ideogram API key to actually run.
 - Validator now understands prefix-style autogrow inputs
   (`COMFY_AUTOGROW_V3`, e.g. BatchImagesNode `images.image0`).
 

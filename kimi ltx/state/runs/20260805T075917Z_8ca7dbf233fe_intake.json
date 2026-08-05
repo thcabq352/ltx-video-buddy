@@ -1,0 +1,23 @@
+{
+ "run_id": "8ca7dbf233fe",
+ "kind": "intake",
+ "persona": "ara",
+ "initial_request": "a sneaker commercial",
+ "history": [
+  {
+   "role": "user",
+   "text": "just go"
+  }
+ ],
+ "brief": {
+  "refined_request": "neon sneaker spot, rain-slick street",
+  "audience": "sneakerheads",
+  "tone": "kinetic",
+  "style": "",
+  "constraints": "",
+  "duration_s": null,
+  "aspect_ratio": "",
+  "music_mood": null,
+  "negatives": ""
+ }
+}

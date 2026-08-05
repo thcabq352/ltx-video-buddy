@@ -12,7 +12,7 @@ import json
 import os
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-API = "workflows/260507_MICKMUMPITZ_MOVIE-BUILDER_1-1_ADV_api.json"
+API = "workflows/260507_VIDEO-BUDDY_MOVIE-BUILDER_1-1_ADV_api.json"
 
 REPOINT = {
     "1284": {"image": "ComfyUI_01828_.png"},

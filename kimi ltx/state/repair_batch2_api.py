@@ -1,6 +1,6 @@
 """One-shot repair of the second batch of converted Mickmumpitz *_api.json files.
 
-Same class of converter bugs as batch 1 (state/repair_mick_api.py), plus:
+Same class of converter bugs as batch 1 (state/repair_vb_api.py), plus:
 - dangling subgraph-output links (LTX 2.3 subgraph output slot 2 is unconnected
   in the author's own file; the converter still emitted links to the dropped
   instance id) -> drop those inputs
@@ -21,7 +21,7 @@ ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 
 # --- explicit per-file input overrides -------------------------------------
 REPOINT = {
-    "workflows/251018_MICKMUMPITZ_QWEN-IMAGE-EDIT-360_1-1_api.json": {
+    "workflows/251018_VIDEO-BUDDY_QWEN-IMAGE-EDIT-360_1-1_api.json": {
         "213": {"image": "ComfyUI_01828_.png"},
     },
     "workflows/260330_AI-VFX-STARTIMAGE_1-0_api.json": {
@@ -32,7 +32,7 @@ REPOINT = {
         "30": {"vae_name": "qwen\\qwen_image_vae.safetensors"},
         "29": {"gguf_name": "gguf\\qwen-image-edit-2511-Q5_0.gguf"},
     },
-    "workflows/260330_MICKMUMPITZ_AI-VFX_1-0_ADV_api.json": {
+    "workflows/260330_VIDEO-BUDDY_AI-VFX_1-0_ADV_api.json": {
         "282": {"image": "ComfyUI_01828_.png"},
         "265": {"video": "warehouse_src_30fps.mp4"},
         "3380": {"video": "warehouse_src_30fps.mp4"},
@@ -40,7 +40,7 @@ REPOINT = {
         "3326": {"unet_name": "wan\\wan-14B_vace_skyreels_v3_R2V_e4m3fn_v1.safetensors"},
         "3327": {"lora_name": "wan\\Wan2.1_T2V_14B_FusionX_LoRA.safetensors"},
     },
-    "workflows/260330_MICKMUMPITZ_AI-VFX_PREPROCESS_1-0_api.json": {
+    "workflows/260330_VIDEO-BUDDY_AI-VFX_PREPROCESS_1-0_api.json": {
         "265": {"video": "warehouse_src_30fps.mp4"},
         # CreateShapeImageOnPath: converter dropped frame_width/height widgets,
         # shifting everything after them by two slots
@@ -70,7 +70,7 @@ REPOINT = {
             "background_color": "#808080",
         },
     },
-    "workflows/260608_MICKMUMPITZ_AI-VFX_1-3_ADV_api.json": {
+    "workflows/260608_VIDEO-BUDDY_AI-VFX_1-3_ADV_api.json": {
         "3349": {"image": "ComfyUI_01828_.png"},
         "282": {"image": "ComfyUI_01828_.png"},
         "3380": {"video": "warehouse_src_30fps.mp4"},
@@ -86,7 +86,7 @@ REPOINT = {
         "5893": {"video": "BusinessWoman_DEPTH.mp4"},
         "5883": {"audio": "BusinessWoman_AUDIO.mp3"},
     },
-    "workflows/260729_MICKMUMPITZ_CCC_4-1_KREA2-EDIT_BETA_PUBLISH_api.json": {
+    "workflows/260729_VIDEO-BUDDY_CCC_4-1_KREA2-EDIT_BETA_PUBLISH_api.json": {
         "535": {"image": "ComfyUI_01828_.png"},
         "6292": {"image": "ComfyUI_01828_.png"},
         # ImageCollectUnpack — old order (source, fit, target_size);
@@ -105,12 +105,12 @@ REPOINT = {
         "6139": {"image": "BusinessWoman_START-IMAGE.webp"},
     },
     # --- batch 3 (AI-RENDERER / Z-Image / RTX-SR) ---
-    "workflows/AI-RENDERING-EXAMPLE FILES/260303_MICKMUMPITZ_Z-IMAGE_TURBO_CN_1-1_api.json": {
+    "workflows/AI-RENDERING-EXAMPLE FILES/260303_VIDEO-BUDDY_Z-IMAGE_TURBO_CN_1-1_api.json": {
         "58": {"image": "ComfyUI_01828_.png"},
         "74": {"video": "dance_line_v03_0001-0250.mkv"},
         "88": {"vae_name": "ae.safetensors"},
     },
-    "workflows/AI-RENDERING-EXAMPLE FILES/260402_MICKMUMPITZ_AI-RENDERER_SMPL_2-1_api.json": {
+    "workflows/AI-RENDERING-EXAMPLE FILES/260402_VIDEO-BUDDY_AI-RENDERER_SMPL_2-1_api.json": {
         "265": {"video": "dance_depth_v03_0001-0250.mkv"},
         "282": {"image": "ComfyUI_01828_.png"},
         "3345": {"video": "dance_line_v03_0001-0250.mkv"},
@@ -122,7 +122,7 @@ REPOINT = {
         "3228:3261": {"end_image": None, "inpaint_mask": None,
                       "empty_frame_level": 0.5, "start_index": 0, "end_index": -1},
     },
-    "workflows/AI-RENDERING-EXAMPLE FILES/260402_MICKMUMPITZ_AI-RENDERER_ADV_2-1_api.json": {
+    "workflows/AI-RENDERING-EXAMPLE FILES/260402_VIDEO-BUDDY_AI-RENDERER_ADV_2-1_api.json": {
         "265": {"video": "warehouse_src_30fps.mp4"},
         "282": {"image": "ComfyUI_01828_.png"},
         "3345": {"video": "dance_depth_v03_0001-0250.mkv"},
@@ -134,7 +134,7 @@ REPOINT = {
         "3228:3301": {"ds_factor": 1, "interpolation_factor": 2,
                       "seed": 653337867442944},
     },
-    "workflows/AI-RENDERING-EXAMPLE FILES/260225_MICKMUMPITZ_AI-RENDERER_ADV_2-0_api.json": {
+    "workflows/AI-RENDERING-EXAMPLE FILES/260225_VIDEO-BUDDY_AI-RENDERER_ADV_2-0_api.json": {
         "265": {"video": "warehouse_src_30fps.mp4"},
         "282": {"image": "ComfyUI_01828_.png"},
         "3345": {"video": "dance_depth_v03_0001-0250.mkv"},
@@ -146,7 +146,7 @@ REPOINT = {
         "3228:3301": {"ds_factor": 1, "interpolation_factor": 2,
                       "seed": 653337867442944},
     },
-    "workflows/AI-RENDERING-EXAMPLE FILES/260330_MICKMUMPITZ_NVIDIA-RTX-SUPER-RESOLUTION_1-0_api.json": {
+    "workflows/AI-RENDERING-EXAMPLE FILES/260330_VIDEO-BUDDY_NVIDIA-RTX-SUPER-RESOLUTION_1-0_api.json": {
         "12": {"video": "warehouse_src_30fps.mp4"},
         "26": {"resize_type": "target dimensions", "quality": "ULTRA"},
     },
@@ -162,8 +162,8 @@ LTX_APIS = [
 GEMMA_SWAP = ("gemma_3_12B_it_fp8_e4m3fn.safetensors",
               "gemma_3_12B_it_fp4_mixed.safetensors")
 
-CCC41 = "workflows/260729_MICKMUMPITZ_CCC_4-1_KREA2-EDIT_BETA_PUBLISH_api.json"
-CCC41_UI = "workflows/260729_MICKMUMPITZ_CCC_4-1_KREA2-EDIT_BETA_PUBLISH.json"
+CCC41 = "workflows/260729_VIDEO-BUDDY_CCC_4-1_KREA2-EDIT_BETA_PUBLISH_api.json"
+CCC41_UI = "workflows/260729_VIDEO-BUDDY_CCC_4-1_KREA2-EDIT_BETA_PUBLISH.json"
 
 
 def load(rel):

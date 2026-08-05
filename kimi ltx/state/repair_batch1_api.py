@@ -11,7 +11,7 @@ Idempotent: safe to re-run.
 import json
 
 REPAIRS = {
-    "workflows/260713_MICKMUMPITZ_DATASET-TAGGER_1-5_api.json": {
+    "workflows/260713_VIDEO-BUDDY_DATASET-TAGGER_1-5_api.json": {
         "104": {  # CCC_ShowImageTextPairs — old 5-widget version vs current 4
             "draw_boxes": True,
             "bbox_format": "normalized_1000_xyxy",
@@ -26,7 +26,7 @@ REPAIRS = {
             "filename_suffix": "",
         },
     },
-    "workflows/260713_MICKMUMPITZ_TAG-REVIEW-EDIT_1-0_api.json": {
+    "workflows/260713_VIDEO-BUDDY_TAG-REVIEW-EDIT_1-0_api.json": {
         "16": {  # CCC_DatasetReviewer
             "bbox_format": "yxyx_normalized",
             "edited_data_json": "",
@@ -39,7 +39,7 @@ REPAIRS = {
             "filename_suffix": "",
         },
     },
-    "workflows/260720_MICKMUMPITZ_CCC_4-01_ADV_api.json": {
+    "workflows/260720_VIDEO-BUDDY_CCC_4-01_ADV_api.json": {
         "1560": {  # ImageCollectUnpack — old order (source, fit, target_size); 'Dataset' choice removed
             "source": "first",
             "target_size": "first",
@@ -49,7 +49,7 @@ REPAIRS = {
 }
 
 # JoinStringMulti nodes in CCC ADV: widgets [3, " ", false, null] got shifted.
-CCC_API = "workflows/260720_MICKMUMPITZ_CCC_4-01_ADV_api.json"
+CCC_API = "workflows/260720_VIDEO-BUDDY_CCC_4-01_ADV_api.json"
 
 
 def main():

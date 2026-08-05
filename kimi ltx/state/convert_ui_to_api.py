@@ -2,7 +2,7 @@
 into API/prompt format (dict keyed by node id, {class_type, inputs}).
 
 Conventions reverse-engineered from the existing UI->API pairs in workflows/
-(see e.g. 260608_MICKMUMPITZ_AI-VFX_1-3_ADV.json vs its _api.json):
+(see e.g. 260608_VIDEO-BUDDY_AI-VFX_1-3_ADV.json vs its _api.json):
 
   - Frontend-only classes are dropped: Reroute, SetNode, GetNode,
     MarkdownNote, Note, Mickmumpitz(Multiline)Label, Label (rgthree),
@@ -34,7 +34,7 @@ Conventions reverse-engineered from the existing UI->API pairs in workflows/
 
 Known converter quirks (widget drift on schema-version mismatch, dangling
 subgraph-output links) are deliberately NOT repaired here — see
-state/repair_mick_api.py / state/repair_batch2_api.py.
+state/repair_batch1_api.py / state/repair_batch2_api.py.
 
 Usage:
     python state/convert_ui_to_api.py <ui.json> [<api.json>]
