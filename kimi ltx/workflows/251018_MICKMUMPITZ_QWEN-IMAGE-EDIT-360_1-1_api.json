@@ -1,0 +1,595 @@
+{
+  "360": {
+    "inputs": {
+      "vae_name": "qwen\\qwen_image_vae.safetensors"
+    },
+    "class_type": "VAELoader",
+    "_meta": {
+      "title": "Load VAE"
+    }
+  },
+  "1114": {
+    "inputs": {
+      "strength": 1,
+      "pre_cfg": false,
+      "model": [
+        "1115",
+        0
+      ]
+    },
+    "class_type": "CFGNorm",
+    "_meta": {
+      "title": "CFGNorm"
+    }
+  },
+  "1115": {
+    "inputs": {
+      "shift": 3,
+      "model": [
+        "546",
+        0
+      ]
+    },
+    "class_type": "ModelSamplingAuraFlow",
+    "_meta": {
+      "title": "ModelSamplingAuraFlow"
+    }
+  },
+  "850": {
+    "inputs": {
+      "value": 1
+    },
+    "class_type": "PrimitiveFloat",
+    "_meta": {
+      "title": "CFG"
+    }
+  },
+  "546": {
+    "inputs": {
+      "gguf_name": "gguf\\Qwen-Image-Edit-2509-Q5_0.gguf"
+    },
+    "class_type": "LoaderGGUF",
+    "_meta": {
+      "title": "GGUF Loader"
+    }
+  },
+  "362": {
+    "inputs": {
+      "clip_name": "qwen\\qwen_2.5_vl_7b_fp8_scaled.safetensors",
+      "type": "qwen_image",
+      "device": "cpu"
+    },
+    "class_type": "CLIPLoader",
+    "_meta": {
+      "title": "Load CLIP"
+    }
+  },
+  "1496": {
+    "inputs": {
+      "filename_prefix": "ComfyUI",
+      "images": [
+        "1490",
+        0
+      ]
+    },
+    "class_type": "SaveImage",
+    "_meta": {
+      "title": "Save Image"
+    }
+  },
+  "1494": {
+    "inputs": {
+      "width": 2048,
+      "height": 1024,
+      "batch_size": 1
+    },
+    "class_type": "EmptySD3LatentImage",
+    "_meta": {
+      "title": "EmptySD3LatentImage"
+    }
+  },
+  "1500": {
+    "inputs": {
+      "lora_name": "qwen\\251018_MICKMUMPITZ_QWEN-EDIT_360_03.safetensors",
+      "strength_model": 0.9,
+      "model": [
+        "547",
+        0
+      ]
+    },
+    "class_type": "LoraLoaderModelOnly",
+    "_meta": {
+      "title": "Load LoRA"
+    }
+  },
+  "1503": {
+    "inputs": {
+      "feathering": 40,
+      "image": [
+        "1286",
+        0
+      ],
+      "left": [
+        "1522",
+        0
+      ],
+      "top": [
+        "1522",
+        0
+      ],
+      "right": [
+        "1522",
+        0
+      ],
+      "bottom": [
+        "1522",
+        0
+      ]
+    },
+    "class_type": "ImagePadForOutpaint",
+    "_meta": {
+      "title": "Pad Image for Outpainting"
+    }
+  },
+  "1286": {
+    "inputs": {
+      "upscale_method": "lanczos",
+      "megapixels": 1,
+      "resolution_steps": 1,
+      "image": [
+        "213",
+        0
+      ]
+    },
+    "class_type": "ImageScaleToTotalPixels",
+    "_meta": {
+      "title": "Scale Image to Total Pixels"
+    }
+  },
+  "1524": {
+    "inputs": {
+      "width": 1024,
+      "height": 512,
+      "upscale_method": "lanczos",
+      "keep_proportion": "pad",
+      "pad_color": "127, 127, 127",
+      "crop_position": "center",
+      "divisible_by": 2,
+      "device": "cpu",
+      "image": [
+        "1503",
+        0
+      ]
+    },
+    "class_type": "ImageResizeKJv2",
+    "_meta": {
+      "title": "Resize Image v2"
+    }
+  },
+  "1495": {
+    "inputs": {
+      "seed": 1034973049061656,
+      "sampler_name": "euler",
+      "scheduler": "simple",
+      "denoise": 1,
+      "model": [
+        "1500",
+        0
+      ],
+      "steps": [
+        "844",
+        0
+      ],
+      "cfg": [
+        "850",
+        0
+      ],
+      "positive": [
+        "1497",
+        0
+      ],
+      "negative": [
+        "1497",
+        0
+      ],
+      "latent_image": [
+        "1494",
+        0
+      ]
+    },
+    "class_type": "KSampler",
+    "_meta": {
+      "title": "KSampler"
+    }
+  },
+  "1489": {
+    "inputs": {
+      "filename_prefix": "ComfyUI",
+      "images": [
+        "1490",
+        0
+      ]
+    },
+    "class_type": "SaveImage",
+    "_meta": {
+      "title": "Save Image"
+    }
+  },
+  "1490": {
+    "inputs": {
+      "samples": [
+        "1495",
+        0
+      ],
+      "vae": [
+        "360",
+        0
+      ]
+    },
+    "class_type": "VAEDecode",
+    "_meta": {
+      "title": "VAE Decode"
+    }
+  },
+  "1533": {
+    "inputs": {
+      "filename_prefix": "ComfyUI",
+      "images": [
+        "1539",
+        0
+      ]
+    },
+    "class_type": "SaveImage",
+    "_meta": {
+      "title": "Save Image"
+    }
+  },
+  "1538": {
+    "inputs": {
+      "filename_prefix": "ComfyUI",
+      "images": [
+        "1539",
+        0
+      ]
+    },
+    "class_type": "SaveImage",
+    "_meta": {
+      "title": "Save Image"
+    }
+  },
+  "547": {
+    "inputs": {
+      "lora_name": "qwen\\Qwen-Image-Lightning-4steps-V2.0.safetensors",
+      "strength_model": 1,
+      "model": [
+        "1114",
+        0
+      ]
+    },
+    "class_type": "LoraLoaderModelOnly",
+    "_meta": {
+      "title": "Load LoRA"
+    }
+  },
+  "1536": {
+    "inputs": {
+      "prompt": "Remove the visible seam in the middle of the image. Remove the white bar. Keep the rest of the image exactly the same.",
+      "clip": [
+        "362",
+        0
+      ],
+      "vae": [
+        "360",
+        0
+      ],
+      "image1": [
+        "1547",
+        0
+      ]
+    },
+    "class_type": "TextEncodeQwenImageEditPlus",
+    "_meta": {
+      "title": "TextEncodeQwenImageEditPlus"
+    }
+  },
+  "1542": {
+    "inputs": {
+      "shape": "square",
+      "frames": 1,
+      "location_x": 1024,
+      "location_y": 512,
+      "grow": 0,
+      "shape_height": 1024,
+      "frame_width": [
+        "1528",
+        1
+      ],
+      "frame_height": [
+        "1528",
+        2
+      ],
+      "shape_width": [
+        "1554",
+        0
+      ]
+    },
+    "class_type": "CreateShapeMask",
+    "_meta": {
+      "title": "Create Shape Mask"
+    }
+  },
+  "1546": {
+    "inputs": {
+      "mask": [
+        "1553",
+        0
+      ]
+    },
+    "class_type": "MaskToImage",
+    "_meta": {
+      "title": "Convert Mask to Image"
+    }
+  },
+  "1553": {
+    "inputs": {
+      "expand": 0,
+      "incremental_expandrate": 0,
+      "tapered_corners": true,
+      "flip_input": false,
+      "lerp_alpha": 1,
+      "decay_factor": 1,
+      "fill_holes": false,
+      "mask": [
+        "1542",
+        0
+      ],
+      "blur_radius": [
+        "1557",
+        0
+      ]
+    },
+    "class_type": "GrowMaskWithBlur",
+    "_meta": {
+      "title": "Grow Mask With Blur"
+    }
+  },
+  "1528": {
+    "inputs": {
+      "width": 2048,
+      "height": 1024,
+      "upscale_method": "lanczos",
+      "keep_proportion": "crop",
+      "pad_color": "0, 0, 0",
+      "crop_position": "center",
+      "divisible_by": 2,
+      "device": "cpu",
+      "image": [
+        "1526",
+        0
+      ]
+    },
+    "class_type": "ImageResizeKJv2",
+    "_meta": {
+      "title": "Resize Image v2"
+    }
+  },
+  "1522": {
+    "inputs": {
+      "value": 400
+    },
+    "class_type": "PrimitiveInt",
+    "_meta": {
+      "title": "Padding"
+    }
+  },
+  "1539": {
+    "inputs": {
+      "samples": [
+        "1537",
+        0
+      ],
+      "vae": [
+        "360",
+        0
+      ]
+    },
+    "class_type": "VAEDecode",
+    "_meta": {
+      "title": "VAE Decode"
+    }
+  },
+  "1547": {
+    "inputs": {
+      "blend_factor": 1,
+      "blend_mode": "screen",
+      "image1": [
+        "1528",
+        0
+      ],
+      "image2": [
+        "1546",
+        0
+      ]
+    },
+    "class_type": "ImageBlend",
+    "_meta": {
+      "title": "Blend Images"
+    }
+  },
+  "1537": {
+    "inputs": {
+      "seed": 1034973049061657,
+      "sampler_name": "euler",
+      "scheduler": "simple",
+      "denoise": 1,
+      "model": [
+        "547",
+        0
+      ],
+      "steps": [
+        "844",
+        0
+      ],
+      "cfg": [
+        "850",
+        0
+      ],
+      "positive": [
+        "1551",
+        0
+      ],
+      "negative": [
+        "1551",
+        1
+      ],
+      "latent_image": [
+        "1551",
+        2
+      ]
+    },
+    "class_type": "KSampler",
+    "_meta": {
+      "title": "KSampler"
+    }
+  },
+  "1497": {
+    "inputs": {
+      "prompt": "Create a 360 panoramic image of the futuristic scene brutalist city with towering bridges. An ultra-wide HDRI image captured on a ricoh 360 degree camera, insta 360, equirectagular projection. Keep the style the same.",
+      "clip": [
+        "362",
+        0
+      ],
+      "vae": [
+        "360",
+        0
+      ],
+      "image1": [
+        "1524",
+        0
+      ]
+    },
+    "class_type": "TextEncodeQwenImageEditPlus",
+    "_meta": {
+      "title": "TextEncodeQwenImageEditPlus"
+    }
+  },
+  "1526": {
+    "inputs": {
+      "direction": "right",
+      "match_image_size": true,
+      "image1": [
+        "1490",
+        0
+      ],
+      "image2": [
+        "1490",
+        0
+      ]
+    },
+    "class_type": "ImageConcanate",
+    "_meta": {
+      "title": "Image Concatenate"
+    }
+  },
+  "1557": {
+    "inputs": {
+      "value": 20
+    },
+    "class_type": "PrimitiveFloat",
+    "_meta": {
+      "title": "Mask Blur"
+    }
+  },
+  "1554": {
+    "inputs": {
+      "value": 200
+    },
+    "class_type": "PrimitiveInt",
+    "_meta": {
+      "title": "Mask Size"
+    }
+  },
+  "1551": {
+    "inputs": {
+      "noise_mask": true,
+      "positive": [
+        "1536",
+        0
+      ],
+      "negative": [
+        "1536",
+        0
+      ],
+      "vae": [
+        "360",
+        0
+      ],
+      "pixels": [
+        "1528",
+        0
+      ],
+      "mask": [
+        "1542",
+        0
+      ]
+    },
+    "class_type": "InpaintModelConditioning",
+    "_meta": {
+      "title": "InpaintModelConditioning"
+    }
+  },
+  "1515": {
+    "inputs": {
+      "images": [
+        "1524",
+        0
+      ]
+    },
+    "class_type": "PreviewImage",
+    "_meta": {
+      "title": "Preview Image"
+    }
+  },
+  "213": {
+    "inputs": {
+      "image": "ComfyUI_01828_.png"
+    },
+    "class_type": "LoadImage",
+    "_meta": {
+      "title": "IMAGE 1"
+    }
+  },
+  "1559": {
+    "inputs": {
+      "images": [
+        "1528",
+        0
+      ]
+    },
+    "class_type": "PreviewImage",
+    "_meta": {
+      "title": "Preview Image"
+    }
+  },
+  "1527": {
+    "inputs": {
+      "images": [
+        "1547",
+        0
+      ]
+    },
+    "class_type": "PreviewImage",
+    "_meta": {
+      "title": "Preview Image"
+    }
+  },
+  "844": {
+    "inputs": {
+      "value": 4
+    },
+    "class_type": "PrimitiveInt",
+    "_meta": {
+      "title": "STEPS"
+    }
+  }
+}

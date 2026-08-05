@@ -1,0 +1,67 @@
+{
+ "run_id": "da1fddf569c9",
+ "kind": "music_video",
+ "request": "smoke test beat-synced fractal",
+ "status": "done",
+ "audio_path": "state\\click_128.wav",
+ "visual": "fractal",
+ "beat_map": {
+  "bpm": 127.92,
+  "beats": [
+   0.4412,
+   0.9102,
+   1.3793,
+   1.8483,
+   2.3173,
+   2.7864,
+   3.2554,
+   3.7245,
+   4.1935,
+   4.6626,
+   5.1316,
+   5.6006
+  ],
+  "downbeats": [
+   0.4412,
+   2.3173,
+   4.1935
+  ],
+  "sections": [
+   {
+    "start_s": 0.441,
+    "end_s": 1.379,
+    "label": "intro",
+    "energy": 0.2189
+   },
+   {
+    "start_s": 1.379,
+    "end_s": 2.317,
+    "label": "drop",
+    "energy": 0.225
+   },
+   {
+    "start_s": 2.317,
+    "end_s": 3.255,
+    "label": "verse",
+    "energy": 0.2187
+   },
+   {
+    "start_s": 3.255,
+    "end_s": 4.663,
+    "label": "chorus",
+    "energy": 0.2239
+   },
+   {
+    "start_s": 4.663,
+    "end_s": 6.0,
+    "label": "chorus",
+    "energy": 0.2212
+   }
+  ],
+  "duration_s": 6.0
+ },
+ "seed": 1657472807,
+ "segment_paths": [],
+ "segment_scores": [],
+ "video_path": "C:\\Users\\thcab\\Documents\\ltx2.3_agent\\kimi ltx\\outputs\\da1fddf569c9\\music_video_da1fddf569c9.mp4"
+}

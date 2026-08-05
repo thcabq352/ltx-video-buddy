@@ -1,0 +1,51 @@
+# Secrets
+.env
+**/.env
+
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+.venv/
+venv/
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+
+# Agent / runtime state
+kimi ltx/state/*.sqlite
+kimi ltx/state/*.db
+kimi ltx/state/chroma/
+kimi ltx/state/tools/
+kimi ltx/state/uploads/
+kimi ltx/outputs/**
+!kimi ltx/outputs/.gitkeep
+
+# Large model weights (reproduced via state/download_models.py)
+**/*.safetensors
+**/*.ckpt
+**/*.pt
+**/*.bin
+**/*.gguf
+**/*.pth
+
+# Third-party / downloaded apps
+kimi ltx/ComfyUI_windows_portable/
+kimi ltx/ai-toolkit/
+kimi ltx/blender-*/
+kimi ltx/downloads/
+
+# Example media archives
+kimi ltx/workflows/AI-RENDERING-EXAMPLE FILES/
+kimi ltx/workflows/*.rar
+kimi ltx/workflows/*.zip
+
+# Partial downloads
+**/*.part
+
+# OS / IDE
+.DS_Store
+Thumbs.db
+.idea/
+.vscode/
+*.log

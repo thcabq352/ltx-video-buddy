@@ -1,0 +1,44 @@
+{
+ "run_id": "c7d4d8cc49d0",
+ "request": "photorealistic street scene in light rain, cinematic",
+ "status": "done",
+ "error": null,
+ "video_path": "C:\\Users\\thcab\\Documents\\ltx2.3_agent\\kimi ltx\\outputs\\c7e8f477e0dc_master_agent_00004.mp4",
+ "segment_paths": [
+  "C:\\Users\\thcab\\Documents\\ltx2.3_agent\\kimi ltx\\outputs\\c7e8f477e0dc_master_agent_00004.mp4"
+ ],
+ "segment_scores": [
+  1.0
+ ],
+ "segment_durations": [
+  3.0
+ ],
+ "storyboard": [],
+ "storyboard_md": "",
+ "panel_meta": null,
+ "full_judge_score": 1.0,
+ "full_judge_pass": true,
+ "full_judge_notes": "",
+ "full_judge_history": [],
+ "messages": [
+  "plan: 3.0s -> 1 segment(s) [3.0] (judge=False)",
+  "variant=wan22 duration=3.0s quality=draft",
+  "-> PATCH",
+  "-> VALIDATE",
+  "validator warning: [WARNING] node 194.pix_fmt: input not declared in /object_info for VHS_VideoCombine",
+  "validator warning: [WARNING] node 194.crf: input not declared in /object_info for VHS_VideoCombine",
+  "validator warning: [WARNING] node 194.save_metadata: input not declared in /object_info for VHS_VideoCombine",
+  "validator warning: [WARNING] node 194.trim_to_audio: input not declared in /object_info for VHS_VideoCombine",
+  "validator warning: [WARNING] node 136.PowerLoraLoaderHeaderWidget: input not declared in /object_info for Power Lora Loader (rgthree)",
+  "-> SUBMIT",
+  "queued prompt_id=29c7fce4-2562-4ea8-9764-f0a83fe2685e",
+  "-> POLL",
+  "-> RESOLVE",
+  "output: C:\\Users\\thcab\\Documents\\ltx2.3_agent\\kimi ltx\\outputs\\c7e8f477e0dc_master_agent_00004.mp4",
+  "-> JUDGE",
+  "judge round 0: combined=1.00 decision=accept reason=Judge disabled; heuristic only",
+  "-> DONE",
+  "run record: C:\\Users\\thcab\\Documents\\ltx2.3_agent\\kimi ltx\\state\\runs\\20260803T160320Z_c7e8f477e0dc.json",
+  "kb: run record ingested"
+ ]
+}

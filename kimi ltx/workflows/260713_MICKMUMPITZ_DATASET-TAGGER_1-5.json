@@ -1,0 +1,2542 @@
+{
+  "id": "f95ec80d-47b5-467a-83b1-bc512b3cff0f",
+  "revision": 0,
+  "last_node_id": 139,
+  "last_link_id": 140,
+  "nodes": [
+    {
+      "id": 65,
+      "type": "GetImageSizeAndCount",
+      "pos": [
+        9390.891872621778,
+        10226.226223495121
+      ],
+      "size": [
+        196.33333435058594,
+        86
+      ],
+      "flags": {},
+      "order": 15,
+      "mode": 0,
+      "inputs": [
+        {
+          "name": "image",
+          "type": "IMAGE",
+          "link": 65
+        }
+      ],
+      "outputs": [
+        {
+          "name": "image",
+          "type": "IMAGE",
+          "links": null
+        },
+        {
+          "label": "width",
+          "name": "width",
+          "type": "INT",
+          "links": null
+        },
+        {
+          "label": "height",
+          "name": "height",
+          "type": "INT",
+          "links": null
+        },
+        {
+          "label": "count",
+          "name": "count",
+          "type": "INT",
+          "links": [
+            66
+          ]
+        }
+      ],
+      "properties": {
+        "cnr_id": "comfyui-kjnodes",
+        "ver": "a34c5884853b4003ea571995c27bd969e0d4ca13",
+        "Node name for S&R": "GetImageSizeAndCount"
+      },
+      "widgets_values": []
+    },
+    {
+      "id": 30,
+      "type": "SetNode",
+      "pos": [
+        9396.893800153935,
+        10375.860425643501
+      ],
+      "size": [
+        210,
+        60
+      ],
+      "flags": {
+        "collapsed": false
+      },
+      "order": 21,
+      "mode": 0,
+      "inputs": [
+        {
+          "name": "INT",
+          "type": "INT",
+          "link": 66
+        }
+      ],
+      "outputs": [
+        {
+          "name": "INT",
+          "type": "INT",
+          "links": null
+        }
+      ],
+      "title": "Set_Batch_size",
+      "properties": {
+        "Node name for S&R": "SetNode",
+        "aux_id": "kijai/ComfyUI-KJNodes",
+        "previousName": "Batch_size"
+      },
+      "widgets_values": [
+        "Batch_size"
+      ],
+      "color": "#1b4669",
+      "bgcolor": "#29699c"
+    },
+    {
+      "id": 32,
+      "type": "SetNode",
+      "pos": [
+        8800,
+        10420
+      ],
+      "size": [
+        210,
+        60
+      ],
+      "flags": {
+        "collapsed": true
+      },
+      "order": 22,
+      "mode": 0,
+      "inputs": [
+        {
+          "name": "IMAGE",
+          "type": "IMAGE",
+          "link": 26
+        }
+      ],
+      "outputs": [
+        {
+          "name": "IMAGE",
+          "type": "IMAGE",
+          "links": null
+        }
+      ],
+      "title": "Set_Image_Preview",
+      "properties": {
+        "Node name for S&R": "SetNode",
+        "aux_id": "kijai/ComfyUI-KJNodes",
+        "previousName": "Image_Preview"
+      },
+      "widgets_values": [
+        "Image_Preview"
+      ],
+      "color": "#2a363b",
+      "bgcolor": "#3f5159"
+    },
+    {
+      "id": 22,
+      "type": "SetNode",
+      "pos": [
+        8950,
+        10150
+      ],
+      "size": [
+        210,
+        58
+      ],
+      "flags": {
+        "collapsed": true
+      },
+      "order": 17,
+      "mode": 0,
+      "inputs": [
+        {
+          "name": "STRING",
+          "type": "STRING",
+          "link": 19
+        }
+      ],
+      "outputs": [
+        {
+          "name": "STRING",
+          "type": "STRING",
+          "links": null
+        }
+      ],
+      "title": "Set_Path_Location",
+      "properties": {
+        "Node name for S&R": "SetNode",
+        "aux_id": "kijai/ComfyUI-KJNodes",
+        "previousName": "Path_Location"
+      },
+      "widgets_values": [
+        "Path_Location"
+      ]
+    },
+    {
+      "id": 20,
+      "type": "SetNode",
+      "pos": [
+        9000,
+        10020
+      ],
+      "size": [
+        210,
+        58
+      ],
+      "flags": {
+        "collapsed": true
+      },
+      "order": 18,
+      "mode": 0,
+      "inputs": [
+        {
+          "name": "STRING",
+          "type": "STRING",
+          "link": 17
+        }
+      ],
+      "outputs": [
+        {
+          "name": "STRING",
+          "type": "STRING",
+          "links": null
+        }
+      ],
+      "title": "Set_Lora_Trigger",
+      "properties": {
+        "Node name for S&R": "SetNode",
+        "aux_id": "kijai/ComfyUI-KJNodes",
+        "previousName": "Lora_Trigger"
+      },
+      "widgets_values": [
+        "Lora_Trigger"
+      ]
+    },
+    {
+      "id": 23,
+      "type": "GetNode",
+      "pos": [
+        9290,
+        10640
+      ],
+      "size": [
+        210,
+        58
+      ],
+      "flags": {
+        "collapsed": true
+      },
+      "order": 0,
+      "mode": 0,
+      "inputs": [],
+      "outputs": [
+        {
+          "name": "STRING",
+          "type": "STRING",
+          "links": [
+            84
+          ]
+        }
+      ],
+      "title": "Get_Lora_Trigger",
+      "properties": {
+        "Node name for S&R": "GetNode",
+        "aux_id": "kijai/ComfyUI-KJNodes"
+      },
+      "widgets_values": [
+        "Lora_Trigger"
+      ]
+    },
+    {
+      "id": 46,
+      "type": "GetNode",
+      "pos": [
+        9370,
+        10100
+      ],
+      "size": [
+        210,
+        60
+      ],
+      "flags": {},
+      "order": 1,
+      "mode": 0,
+      "inputs": [],
+      "outputs": [
+        {
+          "name": "IMAGE",
+          "type": "IMAGE",
+          "links": [
+            49,
+            65
+          ]
+        }
+      ],
+      "title": "Get_Image_Preview",
+      "properties": {
+        "Node name for S&R": "GetNode",
+        "aux_id": "kijai/ComfyUI-KJNodes"
+      },
+      "widgets_values": [
+        "Image_Preview"
+      ],
+      "color": "#2a363b",
+      "bgcolor": "#3f5159"
+    },
+    {
+      "id": 102,
+      "type": "GetNode",
+      "pos": [
+        9903.61352398851,
+        9983.01205825906
+      ],
+      "size": [
+        210,
+        58
+      ],
+      "flags": {
+        "collapsed": true
+      },
+      "order": 2,
+      "mode": 0,
+      "inputs": [],
+      "outputs": [
+        {
+          "name": "IMAGE",
+          "type": "IMAGE",
+          "links": [
+            108
+          ]
+        }
+      ],
+      "title": "Get_Image_Preview",
+      "properties": {
+        "Node name for S&R": "GetNode",
+        "aux_id": "kijai/ComfyUI-KJNodes"
+      },
+      "widgets_values": [
+        "Image_Preview"
+      ],
+      "color": "#2a363b",
+      "bgcolor": "#3f5159"
+    },
+    {
+      "id": 38,
+      "type": "GetNode",
+      "pos": [
+        9906.81746601695,
+        10033.210405763866
+      ],
+      "size": [
+        210,
+        60
+      ],
+      "flags": {
+        "collapsed": true
+      },
+      "order": 3,
+      "mode": 0,
+      "inputs": [],
+      "outputs": [
+        {
+          "name": "STRING",
+          "type": "STRING",
+          "links": [
+            109
+          ]
+        }
+      ],
+      "title": "Get_Show_text",
+      "properties": {
+        "Node name for S&R": "GetNode",
+        "aux_id": "kijai/ComfyUI-KJNodes"
+      },
+      "widgets_values": [
+        "Show_text"
+      ]
+    },
+    {
+      "id": 39,
+      "type": "GetNode",
+      "pos": [
+        8690,
+        10280
+      ],
+      "size": [
+        210,
+        50
+      ],
+      "flags": {
+        "collapsed": true
+      },
+      "order": 4,
+      "mode": 0,
+      "inputs": [],
+      "outputs": [
+        {
+          "name": "STRING",
+          "type": "STRING",
+          "links": [
+            75
+          ]
+        }
+      ],
+      "title": "Get_Path_Location",
+      "properties": {
+        "Node name for S&R": "GetNode",
+        "aux_id": "kijai/ComfyUI-KJNodes"
+      },
+      "widgets_values": [
+        "Path_Location"
+      ]
+    },
+    {
+      "id": 36,
+      "type": "SetNode",
+      "pos": [
+        8980,
+        10500
+      ],
+      "size": [
+        210,
+        60
+      ],
+      "flags": {
+        "collapsed": true
+      },
+      "order": 24,
+      "mode": 0,
+      "inputs": [
+        {
+          "name": "STRING",
+          "type": "STRING",
+          "link": 79
+        }
+      ],
+      "outputs": [
+        {
+          "name": "STRING",
+          "type": "STRING",
+          "links": null
+        }
+      ],
+      "title": "Set_Show_text",
+      "properties": {
+        "Node name for S&R": "SetNode",
+        "aux_id": "kijai/ComfyUI-KJNodes",
+        "previousName": "Show_text"
+      },
+      "widgets_values": [
+        "Show_text"
+      ]
+    },
+    {
+      "id": 17,
+      "type": "PrimitiveString",
+      "pos": [
+        8660,
+        10120
+      ],
+      "size": [
+        560,
+        80
+      ],
+      "flags": {},
+      "order": 5,
+      "mode": 0,
+      "inputs": [],
+      "outputs": [
+        {
+          "name": "STRING",
+          "type": "STRING",
+          "links": [
+            19
+          ]
+        }
+      ],
+      "title": "Insert Dataset Image Location",
+      "properties": {
+        "cnr_id": "comfy-core",
+        "ver": "0.20.1",
+        "Node name for S&R": "PrimitiveString"
+      },
+      "widgets_values": [
+        "D:\\comfy\\ComfyUI_windows_portable\\ComfyUI\\output\\CCC\\Multiple_Realistic_02"
+      ],
+      "color": "#d4d4d4",
+      "bgcolor": "#c0c0c0"
+    },
+    {
+      "id": 35,
+      "type": "MickmumpitzLabel",
+      "pos": [
+        9380,
+        9810
+      ],
+      "size": [
+        161.21739196777344,
+        40
+      ],
+      "flags": {
+        "allow_interaction": true
+      },
+      "order": 6,
+      "mode": 0,
+      "inputs": [],
+      "outputs": [],
+      "title": "MickmumpitzLabel",
+      "properties": {
+        "text": "standalone v.1.1",
+        "fontSize": 20,
+        "fontFamily": "Arial",
+        "fontColor": "#ffffff",
+        "textAlign": "left",
+        "backgroundColor": "transparent",
+        "padding": 8,
+        "borderRadius": 0
+      },
+      "color": "#fff0",
+      "bgcolor": "#fff0"
+    },
+    {
+      "id": 48,
+      "type": "MickmumpitzLabel",
+      "pos": [
+        8640,
+        9810
+      ],
+      "size": [
+        374.39129638671875,
+        76
+      ],
+      "flags": {
+        "allow_interaction": true
+      },
+      "order": 7,
+      "mode": 0,
+      "inputs": [],
+      "outputs": [],
+      "title": "MickmumpitzLabel",
+      "properties": {
+        "text": "by mickmumpitz",
+        "fontSize": 50,
+        "fontFamily": "Arial",
+        "fontColor": "#ffa900",
+        "textAlign": "left",
+        "backgroundColor": "transparent",
+        "padding": 8,
+        "borderRadius": 0
+      },
+      "color": "#fff0",
+      "bgcolor": "#fff0"
+    },
+    {
+      "id": 19,
+      "type": "PrimitiveString",
+      "pos": [
+        8660,
+        9990
+      ],
+      "size": [
+        560,
+        80
+      ],
+      "flags": {},
+      "order": 8,
+      "mode": 0,
+      "inputs": [],
+      "outputs": [
+        {
+          "name": "STRING",
+          "type": "STRING",
+          "links": [
+            17
+          ]
+        }
+      ],
+      "title": "Set Lora Trigger Word (not relevant for ideogram tagging)",
+      "properties": {
+        "cnr_id": "comfy-core",
+        "ver": "0.20.1",
+        "Node name for S&R": "PrimitiveString"
+      },
+      "widgets_values": [
+        ""
+      ],
+      "color": "#d4d4d4",
+      "bgcolor": "#c0c0c0"
+    },
+    {
+      "id": 104,
+      "type": "CCC_ShowImageTextPairs",
+      "pos": [
+        9914.439997783138,
+        9976.740693438145
+      ],
+      "size": [
+        726.20220902644,
+        1437.2664976060569
+      ],
+      "flags": {},
+      "order": 16,
+      "mode": 0,
+      "inputs": [
+        {
+          "name": "images",
+          "type": "IMAGE",
+          "link": 108
+        },
+        {
+          "name": "captions",
+          "shape": 7,
+          "type": "STRING",
+          "link": 109
+        }
+      ],
+      "outputs": [],
+      "properties": {
+        "Node name for S&R": "CCC_ShowImageTextPairs"
+      },
+      "widgets_values": [
+        64,
+        "normalized_1000_xyxy",
+        64,
+        64,
+        ""
+      ]
+    },
+    {
+      "id": 15,
+      "type": "GetNode",
+      "pos": [
+        8710,
+        10490
+      ],
+      "size": [
+        210,
+        58
+      ],
+      "flags": {
+        "collapsed": true
+      },
+      "order": 9,
+      "mode": 0,
+      "inputs": [],
+      "outputs": [
+        {
+          "name": "STRING",
+          "type": "STRING",
+          "links": [
+            140
+          ]
+        }
+      ],
+      "title": "Get_Final_TaggerPrompt",
+      "properties": {
+        "Node name for S&R": "GetNode",
+        "aux_id": "kijai/ComfyUI-KJNodes"
+      },
+      "widgets_values": [
+        "Final_TaggerPrompt"
+      ]
+    },
+    {
+      "id": 11,
+      "type": "GetNode",
+      "pos": [
+        8690,
+        10320
+      ],
+      "size": [
+        210,
+        58
+      ],
+      "flags": {
+        "collapsed": true
+      },
+      "order": 10,
+      "mode": 0,
+      "inputs": [],
+      "outputs": [
+        {
+          "name": "STRING",
+          "type": "STRING",
+          "links": [
+            4
+          ]
+        }
+      ],
+      "title": "Get_Path_Location",
+      "properties": {
+        "Node name for S&R": "GetNode",
+        "aux_id": "kijai/ComfyUI-KJNodes"
+      },
+      "widgets_values": [
+        "Path_Location"
+      ]
+    },
+    {
+      "id": 4,
+      "type": "CCC_ImageBatchLoader",
+      "pos": [
+        8670,
+        10270
+      ],
+      "size": [
+        540,
+        160
+      ],
+      "flags": {},
+      "order": 19,
+      "mode": 0,
+      "inputs": [
+        {
+          "name": "image_dir",
+          "type": "STRING",
+          "widget": {
+            "name": "image_dir"
+          },
+          "link": 4
+        }
+      ],
+      "outputs": [
+        {
+          "name": "IMAGE",
+          "shape": 6,
+          "type": "IMAGE",
+          "links": [
+            26,
+            78
+          ]
+        },
+        {
+          "name": "IMAGE_PATH",
+          "shape": 6,
+          "type": "STRING",
+          "links": [
+            76
+          ]
+        }
+      ],
+      "properties": {
+        "Node name for S&R": "CCC_ImageBatchLoader"
+      },
+      "widgets_values": [
+        "C:\\path\\to\\your\\images",
+        0,
+        1,
+        "sequential"
+      ],
+      "color": "#d4d4d4",
+      "bgcolor": "#c0c0c0"
+    },
+    {
+      "id": 56,
+      "type": "PreviewImage",
+      "pos": [
+        9297.047483729531,
+        9979.364692242421
+      ],
+      "size": [
+        520,
+        540
+      ],
+      "flags": {},
+      "order": 14,
+      "mode": 0,
+      "inputs": [
+        {
+          "name": "images",
+          "type": "IMAGE",
+          "link": 49
+        }
+      ],
+      "outputs": [
+        {
+          "name": "images",
+          "type": "IMAGE",
+          "links": null
+        }
+      ],
+      "properties": {
+        "cnr_id": "comfy-core",
+        "ver": "0.24.1",
+        "Node name for S&R": "PreviewImage"
+      },
+      "widgets_values": [],
+      "color": "#d4d4d4",
+      "bgcolor": "#c0c0c0"
+    },
+    {
+      "id": 24,
+      "type": "SetNode",
+      "pos": [
+        9606.986408514647,
+        11430.000000000002
+      ],
+      "size": [
+        210,
+        58
+      ],
+      "flags": {
+        "collapsed": true
+      },
+      "order": 20,
+      "mode": 0,
+      "inputs": [
+        {
+          "name": "STRING",
+          "type": "STRING",
+          "link": 83
+        }
+      ],
+      "outputs": [
+        {
+          "name": "STRING",
+          "type": "STRING",
+          "links": null
+        }
+      ],
+      "title": "Set_Final_TaggerPrompt",
+      "properties": {
+        "Node name for S&R": "SetNode",
+        "aux_id": "kijai/ComfyUI-KJNodes",
+        "previousName": "Final_TaggerPrompt"
+      },
+      "widgets_values": [
+        "Final_TaggerPrompt"
+      ]
+    },
+    {
+      "id": 16,
+      "type": "MickmumpitzLabel",
+      "pos": [
+        8640,
+        9710
+      ],
+      "size": [
+        904.95654296875,
+        136
+      ],
+      "flags": {
+        "allow_interaction": true
+      },
+      "order": 11,
+      "mode": 0,
+      "inputs": [],
+      "outputs": [],
+      "title": "MickmumpitzLabel",
+      "properties": {
+        "text": "DATASET TAGGER",
+        "fontSize": 100,
+        "fontFamily": "Arial",
+        "fontColor": "#ffffff",
+        "textAlign": "left",
+        "backgroundColor": "transparent",
+        "padding": 8,
+        "borderRadius": 0
+      },
+      "color": "#fff0",
+      "bgcolor": "#fff0"
+    },
+    {
+      "id": 47,
+      "type": "MarkdownNote",
+      "pos": [
+        7938.693923269709,
+        9937.887191505015
+      ],
+      "size": [
+        655.3269172645121,
+        775.3909949791662
+      ],
+      "flags": {},
+      "order": 12,
+      "mode": 0,
+      "inputs": [],
+      "outputs": [],
+      "properties": {},
+      "widgets_values": [
+        "## Overview\n\nAutomated image tagging and captioning pipeline using Qwen3-VL for dataset preparation.\n\n- **Batch Processing** — Automatically loads and processes a sequence of images from a specified directory.\n- **ConsistentCharacterCreator Prompt Studio** — Provides specialized prompt templates (FLUX, SD 1.5, SDXL, SD3, Cascade, etc.) to instruct the Vision-Language Model exactly how to structure the caption. (easily editable in the text box)\n- **Auto-Save** — replaces placeholder triggers and saves the final captions as `.txt` files alongside the images.\n\n1. Set your trigger word in **\"Set Lora Trigger Word\"** (Recommended: **Only use Alphanumeric**)\n2. Define the path in **\"Insert Dataset Image Location\"**\n3. Insert Batch Size in **\"Set Batch Size\"**\n4. Use **\"ConsistentCharacterCreator Prompt Studio\"** for Custom Tagger Instructions\n5. Change model and Advanced Settings in the **\"QwenVL\"** node on the right\n \n> **Disclaimer:** VRAM usage depends heavily on the chosen Qwen model and image resolution. The setup uses FP8 for optimal performance on consumer GPUs.\n\n---\n\n## Required Custom Nodes\n\n| Node Pack | Source |\n|-----------|--------|\n| ComfyUI-QwenVL | AILab |\n| CCC_PromptStudio | ConsistentCharacterCreator |\n| CCC_ImageBatchLoader | ConsistentCharacterCreator |\n| ComfyUI-KJNodes | kijai |\n| ComfyUIComfyrollCustomNodes | Suzie1 |\n| comfyui-custom-scripts (pysssss) | pythongosssss |\n| rgthree-comfy | rgthree |\n| ComfyUI_Mickmumpitz_Nodes | mickmumpitz |\n| was-ns | WASasquatch |\n\n*(Note: The workflow uses `CCC_ImageBatchLoader` for image sequencing and `CR Save Text To File` for saving the output txt files.)*\n\n---\n\n## Required Models\n\n### Vision-Language Model\n\n| File | Location | Type |\n|------|----------|----------|\n| `Qwen3-VL-2B-Instruct` | Auto-downloaded | LLM / VLM |\n| `Qwen3-VL-4B-Instruct-FP8` | Auto-downloaded | LLM / VLM |\n\n*(The `AILabQwenVL` node automatically handles the download and loading of the selected Qwen3-VL model variants.)*"
+      ],
+      "color": "#97651BFF",
+      "bgcolor": "#B67921FF"
+    },
+    {
+      "id": 77,
+      "type": "CCC_PromptStudio",
+      "pos": [
+        9290,
+        10640
+      ],
+      "size": [
+        530,
+        790
+      ],
+      "flags": {
+        "collapsed": false
+      },
+      "order": 13,
+      "mode": 0,
+      "inputs": [
+        {
+          "name": "trigger_word",
+          "type": "STRING",
+          "widget": {
+            "name": "trigger_word"
+          },
+          "link": 84
+        }
+      ],
+      "outputs": [
+        {
+          "name": "final_prompt",
+          "type": "STRING",
+          "links": [
+            83
+          ]
+        }
+      ],
+      "properties": {
+        "Node name for S&R": "CCC_PromptStudio"
+      },
+      "widgets_values": [
+        "10 - Ideogram 4",
+        "ohwx_subject",
+        "character",
+        "You are a dataset-captioning engine for fine-tuning a FLUX (FLUX.1 or FLUX.2) LoRA. Write ONE flowing, natural-language paragraph in full sentences — no comma-separated tag lists and no \"this image shows\" filler. FLUX's T5/Mistral text encoder rewards complete prose. Refer to the main subject as '{trigger}'. Describe foreground to background: subject, pose/action, expression, clothing, then setting, lighting, and camera/lens feel. [[CHARACTER]]This is a character LoRA: describe only what VARIES between shots (pose, outfit, framing, lighting) and let '{trigger}' carry the fixed identity — do NOT describe permanent face, hair, or eye features. [[/CHARACTER]][[STYLE]]This is a style LoRA: describe the content/subject of each image and never name the style itself — the shared look is what '{trigger}' must learn. [[/STYLE]]Keep the caption structure consistent across the dataset. Output only the caption.",
+        "You are a dataset-captioning engine for fine-tuning an SD 1.5 LoRA. Output a single comma-separated list of concise Danbooru-style tags — no sentences. SD 1.5's CLIP encoder keys on discrete tokens and its ~75-token window leaves no room for grammar filler. Start with '{trigger}', then tag subject, appearance, clothing, pose, expression, setting, lighting, and quality (masterpiece, best quality, highly detailed). [[CHARACTER]]This is a character LoRA: tag only variable attributes and omit the constant identity tags so '{trigger}' absorbs them. [[/CHARACTER]][[STYLE]]This is a style LoRA: blacklist generic subject tags (1girl, 1boy, standing, looking at viewer, smile) so the style does not bind to poses, and tag the rendering/medium instead. [[/STYLE]]Output only the comma-separated tags.",
+        "You are a dataset-captioning engine for fine-tuning an SDXL LoRA. The right style depends on the base checkpoint. For base / photoreal SDXL, write a short natural-language sentence naming the subject as '{trigger}', then continue with comma-separated descriptive modifiers (the hybrid its dual-CLIP encoders handle best). For an anime fine-tune (Pony, Animagine, Illustrious, NoobAI), output PURE Danbooru-style comma tags starting with '{trigger}'. Either way cover subject, appearance, clothing, pose, setting, lighting, and quality. [[CHARACTER]]This is a character LoRA: describe only variable attributes and let '{trigger}' learn the fixed identity. [[/CHARACTER]][[STYLE]]This is a style LoRA: describe the content, avoid naming the style, and (for tag output) blacklist generic subject tags so the style does not bind to poses. [[/STYLE]]Output only the caption.",
+        "You are a dataset-captioning engine for fine-tuning an SD3 / SD3.5 LoRA. Write ONE precise natural-language description in full sentences — its T5-XXL encoder is the dominant signal and rewards prose over tags. Use '{trigger}' for the main subject. Be explicit about spatial relationships, object placement, composition, and lighting, and caption in the same natural-language style you intend to prompt with. [[CHARACTER]]This is a character LoRA: describe only variable attributes and let '{trigger}' carry identity. [[/CHARACTER]][[STYLE]]This is a style LoRA: describe the content, not the style. [[/STYLE]]Keep structure consistent across the dataset. Output only the caption.",
+        "You are a dataset-captioning engine for fine-tuning a Stable Cascade (Würstchen) LoRA. Write a concise but information-dense natural-language description — descriptive phrases, not Danbooru tags. Begin with '{trigger}' as the main subject, then cover appearance, clothing, setting, lighting, and framing. [[CHARACTER]]This is a character LoRA: describe only what varies and let '{trigger}' learn the fixed identity. [[/CHARACTER]][[STYLE]]This is a style LoRA: describe the content, never the style. [[/STYLE]]Keep the structure consistent across every image. Output only the caption.",
+        "You are a dataset-captioning engine for fine-tuning a Qwen-Image (Qwen-Image-2512) LoRA. Its Qwen2.5-VL text encoder natively understands layout, typography, and spatial relations, so write clear natural-language sentences and describe composition explicitly. Use '{trigger}' for the main subject and state object placement with spatial terms (centered, upper-left, foreground). If the image contains any rendered text, transcribe it VERBATIM in quotes and describe its font weight, style, color, and position. [[CHARACTER]]This is a character LoRA: describe only variable attributes and let '{trigger}' carry identity (avoid over-describing faces on small datasets). [[/CHARACTER]][[STYLE]]This is a style LoRA: describe the content, not the style. [[/STYLE]]Output only the caption.",
+        "You are a dataset-captioning engine for fine-tuning a Wan Video (Wan 2.1 / 2.2) LoRA on STATIC images. Write a short natural-language caption and keep it under ~50 tokens — Wan truncates in training and '{trigger}' must stay in range. A common form is 'A photo of {trigger}, ...'. Describe only constant appearance and context: clothing, background, lighting, framing. Do NOT describe motion or camera movement — Wan's video training reads motion words as change over time, which pollutes still-image training. [[CHARACTER]]This is a character LoRA: omit fine facial micro-details so '{trigger}' carries the identity. [[/CHARACTER]][[STYLE]]This is a style LoRA: describe the content, never the style. [[/STYLE]]Keep the format identical across the dataset. Output only the caption.",
+        "You are a dataset-captioning engine for fine-tuning an LTX Video LoRA on STATIC images. LTX rewards long, detailed, structured prose — treat the caption as teaching material, not a short prompt, and avoid empty adjectives like \"beautiful\". Describe in a consistent order: shot type, then subject and appearance (using '{trigger}' for the main subject), then camera framing, then lighting, then style/mood. Describe the STATIC composition and framing only — do NOT describe temporal motion or camera movement, since the samples are stills. [[CHARACTER]]This is a character LoRA: describe only variable attributes and let '{trigger}' carry identity. [[/CHARACTER]][[STYLE]]This is a style LoRA: describe the content, not the style. [[/STYLE]]Output only the caption.",
+        "You are a dataset-captioning engine for fine-tuning a HunyuanVideo LoRA on STATIC images. Its LLaVA-Llama3 LLM text encoder rewards rich, fluent, detailed natural-language descriptions — aim for roughly 50+ words. Write '{trigger}' into the sentence as a short phrase, not a bare token. Describe the subject's appearance, clothing, composition, framing, and lighting in detail. Do NOT invent or describe motion or camera movement — the samples are still images. [[CHARACTER]]This is a character LoRA: emphasize variable attributes and let '{trigger}' bind the identity. [[/CHARACTER]][[STYLE]]This is a style LoRA: describe the content, not the style. [[/STYLE]]Output only the caption.",
+        "You are an expert image captioner for LoRA training datasets using Ideogram 4.0.\nYour output must be a single valid JSON object. Do not output plain text, markdown, code fences, or explanations. Output clean, UTF-8, valid JSON only, with NO comments of any kind.\n\nYou will receive an image containing one or more known characters from the list below.\nGoal: write a detailed, structured CLEAN JSON caption for Ideogram 4.0 LoRA training, with placed bounding boxes, tagged characters, and color-palette picks.\n\nCAPTIONING RULES\n- Set \"aspect_ratio\" from the actual image dimensions.\n- Describe the image from left to right in both \"high_level_description\" and \"background\".\n- Order the \"elements\" array by ascending x_min (i.e. left to right).\n- Use the exact Trigger Keyword for each known character present. Reproduce trigger words character-for-character: exact casing, no normalization, no meta commentary.\n- Include a bounding box for each character and each key object or text element, in the format [x_min, y_min, x_max, y_max], normalized to image dimensions (0-1000 range). Origin is the top-left corner: [x_min, y_min] is the top-left of the box and [x_max, y_max] is the bottom-right.\n- Each element contains EXACTLY ONE character OR one text tag OR one key object. Overall composition and character interaction go in \"high_level_description\"; a single element's pose or action goes in that element's \"desc\".\n- Put the character's trigger word in the \"desc\" of its corresponding element.\n- Tag color palettes using hex codes.\n- Describe only what is clearly visible. Do not infer brand names, unreadable text, or occluded/guessed objects. If text is present but illegible, omit it.\n- Always describe lighting conditions and how each character is lit, in both \"high_level_description\" and \"lighting\".\n- Always describe camera angle, lens, aperture/exposure, and distance to subject (close-up, medium, wide, etc.) in \"photo\".\n- Always describe the image's aesthetic in \"aesthetics\".\n- If there are no characters, text, or key objects, \"elements\" may be an empty array.\n- Length guide (for dataset consistency): keep each \"desc\" to roughly 1-3 sentences and \"high_level_description\" to roughly 2-4 sentences.\n\nELEMENT SHAPES (two types only)\n- \"type\": \"text\"  -> include \"bbox\", \"desc\" (typography), and \"text\" (the exact visible string). Do NOT include \"color_palette\".\n- \"type\": \"obj\"   -> include \"bbox\", \"desc\", and \"color_palette\". Do NOT include a \"text\" field.\n\nCHARACTER HANDLING\n- Only tag characters actually visible in the image. Never add a trigger word for a character who is not present.\n- If a person appears who is not in the list below, describe them generically (e.g. \"a man\", \"a woman\") with no trigger word.\n\nCHARACTER TRIGGER WORDS\n- the black man ia \"M4le_M0del_01\"\n- the blonde woman with the buzzcut is \"Berl1n_Model_v01\"\n- the woman with curly hair \"Em1l1_05\"\n(The descriptors above, such as \"buzzcut\" or \"curly hair\", are recognition aids ONLY. They must never appear in your output. See The Forbidden Rule.)\n\n--- THE FORBIDDEN RULE (APPLIES TO ALL SECTIONS) ---\n- Why: the trigger word must carry all identity information, so the LoRA binds identity to the token rather than to descriptive text.\n- When a known character is identified, you are STRICTLY FORBIDDEN from describing that character's permanent/invariant physical features anywhere in the output (both \"high_level_description\" and \"desc\"). This includes hair (color, length, style), eyes, facial structure, skin tone, build/body type, and cybernetics. This applies regardless of what they wear. The trigger keyword alone replaces all such traits.\n- This explicitly includes the descriptors used to identify them above: do not write \"blonde\", \"buzzcut\", \"curly\", skin tone, or any equivalent.\n- Describe ONLY variable attributes: clothing/wardrobe, pose, action, facial expression, position in frame, and how the character is lit.\n- A tagged character's \"color_palette\" must be drawn from wardrobe and immediate surroundings ONLY, never from skin, hair, or eyes.\n\nOUTPUT FORMAT (strict, valid JSON, UTF-8 only, no code fences, no comments)\nReplicate this exact structure. The values below are placeholders showing shape and format only.\n{\n  \"aspect_ratio\": \"1:1\",\n  \"high_level_description\": \"General detailed description of the scene, left to right. Use character trigger words here when recognized, e.g. 'M4le_M0del_01 and Em1l1_05 are seated at a table in a dimly lit diner...'. Cover composition, interaction, and lighting.\",\n  \"compositional_deconstruction\": {\n    \"background\": \"Detailed description of the background, from left to right.\",\n    \"elements\": [\n      {\n        \"type\": \"text\",\n        \"bbox\": [50, 100, 200, 400],\n        \"desc\": \"Description of the text element and its typography.\",\n        \"text\": \"ExactVisibleString\"\n      },\n      {\n        \"type\": \"obj\",\n        \"bbox\": [150, 250, 450, 950],\n        \"desc\": \"Description using the trigger word: wardrobe, pose, action, expression, and lighting only.\",\n        \"color_palette\": [\"#1F2018\", \"#0B141D\"]\n      }\n    ]\n  },\n  \"style_description\": {\n    \"medium\": \"photography, graphic design, 3d render, etc.\",\n    \"aesthetics\": \"photoreal, grainy, vhs, 8bit, comic, anime, etc.\",\n    \"lighting\": \"Detailed description of the lighting in the scene.\",\n    \"photo\": \"Camera angle, lens, aperture/exposure, and distance to subject.\",\n    \"color_palette\": [\"#888888\", \"#444444\"]\n  }\n}\n\nPalette guidance: per-element \"color_palette\" max 5 picks; global \"style_description.color_palette\" should hold roughly 6-10 dominant colors (max 16).\n\nOPTIMAL FINAL CAPTION EXAMPLE (elements ordered left to right by x_min):\n{\n  \"aspect_ratio\": \"16:9\",\n  \"high_level_description\": \"A medium wide eye-level shot capturing Ma3hwaKang and MagnusSt3rn standing side-by-side in a dimly lit underground casino. Ma3hwaKang is reaching toward a green poker table in the center while MagnusSt3rn observes passively. High-contrast neon purple and gold rim lighting illuminates the subjects against deep shadows.\",\n  \"compositional_deconstruction\": {\n    \"background\": \"Left side features a glowing purple neon wall sign; center transitions into a dark, out-of-focus green poker table scattered with chips; right side fades into heavy shadows concealing silhouetted slot machines.\",\n    \"elements\": [\n      {\n        \"type\": \"text\",\n        \"bbox\": [50, 100, 200, 400],\n        \"desc\": \"Bright purple neon cursive tubing mounted on a dark brick wall.\",\n        \"text\": \"Jackpot\"\n      },\n      {\n        \"type\": \"obj\",\n        \"bbox\": [150, 250, 450, 950],\n        \"desc\": \"Ma3hwaKang wearing a floor-length red silk evening gown with a high leg slit. She is leaning forward, extending her right arm toward the table, displaying a highly focused and intense facial expression.\",\n        \"color_palette\": [\"#FF0000\", \"#8B0000\", \"#FFD700\", \"#1A1A1A\"]\n      },\n      {\n        \"type\": \"obj\",\n        \"bbox\": [200, 500, 800, 950],\n        \"desc\": \"A classic green felt poker table in the center foreground, scattered with stacks of casino chips, playing cards, and a golden VIP plaque.\",\n        \"color_palette\": [\"#006400\", \"#228B22\", \"#FFD700\", \"#FFFFFF\", \"#1A1A1A\"]\n      },\n      {\n        \"type\": \"obj\",\n        \"bbox\": [550, 150, 900, 950],\n        \"desc\": \"MagnusSt3rn standing upright with a rigid, imposing posture and hands clasped behind his back. He is looking sharply to the left with a stoic, calculating expression.\",\n        \"color_palette\": [\"#2F2F2F\", \"#1A1A1A\", \"#FFFFFF\", \"#FFD700\"]\n      },\n      {\n        \"type\": \"text\",\n        \"bbox\": [650, 450, 700, 550],\n        \"desc\": \"Small golden engraved plaque sitting on the edge of the poker table.\",\n        \"text\": \"VIP\"\n      }\n    ]\n  },\n  \"style_description\": {\n    \"medium\": \"photography\",\n    \"aesthetics\": \"photoreal, cyberpunk, neo-noir, cinematic\",\n    \"lighting\": \"Low-key neon lighting with a stark purple rim light hitting the subjects from the left, contrasted by a warm gold practical light illuminating them from the lower front-right.\",\n    \"photo\": \"Eye-level medium wide shot, 35mm lens, f/1.8 aperture for shallow depth of field, focused symmetrically on the two subjects, captured on a digital cinema camera.\",\n    \"color_palette\": [\"#4B0082\", \"#800080\", \"#FFD700\", \"#FF0000\", \"#1A1A1A\", \"#2F2F2F\", \"#0F0F0F\"]\n  }\n}\n\n\n",
+        "Write your LoRA-captioning prompt for {trigger}",
+        "You are a dataset-captioning engine for fine-tuning a Krea 2 (K2) LoRA. Krea 2's Qwen3-VL text encoder is conditioned to read color, shape, size, texture, quantity, any rendered text, and the spatial relationships of the objects and background — so write natural-language sentences (no tag lists) that cover those attributes. Keep it short and promptable: one or two sentences is ideal, not a long essay. Name the main subject as '{trigger}', then describe the variable, promptable details — background, clothing, lighting, pose, and camera framing — and state object placement with spatial terms (centered, foreground, upper-left). If the image contains rendered text, transcribe it VERBATIM in quotes. [[CHARACTER]]This is a character LoRA: describe only what VARIES between shots (pose, outfit, expression, framing, lighting) and let '{trigger}' carry the fixed identity — do not re-describe permanent face, hair, or eye features. [[/CHARACTER]][[STYLE]]This is a style LoRA: describe the content/subject of each image, never name the style itself, and prefer a descriptive trigger PHRASE (e.g. 'violet retro anime print style') over an opaque token — Krea 2 handles descriptive triggers well. [[/STYLE]]Keep the caption structure consistent across the dataset. Output only the caption."
+      ]
+    },
+    {
+      "id": 70,
+      "type": "82998357-ca74-4ff7-8d50-da586d5fcd85",
+      "pos": [
+        8670,
+        10480
+      ],
+      "size": [
+        530,
+        170
+      ],
+      "flags": {},
+      "order": 23,
+      "mode": 0,
+      "inputs": [
+        {
+          "name": "output_file_path",
+          "type": "STRING",
+          "widget": {
+            "name": "output_file_path"
+          },
+          "link": 75
+        },
+        {
+          "name": "text",
+          "type": "STRING",
+          "link": 76
+        },
+        {
+          "name": "text_a",
+          "shape": 7,
+          "type": "STRING",
+          "link": 140
+        },
+        {
+          "name": "image",
+          "type": "IMAGE",
+          "link": 78
+        }
+      ],
+      "outputs": [
+        {
+          "name": "RESPONSE",
+          "type": "STRING",
+          "links": [
+            79
+          ]
+        },
+        {
+          "name": "converted_text",
+          "type": "STRING",
+          "links": null
+        }
+      ],
+      "properties": {
+        "proxyWidgets": [
+          [
+            "103",
+            "path"
+          ],
+          [
+            "103",
+            "file_extension"
+          ],
+          [
+            "14",
+            "seed"
+          ],
+          [
+            "14",
+            "max_tokens"
+          ]
+        ],
+        "cnr_id": "comfy-core",
+        "ver": "0.24.1"
+      },
+      "widgets_values": []
+    }
+  ],
+  "links": [
+    [
+      4,
+      11,
+      0,
+      4,
+      0,
+      "STRING"
+    ],
+    [
+      17,
+      19,
+      0,
+      20,
+      0,
+      "STRING"
+    ],
+    [
+      19,
+      17,
+      0,
+      22,
+      0,
+      "STRING"
+    ],
+    [
+      26,
+      4,
+      0,
+      32,
+      0,
+      "IMAGE"
+    ],
+    [
+      49,
+      46,
+      0,
+      56,
+      0,
+      "IMAGE"
+    ],
+    [
+      65,
+      46,
+      0,
+      65,
+      0,
+      "IMAGE"
+    ],
+    [
+      66,
+      65,
+      3,
+      30,
+      0,
+      "INT"
+    ],
+    [
+      75,
+      39,
+      0,
+      70,
+      0,
+      "STRING"
+    ],
+    [
+      76,
+      4,
+      1,
+      70,
+      1,
+      "STRING"
+    ],
+    [
+      78,
+      4,
+      0,
+      70,
+      3,
+      "IMAGE"
+    ],
+    [
+      79,
+      70,
+      0,
+      36,
+      0,
+      "STRING"
+    ],
+    [
+      83,
+      77,
+      0,
+      24,
+      0,
+      "STRING"
+    ],
+    [
+      84,
+      23,
+      0,
+      77,
+      0,
+      "STRING"
+    ],
+    [
+      108,
+      102,
+      0,
+      104,
+      0,
+      "IMAGE"
+    ],
+    [
+      109,
+      38,
+      0,
+      104,
+      1,
+      "STRING"
+    ],
+    [
+      140,
+      15,
+      0,
+      70,
+      2,
+      "STRING"
+    ]
+  ],
+  "groups": [
+    {
+      "id": 1,
+      "title": "DATASET TAGGER SETTINGS (STANDALONE)",
+      "bounding": [
+        8640,
+        9900,
+        610,
+        810
+      ],
+      "color": "#7341ff",
+      "flags": {}
+    },
+    {
+      "id": 2,
+      "title": "INPUT IMAGES",
+      "bounding": [
+        9270,
+        9900,
+        590,
+        640
+      ],
+      "color": "#ff4981",
+      "flags": {}
+    },
+    {
+      "id": 3,
+      "title": "PREVIEW",
+      "bounding": [
+        9880,
+        9900,
+        790,
+        1560
+      ],
+      "color": "#d4d4d4",
+      "flags": {}
+    },
+    {
+      "id": 6,
+      "title": "LEGACY MODEL TAGGING",
+      "bounding": [
+        9270,
+        10560,
+        590,
+        890
+      ],
+      "color": "#3f9e5b",
+      "flags": {}
+    }
+  ],
+  "definitions": {
+    "subgraphs": [
+      {
+        "id": "82998357-ca74-4ff7-8d50-da586d5fcd85",
+        "version": 1,
+        "state": {
+          "lastGroupId": 7,
+          "lastNodeId": 138,
+          "lastLinkId": 140,
+          "lastRerouteId": 1
+        },
+        "revision": 0,
+        "config": {},
+        "name": "LLM CAPTIONING",
+        "inputNode": {
+          "id": -10,
+          "bounding": [
+            11471.566665649414,
+            10391.040791502543,
+            138.0869598388672,
+            148
+          ]
+        },
+        "outputNode": {
+          "id": -20,
+          "bounding": [
+            14196.966361132743,
+            10595.666396732773,
+            131.72463989257812,
+            88
+          ]
+        },
+        "inputs": [
+          {
+            "id": "ae81a6d8-e14e-47d1-8bcf-378063d4c055",
+            "name": "output_file_path",
+            "type": "STRING",
+            "linkIds": [
+              104
+            ],
+            "localized_name": "output_file_path",
+            "pos": [
+              11585.653625488281,
+              10415.040791502543
+            ]
+          },
+          {
+            "id": "3eb1c06d-8c4b-4620-94ac-650b76d635d1",
+            "name": "text",
+            "type": "STRING",
+            "linkIds": [
+              2
+            ],
+            "localized_name": "text",
+            "pos": [
+              11585.653625488281,
+              10435.040791502543
+            ]
+          },
+          {
+            "id": "5815dde0-78ff-412e-a9fe-e792119d887b",
+            "name": "text_a",
+            "type": "STRING",
+            "linkIds": [
+              43
+            ],
+            "localized_name": "text_a",
+            "shape": 7,
+            "pos": [
+              11585.653625488281,
+              10455.040791502543
+            ]
+          },
+          {
+            "id": "869fd191-f20d-460f-83a3-6eb2d8c81b63",
+            "name": "image",
+            "type": "IMAGE",
+            "linkIds": [
+              33,
+              127,
+              128
+            ],
+            "localized_name": "image",
+            "pos": [
+              11585.653625488281,
+              10475.040791502543
+            ]
+          },
+          {
+            "id": "e5ea04b3-1019-4d35-b748-aa1362a387f8",
+            "name": "file_extension",
+            "type": "STRING",
+            "linkIds": [
+              139
+            ],
+            "pos": [
+              11585.653625488281,
+              10495.040791502543
+            ]
+          }
+        ],
+        "outputs": [
+          {
+            "id": "785cbee3-5c46-4599-ad57-1d3b1e0ec839",
+            "name": "RESPONSE",
+            "type": "STRING",
+            "linkIds": [
+              135
+            ],
+            "localized_name": "RESPONSE",
+            "pos": [
+              14220.966361132743,
+              10619.666396732773
+            ]
+          },
+          {
+            "id": "3a587405-41b8-4262-b8a7-c81bf07ac87f",
+            "name": "converted_text",
+            "type": "STRING",
+            "linkIds": [
+              138
+            ],
+            "pos": [
+              14220.966361132743,
+              10639.666396732773
+            ]
+          }
+        ],
+        "widgets": [],
+        "nodes": [
+          {
+            "id": 49,
+            "type": "Text Concatenate",
+            "pos": [
+              11869.98429767143,
+              10305.630577792068
+            ],
+            "size": [
+              270,
+              142
+            ],
+            "flags": {},
+            "order": 13,
+            "mode": 0,
+            "inputs": [
+              {
+                "localized_name": "text_a",
+                "name": "text_a",
+                "shape": 7,
+                "type": "STRING",
+                "link": 43
+              },
+              {
+                "localized_name": "text_b",
+                "name": "text_b",
+                "shape": 7,
+                "type": "STRING",
+                "link": null
+              },
+              {
+                "localized_name": "text_c",
+                "name": "text_c",
+                "shape": 7,
+                "type": "STRING",
+                "link": null
+              },
+              {
+                "localized_name": "text_d",
+                "name": "text_d",
+                "shape": 7,
+                "type": "STRING",
+                "link": null
+              }
+            ],
+            "outputs": [
+              {
+                "localized_name": "STRING",
+                "name": "STRING",
+                "type": "STRING",
+                "links": [
+                  42
+                ]
+              }
+            ],
+            "properties": {
+              "cnr_id": "was-ns",
+              "ver": "44de705818d4663fefefde57ffe0ea5a9ea39df4",
+              "Node name for S&R": "Text Concatenate"
+            },
+            "widgets_values": [
+              "///",
+              "true"
+            ]
+          },
+          {
+            "id": 13,
+            "type": "Image Resize (rgthree)",
+            "pos": [
+              11711.52022904475,
+              9954.711671722602
+            ],
+            "size": [
+              270,
+              280
+            ],
+            "flags": {},
+            "order": 11,
+            "mode": 0,
+            "inputs": [
+              {
+                "localized_name": "image",
+                "name": "image",
+                "type": "IMAGE",
+                "link": 33
+              }
+            ],
+            "outputs": [
+              {
+                "localized_name": "IMAGE",
+                "name": "IMAGE",
+                "type": "IMAGE",
+                "links": [
+                  15
+                ]
+              },
+              {
+                "localized_name": "WIDTH",
+                "name": "WIDTH",
+                "type": "INT",
+                "links": null
+              },
+              {
+                "localized_name": "HEIGHT",
+                "name": "HEIGHT",
+                "type": "INT",
+                "links": null
+              }
+            ],
+            "properties": {
+              "cnr_id": "rgthree-comfy",
+              "ver": "1.0.2604070017",
+              "Node name for S&R": "Image Resize (rgthree)"
+            },
+            "widgets_values": [
+              "pixels",
+              1024,
+              1024,
+              "crop",
+              "lanczos"
+            ]
+          },
+          {
+            "id": 8,
+            "type": "CR Text Replace",
+            "pos": [
+              12087.999349371425,
+              10783.331483507
+            ],
+            "size": [
+              270,
+              312
+            ],
+            "flags": {},
+            "order": 10,
+            "mode": 0,
+            "inputs": [
+              {
+                "localized_name": "text",
+                "name": "text",
+                "type": "STRING",
+                "link": 11
+              }
+            ],
+            "outputs": [
+              {
+                "localized_name": "STRING",
+                "name": "STRING",
+                "type": "*",
+                "links": [
+                  1
+                ]
+              },
+              {
+                "localized_name": "show_help",
+                "name": "show_help",
+                "type": "STRING",
+                "links": null
+              }
+            ],
+            "properties": {
+              "cnr_id": "ComfyUI_Comfyroll_CustomNodes",
+              "ver": "d78b780ae43fcf8c6b7c6505e6ffb4584281ceca",
+              "Node name for S&R": "CR Text Replace"
+            },
+            "widgets_values": [
+              ".",
+              "",
+              "",
+              "",
+              "",
+              ""
+            ]
+          },
+          {
+            "id": 2,
+            "type": "CR Text Replace",
+            "pos": [
+              11678.000114816805,
+              10660.665990523248
+            ],
+            "size": [
+              270,
+              312
+            ],
+            "flags": {},
+            "order": 9,
+            "mode": 0,
+            "inputs": [
+              {
+                "localized_name": "text",
+                "name": "text",
+                "type": "STRING",
+                "link": 2
+              },
+              {
+                "localized_name": "find1",
+                "name": "find1",
+                "shape": 7,
+                "type": "STRING",
+                "widget": {
+                  "name": "find1"
+                },
+                "link": 35
+              }
+            ],
+            "outputs": [
+              {
+                "localized_name": "STRING",
+                "name": "STRING",
+                "type": "*",
+                "links": [
+                  11
+                ]
+              },
+              {
+                "localized_name": "show_help",
+                "name": "show_help",
+                "type": "STRING",
+                "links": null
+              }
+            ],
+            "properties": {
+              "cnr_id": "ComfyUI_Comfyroll_CustomNodes",
+              "ver": "d78b780ae43fcf8c6b7c6505e6ffb4584281ceca",
+              "Node name for S&R": "CR Text Replace"
+            },
+            "widgets_values": [
+              "\\",
+              "",
+              "png",
+              "",
+              "\\",
+              ""
+            ]
+          },
+          {
+            "id": 40,
+            "type": "GetNode",
+            "pos": [
+              11316.670047383759,
+              10709.331713140602
+            ],
+            "size": [
+              210,
+              50
+            ],
+            "flags": {
+              "collapsed": true
+            },
+            "order": 0,
+            "mode": 0,
+            "inputs": [],
+            "outputs": [
+              {
+                "name": "STRING",
+                "type": "STRING",
+                "links": [
+                  35
+                ]
+              }
+            ],
+            "title": "Get_Path_Location",
+            "properties": {
+              "Node name for S&R": "GetNode",
+              "aux_id": "kijai/ComfyUI-KJNodes"
+            },
+            "widgets_values": [
+              "Path_Location"
+            ]
+          },
+          {
+            "id": 14,
+            "type": "AILab_QwenVL",
+            "pos": [
+              12180,
+              10080
+            ],
+            "size": [
+              340,
+              384
+            ],
+            "flags": {},
+            "order": 12,
+            "mode": 0,
+            "inputs": [
+              {
+                "localized_name": "image",
+                "name": "image",
+                "shape": 7,
+                "type": "IMAGE",
+                "link": 15
+              },
+              {
+                "localized_name": "video",
+                "name": "video",
+                "shape": 7,
+                "type": "IMAGE",
+                "link": null
+              },
+              {
+                "localized_name": "custom_prompt",
+                "name": "custom_prompt",
+                "type": "STRING",
+                "widget": {
+                  "name": "custom_prompt"
+                },
+                "link": 42
+              }
+            ],
+            "outputs": [
+              {
+                "localized_name": "RESPONSE",
+                "name": "RESPONSE",
+                "type": "STRING",
+                "links": [
+                  107,
+                  122
+                ]
+              }
+            ],
+            "properties": {
+              "cnr_id": "ComfyUI-QwenVL",
+              "ver": "fcd1ada87a28f922cb887f779db32429f78a022c",
+              "Node name for S&R": "AILab_QwenVL"
+            },
+            "widgets_values": [
+              "Qwen3-VL-4B-Instruct",
+              "None (FP16)",
+              "auto",
+              "🖼️ Simple Description",
+              "",
+              1024,
+              true,
+              6,
+              "fixed"
+            ]
+          },
+          {
+            "id": 129,
+            "type": "SetNode",
+            "pos": [
+              11058.570264163296,
+              10540.171933974229
+            ],
+            "size": [
+              210,
+              60
+            ],
+            "flags": {},
+            "order": 19,
+            "mode": 0,
+            "inputs": [
+              {
+                "name": "IMAGE",
+                "type": "IMAGE",
+                "link": 128
+              }
+            ],
+            "outputs": [
+              {
+                "name": "IMAGE",
+                "type": "IMAGE",
+                "links": null
+              }
+            ],
+            "title": "Set_image",
+            "properties": {
+              "Node name for S&R": "SetNode",
+              "aux_id": "kijai/ComfyUI-KJNodes",
+              "previousName": "image"
+            },
+            "widgets_values": [
+              "image"
+            ],
+            "color": "#2a363b",
+            "bgcolor": "#3f5159"
+          },
+          {
+            "id": 130,
+            "type": "GetNode",
+            "pos": [
+              15564.093935163299,
+              9740.38526497423
+            ],
+            "size": [
+              210,
+              60
+            ],
+            "flags": {},
+            "order": 1,
+            "mode": 4,
+            "inputs": [],
+            "outputs": [
+              {
+                "name": "IMAGE",
+                "type": "IMAGE",
+                "links": [
+                  129
+                ]
+              }
+            ],
+            "title": "Get_image",
+            "properties": {
+              "Node name for S&R": "GetNode",
+              "aux_id": "kijai/ComfyUI-KJNodes"
+            },
+            "widgets_values": [
+              "image"
+            ],
+            "color": "#2a363b",
+            "bgcolor": "#3f5159"
+          },
+          {
+            "id": 131,
+            "type": "GetNode",
+            "pos": [
+              16696.49393516329,
+              9669.885264974242
+            ],
+            "size": [
+              210,
+              58
+            ],
+            "flags": {},
+            "order": 2,
+            "mode": 4,
+            "inputs": [],
+            "outputs": [
+              {
+                "name": "IMAGE",
+                "type": "IMAGE",
+                "links": [
+                  130
+                ]
+              }
+            ],
+            "title": "Get_image",
+            "properties": {
+              "Node name for S&R": "GetNode",
+              "aux_id": "kijai/ComfyUI-KJNodes"
+            },
+            "widgets_values": [
+              "image"
+            ],
+            "color": "#2a363b",
+            "bgcolor": "#3f5159"
+          },
+          {
+            "id": 132,
+            "type": "GetNode",
+            "pos": [
+              15556.393935163285,
+              9867.985264974246
+            ],
+            "size": [
+              210,
+              60
+            ],
+            "flags": {},
+            "order": 3,
+            "mode": 4,
+            "inputs": [],
+            "outputs": [
+              {
+                "name": "STRING",
+                "type": "STRING",
+                "links": [
+                  131
+                ]
+              }
+            ],
+            "title": "Get_Converted1",
+            "properties": {
+              "Node name for S&R": "GetNode",
+              "aux_id": "kijai/ComfyUI-KJNodes"
+            },
+            "widgets_values": [
+              "Converted1"
+            ]
+          },
+          {
+            "id": 133,
+            "type": "GetNode",
+            "pos": [
+              16730.593935163284,
+              9839.285264974247
+            ],
+            "size": [
+              210,
+              58
+            ],
+            "flags": {},
+            "order": 4,
+            "mode": 4,
+            "inputs": [],
+            "outputs": [
+              {
+                "name": "*",
+                "type": "*",
+                "links": [
+                  132
+                ]
+              }
+            ],
+            "title": "Get_ConvertedAbsolute",
+            "properties": {
+              "Node name for S&R": "GetNode",
+              "aux_id": "kijai/ComfyUI-KJNodes"
+            },
+            "widgets_values": [
+              "ConvertedAbsolute"
+            ]
+          },
+          {
+            "id": 128,
+            "type": "CCC_ShowImageTextPairs",
+            "pos": [
+              14787.914608447167,
+              9709.286441681137
+            ],
+            "size": [
+              726.20220902644,
+              1437.2664976060569
+            ],
+            "flags": {},
+            "order": 18,
+            "mode": 4,
+            "inputs": [
+              {
+                "localized_name": "images",
+                "name": "images",
+                "type": "IMAGE",
+                "link": 127
+              },
+              {
+                "localized_name": "captions",
+                "name": "captions",
+                "shape": 7,
+                "type": "STRING",
+                "link": 133
+              }
+            ],
+            "outputs": [],
+            "properties": {
+              "Node name for S&R": "CCC_ShowImageTextPairs"
+            },
+            "widgets_values": [
+              64,
+              64,
+              64,
+              64,
+              ""
+            ]
+          },
+          {
+            "id": 126,
+            "type": "CCC_ShowImageTextPairs",
+            "pos": [
+              15905.405672479821,
+              9671.955608090255
+            ],
+            "size": [
+              726.20220902644,
+              1437.2664976060569
+            ],
+            "flags": {},
+            "order": 6,
+            "mode": 4,
+            "inputs": [
+              {
+                "localized_name": "images",
+                "name": "images",
+                "type": "IMAGE",
+                "link": 129
+              },
+              {
+                "localized_name": "captions",
+                "name": "captions",
+                "shape": 7,
+                "type": "STRING",
+                "link": 131
+              }
+            ],
+            "outputs": [],
+            "properties": {
+              "Node name for S&R": "CCC_ShowImageTextPairs"
+            },
+            "widgets_values": [
+              64,
+              64,
+              64,
+              64,
+              ""
+            ]
+          },
+          {
+            "id": 127,
+            "type": "CCC_ShowImageTextPairs",
+            "pos": [
+              17010.898781772124,
+              9660.184025123941
+            ],
+            "size": [
+              726.20220902644,
+              1437.2664976060569
+            ],
+            "flags": {},
+            "order": 7,
+            "mode": 4,
+            "inputs": [
+              {
+                "localized_name": "images",
+                "name": "images",
+                "type": "IMAGE",
+                "link": 130
+              },
+              {
+                "localized_name": "captions",
+                "name": "captions",
+                "shape": 7,
+                "type": "STRING",
+                "link": 132
+              }
+            ],
+            "outputs": [],
+            "properties": {
+              "Node name for S&R": "CCC_ShowImageTextPairs"
+            },
+            "widgets_values": [
+              64,
+              64,
+              64,
+              64,
+              ""
+            ]
+          },
+          {
+            "id": 134,
+            "type": "GetNode",
+            "pos": [
+              14550.393935163302,
+              9782.085264974232
+            ],
+            "size": [
+              210,
+              58
+            ],
+            "flags": {},
+            "order": 5,
+            "mode": 4,
+            "inputs": [],
+            "outputs": [
+              {
+                "name": "STRING",
+                "type": "STRING",
+                "links": [
+                  133
+                ]
+              }
+            ],
+            "title": "Get_Directout",
+            "properties": {
+              "Node name for S&R": "GetNode",
+              "aux_id": "kijai/ComfyUI-KJNodes"
+            },
+            "widgets_values": [
+              "Directout"
+            ]
+          },
+          {
+            "id": 103,
+            "type": "Save Text File",
+            "pos": [
+              14237.45749531352,
+              10884.86855509532
+            ],
+            "size": [
+              314.15234375,
+              202
+            ],
+            "flags": {},
+            "order": 15,
+            "mode": 0,
+            "inputs": [
+              {
+                "localized_name": "text",
+                "name": "text",
+                "type": "STRING",
+                "link": 134
+              },
+              {
+                "localized_name": "path",
+                "name": "path",
+                "type": "STRING",
+                "widget": {
+                  "name": "path"
+                },
+                "link": 104
+              },
+              {
+                "localized_name": "filename_prefix",
+                "name": "filename_prefix",
+                "type": "STRING",
+                "widget": {
+                  "name": "filename_prefix"
+                },
+                "link": 103
+              },
+              {
+                "localized_name": "file_extension",
+                "name": "file_extension",
+                "shape": 7,
+                "type": "STRING",
+                "widget": {
+                  "name": "file_extension"
+                },
+                "link": 139
+              }
+            ],
+            "outputs": [],
+            "properties": {
+              "cnr_id": "was-ns",
+              "ver": "44de705818d4663fefefde57ffe0ea5a9ea39df4",
+              "Node name for S&R": "Save Text File"
+            },
+            "widgets_values": [
+              "./ComfyUI/output/[time(%Y-%m-%d)]",
+              "ComfyUI",
+              "",
+              0,
+              ".json",
+              "utf-8",
+              ""
+            ],
+            "color": "#d4d4d4",
+            "bgcolor": "#c0c0c0"
+          },
+          {
+            "id": 1,
+            "type": "ShowText|pysssss",
+            "pos": [
+              13152.329214408366,
+              11015.73509194654
+            ],
+            "size": [
+              361.109375,
+              5476
+            ],
+            "flags": {
+              "collapsed": false
+            },
+            "order": 8,
+            "mode": 0,
+            "inputs": [
+              {
+                "localized_name": "text",
+                "name": "text",
+                "type": "STRING",
+                "link": 1
+              }
+            ],
+            "outputs": [
+              {
+                "localized_name": "STRING",
+                "name": "STRING",
+                "shape": 6,
+                "type": "STRING",
+                "links": [
+                  103
+                ]
+              }
+            ],
+            "properties": {
+              "cnr_id": "comfyui-custom-scripts",
+              "ver": "1.2.5",
+              "Node name for S&R": "ShowText|pysssss"
+            },
+            "widgets_values": [
+              "Berl1n_Model_v01_TrueV3_DATASET001",
+              "Berl1n_Model_v01_TrueV3_DATASET002",
+              "Berl1n_Model_v01_TrueV3_DATASET003",
+              "Berl1n_Model_v01_TrueV3_DATASET004",
+              "Berl1n_Model_v01_TrueV3_DATASET005",
+              "Berl1n_Model_v01_TrueV3_DATASET006",
+              "Berl1n_Model_v01_TrueV3_DATASET007",
+              "Berl1n_Model_v01_TrueV3_DATASET008",
+              "Berl1n_Model_v01_TrueV3_DATASET009",
+              "Berl1n_Model_v01_TrueV3_DATASET010",
+              "Berl1n_Model_v01_TrueV3_DATASET011",
+              "Berl1n_Model_v01_TrueV3_DATASET012",
+              "Berl1n_Model_v01_TrueV3_DATASET013",
+              "Berl1n_Model_v01_TrueV3_DATASET014",
+              "Berl1n_Model_v01_TrueV3_DATASET015",
+              "Berl1n_Model_v01_TrueV3_DATASET016",
+              "Berl1n_Model_v01_TrueV3_DATASET017",
+              "Berl1n_Model_v01_TrueV3_DATASET018",
+              "Berl1n_Model_v01_TrueV3_DATASET019",
+              "Berl1n_Model_v01_TrueV3_DATASET020",
+              "Berl1n_Model_v01_TrueV3_DATASET021",
+              "Berl1n_Model_v01_TrueV3_DATASET022",
+              "Berl1n_Model_v01_TrueV3_DATASET023",
+              "Berl1n_Model_v01_TrueV3_DATASET024",
+              "Berl1n_Model_v01_TrueV3_DATASET025",
+              "Berl1n_Model_v01_TrueV3_IMG_GEN_00029_",
+              "Berl1n_Model_v01_TrueV3_IMG_GEN_00030_",
+              "Berl1n_Model_v01_TrueV3_IMG_GEN_00032_",
+              "Berl1n_Model_v01_TrueV3_IMG_GEN_00033_",
+              "Berl1n_Model_v01_TrueV3_IMG_GEN_00035_",
+              "ComfyUI_02836_",
+              "ComfyUI_02837_",
+              "ComfyUI_02838_",
+              "ComfyUI_02839_",
+              "ComfyUI_02840_",
+              "ComfyUI_02842_",
+              "ComfyUI_02844_",
+              "ComfyUI_02854_",
+              "ComfyUI_02855_",
+              "ComfyUI_02856_",
+              "ComfyUI_02857_",
+              "ComfyUI_02858_",
+              "ComfyUI_02859_",
+              "ComfyUI_02860_",
+              "ComfyUI_02863_",
+              "ComfyUI_02865_",
+              "ComfyUI_02867_ - Copy",
+              "ComfyUI_02867_",
+              "ComfyUI_02871_",
+              "ComfyUI_02874_",
+              "Em1l1_05_DATASET001",
+              "Em1l1_05_DATASET002",
+              "Em1l1_05_DATASET003",
+              "Em1l1_05_DATASET004",
+              "Em1l1_05_DATASET005",
+              "Em1l1_05_DATASET006",
+              "Em1l1_05_DATASET007",
+              "Em1l1_05_DATASET008",
+              "Em1l1_05_DATASET009",
+              "Em1l1_05_DATASET010",
+              "Em1l1_05_DATASET011",
+              "Em1l1_05_DATASET012",
+              "Em1l1_05_DATASET013",
+              "Em1l1_05_DATASET014",
+              "Em1l1_05_DATASET015",
+              "Em1l1_05_DATASET016",
+              "Em1l1_05_DATASET017",
+              "Em1l1_05_DATASET018",
+              "Em1l1_05_DATASET019",
+              "Em1l1_05_DATASET020",
+              "Em1l1_05_DATASET021",
+              "Em1l1_05_DATASET022",
+              "Em1l1_05_DATASET023",
+              "Em1l1_05_DATASET024",
+              "M4le_M0del_01_DATASET001",
+              "M4le_M0del_01_DATASET002",
+              "M4le_M0del_01_DATASET003",
+              "M4le_M0del_01_DATASET004",
+              "M4le_M0del_01_DATASET005",
+              "M4le_M0del_01_DATASET006",
+              "M4le_M0del_01_DATASET007",
+              "M4le_M0del_01_DATASET008",
+              "M4le_M0del_01_DATASET009",
+              "M4le_M0del_01_DATASET010",
+              "M4le_M0del_01_DATASET011",
+              "M4le_M0del_01_DATASET012",
+              "M4le_M0del_01_DATASET013",
+              "M4le_M0del_01_DATASET014",
+              "M4le_M0del_01_DATASET015",
+              "M4le_M0del_01_DATASET016",
+              "M4le_M0del_01_DATASET017",
+              "M4le_M0del_01_DATASET018",
+              "M4le_M0del_01_DATASET019",
+              "M4le_M0del_01_DATASET020",
+              "M4le_M0del_01_DATASET021",
+              "M4le_M0del_01_DATASET022",
+              "M4le_M0del_01_DATASET023",
+              "M4le_M0del_01_DATASET024",
+              "M4le_M0del_01_DATASET025",
+              "M4le_M0del_01_IMG_GEN_00053_",
+              "M4le_M0del_01_IMG_GEN_00055_",
+              "M4le_M0del_01_IMG_GEN_00058_",
+              "M4le_M0del_01_IMG_GEN_00060_",
+              "M4le_M0del_01_IMG_GEN_00063_",
+              "krea_2pass_00225_",
+              "krea_2pass_00232_",
+              "krea_2pass_00237_",
+              "krea_2pass_00245_",
+              "krea_2pass_00248_"
+            ]
+          },
+          {
+            "id": 120,
+            "type": "SetNode",
+            "pos": [
+              13370.61304810887,
+              10402.3208820589
+            ],
+            "size": [
+              210,
+              58
+            ],
+            "flags": {},
+            "order": 17,
+            "mode": 0,
+            "inputs": [
+              {
+                "name": "STRING",
+                "type": "STRING",
+                "link": 123
+              }
+            ],
+            "outputs": [
+              {
+                "name": "STRING",
+                "type": "STRING",
+                "links": null
+              }
+            ],
+            "title": "Set_Converted1",
+            "properties": {
+              "Node name for S&R": "SetNode",
+              "aux_id": "kijai/ComfyUI-KJNodes",
+              "previousName": "Converted1"
+            },
+            "widgets_values": [
+              "Converted1"
+            ]
+          },
+          {
+            "id": 119,
+            "type": "SetNode",
+            "pos": [
+              12800.566202077496,
+              9938.855132429053
+            ],
+            "size": [
+              210,
+              60
+            ],
+            "flags": {},
+            "order": 16,
+            "mode": 0,
+            "inputs": [
+              {
+                "name": "STRING",
+                "type": "STRING",
+                "link": 122
+              }
+            ],
+            "outputs": [
+              {
+                "name": "STRING",
+                "type": "STRING",
+                "links": null
+              }
+            ],
+            "title": "Set_Directout",
+            "properties": {
+              "Node name for S&R": "SetNode",
+              "aux_id": "kijai/ComfyUI-KJNodes",
+              "previousName": "Directout"
+            },
+            "widgets_values": [
+              "Directout"
+            ]
+          },
+          {
+            "id": 84,
+            "type": "CCC_BBoxConverter",
+            "pos": [
+              12761.585517317388,
+              10622.449477049477
+            ],
+            "size": [
+              388.92204907259145,
+              40.77459901371185
+            ],
+            "flags": {},
+            "order": 14,
+            "mode": 0,
+            "inputs": [
+              {
+                "localized_name": "text_input",
+                "name": "text_input",
+                "type": "STRING",
+                "link": 107
+              }
+            ],
+            "outputs": [
+              {
+                "localized_name": "converted_text",
+                "name": "converted_text",
+                "type": "STRING",
+                "links": [
+                  123,
+                  134,
+                  135,
+                  138
+                ]
+              }
+            ],
+            "properties": {
+              "Node name for S&R": "CCC_BBoxConverter"
+            },
+            "widgets_values": []
+          }
+        ],
+        "groups": [],
+        "links": [
+          {
+            "id": 15,
+            "origin_id": 13,
+            "origin_slot": 0,
+            "target_id": 14,
+            "target_slot": 0,
+            "type": "IMAGE"
+          },
+          {
+            "id": 42,
+            "origin_id": 49,
+            "origin_slot": 0,
+            "target_id": 14,
+            "target_slot": 2,
+            "type": "STRING"
+          },
+          {
+            "id": 1,
+            "origin_id": 8,
+            "origin_slot": 0,
+            "target_id": 1,
+            "target_slot": 0,
+            "type": "STRING"
+          },
+          {
+            "id": 35,
+            "origin_id": 40,
+            "origin_slot": 0,
+            "target_id": 2,
+            "target_slot": 1,
+            "type": "STRING"
+          },
+          {
+            "id": 11,
+            "origin_id": 2,
+            "origin_slot": 0,
+            "target_id": 8,
+            "target_slot": 0,
+            "type": "STRING"
+          },
+          {
+            "id": 2,
+            "origin_id": -10,
+            "origin_slot": 1,
+            "target_id": 2,
+            "target_slot": 0,
+            "type": "STRING"
+          },
+          {
+            "id": 43,
+            "origin_id": -10,
+            "origin_slot": 2,
+            "target_id": 49,
+            "target_slot": 0,
+            "type": "STRING"
+          },
+          {
+            "id": 33,
+            "origin_id": -10,
+            "origin_slot": 3,
+            "target_id": 13,
+            "target_slot": 0,
+            "type": "IMAGE"
+          },
+          {
+            "id": 103,
+            "origin_id": 1,
+            "origin_slot": 0,
+            "target_id": 103,
+            "target_slot": 2,
+            "type": "STRING"
+          },
+          {
+            "id": 104,
+            "origin_id": -10,
+            "origin_slot": 0,
+            "target_id": 103,
+            "target_slot": 1,
+            "type": "STRING"
+          },
+          {
+            "id": 107,
+            "origin_id": 14,
+            "origin_slot": 0,
+            "target_id": 84,
+            "target_slot": 0,
+            "type": "STRING"
+          },
+          {
+            "id": 122,
+            "origin_id": 14,
+            "origin_slot": 0,
+            "target_id": 119,
+            "target_slot": 0,
+            "type": "STRING"
+          },
+          {
+            "id": 123,
+            "origin_id": 84,
+            "origin_slot": 0,
+            "target_id": 120,
+            "target_slot": 0,
+            "type": "STRING"
+          },
+          {
+            "id": 127,
+            "origin_id": -10,
+            "origin_slot": 3,
+            "target_id": 128,
+            "target_slot": 0,
+            "type": "IMAGE"
+          },
+          {
+            "id": 128,
+            "origin_id": -10,
+            "origin_slot": 3,
+            "target_id": 129,
+            "target_slot": 0,
+            "type": "*"
+          },
+          {
+            "id": 129,
+            "origin_id": 130,
+            "origin_slot": 0,
+            "target_id": 126,
+            "target_slot": 0,
+            "type": "IMAGE"
+          },
+          {
+            "id": 130,
+            "origin_id": 131,
+            "origin_slot": 0,
+            "target_id": 127,
+            "target_slot": 0,
+            "type": "IMAGE"
+          },
+          {
+            "id": 131,
+            "origin_id": 132,
+            "origin_slot": 0,
+            "target_id": 126,
+            "target_slot": 1,
+            "type": "STRING"
+          },
+          {
+            "id": 132,
+            "origin_id": 133,
+            "origin_slot": 0,
+            "target_id": 127,
+            "target_slot": 1,
+            "type": "STRING"
+          },
+          {
+            "id": 133,
+            "origin_id": 134,
+            "origin_slot": 0,
+            "target_id": 128,
+            "target_slot": 1,
+            "type": "STRING"
+          },
+          {
+            "id": 134,
+            "origin_id": 84,
+            "origin_slot": 0,
+            "target_id": 103,
+            "target_slot": 0,
+            "type": "STRING"
+          },
+          {
+            "id": 135,
+            "origin_id": 84,
+            "origin_slot": 0,
+            "target_id": -20,
+            "target_slot": 0,
+            "type": "STRING"
+          },
+          {
+            "id": 138,
+            "origin_id": 84,
+            "origin_slot": 0,
+            "target_id": -20,
+            "target_slot": 1,
+            "type": "STRING"
+          },
+          {
+            "id": 139,
+            "origin_id": -10,
+            "origin_slot": 4,
+            "target_id": 103,
+            "target_slot": 3,
+            "type": "STRING"
+          }
+        ],
+        "extra": {}
+      }
+    ]
+  },
+  "config": {},
+  "extra": {
+    "frontendVersion": "1.45.20",
+    "VHS_latentpreview": true,
+    "VHS_latentpreviewrate": 0,
+    "VHS_MetadataImage": true,
+    "VHS_KeepIntermediate": true,
+    "ds": {
+      "scale": 1.978446689001392,
+      "offset": [
+        -8426.927964968088,
+        -10211.506803354172
+      ]
+    }
+  },
+  "version": 0.4
+}

@@ -1,0 +1,27 @@
+{
+ "run_id": "33af6fc697fc",
+ "kind": "intake",
+ "persona": "ara",
+ "initial_request": "a sneaker commercial",
+ "history": [
+  {
+   "role": "user",
+   "text": "for sneakerheads, kinetic"
+  },
+  {
+   "role": "agent",
+   "text": "Perfect, here's the brief."
+  }
+ ],
+ "brief": {
+  "refined_request": "neon sneaker spot, rain-slick street",
+  "audience": "sneakerheads",
+  "tone": "kinetic",
+  "style": "",
+  "constraints": "",
+  "duration_s": null,
+  "aspect_ratio": "",
+  "music_mood": null,
+  "negatives": ""
+ }
+}

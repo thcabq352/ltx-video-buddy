@@ -1,0 +1,39 @@
+{
+ "run_id": "d98fb9a58d3e",
+ "kind": "intake",
+ "persona": "ara",
+ "initial_request": "a sneaker commercial",
+ "history": [
+  {
+   "role": "user",
+   "text": "some answer"
+  },
+  {
+   "role": "agent",
+   "text": "more?"
+  },
+  {
+   "role": "user",
+   "text": "some answer"
+  },
+  {
+   "role": "agent",
+   "text": "more?"
+  },
+  {
+   "role": "user",
+   "text": "some answer"
+  }
+ ],
+ "brief": {
+  "refined_request": "a sneaker commercial \u2014 some answer; some answer; some answer",
+  "audience": "",
+  "tone": "",
+  "style": "",
+  "constraints": "",
+  "duration_s": null,
+  "aspect_ratio": "",
+  "music_mood": null,
+  "negatives": ""
+ }
+}

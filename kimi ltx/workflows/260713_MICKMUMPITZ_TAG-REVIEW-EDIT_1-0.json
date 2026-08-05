@@ -1,0 +1,461 @@
+{
+  "id": "af280ae8-7ce1-4fa6-95be-6ab82892f94a",
+  "revision": 0,
+  "last_node_id": 18,
+  "last_link_id": 32,
+  "nodes": [
+    {
+      "id": 6,
+      "type": "CCC_ImageBatchLoader",
+      "pos": [
+        10572.623120596878,
+        9755.061274029867
+      ],
+      "size": [
+        270,
+        150
+      ],
+      "flags": {},
+      "order": 1,
+      "mode": 0,
+      "inputs": [
+        {
+          "name": "image_dir",
+          "type": "STRING",
+          "widget": {
+            "name": "image_dir"
+          },
+          "link": 3
+        }
+      ],
+      "outputs": [
+        {
+          "name": "IMAGE",
+          "shape": 6,
+          "type": "IMAGE",
+          "links": [
+            27
+          ]
+        },
+        {
+          "name": "IMAGE_PATH",
+          "shape": 6,
+          "type": "STRING",
+          "links": []
+        }
+      ],
+      "properties": {
+        "Node name for S&R": "CCC_ImageBatchLoader"
+      },
+      "widgets_values": [
+        "C:\\path\\to\\your\\images",
+        0,
+        1,
+        "sequential"
+      ],
+      "color": "#d4d4d4",
+      "bgcolor": "#c0c0c0"
+    },
+    {
+      "id": 16,
+      "type": "CCC_DatasetReviewer",
+      "pos": [
+        11071.957912046671,
+        9757.43893485708
+      ],
+      "size": [
+        817.8210659790038,
+        869.9322131958015
+      ],
+      "flags": {},
+      "order": 3,
+      "mode": 0,
+      "inputs": [
+        {
+          "name": "images",
+          "type": "IMAGE",
+          "link": 27
+        },
+        {
+          "name": "captions",
+          "shape": 7,
+          "type": "STRING",
+          "link": 31
+        }
+      ],
+      "outputs": [
+        {
+          "name": "edited_captions",
+          "shape": 6,
+          "type": "STRING",
+          "links": [
+            29
+          ]
+        }
+      ],
+      "properties": {
+        "Node name for S&R": "CCC_DatasetReviewer"
+      },
+      "widgets_values": [
+        "yxyx_normalized",
+        "",
+        ""
+      ]
+    },
+    {
+      "id": 5,
+      "type": "CCC_TextBatchLoader",
+      "pos": [
+        10571.149140305703,
+        9979.034341678982
+      ],
+      "size": [
+        270,
+        126
+      ],
+      "flags": {},
+      "order": 2,
+      "mode": 0,
+      "inputs": [
+        {
+          "name": "folder_path",
+          "type": "STRING",
+          "widget": {
+            "name": "folder_path"
+          },
+          "link": 4
+        }
+      ],
+      "outputs": [
+        {
+          "name": "text_list",
+          "shape": 6,
+          "type": "STRING",
+          "links": [
+            31
+          ]
+        },
+        {
+          "name": "filename_list",
+          "shape": 6,
+          "type": "STRING",
+          "links": [
+            12
+          ]
+        }
+      ],
+      "properties": {
+        "Node name for S&R": "CCC_TextBatchLoader"
+      },
+      "widgets_values": [
+        "Pfad_zu_deinen_Texten",
+        ".json",
+        0
+      ],
+      "color": "#d4d4d4",
+      "bgcolor": "#c0c0c0"
+    },
+    {
+      "id": 7,
+      "type": "PrimitiveString",
+      "pos": [
+        9922.682058956514,
+        9917.89247509766
+      ],
+      "size": [
+        560,
+        80
+      ],
+      "flags": {},
+      "order": 0,
+      "mode": 0,
+      "inputs": [],
+      "outputs": [
+        {
+          "name": "STRING",
+          "type": "STRING",
+          "links": [
+            3,
+            4,
+            32
+          ]
+        }
+      ],
+      "title": "Insert Dataset Image Location",
+      "properties": {
+        "cnr_id": "comfy-core",
+        "ver": "0.20.1",
+        "Node name for S&R": "PrimitiveString"
+      },
+      "widgets_values": [
+        "D:\\comfy\\ComfyUI_windows_portable\\ComfyUI\\output\\CCC\\Multiple_Realistic_02"
+      ],
+      "color": "#d4d4d4",
+      "bgcolor": "#c0c0c0"
+    },
+    {
+      "id": 11,
+      "type": "ShowText|pysssss",
+      "pos": [
+        11959.44449467904,
+        10219.644811773469
+      ],
+      "size": [
+        325.14744905763837,
+        388.1421311355152
+      ],
+      "flags": {},
+      "order": 4,
+      "mode": 0,
+      "inputs": [
+        {
+          "name": "text",
+          "type": "STRING",
+          "link": 12
+        }
+      ],
+      "outputs": [
+        {
+          "name": "STRING",
+          "shape": 6,
+          "type": "STRING",
+          "links": [
+            13
+          ]
+        }
+      ],
+      "properties": {
+        "cnr_id": "comfyui-custom-scripts",
+        "ver": "1.2.5",
+        "Node name for S&R": "ShowText|pysssss"
+      },
+      "widgets_values": [
+        "0372c7ef-bfe9-47b2-8c9c-d917bb12fe85.txt",
+        "0fe36a48-dcd6-460b-80fa-17d7fe88f5da.txt",
+        "1ComfyUI_00343_.txt",
+        "1ComfyUI_00360_.txt",
+        "1ComfyUI_00361_.txt"
+      ]
+    },
+    {
+      "id": 12,
+      "type": "CR Text Replace",
+      "pos": [
+        12327.414517489551,
+        10218.44770839825
+      ],
+      "size": [
+        270,
+        312
+      ],
+      "flags": {},
+      "order": 5,
+      "mode": 0,
+      "inputs": [
+        {
+          "name": "text",
+          "type": "STRING",
+          "link": 13
+        }
+      ],
+      "outputs": [
+        {
+          "name": "STRING",
+          "type": "*",
+          "links": [
+            14
+          ]
+        },
+        {
+          "name": "show_help",
+          "type": "STRING",
+          "links": null
+        }
+      ],
+      "properties": {
+        "cnr_id": "ComfyUI_Comfyroll_CustomNodes",
+        "ver": "d78b780ae43fcf8c6b7c6505e6ffb4584281ceca",
+        "Node name for S&R": "CR Text Replace"
+      },
+      "widgets_values": [
+        ".",
+        "",
+        "json",
+        "",
+        "txt",
+        ""
+      ]
+    },
+    {
+      "id": 9,
+      "type": "Save Text File",
+      "pos": [
+        12664.029701506866,
+        10035.955707835272
+      ],
+      "size": [
+        314.15234375,
+        202
+      ],
+      "flags": {},
+      "order": 6,
+      "mode": 0,
+      "inputs": [
+        {
+          "name": "text",
+          "type": "STRING",
+          "link": 29
+        },
+        {
+          "name": "path",
+          "type": "STRING",
+          "widget": {
+            "name": "path"
+          },
+          "link": 32
+        },
+        {
+          "name": "filename_prefix",
+          "type": "STRING",
+          "widget": {
+            "name": "filename_prefix"
+          },
+          "link": 14
+        }
+      ],
+      "outputs": [],
+      "title": "Override Text Files",
+      "properties": {
+        "cnr_id": "was-ns",
+        "ver": "44de705818d4663fefefde57ffe0ea5a9ea39df4",
+        "Node name for S&R": "Save Text File"
+      },
+      "widgets_values": [
+        "./ComfyUI/output/[time(%Y-%m-%d)]",
+        "ComfyUI",
+        "",
+        0,
+        ".json",
+        "utf-8",
+        ""
+      ],
+      "color": "#d4d4d4",
+      "bgcolor": "#c0c0c0"
+    },
+    {
+      "id": 18,
+      "type": "MarkdownNote",
+      "pos": [
+        12300,
+        9640
+      ],
+      "size": [
+        400,
+        300
+      ],
+      "flags": {},
+      "order": 0,
+      "mode": 0,
+      "inputs": [],
+      "outputs": [],
+      "title": "⚠️ HINWEIS · SPEICHERN",
+      "properties": {},
+      "widgets_values": [
+        "# ⚠️ NOTE · Saving\n\nThis workflow **overwrites the original `.json` files** in the image folder (in-place)!\n➡️ Make a **backup** of the dataset folder first.\n\n**Steps:**\n1. `Insert Dataset Image Location` = folder with images **and** `.json` (captions live in the `.json`; the `.txt` files are empty).\n2. Run → in the **Dataset Reviewer**, drag boxes / edit text → **\"Apply BBox edits\"**.\n3. Run again → *Override Text Files* writes the captions back as `.json`.\n\nBBox format: `yxyx_normalized`. Saves on **every** run (even without changes)."
+      ],
+      "color": "#97651BFF",
+      "bgcolor": "#B67921FF"
+    }
+  ],
+  "links": [
+    [
+      3,
+      7,
+      0,
+      6,
+      0,
+      "STRING"
+    ],
+    [
+      4,
+      7,
+      0,
+      5,
+      0,
+      "STRING"
+    ],
+    [
+      12,
+      5,
+      1,
+      11,
+      0,
+      "STRING"
+    ],
+    [
+      13,
+      11,
+      0,
+      12,
+      0,
+      "STRING"
+    ],
+    [
+      14,
+      12,
+      0,
+      9,
+      2,
+      "STRING"
+    ],
+    [
+      27,
+      6,
+      0,
+      16,
+      0,
+      "IMAGE"
+    ],
+    [
+      29,
+      16,
+      0,
+      9,
+      0,
+      "STRING"
+    ],
+    [
+      31,
+      5,
+      0,
+      16,
+      1,
+      "STRING"
+    ],
+    [
+      32,
+      7,
+      0,
+      9,
+      1,
+      "STRING"
+    ]
+  ],
+  "groups": [],
+  "config": {},
+  "extra": {
+    "ds": {
+      "scale": 0.6209213230591553,
+      "offset": [
+        -9736.513194399036,
+        -8795.41058492999
+      ]
+    },
+    "frontendVersion": "1.45.15",
+    "VHS_latentpreview": false,
+    "VHS_latentpreviewrate": 0,
+    "VHS_MetadataImage": true,
+    "VHS_KeepIntermediate": true
+  },
+  "version": 0.4
+}

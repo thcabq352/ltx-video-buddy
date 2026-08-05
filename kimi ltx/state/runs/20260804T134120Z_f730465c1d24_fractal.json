@@ -1,0 +1,20 @@
+{
+ "run_id": "f730465c1d24",
+ "kind": "fractal",
+ "request": "smoke test",
+ "status": "done",
+ "video_path": "C:\\Users\\thcab\\Documents\\ltx2.3_agent\\kimi ltx\\outputs\\f730465c1d24\\fractal_f730465c1d24.mp4",
+ "params": {
+  "duration_s": 3.0,
+  "fps": 24,
+  "width": 320,
+  "height": 240,
+  "target": "seahorse",
+  "palette": "fire",
+  "julia": false,
+  "seed": null,
+  "max_iter": 256
+ },
+ "beat_map": null,
+ "audio_path": null
+}

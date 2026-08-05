@@ -1,0 +1,27 @@
+{
+ "run_id": "0a97369ac6a1",
+ "kind": "intake",
+ "persona": "ara",
+ "initial_request": "a launch film for a fintech startup",
+ "history": [
+  {
+   "role": "agent",
+   "text": "Fintech launch films are a tightrope walk\u2014too corporate and you\u2019re asleep, too chaotic and people think it\u2019s a scam. Let\u2019s find the sweet spot where trust meets excitement. Who exactly is this talking to (Gen Z crypto natives or busy CFOs?), where will they see it first (TikTok vs. LinkedIn makes a huge difference), and what\u2019s your visual appetite\u2014sleek abstract data, photoreal humans, or something wilder?"
+  },
+  {
+   "role": "user",
+   "text": "just go"
+  }
+ ],
+ "brief": {
+  "refined_request": "A cinematic fintech launch visualizer featuring abstract golden data streams flowing through a secure digital vault environment, transitioning into upward-trending growth charts made of light particles. The aesthetic balances trust and excitement with clean lines, deep navy blues contrasted by warm gold accents, and subtle bokeh effects to create depth. High-end motion graphics style suitable for a professional yet energetic product reveal.",
+  "audience": "Modern investors and early adopters",
+  "tone": "Trustworthy, exciting, forward-thinking",
+  "style": "Sleek abstract data visualization, deep navy and gold palette, high-end motion graphics",
+  "constraints": "Must feel secure but dynamic; avoid clutter or overly literal bank imagery",
+  "duration_s": 15.0,
+  "aspect_ratio": "16:9",
+  "music_mood": "Driving electronic with a sense of optimism and precision",
+  "negatives": "Cluttered text, low-resolution graphics, dark/scary horror vibes, chaotic noise"
+ }
+}

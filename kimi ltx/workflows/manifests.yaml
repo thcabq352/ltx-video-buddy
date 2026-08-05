@@ -1,0 +1,432 @@
+# Maps logical fields → simplified single-pass LTX workflows
+
+base:
+  file: base_t2v_i2v.json
+  description: Simplified LTX-2.3 single-pass T2V (AV joint)
+  fields:
+    prompt:
+      node_id: "10"
+      input: text
+    negative_prompt:
+      node_id: "11"
+      input: text
+    seed:
+      node_id: "42"
+      input: noise_seed
+    width:
+      node_id: "20"
+      input: width
+    height:
+      node_id: "20"
+      input: height
+    frames:
+      node_id: "20"
+      input: length
+    steps:
+      node_id: "40"
+      input: steps
+    checkpoint:
+      node_id: "1"
+      input: ckpt_name
+    lora:
+      node_id: "4"
+      input: lora_name
+    filename_prefix:
+      node_id: "90"
+      input: filename_prefix
+
+eros:
+  file: eros_t2v_i2v.json
+  description: Same simplified graph with EROS baked checkpoint
+  fields:
+    prompt:
+      node_id: "10"
+      input: text
+    negative_prompt:
+      node_id: "11"
+      input: text
+    seed:
+      node_id: "42"
+      input: noise_seed
+    width:
+      node_id: "20"
+      input: width
+    height:
+      node_id: "20"
+      input: height
+    frames:
+      node_id: "20"
+      input: length
+    steps:
+      node_id: "40"
+      input: steps
+    checkpoint:
+      node_id: "1"
+      input: ckpt_name
+    filename_prefix:
+      node_id: "90"
+      input: filename_prefix
+
+directors:
+  file: directors.json
+  description: Simplified graph used for multi-segment director style
+  fields:
+    prompt:
+      node_id: "10"
+      input: text
+    negative_prompt:
+      node_id: "11"
+      input: text
+    seed:
+      node_id: "42"
+      input: noise_seed
+    width:
+      node_id: "20"
+      input: width
+    height:
+      node_id: "20"
+      input: height
+    frames:
+      node_id: "20"
+      input: length
+    steps:
+      node_id: "40"
+      input: steps
+    checkpoint:
+      node_id: "1"
+      input: ckpt_name
+    lora:
+      node_id: "4"
+      input: lora_name
+    filename_prefix:
+      node_id: "90"
+      input: filename_prefix
+
+flux:
+  file: flux_t2i.json
+  description: Flux.1-dev fp8 text-to-image (UNETLoader + DualCLIP + FluxGuidance)
+  fields:
+    prompt:
+      node_id: "10"
+      input: text
+    seed:
+      node_id: "50"
+      input: seed
+    width:
+      node_id: "20"
+      input: width
+    height:
+      node_id: "20"
+      input: height
+    steps:
+      node_id: "50"
+      input: steps
+    filename_prefix:
+      node_id: "90"
+      input: filename_prefix
+
+lipsync:
+  file: lipsync_ia2v.json
+  description: LipDub graph (takes a source video with speech audio)
+  fields:
+    prompt:
+      class_type: CLIPTextEncode
+      index: 0
+      input: text
+    negative_prompt:
+      class_type: CLIPTextEncode
+      index: 1
+      input: text
+    seed:
+      class_type: RandomNoise
+      index: 0
+      input: noise_seed
+    width:
+      class_type: EmptyLTXVLatentVideo
+      index: 0
+      input: width
+    height:
+      class_type: EmptyLTXVLatentVideo
+      index: 0
+      input: height
+    frames:
+      class_type: EmptyLTXVLatentVideo
+      index: 0
+      input: length
+    checkpoint:
+      class_type: CheckpointLoaderSimple
+      index: 0
+      input: ckpt_name
+    lora:
+      class_type: LTXICLoRALoaderModelOnly
+      index: 0
+      input: lora_name
+    video_name:
+      class_type: LoadVideo
+      index: 0
+      input: file
+    filename_prefix:
+      class_type: SaveVideo
+      index: 0
+      input: filename_prefix
+
+# --- Mickmumpitz library (converted to API format 2026-07-31) ---
+# The `*_api.json` versions (via the /workflow/convert endpoint) are queueable
+# and validate clean live + offline. The original UI exports are kept for
+# editing in the frontend + KB RAG digests — always re-convert after editing.
+# Installed packs: VideoHelperSuite, RES4LYF (Film Grain), Comfyroll,
+# AutoCropFaces, ComfyUI-QwenVL (+ the pre-installed Mickmumpitz/KJNodes/
+# rgthree/easy-use/Impact/SeedVR2/WAS/custom-scripts packs).
+
+wan22:
+  file: 260713_MICKMUMPITZ_WAN-2-2-VID_1-0_api.json
+  description: Wan 2.2 two-stage T2V (high/low noise UNETs, NAG, film grain, 16fps)
+  fields:
+    prompt:
+      node_id: "3"
+      input: text
+    negative_prompt:
+      node_id: "4"
+      input: text
+    seed:
+      node_id: "197"
+      input: value
+    width:
+      node_id: "5"
+      input: width
+    height:
+      node_id: "5"
+      input: height
+    frames:
+      node_id: "5"
+      input: length
+    steps:
+      node_id: ["168", "169"]
+      input: steps
+    cfg:
+      node_id: ["168", "169"]
+      input: cfg
+    sampler_name:
+      node_id: ["168", "169"]
+      input: sampler_name
+    checkpoint_high:
+      node_id: "106"
+      input: unet_name
+    checkpoint_low:
+      node_id: "104"
+      input: unet_name
+    text_encoder:
+      node_id: "22"
+      input: clip_name
+    vae_name:
+      node_id: "8"
+      input: vae_name
+    fps:
+      node_id: "194"
+      input: frame_rate
+    filename_prefix:
+      node_id: "194"
+      input: filename_prefix
+
+krea2_img:
+  file: 260713_MICKMUMPITZ_KREA-2-IMG_1-0_api.json
+  description: Krea-2 image generation (image variant — not video-pipeline routed; negative is ConditioningZeroOut)
+  fields:
+    prompt:
+      node_id: "4"
+      input: text
+    seed:
+      node_id: "7"
+      input: seed
+    width:
+      node_id: "6"
+      input: width
+    height:
+      node_id: "6"
+      input: height
+    steps:
+      node_id: "7"
+      input: steps
+    cfg:
+      node_id: "7"
+      input: cfg
+    sampler_name:
+      node_id: "7"
+      input: sampler_name
+    text_encoder:
+      node_id: "2"
+      input: clip_name
+    vae_name:
+      node_id: "3"
+      input: vae_name
+    filename_prefix:
+      node_id: "20"
+      input: filename_prefix
+
+mick_ccc_adv:
+  file: 260720_MICKMUMPITZ_CCC_4-01_ADV_api.json
+  format: api
+  ui_source: 260720_MICKMUMPITZ_CCC_4-01_ADV.json
+  description: Consistent Character Creator v4 ADV (516 nodes — face split, detailer, upscale)
+  requires: [ComfyUI-Mickmumpitz-Nodes (CCC_*), KJNodes (GetNode/SetNode/JoinStringMulti/ImageResizeKJv2),
+             rgthree-comfy, ComfyUI-Easy-Use, ComfyUI-Impact-Pack, SeedVR2, ComfyUI-AutoCropFaces]
+
+mick_dataset_tagger:
+  file: 260713_MICKMUMPITZ_DATASET-TAGGER_1-5_api.json
+  format: api
+  ui_source: 260713_MICKMUMPITZ_DATASET-TAGGER_1-5.json
+  description: Dataset auto-tagger (batch images -> caption pairs) for LoRA training data
+  requires: [ComfyUI-Mickmumpitz-Nodes (CCC_ImageBatchLoader/CCC_PromptStudio/CCC_ShowImageTextPairs), KJNodes,
+             ComfyUI-QwenVL (AILab_QwenVL — first run downloads Qwen3-VL weights)]
+
+mick_tag_review:
+  file: 260713_MICKMUMPITZ_TAG-REVIEW-EDIT_1-0_api.json
+  format: api
+  ui_source: 260713_MICKMUMPITZ_TAG-REVIEW-EDIT_1-0.json
+  description: Review/edit auto-generated dataset captions before LoRA training
+  requires: [ComfyUI-Mickmumpitz-Nodes (CCC_DatasetReviewer/CCC_TextBatchLoader), comfyui-custom-scripts (pysssss), Comfyroll (CR Text Replace), WAS (Save Text File)]
+
+mick_ideogram:
+  file: 260713_MICKMUMPITZ_IDEOGRAM_1-0_api.json
+  format: api
+  ui_source: 260713_MICKMUMPITZ_IDEOGRAM_1-0.json
+  description: Ideogram API image generation with prompt builder (external API key needed)
+  requires: [KJNodes (Ideogram4PromptBuilderKJ), comfyui-custom-scripts, rgthree-comfy, ComfyMathExpression]
+
+mick_krea2_img:
+  file: 260713_MICKMUMPITZ_KREA-2-IMG_1-0_api.json
+  format: api
+  ui_source: 260713_MICKMUMPITZ_KREA-2-IMG_1-0.json
+  description: Krea-2 two-pass image generation (private lora node bypassed — see krea2_img variant)
+  requires: [MarkdownNote + MickmumpitzLabel only (cosmetic)]
+
+mick_wan22_vid:
+  file: 260713_MICKMUMPITZ_WAN-2-2-VID_1-0_api.json
+  format: api
+  ui_source: 260713_MICKMUMPITZ_WAN-2-2-VID_1-0.json
+  description: Wan 2.2 video generation with NAG + film grain finish (see wan22 variant)
+  requires: [VideoHelperSuite (VHS_VideoCombine), rgthree-comfy, RES4LYF (Film Grain), KJNodes (WanVideoNAG)]
+
+# --- batch 2 (converted 2026-08-03) ---
+# Extra packs: gguf + ComfyUI-GGUF, ComfyUI_essentials, comfyui_controlnet_aux,
+# ComfyUI-DepthCrafter-Nodes, comfyui_cotracker_node, ComfyUI-RMBG,
+# ComfyUI-WanVaceAdvanced, ComfyUI-Krea2-Ostris-Edit, comfyui-krea2edit.
+# Private assets (LoadImage/LoadVideo/LoadAudio of the author) were repointed
+# to bundled example files or placeholders — see state/repair_batch2_api.py.
+
+mick_qwen_edit_360:
+  file: 251018_MICKMUMPITZ_QWEN-IMAGE-EDIT-360_1-1_api.json
+  format: api
+  ui_source: 251018_MICKMUMPITZ_QWEN-IMAGE-EDIT-360_1-1.json
+  description: Qwen-Image-Edit 360 turnaround (GGUF Q5_0 + Lightning LoRAs + his 360 LoRA)
+  requires: [ComfyUI-GGUF/gguf (GGUF loaders), VideoHelperSuite]
+
+mick_aivfx_startimage:
+  file: 260330_AI-VFX-STARTIMAGE_1-0_api.json
+  format: api
+  ui_source: 260330_AI-VFX-STARTIMAGE_1-0.json
+  description: AI-VFX start-image generator (Qwen-Image-Edit-2511 GGUF)
+  requires: [ComfyUI-GGUF/gguf]
+
+mick_aivfx_preprocess:
+  file: 260330_MICKMUMPITZ_AI-VFX_PREPROCESS_1-0_api.json
+  format: api
+  ui_source: 260330_MICKMUMPITZ_AI-VFX_PREPROCESS_1-0.json
+  description: AI-VFX preprocess (SAM3 segment, depth, cotracker, RMBG -> control videos)
+  requires: [ComfyUI-RMBG (SAM3Segment — first run downloads sam3.pt), ComfyUI-DepthCrafter-Nodes,
+             comfyui_cotracker_node, comfyui_controlnet_aux, triton-windows]
+
+mick_aivfx_adv:
+  file: 260330_MICKMUMPITZ_AI-VFX_1-0_ADV_api.json
+  format: api
+  ui_source: 260330_MICKMUMPITZ_AI-VFX_1-0_ADV.json
+  description: AI-VFX compositor v1.0 (Wan VACE e4m3fn; fp32 build does not exist publicly)
+  requires: [ComfyUI-WanVaceAdvanced (WanVacePhantomSimpleV2), KJNodes, VideoHelperSuite]
+
+mick_aivfx_adv_13:
+  file: 260608_MICKMUMPITZ_AI-VFX_1-3_ADV_api.json
+  format: api
+  ui_source: 260608_MICKMUMPITZ_AI-VFX_1-3_ADV.json
+  description: AI-VFX compositor v1.3 (Wan VACE e4m3fn or Q4_K_M GGUF option)
+  requires: [ComfyUI-WanVaceAdvanced, ComfyUI-GGUF/gguf, KJNodes, VideoHelperSuite]
+
+ltx23_lipsync_v08:
+  file: 260603_LTX2-3_3D-RENDERING_LIP-SNYC_v08_api.json
+  format: api
+  ui_source: 260603_LTX2-3_3D-RENDERING_LIP-SNYC_v08.json
+  description: LTX-2.3 3D-rendering lip-sync (clay/depth/mouth guides + OmniNFT/ic-loras)
+  requires: [ComfyUI-LTXVideo, ComfyUI-Mickmumpitz-Nodes, KJNodes, VideoHelperSuite,
+             comfyui_controlnet_aux, ComfyUI_essentials, ComfyUI-Easy-Use, rgthree-comfy]
+
+mick_ccc41_krea2:
+  file: 260729_MICKMUMPITZ_CCC_4-1_KREA2-EDIT_BETA_PUBLISH_api.json
+  format: api
+  ui_source: 260729_MICKMUMPITZ_CCC_4-1_KREA2-EDIT_BETA_PUBLISH.json
+  description: CCC 4.1 BETA — Krea2-Edit grounded character editing (supersedes CCC 4.01 ADV)
+  requires: [ComfyUI-Krea2-Ostris-Edit (Krea2EditGroundedEncode), comfyui-krea2edit (Krea2EditModelPatch),
+             ComfyUI-Mickmumpitz-Nodes, KJNodes, Impact-Pack]
+
+# --- AI-RENDERING example projects (batch 2/3, converted 2026-08-03/04) ---
+# Bundled per-project assets were copied into ComfyUI/input/.
+
+air_render_030:
+  file: AI-RENDERING-EXAMPLE FILES/030_BearMinimum_RightThisWay/030_BearMinimum_RightThisWay_api.json
+  format: api
+  ui_source: AI-RENDERING-EXAMPLE FILES/030_BearMinimum_RightThisWay/030_BearMinimum_RightThisWay.json
+  description: LTX-2.3 AI-rendering example (BearMinimum clay scene, right-this-way shot)
+  requires: [same as ltx23_lipsync_v08]
+
+air_render_050:
+  file: AI-RENDERING-EXAMPLE FILES/050_BearMinimum_Bar/050_BearMinimum_Bar_workflow_api.json
+  format: api
+  ui_source: AI-RENDERING-EXAMPLE FILES/050_BearMinimum_Bar/050_BearMinimum_Bar_workflow.json
+  description: LTX-2.3 AI-rendering example (BearMinimum bar scene)
+  requires: [same as ltx23_lipsync_v08]
+
+air_render_businesswoman:
+  file: AI-RENDERING-EXAMPLE FILES/BusinessWoman/BusinessWoman_Workflow_api.json
+  format: api
+  ui_source: AI-RENDERING-EXAMPLE FILES/BusinessWoman/BusinessWoman_Workflow.json
+  description: LTX-2.3 AI-rendering example (BusinessWoman scene)
+  requires: [same as ltx23_lipsync_v08]
+
+# --- batch 3 (converted 2026-08-04) ---
+# Extra packs: ComfyUI-GIMM-VFI, mickmumpitz/ComfyUI-WanVideoWrapper (his fork),
+# Comfy-Org/Nvidia_RTX_Nodes_ComfyUI (+ nvidia-vfx from pypi.nvidia.com),
+# ComfyUI-DepthAnythingV3.
+
+mick_zimage_turbo_cn:
+  file: AI-RENDERING-EXAMPLE FILES/260303_MICKMUMPITZ_Z-IMAGE_TURBO_CN_1-1_api.json
+  format: api
+  ui_source: AI-RENDERING-EXAMPLE FILES/260303_MICKMUMPITZ_Z-IMAGE_TURBO_CN_1-1.json
+  description: Z-Image Turbo with Fun-Controlnet-Union 2.1 (lineart-guided start frames)
+  requires: [ComfyUI core ModelPatchLoader (models/model_patches mapped in extra_model_paths.yaml)]
+
+mick_ai_renderer_smpl:
+  file: AI-RENDERING-EXAMPLE FILES/260402_MICKMUMPITZ_AI-RENDERER_SMPL_2-1_api.json
+  format: api
+  ui_source: AI-RENDERING-EXAMPLE FILES/260402_MICKMUMPITZ_AI-RENDERER_SMPL_2-1.json
+  description: AI-Renderer simple v2.1 (Wan VACE start/end frame + DepthAnythingV3 preprocess)
+  requires: [mickmumpitz/ComfyUI-WanVideoWrapper (WanVideoVACEStartToEndFrame), ComfyUI-DepthAnythingV3,
+             ComfyUI-WanVaceAdvanced]
+
+mick_ai_renderer_adv:
+  file: AI-RENDERING-EXAMPLE FILES/260402_MICKMUMPITZ_AI-RENDERER_ADV_2-1_api.json
+  format: api
+  ui_source: AI-RENDERING-EXAMPLE FILES/260402_MICKMUMPITZ_AI-RENDERER_ADV_2-1.json
+  description: AI-Renderer advanced v2.1 (+ GIMM-VFI interpolation)
+  requires: [same as mick_ai_renderer_smpl, ComfyUI-GIMM-VFI]
+
+mick_ai_renderer_adv_20:
+  file: AI-RENDERING-EXAMPLE FILES/260225_MICKMUMPITZ_AI-RENDERER_ADV_2-0_api.json
+  format: api
+  ui_source: AI-RENDERING-EXAMPLE FILES/260225_MICKMUMPITZ_AI-RENDERER_ADV_2-0.json
+  description: AI-Renderer advanced v2.0 (previous revision of the ADV pipeline)
+  requires: [same as mick_ai_renderer_adv]
+
+mick_rtx_superres:
+  file: AI-RENDERING-EXAMPLE FILES/260330_MICKMUMPITZ_NVIDIA-RTX-SUPER-RESOLUTION_1-0_api.json
+  format: api
+  ui_source: AI-RENDERING-EXAMPLE FILES/260330_MICKMUMPITZ_NVIDIA-RTX-SUPER-RESOLUTION_1-0.json
+  description: NVIDIA RTX Video Super Resolution upscale pass
+  requires: [Comfy-Org/Nvidia_RTX_Nodes_ComfyUI + nvidia-vfx (pip, pypi.nvidia.com)]

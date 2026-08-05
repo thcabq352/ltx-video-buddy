@@ -1,0 +1,524 @@
+{
+  "277": {
+    "inputs": {
+      "expression": "max(((a + 15) // 16) * 16, 256)",
+      "values.a": [
+        "37",
+        0
+      ]
+    },
+    "class_type": "ComfyMathExpression",
+    "_meta": {
+      "title": "Math Expression"
+    }
+  },
+  "278": {
+    "inputs": {
+      "expression": "max(((a + 15) // 16) * 16, 256)",
+      "values.a": [
+        "37",
+        1
+      ]
+    },
+    "class_type": "ComfyMathExpression",
+    "_meta": {
+      "title": "Math Expression"
+    }
+  },
+  "246": {
+    "inputs": {
+      "text": [
+        "314",
+        0
+      ]
+    },
+    "class_type": "ShowText|pysssss",
+    "_meta": {
+      "title": "JSON PREVIEW"
+    }
+  },
+  "314": {
+    "inputs": {
+      "high_level_description": "A amateur iphone close up photography of exactly three people in in front of a white background. They all have an animal on their head A man and a woman crouch on the left, and a single woman crouches alone at the right. Headshots of three people in total.",
+      "background": "A seamless white empty void",
+      "style": "photo",
+      "aesthetics": "Professional photography shot on dslr",
+      "lighting": "bright natural light",
+      "medium": "",
+      "style_palette_data": "[\"#000000\",\"#111111\",\"#333333\",\"#777777\",\"#D8D8D8\",\"#FFFFFF\"]",
+      "elements_data": "[{\"type\":\"obj\",\"text\":\"\",\"desc\":\"Face of M4le_M0del_01, one close up of a single black man, face close up, full body, silver chain with triangle pendant, black leather handbag low at his side, short box braids and a trimmed beard, dark grey turtleneck, under a dark overcoat Solo — only one person in this region. headshot\",\"palette\":[\"#000000\",\"#111111\",\"#2A2A2A\",\"#777777\",\"#D8D8D8\"],\"x\":0,\"y\":0.3504377276032731,\"w\":0.3473432877619314,\"h\":0.6442539956659481},{\"type\":\"obj\",\"text\":\"\",\"desc\":\"Face of Em1l1_05, close up of one single smiling woman, headshot, she is looking up, full body, light brown skin, voluminous dark curly hair, wearing black blazer over a sheer black mesh tank with a subtle embroidered swirl pattern, black bra,  nocturne Relic Necklace with black, bronze, teal and marbled beads and a small ornate square amber pendant, Wearing large silver hoop earrings. \",\"palette\":[\"#000000\",\"#1A1A1A\",\"#333333\",\"#008080\",\"#B08A4A\"],\"x\":0.3038815187519842,\"y\":0.34306430678122385,\"w\":0.3899491010180448,\"h\":0.6499460538188051},{\"type\":\"obj\",\"text\":\"\",\"desc\":\"Face of Berl1n_Model_v01, a close up headshot of one single young woman, crouching looking at the squirrel, near full body, platinum blonde buzzcut, small ear piercings, cool deadpan expression, glossy black leather trench coat over a plain white t-shirt, light eyes. Solo — only one person in this region.\",\"palette\":[\"#000000\",\"#111111\",\"#333333\",\"#FFFFFF\",\"#CCCCCC\"],\"x\":0.5989912210051547,\"y\":0.33631921507361434,\"w\":0.4010087789948453,\"h\":0.6636807849263857},{\"x\":0.3994043725198107,\"y\":0.050428840242324385,\"w\":0.1920818540763452,\"h\":0.3058531676665573,\"type\":\"obj\",\"text\":\"\",\"desc\":\"a bluebird sitting in her hair\",\"palette\":[]},{\"x\":0.7517836916349091,\"y\":0.0374228359787345,\"w\":0.19067106733355077,\"h\":0.3125913974790356,\"type\":\"obj\",\"text\":\"\",\"desc\":\"a mantis, insect climbing on her head\",\"palette\":[]},{\"x\":0.0709050658334704,\"y\":0.05573711697310321,\"w\":0.18202237847654618,\"h\":0.32664060724358407,\"type\":\"obj\",\"text\":\"\",\"desc\":\"a european brown squirrel sitting on his head\",\"palette\":[]},{\"x\":0.17782266229798993,\"y\":0.6628133315322013,\"w\":0.1954530434607838,\"h\":0.33718666846779866,\"type\":\"obj\",\"text\":\"\",\"desc\":\"M4le_M0del_01 holding up a walnut\",\"palette\":[]}]",
+      "bg_brightness": 25,
+      "import_mode": "always",
+      "output_format": "compact",
+      "coord_mode": "normalized",
+      "bbox_order": "yx",
+      "import_json": "",
+      "bboxes": {
+        "x": 0,
+        "y": 0,
+        "width": 512,
+        "height": 512
+      },
+      "width": [
+        "277",
+        1
+      ],
+      "height": [
+        "278",
+        1
+      ],
+      "style.photo": "35mm editorial feel"
+    },
+    "class_type": "Ideogram4PromptBuilderKJ",
+    "_meta": {
+      "title": "Ideogram 4 Prompt Builder KJ"
+    }
+  },
+  "281": {
+    "inputs": {
+      "batch_size": 1,
+      "width": [
+        "286",
+        1
+      ],
+      "height": [
+        "287",
+        1
+      ]
+    },
+    "class_type": "EmptyFlux2LatentImage",
+    "_meta": {
+      "title": "Empty Flux 2 Latent"
+    }
+  },
+  "287": {
+    "inputs": {
+      "expression": "max(((a + 15) // 16) * 16, 256)",
+      "values.a": [
+        "278",
+        1
+      ]
+    },
+    "class_type": "ComfyMathExpression",
+    "_meta": {
+      "title": "Math Expression"
+    }
+  },
+  "295": {
+    "inputs": {
+      "json_string": "{\n  \"Quality\": {\n    \"num_steps\": 48,\n    \"mu\": 0.0,\n    \"std\": 1.5,\n    \"preset_id\": \"V4_QUALITY_48\"\n  },\n  \"Default\": {\n    \"num_steps\": 20,\n    \"mu\": 0.0,\n    \"std\": 1.75,\n    \"preset_id\": \"V4_DEFAULT_20\"\n  },\n  \"Turbo\": {\n    \"num_steps\": 12,\n    \"mu\": 0.5,\n    \"std\": 1.75,\n    \"preset_id\": \"V4_TURBO_12\"\n  }\n}",
+      "key": [
+        "294",
+        0
+      ]
+    },
+    "class_type": "JsonExtractString",
+    "_meta": {
+      "title": "Extract Text from JSON"
+    }
+  },
+  "291": {
+    "inputs": {
+      "find": "'",
+      "replace": "\"",
+      "string": [
+        "295",
+        0
+      ]
+    },
+    "class_type": "StringReplace",
+    "_meta": {
+      "title": "Replace Text"
+    }
+  },
+  "292": {
+    "inputs": {
+      "key": "num_steps",
+      "json_string": [
+        "291",
+        0
+      ]
+    },
+    "class_type": "JsonExtractString",
+    "_meta": {
+      "title": "Extract Text from JSON"
+    }
+  },
+  "298": {
+    "inputs": {
+      "value": [
+        "292",
+        0
+      ]
+    },
+    "class_type": "ComfyNumberConvert",
+    "_meta": {
+      "title": "Convert Number"
+    }
+  },
+  "316": {
+    "inputs": {
+      "key": "mu",
+      "json_string": [
+        "291",
+        0
+      ]
+    },
+    "class_type": "JsonExtractString",
+    "_meta": {
+      "title": "Extract Text from JSON"
+    }
+  },
+  "318": {
+    "inputs": {
+      "key": "std",
+      "json_string": [
+        "291",
+        0
+      ]
+    },
+    "class_type": "JsonExtractString",
+    "_meta": {
+      "title": "Extract Text from JSON"
+    }
+  },
+  "317": {
+    "inputs": {
+      "value": [
+        "316",
+        0
+      ]
+    },
+    "class_type": "ComfyNumberConvert",
+    "_meta": {
+      "title": "Convert Number"
+    }
+  },
+  "319": {
+    "inputs": {
+      "value": [
+        "318",
+        0
+      ]
+    },
+    "class_type": "ComfyNumberConvert",
+    "_meta": {
+      "title": "Convert Number"
+    }
+  },
+  "303": {
+    "inputs": {
+      "text": [
+        "246",
+        0
+      ],
+      "clip": [
+        "187",
+        0
+      ]
+    },
+    "class_type": "CLIPTextEncode",
+    "_meta": {
+      "title": "CLIP Text Encode (Positive Prompt)"
+    }
+  },
+  "297": {
+    "inputs": {
+      "conditioning": [
+        "303",
+        0
+      ]
+    },
+    "class_type": "ConditioningZeroOut",
+    "_meta": {
+      "title": "Conditioning Zero Out"
+    }
+  },
+  "286": {
+    "inputs": {
+      "expression": "max(((a + 15) // 16) * 16, 256)",
+      "values.a": [
+        "277",
+        1
+      ]
+    },
+    "class_type": "ComfyMathExpression",
+    "_meta": {
+      "title": "Math Expression"
+    }
+  },
+  "301": {
+    "inputs": {
+      "noise_seed": 889579770557293
+    },
+    "class_type": "RandomNoise",
+    "_meta": {
+      "title": "RandomNoise"
+    }
+  },
+  "299": {
+    "inputs": {
+      "cfg": 3,
+      "start_percent": 0.7,
+      "end_percent": 1,
+      "model": [
+        "248",
+        0
+      ]
+    },
+    "class_type": "CFGOverride",
+    "_meta": {
+      "title": "CFG Override"
+    }
+  },
+  "305": {
+    "inputs": {
+      "cfg": 7,
+      "model": [
+        "299",
+        0
+      ],
+      "positive": [
+        "303",
+        0
+      ],
+      "model_negative": [
+        "249",
+        0
+      ],
+      "negative": [
+        "297",
+        0
+      ]
+    },
+    "class_type": "DualModelGuider",
+    "_meta": {
+      "title": "Dual Model CFG Guider"
+    }
+  },
+  "304": {
+    "inputs": {
+      "sampler_name": "euler"
+    },
+    "class_type": "KSamplerSelect",
+    "_meta": {
+      "title": "KSamplerSelect"
+    }
+  },
+  "315": {
+    "inputs": {
+      "steps": [
+        "298",
+        1
+      ],
+      "width": [
+        "286",
+        1
+      ],
+      "height": [
+        "287",
+        1
+      ],
+      "mu": [
+        "317",
+        0
+      ],
+      "std": [
+        "319",
+        0
+      ]
+    },
+    "class_type": "Ideogram4Scheduler",
+    "_meta": {
+      "title": "Ideogram 4 Scheduler"
+    }
+  },
+  "322": {
+    "inputs": {
+      "bboxes": [
+        "314",
+        2
+      ],
+      "image": [
+        "283",
+        0
+      ]
+    },
+    "class_type": "DrawBBoxes",
+    "_meta": {
+      "title": "Draw BBoxes"
+    }
+  },
+  "310": {
+    "inputs": {
+      "filename_prefix": "ComfyUI",
+      "images": [
+        "283",
+        0
+      ]
+    },
+    "class_type": "SaveImage",
+    "_meta": {
+      "title": "Save Image"
+    }
+  },
+  "282": {
+    "inputs": {
+      "noise": [
+        "301",
+        0
+      ],
+      "guider": [
+        "305",
+        0
+      ],
+      "sampler": [
+        "304",
+        0
+      ],
+      "sigmas": [
+        "315",
+        0
+      ],
+      "latent_image": [
+        "281",
+        0
+      ]
+    },
+    "class_type": "SamplerCustomAdvanced",
+    "_meta": {
+      "title": "SamplerCustomAdvanced"
+    }
+  },
+  "283": {
+    "inputs": {
+      "samples": [
+        "282",
+        0
+      ],
+      "vae": [
+        "177",
+        0
+      ]
+    },
+    "class_type": "VAEDecode",
+    "_meta": {
+      "title": "VAE Decode"
+    }
+  },
+  "323": {
+    "inputs": {
+      "filename_prefix": "ComfyUI",
+      "images": [
+        "322",
+        0
+      ]
+    },
+    "class_type": "SaveImage",
+    "_meta": {
+      "title": "Save Image"
+    }
+  },
+  "177": {
+    "inputs": {
+      "vae_name": "flux2-vae.safetensors"
+    },
+    "class_type": "VAELoader",
+    "_meta": {
+      "title": "Load VAE"
+    }
+  },
+  "187": {
+    "inputs": {
+      "clip_name": "qwen3vl_8b_fp8_scaled.safetensors",
+      "type": "ideogram4",
+      "device": "default"
+    },
+    "class_type": "CLIPLoader",
+    "_meta": {
+      "title": "Load CLIP"
+    }
+  },
+  "203": {
+    "inputs": {
+      "unet_name": "ideogram4_unconditional_fp8_scaled.safetensors",
+      "weight_dtype": "default"
+    },
+    "class_type": "UNETLoader",
+    "_meta": {
+      "title": "Load Diffusion Model"
+    }
+  },
+  "237": {
+    "inputs": {
+      "unet_name": "ideogram4_fp8_scaled.safetensors",
+      "weight_dtype": "default"
+    },
+    "class_type": "UNETLoader",
+    "_meta": {
+      "title": "Load Diffusion Model"
+    }
+  },
+  "249": {
+    "inputs": {
+      "model": [
+        "203",
+        0
+      ],
+      "PowerLoraLoaderHeaderWidget": {
+        "type": "PowerLoraLoaderHeaderWidget"
+      },
+      "lora_1": {
+        "on": true,
+        "lora": "CCC4-0\\ideogram\\Multiple_Realistic_02-Ideogram_copy_000001250.safetensors",
+        "strength": 0.2
+      },
+      "➕ Add Lora": ""
+    },
+    "class_type": "Power Lora Loader (rgthree)",
+    "_meta": {
+      "title": "Power Lora Loader (rgthree)"
+    }
+  },
+  "248": {
+    "inputs": {
+      "model": [
+        "237",
+        0
+      ],
+      "PowerLoraLoaderHeaderWidget": {
+        "type": "PowerLoraLoaderHeaderWidget"
+      },
+      "lora_1": {
+        "on": true,
+        "lora": "CCC4-0\\ideogram\\Multiple_Realistic_02-Ideogram_copy_000002000.safetensors",
+        "strength": 0.5
+      },
+      "➕ Add Lora": ""
+    },
+    "class_type": "Power Lora Loader (rgthree)",
+    "_meta": {
+      "title": "Power Lora Loader (rgthree)"
+    }
+  },
+  "37": {
+    "inputs": {
+      "aspect_ratio": "16:9 (Widescreen)",
+      "megapixels": 1.5,
+      "multiple": 8
+    },
+    "class_type": "ResolutionSelector",
+    "_meta": {
+      "title": "Resolution Selector"
+    }
+  },
+  "294": {
+    "inputs": {
+      "choice": "Quality"
+    },
+    "class_type": "CustomCombo",
+    "_meta": {
+      "title": "Custom Combo"
+    }
+  }
+}

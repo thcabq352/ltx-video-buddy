@@ -1,0 +1,84 @@
+# LoRA (scene OR style) — Wan 2.2 14B on a 16GB card (RTX 5060 Ti)
+#
+# Trains a LoRA for the Wan pipeline (workflows/260713_MICKMUMPITZ_WAN-2-2-VID).
+# Same config works for SCENE and STYLE LoRAs — see training/README.md.
+# Based on ai-toolkit's train_lora_wan22_14b_24gb.yaml, cut down for 16GB:
+# lower resolutions, 4-bit transformer + fp8 text encoder, low_vram.
+#
+# The base model (ai-toolkit/Wan2.2-T2V-A14B-Diffusers-bf16, ~28GB) is
+# downloaded from HuggingFace on first run.
+#
+# Run from the ai-toolkit folder:
+#   ./venv/Scripts/python.exe run.py ../training/configs/train_lora_wan22_16gb.yaml
+---
+job: extension
+config:
+  name: "wan22_style_lego_v1"   # output folder + filename; rename per scene/style
+  process:
+    - type: 'sd_trainer'
+      training_folder: "output"   # -> ai-toolkit/output/<name>/
+      device: cuda:0
+      trigger_word: "l3g0styl3"   # nonsense token; start every caption with it
+      network:
+        type: "lora"
+        linear: 16                # 16 is easier on 16GB than 32; raise if you have headroom
+        linear_alpha: 16
+      save:
+        dtype: float16
+        save_every: 250
+        max_step_saves_to_keep: 4
+      datasets:
+        - folder_path: "../training/datasets/styles/lego"   # <- your scene/style folder
+          caption_ext: "txt"
+          caption_dropout_rate: 0.05
+          # 1 = stills. Raise for video (very VRAM hungry — keep clips short on 16GB)
+          num_frames: 1
+          resolution: [512, 768]
+      train:
+        batch_size: 1
+        steps: 2500               # scene: 1500-2500, style: 2000-4000
+        gradient_accumulation: 1
+        train_unet: true
+        train_text_encoder: false
+        gradient_checkpointing: true
+        noise_scheduler: "flowmatch"
+        timestep_type: 'linear'
+        optimizer: "adamw8bit"
+        lr: 1e-4
+        optimizer_params:
+          weight_decay: 1e-4
+        dtype: bf16
+        # Wan 2.2 MoE: alternates high/low noise expert training every N steps
+        switch_boundary_every: 10
+        cache_text_embeddings: true   # required on 16GB (do NOT combine with unload_text_encoder)
+      model:
+        name_or_path: "ai-toolkit/Wan2.2-T2V-A14B-Diffusers-bf16"
+        arch: 'wan22_14b'
+        quantize: true
+        # 4-bit transformer with accuracy-recovery adapter (needed on 16GB)
+        qtype: "uint4|ostris/accuracy_recovery_adapters/wan22_14b_t2i_torchao_uint4.safetensors"
+        quantize_te: true
+        qtype_te: "qfloat8"
+        low_vram: true
+        model_kwargs:
+          train_high_noise: true
+          train_low_noise: true
+      sample:
+        sampler: "flowmatch"
+        sample_every: 250
+        sample_start_step: 0
+        width: 768
+        height: 512
+        num_frames: 1
+        fps: 16
+        prompts:
+          - "[trigger] a bear walking through a forest, wide shot"
+          - "[trigger] a woman at a desk in an office, medium shot"
+        neg: ""
+        seed: 42
+        walk_seed: true
+        guidance_scale: 3.5
+        sample_steps: 25
+meta:
+  name: "[name]"
+  version: '1.0'

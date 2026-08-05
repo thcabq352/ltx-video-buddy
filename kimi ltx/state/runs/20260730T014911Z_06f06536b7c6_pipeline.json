@@ -1,0 +1,100 @@
+{
+ "run_id": "06f06536b7c6",
+ "status": "done",
+ "error": null,
+ "video_path": "C:\\Users\\thcab\\Documents\\ltx2.3_agent\\kimi ltx\\outputs\\06f06536b7c6\\master_agent_full_06f06536b7c6.mp4",
+ "segment_paths": [
+  "C:\\Users\\thcab\\Documents\\ltx2.3_agent\\kimi ltx\\outputs\\919f362cd57a_master_agent_00002_.mp4",
+  "C:\\Users\\thcab\\Documents\\ltx2.3_agent\\kimi ltx\\outputs\\844c8e76e082_master_agent_00003_.mp4"
+ ],
+ "segment_scores": [
+  0.9724999999999999,
+  0.9724999999999999
+ ],
+ "segment_durations": [
+  4.0,
+  4.0
+ ],
+ "storyboard": [
+  {
+   "index": 0,
+   "title": "Condensation close-up",
+   "duration_s": 4.0,
+   "camera": "slow push-in",
+   "action": "Beads of cold condensation slowly travel down the curved glass of a premium cold-brew bottle",
+   "visuals": "frosted amber glass bottle, dense water droplets, soft rim light, dark matte counter, shallow depth of field, cool steel-blue highlights",
+   "continuity": "opening",
+   "audio_mood": "quiet premium hush, faint fridge hum",
+   "ltx_prompt": "Macro slow push-in on a premium cold-brew coffee bottle in frosted amber glass, thick condensation droplets sliding down the curved surface, cool steel-blue rim light, soft specular highlights on wet glass, dark matte stone counter, shallow depth of field, clean commercial product lighting, ultra-sharp droplets, elegant minimal set, cinematic color grade",
+   "negative_extras": "text, labels in focus, hands, pouring, ice, steam, warmth, clutter",
+   "seed_offset": 0
+  },
+  {
+   "index": 1,
+   "title": "Slow pour over ice",
+   "duration_s": 4.0,
+   "camera": "gentle pan",
+   "action": "Dark cold-brew streams slowly from the bottle into a clear glass packed with crystal ice cubes",
+   "visuals": "rich near-black coffee ribbon, crystal-clear ice, rising bubbles, wet glass reflections, same cool palette and dark counter",
+   "continuity": "continues from previous: same bottle, condensation, cool steel-blue lighting, and dark matte counter; camera eases to reveal the pour into an iced glass beside it",
+   "audio_mood": "soft liquid pour, ice clink",
+   "ltx_prompt": "Gentle pan revealing a slow pour of dark cold-brew coffee from the same frosted amber bottle into a clear rocks glass filled with large crystal ice cubes, glossy black coffee ribbon catching cool steel-blue light, bubbles rising through ice, wet glass reflections, condensation still visible on bottle, dark matte stone counter, premium commercial lighting, smooth viscous pour, cinematic shallow depth of field",
+   "negative_extras": "text, splash mess, foam overflow, warm tones, hands dominating frame, steam",
+   "seed_offset": 17
+  }
+ ],
+ "storyboard_md": "### Storyboard\n**Style:** cool steel-blue and amber palette, wet glass highlights, dark matte surfaces, clean premium commercial mood\n**1. Condensation close-up** (4.0s) \u2014 _slow push-in_\n- action: Beads of cold condensation slowly travel down the curved glass of a premium cold-brew bottle\n- continuity: opening\n- prompt: Macro slow push-in on a premium cold-brew coffee bottle in frosted amber glass, thick condensation droplets sliding down the curved surface, cool steel-blue rim light, soft specular highlights on wet glass, dark matte st\u2026\n**2. Slow pour over ice** (4.0s) \u2014 _gentle pan_\n- action: Dark cold-brew streams slowly from the bottle into a clear glass packed with crystal ice cubes\n- continuity: continues from previous: same bottle, condensation, cool steel-blue lighting, and dark matte counter; camera eases to reveal the pour into an iced glass beside it\n- prompt: Gentle pan revealing a slow pour of dark cold-brew coffee from the same frosted amber bottle into a clear rocks glass filled with large crystal ice cubes, glossy black coffee ribbon catching cool steel-blue light, bubble\u2026",
+ "full_judge_score": 0.971125,
+ "full_judge_pass": true,
+ "full_judge_notes": "High heuristic quality with strong motion, correct duration, and subject matching the premium cold-brew condensation and pour brief.",
+ "full_judge_history": [
+  {
+   "score": 0.97,
+   "combined_score": 0.971125,
+   "issues": [],
+   "prompt_rewrite": "",
+   "param_hints": {},
+   "reason": "High heuristic quality with strong motion, correct duration, and subject matching the premium cold-brew condensation and pour brief.",
+   "decision": "accept",
+   "heuristic_score": 0.9724999999999999,
+   "llm_score": 0.97,
+   "pass": true
+  }
+ ],
+ "messages": [
+  "plan: 8.0s -> 2 segment(s) [4.0, 4.0] (judge=True)",
+  "storyboard (2 shots):\n### Storyboard\n**Style:** cool steel-blue and amber palette, wet glass highlights, dark matte surfaces, clean premium commercial mood\n**1. Condensation close-up** (4.0s) \u2014 _slow push-in_\n- action: Beads of cold condensation slowly travel down the curved glass of a premium cold-brew bottle\n- continuity: opening\n- prompt: Macro slow push-in on a premium cold-brew coffee bottle in frosted amber glass, thick condensation droplets sliding down the curved surface, cool steel-blue rim light, soft specular highlights on wet glass, dark matte st\u2026\n**2. Slow pour over ice** (4.0s) \u2014 _gentle pan_\n- action: Dark cold-brew streams slowly from the bottle into a clear glass packed with crystal ice cubes\n- continuity: continues from previous: same bottle, condensation, cool steel-blue lighting, and dark matte counter; camera eases to reveal the pour into an iced glass beside it\n- prompt: Gentle pan revealing a slow pour of dark cold-brew coffee from the same frosted amber bottle into a clear rocks glass filled with large crystal ice cubes, glossy black coffee ribbon catching cool steel-blue light, bubble\u2026",
+  "--- segment 1/2 (4.0s) ---",
+  "variant=base duration=4.0s quality=draft",
+  "-> PATCH",
+  "-> VALIDATE",
+  "validator warning: [WARNING] node 80.filename_prefix: input not declared in /object_info for CreateVideo",
+  "-> SUBMIT",
+  "queued prompt_id=77c7e85e-3f67-4be8-b043-6545f083421a",
+  "-> POLL",
+  "-> RESOLVE",
+  "output: C:\\Users\\thcab\\Documents\\ltx2.3_agent\\kimi ltx\\outputs\\919f362cd57a_master_agent_00002_.mp4",
+  "-> JUDGE",
+  "judge round 0: combined=0.97 decision=accept reason=Strong commercial condensation hero shot with solid motion, correct subject, and no heuristic failures; fits the opening beat of the brief.",
+  "-> DONE",
+  "run record: C:\\Users\\thcab\\Documents\\ltx2.3_agent\\kimi ltx\\state\\runs\\20260730T014551Z_919f362cd57a.json",
+  "--- segment 2/2 (4.0s) ---",
+  "variant=base duration=4.0s quality=draft",
+  "-> PATCH",
+  "-> VALIDATE",
+  "validator warning: [WARNING] node 80.filename_prefix: input not declared in /object_info for CreateVideo",
+  "-> SUBMIT",
+  "queued prompt_id=1fe84c71-ee51-442f-b5f2-a2352e23fb94",
+  "-> POLL",
+  "-> RESOLVE",
+  "output: C:\\Users\\thcab\\Documents\\ltx2.3_agent\\kimi ltx\\outputs\\844c8e76e082_master_agent_00003_.mp4",
+  "-> JUDGE",
+  "judge round 0: combined=0.97 decision=accept reason=Strong match to brief with clear pour action, solid motion, correct duration/file health, and premium commercial continuity.",
+  "-> DONE",
+  "run record: C:\\Users\\thcab\\Documents\\ltx2.3_agent\\kimi ltx\\state\\runs\\20260730T014907Z_844c8e76e082.json",
+  "stitched 2 segments -> C:\\Users\\thcab\\Documents\\ltx2.3_agent\\kimi ltx\\outputs\\06f06536b7c6\\master_agent_full_06f06536b7c6.mp4",
+  "full judge round 1/2: combined=0.97 pass=True \u2014 High heuristic quality with strong motion, correct duration, and subject matching the premium cold-brew condensation and pour brief.",
+  "final: C:\\Users\\thcab\\Documents\\ltx2.3_agent\\kimi ltx\\outputs\\06f06536b7c6\\master_agent_full_06f06536b7c6.mp4 (8.083333s, full_score=0.97, done)"
+ ],
+ "request": "premium cold-brew coffee commercial"
+}

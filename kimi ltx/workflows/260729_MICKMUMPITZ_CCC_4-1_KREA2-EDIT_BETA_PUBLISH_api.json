@@ -1,0 +1,6546 @@
+{
+  "562": {
+    "inputs": {
+      "upscale_method": "lanczos",
+      "keep_proportion": "pad",
+      "pad_color": "0, 0, 0",
+      "crop_position": "center",
+      "divisible_by": 2,
+      "device": "cpu",
+      "image": [
+        "6295",
+        0
+      ],
+      "width": [
+        "2903",
+        0
+      ],
+      "height": [
+        "2903",
+        1
+      ]
+    },
+    "class_type": "ImageResizeKJv2",
+    "_meta": {
+      "title": "Resize Image v2"
+    }
+  },
+  "2569": {
+    "inputs": {
+      "inputcount": 3,
+      "delimiter": " ",
+      "return_list": false,
+      "string_1": [
+        "547",
+        0
+      ],
+      "string_2": [
+        "2781",
+        0
+      ],
+      "string_3": [
+        "549",
+        0
+      ]
+    },
+    "class_type": "JoinStringMulti",
+    "_meta": {
+      "title": "Join String Multi"
+    }
+  },
+  "2578": {
+    "inputs": {
+      "inputcount": 3,
+      "delimiter": " ",
+      "return_list": false,
+      "string_1": [
+        "547",
+        0
+      ],
+      "string_2": [
+        "2780",
+        0
+      ],
+      "string_3": [
+        "549",
+        0
+      ]
+    },
+    "class_type": "JoinStringMulti",
+    "_meta": {
+      "title": "Join String Multi"
+    }
+  },
+  "2619": {
+    "inputs": {
+      "inputcount": 3,
+      "delimiter": " ",
+      "return_list": false,
+      "string_1": [
+        "547",
+        0
+      ],
+      "string_2": [
+        "2782",
+        0
+      ],
+      "string_3": [
+        "549",
+        0
+      ]
+    },
+    "class_type": "JoinStringMulti",
+    "_meta": {
+      "title": "Join String Multi"
+    }
+  },
+  "2640": {
+    "inputs": {
+      "inputcount": 3,
+      "delimiter": " ",
+      "return_list": false,
+      "string_1": [
+        "547",
+        0
+      ],
+      "string_2": [
+        "2785",
+        0
+      ],
+      "string_3": [
+        "549",
+        0
+      ]
+    },
+    "class_type": "JoinStringMulti",
+    "_meta": {
+      "title": "Join String Multi"
+    }
+  },
+  "2649": {
+    "inputs": {
+      "inputcount": 3,
+      "delimiter": " ",
+      "return_list": false,
+      "string_1": [
+        "547",
+        0
+      ],
+      "string_2": [
+        "2775",
+        0
+      ]
+    },
+    "class_type": "JoinStringMulti",
+    "_meta": {
+      "title": "Join String Multi"
+    }
+  },
+  "2657:6349": {
+    "inputs": {
+      "clip": [
+        "528",
+        0
+      ],
+      "image": [
+        "2653",
+        0
+      ],
+      "image_b": [
+        "562",
+        0
+      ],
+      "prompt": [
+        "2712",
+        0
+      ],
+      "grounding_px": [
+        "6299",
+        0
+      ]
+    },
+    "class_type": "Krea2EditGroundedEncode",
+    "_meta": {
+      "title": "POSITIVE"
+    }
+  },
+  "2657:6350": {
+    "inputs": {
+      "clip": [
+        "528",
+        0
+      ],
+      "image": [
+        "2653",
+        0
+      ],
+      "image_b": [
+        "562",
+        0
+      ],
+      "grounding_px": [
+        "6299",
+        0
+      ],
+      "prompt": ""
+    },
+    "class_type": "Krea2EditGroundedEncode",
+    "_meta": {
+      "title": "NEGATIVE"
+    }
+  },
+  "2657:6012": {
+    "inputs": {
+      "batch_size": 1,
+      "width": [
+        "2903",
+        0
+      ],
+      "height": [
+        "2903",
+        1
+      ]
+    },
+    "class_type": "EmptyLatentImage",
+    "_meta": {
+      "title": "Empty Latent Image"
+    }
+  },
+  "2657:6013": {
+    "inputs": {
+      "seed": 42,
+      "sampler_name": "euler",
+      "scheduler": "simple",
+      "denoise": 1,
+      "model": [
+        "2657:6015",
+        0
+      ],
+      "steps": [
+        "3058",
+        0
+      ],
+      "cfg": [
+        "3061",
+        0
+      ],
+      "positive": [
+        "2657:6349",
+        0
+      ],
+      "negative": [
+        "2657:6350",
+        0
+      ],
+      "latent_image": [
+        "2657:6012",
+        0
+      ]
+    },
+    "class_type": "KSampler",
+    "_meta": {
+      "title": "KSampler"
+    }
+  },
+  "2657:6014": {
+    "inputs": {
+      "samples": [
+        "2657:6013",
+        0
+      ],
+      "vae": [
+        "529",
+        0
+      ]
+    },
+    "class_type": "VAEDecode",
+    "_meta": {
+      "title": "VAE Decode"
+    }
+  },
+  "2657:6015": {
+    "inputs": {
+      "model": [
+        "664",
+        0
+      ],
+      "vae": [
+        "529",
+        0
+      ],
+      "source_image": [
+        "2653",
+        0
+      ],
+      "source_image_b": [
+        "562",
+        0
+      ],
+      "ref_boost": [
+        "6297",
+        0
+      ],
+      "ref_boost_a": 1.0,
+      "fit_mode": "fit",
+      "source_latent": [
+        "2657:9016",
+        0
+      ],
+      "source_latent_b": [
+        "2657:9017",
+        0
+      ]
+    },
+    "class_type": "Krea2EditModelPatch",
+    "_meta": {
+      "title": "Krea2EditModelPatch"
+    }
+  },
+  "2661:6351": {
+    "inputs": {
+      "clip": [
+        "528",
+        0
+      ],
+      "image": [
+        "2762",
+        0
+      ],
+      "image_b": [
+        "562",
+        0
+      ],
+      "prompt": [
+        "2714",
+        0
+      ],
+      "grounding_px": [
+        "6299",
+        0
+      ]
+    },
+    "class_type": "Krea2EditGroundedEncode",
+    "_meta": {
+      "title": "POSITIVE"
+    }
+  },
+  "2661:6352": {
+    "inputs": {
+      "clip": [
+        "528",
+        0
+      ],
+      "image": [
+        "2762",
+        0
+      ],
+      "image_b": [
+        "562",
+        0
+      ],
+      "grounding_px": [
+        "6299",
+        0
+      ],
+      "prompt": ""
+    },
+    "class_type": "Krea2EditGroundedEncode",
+    "_meta": {
+      "title": "NEGATIVE"
+    }
+  },
+  "2661:6019": {
+    "inputs": {
+      "batch_size": 1,
+      "width": [
+        "2903",
+        0
+      ],
+      "height": [
+        "2903",
+        1
+      ]
+    },
+    "class_type": "EmptyLatentImage",
+    "_meta": {
+      "title": "Empty Latent Image"
+    }
+  },
+  "2661:6020": {
+    "inputs": {
+      "seed": 42,
+      "sampler_name": "euler",
+      "scheduler": "simple",
+      "denoise": 1,
+      "model": [
+        "2661:6022",
+        0
+      ],
+      "steps": [
+        "3058",
+        0
+      ],
+      "cfg": [
+        "3061",
+        0
+      ],
+      "positive": [
+        "2661:6351",
+        0
+      ],
+      "negative": [
+        "2661:6352",
+        0
+      ],
+      "latent_image": [
+        "2661:6019",
+        0
+      ]
+    },
+    "class_type": "KSampler",
+    "_meta": {
+      "title": "KSampler"
+    }
+  },
+  "2661:6021": {
+    "inputs": {
+      "samples": [
+        "2661:6020",
+        0
+      ],
+      "vae": [
+        "529",
+        0
+      ]
+    },
+    "class_type": "VAEDecode",
+    "_meta": {
+      "title": "VAE Decode"
+    }
+  },
+  "2661:6022": {
+    "inputs": {
+      "model": [
+        "664",
+        0
+      ],
+      "vae": [
+        "529",
+        0
+      ],
+      "source_image": [
+        "2762",
+        0
+      ],
+      "source_image_b": [
+        "562",
+        0
+      ],
+      "ref_boost": [
+        "6297",
+        0
+      ],
+      "ref_boost_a": 1.0,
+      "fit_mode": "fit",
+      "source_latent": [
+        "2661:9016",
+        0
+      ],
+      "source_latent_b": [
+        "2661:9017",
+        0
+      ]
+    },
+    "class_type": "Krea2EditModelPatch",
+    "_meta": {
+      "title": "Krea2EditModelPatch"
+    }
+  },
+  "2663:6353": {
+    "inputs": {
+      "clip": [
+        "528",
+        0
+      ],
+      "image": [
+        "535",
+        0
+      ],
+      "image_b": [
+        "562",
+        0
+      ],
+      "prompt": [
+        "2716",
+        0
+      ],
+      "grounding_px": [
+        "6299",
+        0
+      ]
+    },
+    "class_type": "Krea2EditGroundedEncode",
+    "_meta": {
+      "title": "POSITIVE"
+    }
+  },
+  "2663:6354": {
+    "inputs": {
+      "clip": [
+        "528",
+        0
+      ],
+      "image": [
+        "535",
+        0
+      ],
+      "image_b": [
+        "562",
+        0
+      ],
+      "grounding_px": [
+        "6299",
+        0
+      ],
+      "prompt": ""
+    },
+    "class_type": "Krea2EditGroundedEncode",
+    "_meta": {
+      "title": "NEGATIVE"
+    }
+  },
+  "2663:6026": {
+    "inputs": {
+      "batch_size": 1,
+      "width": [
+        "2903",
+        0
+      ],
+      "height": [
+        "2903",
+        1
+      ]
+    },
+    "class_type": "EmptyLatentImage",
+    "_meta": {
+      "title": "Empty Latent Image"
+    }
+  },
+  "2663:6027": {
+    "inputs": {
+      "seed": 42,
+      "sampler_name": "euler",
+      "scheduler": "simple",
+      "denoise": 1,
+      "model": [
+        "2663:6029",
+        0
+      ],
+      "steps": [
+        "3058",
+        0
+      ],
+      "cfg": [
+        "3061",
+        0
+      ],
+      "positive": [
+        "2663:6353",
+        0
+      ],
+      "negative": [
+        "2663:6354",
+        0
+      ],
+      "latent_image": [
+        "2663:6026",
+        0
+      ]
+    },
+    "class_type": "KSampler",
+    "_meta": {
+      "title": "KSampler"
+    }
+  },
+  "2663:6028": {
+    "inputs": {
+      "samples": [
+        "2663:6027",
+        0
+      ],
+      "vae": [
+        "529",
+        0
+      ]
+    },
+    "class_type": "VAEDecode",
+    "_meta": {
+      "title": "VAE Decode"
+    }
+  },
+  "2663:6029": {
+    "inputs": {
+      "model": [
+        "664",
+        0
+      ],
+      "vae": [
+        "529",
+        0
+      ],
+      "source_image": [
+        "535",
+        0
+      ],
+      "source_image_b": [
+        "562",
+        0
+      ],
+      "ref_boost": [
+        "6297",
+        0
+      ],
+      "ref_boost_a": 1.0,
+      "fit_mode": "fit",
+      "source_latent": [
+        "2663:9016",
+        0
+      ],
+      "source_latent_b": [
+        "2663:9017",
+        0
+      ]
+    },
+    "class_type": "Krea2EditModelPatch",
+    "_meta": {
+      "title": "Krea2EditModelPatch"
+    }
+  },
+  "2666": {
+    "inputs": {
+      "name": "Dataset",
+      "order": 0,
+      "image": [
+        "2701:6049",
+        0
+      ]
+    },
+    "class_type": "ImageCollect",
+    "_meta": {
+      "title": "Collect Image"
+    }
+  },
+  "2674:6355": {
+    "inputs": {
+      "clip": [
+        "528",
+        0
+      ],
+      "image": [
+        "2653",
+        0
+      ],
+      "image_b": [
+        "562",
+        0
+      ],
+      "prompt": [
+        "2648",
+        0
+      ],
+      "grounding_px": [
+        "6299",
+        0
+      ]
+    },
+    "class_type": "Krea2EditGroundedEncode",
+    "_meta": {
+      "title": "POSITIVE"
+    }
+  },
+  "2674:6356": {
+    "inputs": {
+      "clip": [
+        "528",
+        0
+      ],
+      "image": [
+        "2653",
+        0
+      ],
+      "image_b": [
+        "562",
+        0
+      ],
+      "grounding_px": [
+        "6299",
+        0
+      ],
+      "prompt": ""
+    },
+    "class_type": "Krea2EditGroundedEncode",
+    "_meta": {
+      "title": "NEGATIVE"
+    }
+  },
+  "2674:6033": {
+    "inputs": {
+      "batch_size": 1,
+      "width": [
+        "2903",
+        0
+      ],
+      "height": [
+        "2903",
+        1
+      ]
+    },
+    "class_type": "EmptyLatentImage",
+    "_meta": {
+      "title": "Empty Latent Image"
+    }
+  },
+  "2674:6034": {
+    "inputs": {
+      "seed": 42,
+      "sampler_name": "euler",
+      "scheduler": "simple",
+      "denoise": 1,
+      "model": [
+        "2674:6036",
+        0
+      ],
+      "steps": [
+        "3058",
+        0
+      ],
+      "cfg": [
+        "3061",
+        0
+      ],
+      "positive": [
+        "2674:6355",
+        0
+      ],
+      "negative": [
+        "2674:6356",
+        0
+      ],
+      "latent_image": [
+        "2674:6033",
+        0
+      ]
+    },
+    "class_type": "KSampler",
+    "_meta": {
+      "title": "KSampler"
+    }
+  },
+  "2674:6035": {
+    "inputs": {
+      "samples": [
+        "2674:6034",
+        0
+      ],
+      "vae": [
+        "529",
+        0
+      ]
+    },
+    "class_type": "VAEDecode",
+    "_meta": {
+      "title": "VAE Decode"
+    }
+  },
+  "2674:6036": {
+    "inputs": {
+      "model": [
+        "664",
+        0
+      ],
+      "vae": [
+        "529",
+        0
+      ],
+      "source_image": [
+        "2653",
+        0
+      ],
+      "source_image_b": [
+        "562",
+        0
+      ],
+      "ref_boost": [
+        "6297",
+        0
+      ],
+      "ref_boost_a": 1.0,
+      "fit_mode": "fit",
+      "source_latent": [
+        "2674:9016",
+        0
+      ],
+      "source_latent_b": [
+        "2674:9017",
+        0
+      ]
+    },
+    "class_type": "Krea2EditModelPatch",
+    "_meta": {
+      "title": "Krea2EditModelPatch"
+    }
+  },
+  "2678": {
+    "inputs": {
+      "name": "Dataset",
+      "order": 0,
+      "image": [
+        "2817:6154",
+        0
+      ]
+    },
+    "class_type": "ImageCollect",
+    "_meta": {
+      "title": "Collect Image"
+    }
+  },
+  "2680": {
+    "inputs": {
+      "name": "Dataset",
+      "order": 0,
+      "image": [
+        "2703:6063",
+        0
+      ]
+    },
+    "class_type": "ImageCollect",
+    "_meta": {
+      "title": "Collect Image"
+    }
+  },
+  "2681:6357": {
+    "inputs": {
+      "clip": [
+        "528",
+        0
+      ],
+      "image": [
+        "2762",
+        0
+      ],
+      "image_b": [
+        "535",
+        0
+      ],
+      "prompt": [
+        "2578",
+        0
+      ],
+      "grounding_px": [
+        "6299",
+        0
+      ]
+    },
+    "class_type": "Krea2EditGroundedEncode",
+    "_meta": {
+      "title": "POSITIVE"
+    }
+  },
+  "2681:6358": {
+    "inputs": {
+      "clip": [
+        "528",
+        0
+      ],
+      "image": [
+        "2762",
+        0
+      ],
+      "image_b": [
+        "535",
+        0
+      ],
+      "grounding_px": [
+        "6299",
+        0
+      ],
+      "prompt": ""
+    },
+    "class_type": "Krea2EditGroundedEncode",
+    "_meta": {
+      "title": "NEGATIVE"
+    }
+  },
+  "2681:6040": {
+    "inputs": {
+      "batch_size": 1,
+      "width": [
+        "2903",
+        0
+      ],
+      "height": [
+        "2903",
+        1
+      ]
+    },
+    "class_type": "EmptyLatentImage",
+    "_meta": {
+      "title": "Empty Latent Image"
+    }
+  },
+  "2681:6041": {
+    "inputs": {
+      "seed": 42,
+      "sampler_name": "euler",
+      "scheduler": "simple",
+      "denoise": 1,
+      "model": [
+        "2681:6043",
+        0
+      ],
+      "steps": [
+        "3058",
+        0
+      ],
+      "cfg": [
+        "3061",
+        0
+      ],
+      "positive": [
+        "2681:6357",
+        0
+      ],
+      "negative": [
+        "2681:6358",
+        0
+      ],
+      "latent_image": [
+        "2681:6040",
+        0
+      ]
+    },
+    "class_type": "KSampler",
+    "_meta": {
+      "title": "KSampler"
+    }
+  },
+  "2681:6042": {
+    "inputs": {
+      "samples": [
+        "2681:6041",
+        0
+      ],
+      "vae": [
+        "529",
+        0
+      ]
+    },
+    "class_type": "VAEDecode",
+    "_meta": {
+      "title": "VAE Decode"
+    }
+  },
+  "2681:6043": {
+    "inputs": {
+      "model": [
+        "664",
+        0
+      ],
+      "vae": [
+        "529",
+        0
+      ],
+      "source_image": [
+        "2762",
+        0
+      ],
+      "source_image_b": [
+        "535",
+        0
+      ],
+      "ref_boost": [
+        "6297",
+        0
+      ],
+      "ref_boost_a": 1.0,
+      "fit_mode": "fit",
+      "source_latent": [
+        "2681:9016",
+        0
+      ],
+      "source_latent_b": [
+        "2681:9017",
+        0
+      ]
+    },
+    "class_type": "Krea2EditModelPatch",
+    "_meta": {
+      "title": "Krea2EditModelPatch"
+    }
+  },
+  "2683": {
+    "inputs": {
+      "name": "Dataset",
+      "order": 0,
+      "image": [
+        "2681:6042",
+        0
+      ]
+    },
+    "class_type": "ImageCollect",
+    "_meta": {
+      "title": "Collect Image"
+    }
+  },
+  "2685": {
+    "inputs": {
+      "name": "Dataset",
+      "order": 0,
+      "image": [
+        "2705:6070",
+        0
+      ]
+    },
+    "class_type": "ImageCollect",
+    "_meta": {
+      "title": "Collect Image"
+    }
+  },
+  "2687": {
+    "inputs": {
+      "name": "Dataset",
+      "order": 0,
+      "image": [
+        "2746:6119",
+        0
+      ]
+    },
+    "class_type": "ImageCollect",
+    "_meta": {
+      "title": "Collect Image"
+    }
+  },
+  "2688": {
+    "inputs": {
+      "name": "Dataset",
+      "order": 0,
+      "image": [
+        "2784:6147",
+        0
+      ]
+    },
+    "class_type": "ImageCollect",
+    "_meta": {
+      "title": "Collect Image"
+    }
+  },
+  "2701:6359": {
+    "inputs": {
+      "clip": [
+        "528",
+        0
+      ],
+      "image": [
+        "535",
+        0
+      ],
+      "image_b": [
+        "2653",
+        0
+      ],
+      "prompt": [
+        "2719",
+        0
+      ],
+      "grounding_px": [
+        "6299",
+        0
+      ]
+    },
+    "class_type": "Krea2EditGroundedEncode",
+    "_meta": {
+      "title": "POSITIVE"
+    }
+  },
+  "2701:6360": {
+    "inputs": {
+      "clip": [
+        "528",
+        0
+      ],
+      "image": [
+        "535",
+        0
+      ],
+      "image_b": [
+        "2653",
+        0
+      ],
+      "grounding_px": [
+        "6299",
+        0
+      ],
+      "prompt": ""
+    },
+    "class_type": "Krea2EditGroundedEncode",
+    "_meta": {
+      "title": "NEGATIVE"
+    }
+  },
+  "2701:6047": {
+    "inputs": {
+      "batch_size": 1,
+      "width": [
+        "2903",
+        0
+      ],
+      "height": [
+        "2903",
+        1
+      ]
+    },
+    "class_type": "EmptyLatentImage",
+    "_meta": {
+      "title": "Empty Latent Image"
+    }
+  },
+  "2701:6048": {
+    "inputs": {
+      "seed": 42,
+      "sampler_name": "euler",
+      "scheduler": "simple",
+      "denoise": 1,
+      "model": [
+        "2701:6050",
+        0
+      ],
+      "steps": [
+        "3058",
+        0
+      ],
+      "cfg": [
+        "3061",
+        0
+      ],
+      "positive": [
+        "2701:6359",
+        0
+      ],
+      "negative": [
+        "2701:6360",
+        0
+      ],
+      "latent_image": [
+        "2701:6047",
+        0
+      ]
+    },
+    "class_type": "KSampler",
+    "_meta": {
+      "title": "KSampler"
+    }
+  },
+  "2701:6049": {
+    "inputs": {
+      "samples": [
+        "2701:6048",
+        0
+      ],
+      "vae": [
+        "529",
+        0
+      ]
+    },
+    "class_type": "VAEDecode",
+    "_meta": {
+      "title": "VAE Decode"
+    }
+  },
+  "2701:6050": {
+    "inputs": {
+      "model": [
+        "664",
+        0
+      ],
+      "vae": [
+        "529",
+        0
+      ],
+      "source_image": [
+        "535",
+        0
+      ],
+      "source_image_b": [
+        "2653",
+        0
+      ],
+      "ref_boost": [
+        "6297",
+        0
+      ],
+      "ref_boost_a": 1.0,
+      "fit_mode": "fit",
+      "source_latent": [
+        "2701:9016",
+        0
+      ],
+      "source_latent_b": [
+        "2701:9017",
+        0
+      ]
+    },
+    "class_type": "Krea2EditModelPatch",
+    "_meta": {
+      "title": "Krea2EditModelPatch"
+    }
+  },
+  "2702:6361": {
+    "inputs": {
+      "clip": [
+        "528",
+        0
+      ],
+      "image": [
+        "2653",
+        0
+      ],
+      "image_b": [
+        "562",
+        0
+      ],
+      "prompt": [
+        "2647",
+        0
+      ],
+      "grounding_px": [
+        "6299",
+        0
+      ]
+    },
+    "class_type": "Krea2EditGroundedEncode",
+    "_meta": {
+      "title": "POSITIVE"
+    }
+  },
+  "2702:6362": {
+    "inputs": {
+      "clip": [
+        "528",
+        0
+      ],
+      "image": [
+        "2653",
+        0
+      ],
+      "image_b": [
+        "562",
+        0
+      ],
+      "grounding_px": [
+        "6299",
+        0
+      ],
+      "prompt": ""
+    },
+    "class_type": "Krea2EditGroundedEncode",
+    "_meta": {
+      "title": "NEGATIVE"
+    }
+  },
+  "2702:6054": {
+    "inputs": {
+      "batch_size": 1,
+      "width": [
+        "2903",
+        0
+      ],
+      "height": [
+        "2903",
+        1
+      ]
+    },
+    "class_type": "EmptyLatentImage",
+    "_meta": {
+      "title": "Empty Latent Image"
+    }
+  },
+  "2702:6055": {
+    "inputs": {
+      "seed": 42,
+      "sampler_name": "euler",
+      "scheduler": "simple",
+      "denoise": 1,
+      "model": [
+        "2702:6057",
+        0
+      ],
+      "steps": [
+        "3058",
+        0
+      ],
+      "cfg": [
+        "3061",
+        0
+      ],
+      "positive": [
+        "2702:6361",
+        0
+      ],
+      "negative": [
+        "2702:6362",
+        0
+      ],
+      "latent_image": [
+        "2702:6054",
+        0
+      ]
+    },
+    "class_type": "KSampler",
+    "_meta": {
+      "title": "KSampler"
+    }
+  },
+  "2702:6056": {
+    "inputs": {
+      "samples": [
+        "2702:6055",
+        0
+      ],
+      "vae": [
+        "529",
+        0
+      ]
+    },
+    "class_type": "VAEDecode",
+    "_meta": {
+      "title": "VAE Decode"
+    }
+  },
+  "2702:6057": {
+    "inputs": {
+      "model": [
+        "664",
+        0
+      ],
+      "vae": [
+        "529",
+        0
+      ],
+      "source_image": [
+        "2653",
+        0
+      ],
+      "source_image_b": [
+        "562",
+        0
+      ],
+      "ref_boost": [
+        "6297",
+        0
+      ],
+      "ref_boost_a": 1.0,
+      "fit_mode": "fit",
+      "source_latent": [
+        "2702:9016",
+        0
+      ],
+      "source_latent_b": [
+        "2702:9017",
+        0
+      ]
+    },
+    "class_type": "Krea2EditModelPatch",
+    "_meta": {
+      "title": "Krea2EditModelPatch"
+    }
+  },
+  "2703:6363": {
+    "inputs": {
+      "clip": [
+        "528",
+        0
+      ],
+      "image": [
+        "2762",
+        0
+      ],
+      "image_b": [
+        "562",
+        0
+      ],
+      "prompt": [
+        "2569",
+        0
+      ],
+      "grounding_px": [
+        "6299",
+        0
+      ]
+    },
+    "class_type": "Krea2EditGroundedEncode",
+    "_meta": {
+      "title": "POSITIVE"
+    }
+  },
+  "2703:6364": {
+    "inputs": {
+      "clip": [
+        "528",
+        0
+      ],
+      "image": [
+        "2762",
+        0
+      ],
+      "image_b": [
+        "562",
+        0
+      ],
+      "grounding_px": [
+        "6299",
+        0
+      ],
+      "prompt": ""
+    },
+    "class_type": "Krea2EditGroundedEncode",
+    "_meta": {
+      "title": "NEGATIVE"
+    }
+  },
+  "2703:6061": {
+    "inputs": {
+      "batch_size": 1,
+      "width": [
+        "2903",
+        0
+      ],
+      "height": [
+        "2903",
+        1
+      ]
+    },
+    "class_type": "EmptyLatentImage",
+    "_meta": {
+      "title": "Empty Latent Image"
+    }
+  },
+  "2703:6062": {
+    "inputs": {
+      "seed": 42,
+      "sampler_name": "euler",
+      "scheduler": "simple",
+      "denoise": 1,
+      "model": [
+        "2703:6064",
+        0
+      ],
+      "steps": [
+        "3058",
+        0
+      ],
+      "cfg": [
+        "3061",
+        0
+      ],
+      "positive": [
+        "2703:6363",
+        0
+      ],
+      "negative": [
+        "2703:6364",
+        0
+      ],
+      "latent_image": [
+        "2703:6061",
+        0
+      ]
+    },
+    "class_type": "KSampler",
+    "_meta": {
+      "title": "KSampler"
+    }
+  },
+  "2703:6063": {
+    "inputs": {
+      "samples": [
+        "2703:6062",
+        0
+      ],
+      "vae": [
+        "529",
+        0
+      ]
+    },
+    "class_type": "VAEDecode",
+    "_meta": {
+      "title": "VAE Decode"
+    }
+  },
+  "2703:6064": {
+    "inputs": {
+      "model": [
+        "664",
+        0
+      ],
+      "vae": [
+        "529",
+        0
+      ],
+      "source_image": [
+        "2762",
+        0
+      ],
+      "source_image_b": [
+        "562",
+        0
+      ],
+      "ref_boost": [
+        "6297",
+        0
+      ],
+      "ref_boost_a": 1.0,
+      "fit_mode": "fit",
+      "source_latent": [
+        "2703:9016",
+        0
+      ],
+      "source_latent_b": [
+        "2703:9017",
+        0
+      ]
+    },
+    "class_type": "Krea2EditModelPatch",
+    "_meta": {
+      "title": "Krea2EditModelPatch"
+    }
+  },
+  "2705:6365": {
+    "inputs": {
+      "clip": [
+        "528",
+        0
+      ],
+      "image": [
+        "535",
+        0
+      ],
+      "image_b": [
+        "562",
+        0
+      ],
+      "prompt": [
+        "2650",
+        0
+      ],
+      "grounding_px": [
+        "6299",
+        0
+      ]
+    },
+    "class_type": "Krea2EditGroundedEncode",
+    "_meta": {
+      "title": "POSITIVE"
+    }
+  },
+  "2705:6366": {
+    "inputs": {
+      "clip": [
+        "528",
+        0
+      ],
+      "image": [
+        "535",
+        0
+      ],
+      "image_b": [
+        "562",
+        0
+      ],
+      "grounding_px": [
+        "6299",
+        0
+      ],
+      "prompt": ""
+    },
+    "class_type": "Krea2EditGroundedEncode",
+    "_meta": {
+      "title": "NEGATIVE"
+    }
+  },
+  "2705:6068": {
+    "inputs": {
+      "batch_size": 1,
+      "width": [
+        "2903",
+        0
+      ],
+      "height": [
+        "2903",
+        1
+      ]
+    },
+    "class_type": "EmptyLatentImage",
+    "_meta": {
+      "title": "Empty Latent Image"
+    }
+  },
+  "2705:6069": {
+    "inputs": {
+      "seed": 42,
+      "sampler_name": "euler",
+      "scheduler": "simple",
+      "denoise": 1,
+      "model": [
+        "2705:6071",
+        0
+      ],
+      "steps": [
+        "3058",
+        0
+      ],
+      "cfg": [
+        "3061",
+        0
+      ],
+      "positive": [
+        "2705:6365",
+        0
+      ],
+      "negative": [
+        "2705:6366",
+        0
+      ],
+      "latent_image": [
+        "2705:6068",
+        0
+      ]
+    },
+    "class_type": "KSampler",
+    "_meta": {
+      "title": "KSampler"
+    }
+  },
+  "2705:6070": {
+    "inputs": {
+      "samples": [
+        "2705:6069",
+        0
+      ],
+      "vae": [
+        "529",
+        0
+      ]
+    },
+    "class_type": "VAEDecode",
+    "_meta": {
+      "title": "VAE Decode"
+    }
+  },
+  "2705:6071": {
+    "inputs": {
+      "model": [
+        "664",
+        0
+      ],
+      "vae": [
+        "529",
+        0
+      ],
+      "source_image": [
+        "535",
+        0
+      ],
+      "source_image_b": [
+        "562",
+        0
+      ],
+      "ref_boost": [
+        "6297",
+        0
+      ],
+      "ref_boost_a": 1.0,
+      "fit_mode": "fit",
+      "source_latent": [
+        "2705:9016",
+        0
+      ],
+      "source_latent_b": [
+        "2705:9017",
+        0
+      ]
+    },
+    "class_type": "Krea2EditModelPatch",
+    "_meta": {
+      "title": "Krea2EditModelPatch"
+    }
+  },
+  "2719": {
+    "inputs": {
+      "inputcount": 3,
+      "delimiter": " ",
+      "return_list": false,
+      "string_1": [
+        "547",
+        0
+      ],
+      "string_2": [
+        "2767",
+        0
+      ],
+      "string_3": [
+        "549",
+        0
+      ]
+    },
+    "class_type": "JoinStringMulti",
+    "_meta": {
+      "title": "Join String Multi"
+    }
+  },
+  "2724": {
+    "inputs": {
+      "inputcount": 2,
+      "delimiter": " ",
+      "return_list": false,
+      "string_1": [
+        "547",
+        0
+      ],
+      "string_2": [
+        "2769",
+        0
+      ]
+    },
+    "class_type": "JoinStringMulti",
+    "_meta": {
+      "title": "Join String Multi"
+    }
+  },
+  "2730:6369": {
+    "inputs": {
+      "clip": [
+        "528",
+        0
+      ],
+      "image": [
+        "535",
+        0
+      ],
+      "image_b": [
+        "562",
+        0
+      ],
+      "prompt": [
+        "2732",
+        0
+      ],
+      "grounding_px": [
+        "6299",
+        0
+      ]
+    },
+    "class_type": "Krea2EditGroundedEncode",
+    "_meta": {
+      "title": "POSITIVE"
+    }
+  },
+  "2730:6370": {
+    "inputs": {
+      "clip": [
+        "528",
+        0
+      ],
+      "image": [
+        "535",
+        0
+      ],
+      "image_b": [
+        "562",
+        0
+      ],
+      "grounding_px": [
+        "6299",
+        0
+      ],
+      "prompt": ""
+    },
+    "class_type": "Krea2EditGroundedEncode",
+    "_meta": {
+      "title": "NEGATIVE"
+    }
+  },
+  "2730:6082": {
+    "inputs": {
+      "batch_size": 1,
+      "width": [
+        "2903",
+        0
+      ],
+      "height": [
+        "2903",
+        1
+      ]
+    },
+    "class_type": "EmptyLatentImage",
+    "_meta": {
+      "title": "Empty Latent Image"
+    }
+  },
+  "2730:6083": {
+    "inputs": {
+      "seed": 42,
+      "sampler_name": "euler",
+      "scheduler": "simple",
+      "denoise": 1,
+      "model": [
+        "2730:6085",
+        0
+      ],
+      "steps": [
+        "3058",
+        0
+      ],
+      "cfg": [
+        "3061",
+        0
+      ],
+      "positive": [
+        "2730:6369",
+        0
+      ],
+      "negative": [
+        "2730:6370",
+        0
+      ],
+      "latent_image": [
+        "2730:6082",
+        0
+      ]
+    },
+    "class_type": "KSampler",
+    "_meta": {
+      "title": "KSampler"
+    }
+  },
+  "2730:6084": {
+    "inputs": {
+      "samples": [
+        "2730:6083",
+        0
+      ],
+      "vae": [
+        "529",
+        0
+      ]
+    },
+    "class_type": "VAEDecode",
+    "_meta": {
+      "title": "VAE Decode"
+    }
+  },
+  "2730:6085": {
+    "inputs": {
+      "model": [
+        "664",
+        0
+      ],
+      "vae": [
+        "529",
+        0
+      ],
+      "source_image": [
+        "535",
+        0
+      ],
+      "source_image_b": [
+        "562",
+        0
+      ],
+      "ref_boost": [
+        "6297",
+        0
+      ],
+      "ref_boost_a": 1.0,
+      "fit_mode": "fit",
+      "source_latent": [
+        "2730:9016",
+        0
+      ],
+      "source_latent_b": [
+        "2730:9017",
+        0
+      ]
+    },
+    "class_type": "Krea2EditModelPatch",
+    "_meta": {
+      "title": "Krea2EditModelPatch"
+    }
+  },
+  "2742:6373": {
+    "inputs": {
+      "clip": [
+        "528",
+        0
+      ],
+      "image": [
+        "535",
+        0
+      ],
+      "prompt": [
+        "2818",
+        0
+      ],
+      "grounding_px": [
+        "6299",
+        0
+      ]
+    },
+    "class_type": "Krea2EditGroundedEncode",
+    "_meta": {
+      "title": "POSITIVE"
+    }
+  },
+  "2742:6374": {
+    "inputs": {
+      "clip": [
+        "528",
+        0
+      ],
+      "image": [
+        "535",
+        0
+      ],
+      "grounding_px": [
+        "6299",
+        0
+      ],
+      "prompt": ""
+    },
+    "class_type": "Krea2EditGroundedEncode",
+    "_meta": {
+      "title": "NEGATIVE"
+    }
+  },
+  "2742:6096": {
+    "inputs": {
+      "batch_size": 1,
+      "width": [
+        "2903",
+        0
+      ],
+      "height": [
+        "2903",
+        1
+      ]
+    },
+    "class_type": "EmptyLatentImage",
+    "_meta": {
+      "title": "Empty Latent Image"
+    }
+  },
+  "2742:6097": {
+    "inputs": {
+      "seed": 42,
+      "sampler_name": "euler",
+      "scheduler": "simple",
+      "denoise": 1,
+      "model": [
+        "2742:6099",
+        0
+      ],
+      "steps": [
+        "3058",
+        0
+      ],
+      "cfg": [
+        "3061",
+        0
+      ],
+      "positive": [
+        "2742:6373",
+        0
+      ],
+      "negative": [
+        "2742:6374",
+        0
+      ],
+      "latent_image": [
+        "2742:6096",
+        0
+      ]
+    },
+    "class_type": "KSampler",
+    "_meta": {
+      "title": "KSampler"
+    }
+  },
+  "2742:6098": {
+    "inputs": {
+      "samples": [
+        "2742:6097",
+        0
+      ],
+      "vae": [
+        "529",
+        0
+      ]
+    },
+    "class_type": "VAEDecode",
+    "_meta": {
+      "title": "VAE Decode"
+    }
+  },
+  "2742:6099": {
+    "inputs": {
+      "model": [
+        "664",
+        0
+      ],
+      "vae": [
+        "529",
+        0
+      ],
+      "source_image": [
+        "535",
+        0
+      ],
+      "ref_boost": [
+        "6297",
+        0
+      ],
+      "ref_boost_a": 1.0,
+      "fit_mode": "fit",
+      "source_latent": [
+        "2742:9016",
+        0
+      ]
+    },
+    "class_type": "Krea2EditModelPatch",
+    "_meta": {
+      "title": "Krea2EditModelPatch"
+    }
+  },
+  "2745:6377": {
+    "inputs": {
+      "clip": [
+        "528",
+        0
+      ],
+      "image": [
+        "2762",
+        0
+      ],
+      "image_b": [
+        "562",
+        0
+      ],
+      "prompt": [
+        "2722",
+        0
+      ],
+      "grounding_px": [
+        "6299",
+        0
+      ]
+    },
+    "class_type": "Krea2EditGroundedEncode",
+    "_meta": {
+      "title": "POSITIVE"
+    }
+  },
+  "2745:6378": {
+    "inputs": {
+      "clip": [
+        "528",
+        0
+      ],
+      "image": [
+        "2762",
+        0
+      ],
+      "image_b": [
+        "562",
+        0
+      ],
+      "grounding_px": [
+        "6299",
+        0
+      ],
+      "prompt": ""
+    },
+    "class_type": "Krea2EditGroundedEncode",
+    "_meta": {
+      "title": "NEGATIVE"
+    }
+  },
+  "2745:6110": {
+    "inputs": {
+      "batch_size": 1,
+      "width": [
+        "2903",
+        0
+      ],
+      "height": [
+        "2903",
+        1
+      ]
+    },
+    "class_type": "EmptyLatentImage",
+    "_meta": {
+      "title": "Empty Latent Image"
+    }
+  },
+  "2745:6111": {
+    "inputs": {
+      "seed": 42,
+      "sampler_name": "euler",
+      "scheduler": "simple",
+      "denoise": 1,
+      "model": [
+        "2745:6113",
+        0
+      ],
+      "steps": [
+        "3058",
+        0
+      ],
+      "cfg": [
+        "3061",
+        0
+      ],
+      "positive": [
+        "2745:6377",
+        0
+      ],
+      "negative": [
+        "2745:6378",
+        0
+      ],
+      "latent_image": [
+        "2745:6110",
+        0
+      ]
+    },
+    "class_type": "KSampler",
+    "_meta": {
+      "title": "KSampler"
+    }
+  },
+  "2745:6112": {
+    "inputs": {
+      "samples": [
+        "2745:6111",
+        0
+      ],
+      "vae": [
+        "529",
+        0
+      ]
+    },
+    "class_type": "VAEDecode",
+    "_meta": {
+      "title": "VAE Decode"
+    }
+  },
+  "2745:6113": {
+    "inputs": {
+      "model": [
+        "664",
+        0
+      ],
+      "vae": [
+        "529",
+        0
+      ],
+      "source_image": [
+        "2762",
+        0
+      ],
+      "source_image_b": [
+        "562",
+        0
+      ],
+      "ref_boost": [
+        "6297",
+        0
+      ],
+      "ref_boost_a": 1.0,
+      "fit_mode": "fit",
+      "source_latent": [
+        "2745:9016",
+        0
+      ],
+      "source_latent_b": [
+        "2745:9017",
+        0
+      ]
+    },
+    "class_type": "Krea2EditModelPatch",
+    "_meta": {
+      "title": "Krea2EditModelPatch"
+    }
+  },
+  "2746:6379": {
+    "inputs": {
+      "clip": [
+        "528",
+        0
+      ],
+      "image": [
+        "2762",
+        0
+      ],
+      "image_b": [
+        "562",
+        0
+      ],
+      "prompt": [
+        "2619",
+        0
+      ],
+      "grounding_px": [
+        "6299",
+        0
+      ]
+    },
+    "class_type": "Krea2EditGroundedEncode",
+    "_meta": {
+      "title": "POSITIVE"
+    }
+  },
+  "2746:6380": {
+    "inputs": {
+      "clip": [
+        "528",
+        0
+      ],
+      "image": [
+        "2762",
+        0
+      ],
+      "image_b": [
+        "562",
+        0
+      ],
+      "grounding_px": [
+        "6299",
+        0
+      ],
+      "prompt": ""
+    },
+    "class_type": "Krea2EditGroundedEncode",
+    "_meta": {
+      "title": "NEGATIVE"
+    }
+  },
+  "2746:6117": {
+    "inputs": {
+      "batch_size": 1,
+      "width": [
+        "2903",
+        0
+      ],
+      "height": [
+        "2903",
+        1
+      ]
+    },
+    "class_type": "EmptyLatentImage",
+    "_meta": {
+      "title": "Empty Latent Image"
+    }
+  },
+  "2746:6118": {
+    "inputs": {
+      "seed": 42,
+      "sampler_name": "euler",
+      "scheduler": "simple",
+      "denoise": 1,
+      "model": [
+        "2746:6120",
+        0
+      ],
+      "steps": [
+        "3058",
+        0
+      ],
+      "cfg": [
+        "3061",
+        0
+      ],
+      "positive": [
+        "2746:6379",
+        0
+      ],
+      "negative": [
+        "2746:6380",
+        0
+      ],
+      "latent_image": [
+        "2746:6117",
+        0
+      ]
+    },
+    "class_type": "KSampler",
+    "_meta": {
+      "title": "KSampler"
+    }
+  },
+  "2746:6119": {
+    "inputs": {
+      "samples": [
+        "2746:6118",
+        0
+      ],
+      "vae": [
+        "529",
+        0
+      ]
+    },
+    "class_type": "VAEDecode",
+    "_meta": {
+      "title": "VAE Decode"
+    }
+  },
+  "2746:6120": {
+    "inputs": {
+      "model": [
+        "664",
+        0
+      ],
+      "vae": [
+        "529",
+        0
+      ],
+      "source_image": [
+        "2762",
+        0
+      ],
+      "source_image_b": [
+        "562",
+        0
+      ],
+      "ref_boost": [
+        "6297",
+        0
+      ],
+      "ref_boost_a": 1.0,
+      "fit_mode": "fit",
+      "source_latent": [
+        "2746:9016",
+        0
+      ],
+      "source_latent_b": [
+        "2746:9017",
+        0
+      ]
+    },
+    "class_type": "Krea2EditModelPatch",
+    "_meta": {
+      "title": "Krea2EditModelPatch"
+    }
+  },
+  "2749": {
+    "inputs": {
+      "string": "A close-up of this person in front of a moody rainy city street: make them have a sad expression. Do not change the appearance, style or facial structure - keep the identity perfectly consistent with the reference. Only one person in the image, no other people.",
+      "strip_newlines": true
+    },
+    "class_type": "StringConstantMultiline",
+    "_meta": {
+      "title": "PROMPT"
+    }
+  },
+  "2765": {
+    "inputs": {
+      "string": "Create a photo of this person squatting in a forest in the evening, low golden sunlight filtering through the trees casting long shadows; one hand touches a tree trunk while looking down at a frog on the ground. Keep the exact same skin tone, hairstyle, clothing and identity as the reference. Only one person in the image, no other people.",
+      "strip_newlines": true
+    },
+    "class_type": "StringConstantMultiline",
+    "_meta": {
+      "title": "PROMPT"
+    }
+  },
+  "2768": {
+    "inputs": {
+      "string": "Create a photo of this lonely person sitting on an office chair in front of a giant marble table in a big office meeting room, looking at their watch, medium shot. Behind the window the London skyline is visible at midday under a neutral gray cloudy sky. Keep the exact same face, hair and identity as the reference. Only one person in the image, no other people.",
+      "strip_newlines": true
+    },
+    "class_type": "StringConstantMultiline",
+    "_meta": {
+      "title": "PROMPT"
+    }
+  },
+  "2771:6381": {
+    "inputs": {
+      "clip": [
+        "528",
+        0
+      ],
+      "image": [
+        "2653",
+        0
+      ],
+      "image_b": [
+        "562",
+        0
+      ],
+      "prompt": [
+        "2646",
+        0
+      ],
+      "grounding_px": [
+        "6299",
+        0
+      ]
+    },
+    "class_type": "Krea2EditGroundedEncode",
+    "_meta": {
+      "title": "POSITIVE"
+    }
+  },
+  "2771:6382": {
+    "inputs": {
+      "clip": [
+        "528",
+        0
+      ],
+      "image": [
+        "2653",
+        0
+      ],
+      "image_b": [
+        "562",
+        0
+      ],
+      "grounding_px": [
+        "6299",
+        0
+      ],
+      "prompt": ""
+    },
+    "class_type": "Krea2EditGroundedEncode",
+    "_meta": {
+      "title": "NEGATIVE"
+    }
+  },
+  "2771:6124": {
+    "inputs": {
+      "batch_size": 1,
+      "width": [
+        "2903",
+        0
+      ],
+      "height": [
+        "2903",
+        1
+      ]
+    },
+    "class_type": "EmptyLatentImage",
+    "_meta": {
+      "title": "Empty Latent Image"
+    }
+  },
+  "2771:6125": {
+    "inputs": {
+      "seed": 42,
+      "sampler_name": "euler",
+      "scheduler": "simple",
+      "denoise": 1,
+      "model": [
+        "2771:6127",
+        0
+      ],
+      "steps": [
+        "3058",
+        0
+      ],
+      "cfg": [
+        "3061",
+        0
+      ],
+      "positive": [
+        "2771:6381",
+        0
+      ],
+      "negative": [
+        "2771:6382",
+        0
+      ],
+      "latent_image": [
+        "2771:6124",
+        0
+      ]
+    },
+    "class_type": "KSampler",
+    "_meta": {
+      "title": "KSampler"
+    }
+  },
+  "2771:6126": {
+    "inputs": {
+      "samples": [
+        "2771:6125",
+        0
+      ],
+      "vae": [
+        "529",
+        0
+      ]
+    },
+    "class_type": "VAEDecode",
+    "_meta": {
+      "title": "VAE Decode"
+    }
+  },
+  "2771:6127": {
+    "inputs": {
+      "model": [
+        "664",
+        0
+      ],
+      "vae": [
+        "529",
+        0
+      ],
+      "source_image": [
+        "2653",
+        0
+      ],
+      "source_image_b": [
+        "562",
+        0
+      ],
+      "ref_boost": [
+        "6297",
+        0
+      ],
+      "ref_boost_a": 1.0,
+      "fit_mode": "fit",
+      "source_latent": [
+        "2771:9016",
+        0
+      ],
+      "source_latent_b": [
+        "2771:9017",
+        0
+      ]
+    },
+    "class_type": "Krea2EditModelPatch",
+    "_meta": {
+      "title": "Krea2EditModelPatch"
+    }
+  },
+  "2773": {
+    "inputs": {
+      "string": "Extreme close-up side profile portrait of this person against a plain white background, neutral relaxed pose. Head and shoulders fill the frame, facing left in a 90-degree profile so only one side of the face is visible. Keep the exact same face, hair and identity as the reference. Only one person in the image, no other people.",
+      "strip_newlines": true
+    },
+    "class_type": "StringConstantMultiline",
+    "_meta": {
+      "title": "PROMPT"
+    }
+  },
+  "2774:6383": {
+    "inputs": {
+      "clip": [
+        "528",
+        0
+      ],
+      "image": [
+        "2653",
+        0
+      ],
+      "image_b": [
+        "562",
+        0
+      ],
+      "prompt": [
+        "2710",
+        0
+      ],
+      "grounding_px": [
+        "6299",
+        0
+      ]
+    },
+    "class_type": "Krea2EditGroundedEncode",
+    "_meta": {
+      "title": "POSITIVE"
+    }
+  },
+  "2774:6384": {
+    "inputs": {
+      "clip": [
+        "528",
+        0
+      ],
+      "image": [
+        "2653",
+        0
+      ],
+      "image_b": [
+        "562",
+        0
+      ],
+      "grounding_px": [
+        "6299",
+        0
+      ],
+      "prompt": ""
+    },
+    "class_type": "Krea2EditGroundedEncode",
+    "_meta": {
+      "title": "NEGATIVE"
+    }
+  },
+  "2774:6131": {
+    "inputs": {
+      "batch_size": 1,
+      "width": [
+        "2903",
+        0
+      ],
+      "height": [
+        "2903",
+        1
+      ]
+    },
+    "class_type": "EmptyLatentImage",
+    "_meta": {
+      "title": "Empty Latent Image"
+    }
+  },
+  "2774:6132": {
+    "inputs": {
+      "seed": 42,
+      "sampler_name": "euler",
+      "scheduler": "simple",
+      "denoise": 1,
+      "model": [
+        "2774:6134",
+        0
+      ],
+      "steps": [
+        "3058",
+        0
+      ],
+      "cfg": [
+        "3061",
+        0
+      ],
+      "positive": [
+        "2774:6383",
+        0
+      ],
+      "negative": [
+        "2774:6384",
+        0
+      ],
+      "latent_image": [
+        "2774:6131",
+        0
+      ]
+    },
+    "class_type": "KSampler",
+    "_meta": {
+      "title": "KSampler"
+    }
+  },
+  "2774:6133": {
+    "inputs": {
+      "samples": [
+        "2774:6132",
+        0
+      ],
+      "vae": [
+        "529",
+        0
+      ]
+    },
+    "class_type": "VAEDecode",
+    "_meta": {
+      "title": "VAE Decode"
+    }
+  },
+  "2774:6134": {
+    "inputs": {
+      "model": [
+        "664",
+        0
+      ],
+      "vae": [
+        "529",
+        0
+      ],
+      "source_image": [
+        "2653",
+        0
+      ],
+      "source_image_b": [
+        "562",
+        0
+      ],
+      "ref_boost": [
+        "6297",
+        0
+      ],
+      "ref_boost_a": 1.0,
+      "fit_mode": "fit",
+      "source_latent": [
+        "2774:9016",
+        0
+      ],
+      "source_latent_b": [
+        "2774:9017",
+        0
+      ]
+    },
+    "class_type": "Krea2EditModelPatch",
+    "_meta": {
+      "title": "Krea2EditModelPatch"
+    }
+  },
+  "2780": {
+    "inputs": {
+      "string": "A full body wide shot of this person looking up into the sky, hands on the hips, surrounded by office buildings, dramatic lighting; the sky fills the background. Full body visible, shoes visible. Completely change the perspective. Do not change the appearance, style or facial structure - keep the identity perfectly consistent with the reference. Only one person in the image, no other people.",
+      "strip_newlines": true
+    },
+    "class_type": "StringConstantMultiline",
+    "_meta": {
+      "title": "PROMPT"
+    }
+  },
+  "2781": {
+    "inputs": {
+      "string": "A high angle wide shot of this person with a surprised expression, the mouth changed to match the surprise. Completely change the perspective to a high angle. Do not change the appearance, style or facial structure - keep the identity perfectly consistent with the reference. Only one person in the image, no other people.",
+      "strip_newlines": true
+    },
+    "class_type": "StringConstantMultiline",
+    "_meta": {
+      "title": "PROMPT"
+    }
+  },
+  "2784:6387": {
+    "inputs": {
+      "clip": [
+        "528",
+        0
+      ],
+      "image": [
+        "2762",
+        0
+      ],
+      "image_b": [
+        "562",
+        0
+      ],
+      "prompt": [
+        "2640",
+        0
+      ],
+      "grounding_px": [
+        "6299",
+        0
+      ]
+    },
+    "class_type": "Krea2EditGroundedEncode",
+    "_meta": {
+      "title": "POSITIVE"
+    }
+  },
+  "2784:6388": {
+    "inputs": {
+      "clip": [
+        "528",
+        0
+      ],
+      "image": [
+        "2762",
+        0
+      ],
+      "image_b": [
+        "562",
+        0
+      ],
+      "grounding_px": [
+        "6299",
+        0
+      ],
+      "prompt": ""
+    },
+    "class_type": "Krea2EditGroundedEncode",
+    "_meta": {
+      "title": "NEGATIVE"
+    }
+  },
+  "2784:6145": {
+    "inputs": {
+      "batch_size": 1,
+      "width": [
+        "2903",
+        0
+      ],
+      "height": [
+        "2903",
+        1
+      ]
+    },
+    "class_type": "EmptyLatentImage",
+    "_meta": {
+      "title": "Empty Latent Image"
+    }
+  },
+  "2784:6146": {
+    "inputs": {
+      "seed": 42,
+      "sampler_name": "euler",
+      "scheduler": "simple",
+      "denoise": 1,
+      "model": [
+        "2784:6148",
+        0
+      ],
+      "steps": [
+        "3058",
+        0
+      ],
+      "cfg": [
+        "3061",
+        0
+      ],
+      "positive": [
+        "2784:6387",
+        0
+      ],
+      "negative": [
+        "2784:6388",
+        0
+      ],
+      "latent_image": [
+        "2784:6145",
+        0
+      ]
+    },
+    "class_type": "KSampler",
+    "_meta": {
+      "title": "KSampler"
+    }
+  },
+  "2784:6147": {
+    "inputs": {
+      "samples": [
+        "2784:6146",
+        0
+      ],
+      "vae": [
+        "529",
+        0
+      ]
+    },
+    "class_type": "VAEDecode",
+    "_meta": {
+      "title": "VAE Decode"
+    }
+  },
+  "2784:6148": {
+    "inputs": {
+      "model": [
+        "664",
+        0
+      ],
+      "vae": [
+        "529",
+        0
+      ],
+      "source_image": [
+        "2762",
+        0
+      ],
+      "source_image_b": [
+        "562",
+        0
+      ],
+      "ref_boost": [
+        "6297",
+        0
+      ],
+      "ref_boost_a": 1.0,
+      "fit_mode": "fit",
+      "source_latent": [
+        "2784:9016",
+        0
+      ],
+      "source_latent_b": [
+        "2784:9017",
+        0
+      ]
+    },
+    "class_type": "Krea2EditModelPatch",
+    "_meta": {
+      "title": "Krea2EditModelPatch"
+    }
+  },
+  "2785": {
+    "inputs": {
+      "string": "A medium close-up of this person running in a dynamic, stressed pose in an abandoned industrial site after sunset; the last red glow on the horizon, a dark and dangerous environment. Match style, skin, hairstyle and face exactly and keep the identity - do not change the person. Only one person in the image, no other people.",
+      "strip_newlines": true
+    },
+    "class_type": "StringConstantMultiline",
+    "_meta": {
+      "title": "PROMPT"
+    }
+  },
+  "2788": {
+    "inputs": {
+      "string": "Create a photo of this person flying in the sky with the arms stretched away from the body, a neutral confident expression. Keep the exact same face, hair and identity as the reference. Only one person in the image, no other people.",
+      "strip_newlines": true
+    },
+    "class_type": "StringConstantMultiline",
+    "_meta": {
+      "title": "PROMPT"
+    }
+  },
+  "2790": {
+    "inputs": {
+      "name": "Dataset",
+      "order": 0,
+      "image": [
+        "2745:6112",
+        0
+      ]
+    },
+    "class_type": "ImageCollect",
+    "_meta": {
+      "title": "Collect Image"
+    }
+  },
+  "2792": {
+    "inputs": {
+      "name": "Dataset",
+      "order": 0,
+      "image": [
+        "2740:6091",
+        0
+      ]
+    },
+    "class_type": "ImageCollect",
+    "_meta": {
+      "title": "Collect Image"
+    }
+  },
+  "2798": {
+    "inputs": {
+      "images": [
+        "2742:6098",
+        0
+      ],
+      "filename_prefix": [
+        "2910",
+        0
+      ]
+    },
+    "class_type": "SaveImage",
+    "_meta": {
+      "title": "Save Image"
+    }
+  },
+  "2800": {
+    "inputs": {
+      "images": [
+        "2774:6133",
+        0
+      ],
+      "filename_prefix": [
+        "2910",
+        0
+      ]
+    },
+    "class_type": "SaveImage",
+    "_meta": {
+      "title": "Save Image"
+    }
+  },
+  "2802": {
+    "inputs": {
+      "images": [
+        "2663:6028",
+        0
+      ],
+      "filename_prefix": [
+        "2910",
+        0
+      ]
+    },
+    "class_type": "SaveImage",
+    "_meta": {
+      "title": "Save Image"
+    }
+  },
+  "2803": {
+    "inputs": {
+      "images": [
+        "2701:6049",
+        0
+      ],
+      "filename_prefix": [
+        "2910",
+        0
+      ]
+    },
+    "class_type": "SaveImage",
+    "_meta": {
+      "title": "Save Image"
+    }
+  },
+  "2804": {
+    "inputs": {
+      "images": [
+        "2744:6105",
+        0
+      ],
+      "filename_prefix": [
+        "2910",
+        0
+      ]
+    },
+    "class_type": "SaveImage",
+    "_meta": {
+      "title": "Save Image"
+    }
+  },
+  "2805": {
+    "inputs": {
+      "images": [
+        "2745:6112",
+        0
+      ],
+      "filename_prefix": [
+        "2910",
+        0
+      ]
+    },
+    "class_type": "SaveImage",
+    "_meta": {
+      "title": "Save Image"
+    }
+  },
+  "2807": {
+    "inputs": {
+      "images": [
+        "2771:6126",
+        0
+      ],
+      "filename_prefix": [
+        "2910",
+        0
+      ]
+    },
+    "class_type": "SaveImage",
+    "_meta": {
+      "title": "Save Image"
+    }
+  },
+  "2808": {
+    "inputs": {
+      "images": [
+        "2702:6056",
+        0
+      ],
+      "filename_prefix": [
+        "2910",
+        0
+      ]
+    },
+    "class_type": "SaveImage",
+    "_meta": {
+      "title": "Save Image"
+    }
+  },
+  "2811": {
+    "inputs": {
+      "images": [
+        "2703:6063",
+        0
+      ],
+      "filename_prefix": [
+        "2910",
+        0
+      ]
+    },
+    "class_type": "SaveImage",
+    "_meta": {
+      "title": "Save Image"
+    }
+  },
+  "2812": {
+    "inputs": {
+      "images": [
+        "2681:6042",
+        0
+      ],
+      "filename_prefix": [
+        "2910",
+        0
+      ]
+    },
+    "class_type": "SaveImage",
+    "_meta": {
+      "title": "Save Image"
+    }
+  },
+  "2815": {
+    "inputs": {
+      "images": [
+        "2784:6147",
+        0
+      ],
+      "filename_prefix": [
+        "2910",
+        0
+      ]
+    },
+    "class_type": "SaveImage",
+    "_meta": {
+      "title": "Save Image"
+    }
+  },
+  "2817:6389": {
+    "inputs": {
+      "clip": [
+        "528",
+        0
+      ],
+      "image": [
+        "2762",
+        0
+      ],
+      "image_b": [
+        "562",
+        0
+      ],
+      "prompt": [
+        "2649",
+        0
+      ],
+      "grounding_px": [
+        "6299",
+        0
+      ]
+    },
+    "class_type": "Krea2EditGroundedEncode",
+    "_meta": {
+      "title": "POSITIVE"
+    }
+  },
+  "2817:6390": {
+    "inputs": {
+      "clip": [
+        "528",
+        0
+      ],
+      "image": [
+        "2762",
+        0
+      ],
+      "image_b": [
+        "562",
+        0
+      ],
+      "grounding_px": [
+        "6299",
+        0
+      ],
+      "prompt": ""
+    },
+    "class_type": "Krea2EditGroundedEncode",
+    "_meta": {
+      "title": "NEGATIVE"
+    }
+  },
+  "2817:6152": {
+    "inputs": {
+      "batch_size": 1,
+      "width": [
+        "2903",
+        0
+      ],
+      "height": [
+        "2903",
+        1
+      ]
+    },
+    "class_type": "EmptyLatentImage",
+    "_meta": {
+      "title": "Empty Latent Image"
+    }
+  },
+  "2817:6153": {
+    "inputs": {
+      "seed": 42,
+      "sampler_name": "euler",
+      "scheduler": "simple",
+      "denoise": 1,
+      "model": [
+        "2817:6155",
+        0
+      ],
+      "steps": [
+        "3058",
+        0
+      ],
+      "cfg": [
+        "3061",
+        0
+      ],
+      "positive": [
+        "2817:6389",
+        0
+      ],
+      "negative": [
+        "2817:6390",
+        0
+      ],
+      "latent_image": [
+        "2817:6152",
+        0
+      ]
+    },
+    "class_type": "KSampler",
+    "_meta": {
+      "title": "KSampler"
+    }
+  },
+  "2817:6154": {
+    "inputs": {
+      "samples": [
+        "2817:6153",
+        0
+      ],
+      "vae": [
+        "529",
+        0
+      ]
+    },
+    "class_type": "VAEDecode",
+    "_meta": {
+      "title": "VAE Decode"
+    }
+  },
+  "2817:6155": {
+    "inputs": {
+      "model": [
+        "664",
+        0
+      ],
+      "vae": [
+        "529",
+        0
+      ],
+      "source_image": [
+        "2762",
+        0
+      ],
+      "source_image_b": [
+        "562",
+        0
+      ],
+      "ref_boost": [
+        "6297",
+        0
+      ],
+      "ref_boost_a": 1.0,
+      "fit_mode": "fit",
+      "source_latent": [
+        "2817:9016",
+        0
+      ],
+      "source_latent_b": [
+        "2817:9017",
+        0
+      ]
+    },
+    "class_type": "Krea2EditModelPatch",
+    "_meta": {
+      "title": "Krea2EditModelPatch"
+    }
+  },
+  "2825": {
+    "inputs": {
+      "images": [
+        "2730:6084",
+        0
+      ],
+      "filename_prefix": [
+        "2910",
+        0
+      ]
+    },
+    "class_type": "SaveImage",
+    "_meta": {
+      "title": "Save Image"
+    }
+  },
+  "2849": {
+    "inputs": {
+      "string": "Create a photo of this person walking relaxed from the right side of the frame to the left in a white studio, full body side view, medium shot. Keep the exact same face, hair and identity as the reference. Only one person in the image, no other people.",
+      "strip_newlines": true
+    },
+    "class_type": "StringConstantMultiline",
+    "_meta": {
+      "title": "PROMPT"
+    }
+  },
+  "2850": {
+    "inputs": {
+      "images": [
+        "2661:6021",
+        0
+      ],
+      "filename_prefix": [
+        "2910",
+        0
+      ]
+    },
+    "class_type": "SaveImage",
+    "_meta": {
+      "title": "Save Image"
+    }
+  },
+  "2725:6367": {
+    "inputs": {
+      "clip": [
+        "528",
+        0
+      ],
+      "image": [
+        "535",
+        0
+      ],
+      "image_b": [
+        "562",
+        0
+      ],
+      "prompt": [
+        "2724",
+        0
+      ],
+      "grounding_px": [
+        "6299",
+        0
+      ]
+    },
+    "class_type": "Krea2EditGroundedEncode",
+    "_meta": {
+      "title": "POSITIVE"
+    }
+  },
+  "2725:6368": {
+    "inputs": {
+      "clip": [
+        "528",
+        0
+      ],
+      "image": [
+        "535",
+        0
+      ],
+      "image_b": [
+        "562",
+        0
+      ],
+      "grounding_px": [
+        "6299",
+        0
+      ],
+      "prompt": ""
+    },
+    "class_type": "Krea2EditGroundedEncode",
+    "_meta": {
+      "title": "NEGATIVE"
+    }
+  },
+  "2725:6075": {
+    "inputs": {
+      "batch_size": 1,
+      "width": [
+        "2903",
+        0
+      ],
+      "height": [
+        "2903",
+        1
+      ]
+    },
+    "class_type": "EmptyLatentImage",
+    "_meta": {
+      "title": "Empty Latent Image"
+    }
+  },
+  "2725:6076": {
+    "inputs": {
+      "seed": 42,
+      "sampler_name": "euler",
+      "scheduler": "simple",
+      "denoise": 1,
+      "model": [
+        "2725:6078",
+        0
+      ],
+      "steps": [
+        "3058",
+        0
+      ],
+      "cfg": [
+        "3061",
+        0
+      ],
+      "positive": [
+        "2725:6367",
+        0
+      ],
+      "negative": [
+        "2725:6368",
+        0
+      ],
+      "latent_image": [
+        "2725:6075",
+        0
+      ]
+    },
+    "class_type": "KSampler",
+    "_meta": {
+      "title": "KSampler"
+    }
+  },
+  "2725:6077": {
+    "inputs": {
+      "samples": [
+        "2725:6076",
+        0
+      ],
+      "vae": [
+        "529",
+        0
+      ]
+    },
+    "class_type": "VAEDecode",
+    "_meta": {
+      "title": "VAE Decode"
+    }
+  },
+  "2725:6078": {
+    "inputs": {
+      "model": [
+        "664",
+        0
+      ],
+      "vae": [
+        "529",
+        0
+      ],
+      "source_image": [
+        "535",
+        0
+      ],
+      "source_image_b": [
+        "562",
+        0
+      ],
+      "ref_boost": [
+        "6297",
+        0
+      ],
+      "ref_boost_a": 1.0,
+      "fit_mode": "fit",
+      "source_latent": [
+        "2725:9016",
+        0
+      ],
+      "source_latent_b": [
+        "2725:9017",
+        0
+      ]
+    },
+    "class_type": "Krea2EditModelPatch",
+    "_meta": {
+      "title": "Krea2EditModelPatch"
+    }
+  },
+  "2761": {
+    "inputs": {
+      "name": "Dataset",
+      "order": 0,
+      "image": [
+        "2725:6077",
+        0
+      ]
+    },
+    "class_type": "ImageCollect",
+    "_meta": {
+      "title": "Collect Image"
+    }
+  },
+  "2770": {
+    "inputs": {
+      "string": "A close-up of this person in front of a white background: make them scream with an open mouth and a furious, angry expression. Do not change the appearance, style or facial structure from the reference - keep the identity perfectly consistent. Only one person in the image, no other people.",
+      "strip_newlines": true
+    },
+    "class_type": "StringConstantMultiline",
+    "_meta": {
+      "title": "PROMPT"
+    }
+  },
+  "2778": {
+    "inputs": {
+      "inputcount": 3,
+      "delimiter": "////",
+      "return_list": false,
+      "string_1": [
+        "547",
+        0
+      ],
+      "string_2": [
+        "2827",
+        0
+      ],
+      "string_3": [
+        "549",
+        0
+      ]
+    },
+    "class_type": "JoinStringMulti",
+    "_meta": {
+      "title": "Join String Multi"
+    }
+  },
+  "2762": {
+    "inputs": {
+      "name": "Dataset",
+      "order": 0,
+      "image": [
+        "2779:6140",
+        0
+      ]
+    },
+    "class_type": "ImageCollect",
+    "_meta": {
+      "title": "Collect Image"
+    }
+  },
+  "2732": {
+    "inputs": {
+      "inputcount": 3,
+      "delimiter": " ",
+      "return_list": false,
+      "string_1": [
+        "547",
+        0
+      ],
+      "string_2": [
+        "2849",
+        0
+      ],
+      "string_3": [
+        "549",
+        0
+      ]
+    },
+    "class_type": "JoinStringMulti",
+    "_meta": {
+      "title": "Join String Multi"
+    }
+  },
+  "2652": {
+    "inputs": {
+      "name": "Dataset",
+      "order": 0,
+      "image": [
+        "2730:6084",
+        0
+      ]
+    },
+    "class_type": "ImageCollect",
+    "_meta": {
+      "title": "Collect Image"
+    }
+  },
+  "2818": {
+    "inputs": {
+      "inputcount": 3,
+      "delimiter": " ",
+      "return_list": false,
+      "string_1": [
+        "547",
+        0
+      ],
+      "string_2": [
+        "2826",
+        0
+      ],
+      "string_3": [
+        "549",
+        0
+      ]
+    },
+    "class_type": "JoinStringMulti",
+    "_meta": {
+      "title": "Join String Multi"
+    }
+  },
+  "2819": {
+    "inputs": {
+      "name": "Dataset",
+      "order": 0,
+      "image": [
+        "2742:6098",
+        0
+      ]
+    },
+    "class_type": "ImageCollect",
+    "_meta": {
+      "title": "Collect Image"
+    }
+  },
+  "2708": {
+    "inputs": {
+      "inputcount": 3,
+      "delimiter": " ",
+      "return_list": false,
+      "string_1": [
+        "547",
+        0
+      ],
+      "string_2": [
+        "2772",
+        0
+      ],
+      "string_3": [
+        "549",
+        0
+      ]
+    },
+    "class_type": "JoinStringMulti",
+    "_meta": {
+      "title": "Join String Multi"
+    }
+  },
+  "2653": {
+    "inputs": {
+      "name": "Dataset",
+      "order": 0,
+      "image": [
+        "2651:6007",
+        0
+      ]
+    },
+    "class_type": "ImageCollect",
+    "_meta": {
+      "title": "Collect Image"
+    }
+  },
+  "2656": {
+    "inputs": {
+      "name": "Dataset",
+      "order": 0,
+      "image": [
+        "2774:6133",
+        0
+      ]
+    },
+    "class_type": "ImageCollect",
+    "_meta": {
+      "title": "Collect Image"
+    }
+  },
+  "2710": {
+    "inputs": {
+      "inputcount": 3,
+      "delimiter": " ",
+      "return_list": false,
+      "string_1": [
+        "547",
+        0
+      ],
+      "string_2": [
+        "2773",
+        0
+      ],
+      "string_3": [
+        "549",
+        0
+      ]
+    },
+    "class_type": "JoinStringMulti",
+    "_meta": {
+      "title": "Join String Multi"
+    }
+  },
+  "2712": {
+    "inputs": {
+      "inputcount": 3,
+      "delimiter": " ",
+      "return_list": false,
+      "string_1": [
+        "547",
+        0
+      ],
+      "string_2": [
+        "2764",
+        0
+      ],
+      "string_3": [
+        "549",
+        0
+      ]
+    },
+    "class_type": "JoinStringMulti",
+    "_meta": {
+      "title": "Join String Multi"
+    }
+  },
+  "2659": {
+    "inputs": {
+      "name": "Dataset",
+      "order": 0,
+      "image": [
+        "2657:6014",
+        0
+      ]
+    },
+    "class_type": "ImageCollect",
+    "_meta": {
+      "title": "Collect Image"
+    }
+  },
+  "2646": {
+    "inputs": {
+      "inputcount": 2,
+      "delimiter": " ",
+      "return_list": false,
+      "string_1": [
+        "547",
+        0
+      ],
+      "string_2": [
+        "2770",
+        0
+      ]
+    },
+    "class_type": "JoinStringMulti",
+    "_meta": {
+      "title": "Join String Multi"
+    }
+  },
+  "2671": {
+    "inputs": {
+      "name": "Dataset",
+      "order": 0,
+      "image": [
+        "2771:6126",
+        0
+      ]
+    },
+    "class_type": "ImageCollect",
+    "_meta": {
+      "title": "Collect Image"
+    }
+  },
+  "2647": {
+    "inputs": {
+      "inputcount": 3,
+      "delimiter": " ",
+      "return_list": false,
+      "string_1": [
+        "547",
+        0
+      ],
+      "string_2": [
+        "2749",
+        0
+      ]
+    },
+    "class_type": "JoinStringMulti",
+    "_meta": {
+      "title": "Join String Multi"
+    }
+  },
+  "2673": {
+    "inputs": {
+      "name": "Dataset",
+      "order": 0,
+      "image": [
+        "2702:6056",
+        0
+      ]
+    },
+    "class_type": "ImageCollect",
+    "_meta": {
+      "title": "Collect Image"
+    }
+  },
+  "2648": {
+    "inputs": {
+      "inputcount": 3,
+      "delimiter": " ",
+      "return_list": false,
+      "string_1": [
+        "547",
+        0
+      ],
+      "string_2": [
+        "2750",
+        0
+      ]
+    },
+    "class_type": "JoinStringMulti",
+    "_meta": {
+      "title": "Join String Multi"
+    }
+  },
+  "2676": {
+    "inputs": {
+      "name": "Dataset",
+      "order": 0,
+      "image": [
+        "2674:6035",
+        0
+      ]
+    },
+    "class_type": "ImageCollect",
+    "_meta": {
+      "title": "Collect Image"
+    }
+  },
+  "2714": {
+    "inputs": {
+      "inputcount": 3,
+      "delimiter": " ",
+      "return_list": false,
+      "string_1": [
+        "547",
+        0
+      ],
+      "string_2": [
+        "2765",
+        0
+      ],
+      "string_3": [
+        "549",
+        0
+      ]
+    },
+    "class_type": "JoinStringMulti",
+    "_meta": {
+      "title": "Join String Multi"
+    }
+  },
+  "2662": {
+    "inputs": {
+      "name": "Dataset",
+      "order": 0,
+      "image": [
+        "2661:6021",
+        0
+      ]
+    },
+    "class_type": "ImageCollect",
+    "_meta": {
+      "title": "Collect Image"
+    }
+  },
+  "2716": {
+    "inputs": {
+      "inputcount": 3,
+      "delimiter": " ",
+      "return_list": false,
+      "string_1": [
+        "547",
+        0
+      ],
+      "string_2": [
+        "2766",
+        0
+      ],
+      "string_3": [
+        "549",
+        0
+      ]
+    },
+    "class_type": "JoinStringMulti",
+    "_meta": {
+      "title": "Join String Multi"
+    }
+  },
+  "2668": {
+    "inputs": {
+      "name": "Dataset",
+      "order": 0,
+      "image": [
+        "2663:6028",
+        0
+      ]
+    },
+    "class_type": "ImageCollect",
+    "_meta": {
+      "title": "Collect Image"
+    }
+  },
+  "1895": {
+    "inputs": {
+      "number_of_faces": 1,
+      "scale_factor": 10,
+      "shift_factor": 0.4,
+      "start_index": 0,
+      "max_faces_per_image": 1,
+      "aspect_ratio": "1:1",
+      "image": [
+        "535",
+        0
+      ]
+    },
+    "class_type": "AutoCropFaces",
+    "_meta": {
+      "title": "Auto Crop Faces"
+    }
+  },
+  "1896": {
+    "inputs": {
+      "upscale_method": "bilinear",
+      "keep_proportion": "crop",
+      "pad_color": "0, 0, 0",
+      "crop_position": "center",
+      "divisible_by": 1,
+      "device": "cpu",
+      "image": [
+        "6296",
+        0
+      ],
+      "width": [
+        "2903",
+        0
+      ],
+      "height": [
+        "2903",
+        1
+      ]
+    },
+    "class_type": "ImageResizeKJv2",
+    "_meta": {
+      "title": "Resize Image v2"
+    }
+  },
+  "2906": {
+    "inputs": {
+      "value": "IMG_GEN"
+    },
+    "class_type": "PrimitiveString",
+    "_meta": {
+      "title": "TYPE"
+    }
+  },
+  "2908": {
+    "inputs": {
+      "inputcount": 2,
+      "delimiter": "_",
+      "return_list": false,
+      "string_1": [
+        "2905",
+        0
+      ],
+      "string_2": [
+        "2906",
+        0
+      ]
+    },
+    "class_type": "JoinStringMulti",
+    "_meta": {
+      "title": "NAME_IMG_GEN"
+    }
+  },
+  "2909": {
+    "inputs": {
+      "inputcount": 2,
+      "delimiter": "_",
+      "return_list": false,
+      "string_1": [
+        "2905",
+        0
+      ],
+      "string_2": [
+        "2907",
+        0
+      ]
+    },
+    "class_type": "JoinStringMulti",
+    "_meta": {
+      "title": "NAME_DATASET"
+    }
+  },
+  "2911": {
+    "inputs": {
+      "inputcount": 3,
+      "delimiter": "/",
+      "return_list": false,
+      "string_1": [
+        "2904",
+        0
+      ],
+      "string_2": [
+        "2905",
+        0
+      ],
+      "string_3": [
+        "2909",
+        0
+      ]
+    },
+    "class_type": "JoinStringMulti",
+    "_meta": {
+      "title": "DATASET LOCATION"
+    }
+  },
+  "2910": {
+    "inputs": {
+      "inputcount": 4,
+      "delimiter": "/",
+      "return_list": false,
+      "string_1": [
+        "2904",
+        0
+      ],
+      "string_2": [
+        "2905",
+        0
+      ],
+      "string_3": [
+        "2908",
+        0
+      ],
+      "string_4": [
+        "2908",
+        0
+      ]
+    },
+    "class_type": "JoinStringMulti",
+    "_meta": {
+      "title": "CACHE LOCATION"
+    }
+  },
+  "1899": {
+    "inputs": {
+      "images": [
+        "1896",
+        0
+      ]
+    },
+    "class_type": "PreviewImage",
+    "_meta": {
+      "title": "Preview Image (For Dataset)"
+    }
+  },
+  "529": {
+    "inputs": {
+      "vae_name": "wan_2.1_vae.safetensors"
+    },
+    "class_type": "VAELoader",
+    "_meta": {
+      "title": "Load VAE"
+    }
+  },
+  "528": {
+    "inputs": {
+      "clip_name": "qwen3vl_4b_fp8_scaled.safetensors",
+      "type": "krea2",
+      "device": "default"
+    },
+    "class_type": "CLIPLoader",
+    "_meta": {
+      "title": "Load CLIP"
+    }
+  },
+  "2769": {
+    "inputs": {
+      "string": "Close-up of this person's hands holding a fresh cup of coffee, the hands and cup filling the image; the paper cup is open and the coffee is steaming hot. Their upper body fills the background. Keep the exact same identity and skin as the reference. Only one person in the image, no other people.",
+      "strip_newlines": true
+    },
+    "class_type": "StringConstantMultiline",
+    "_meta": {
+      "title": "PROMPT"
+    }
+  },
+  "2806": {
+    "inputs": {
+      "images": [
+        "2725:6077",
+        0
+      ],
+      "filename_prefix": [
+        "2910",
+        0
+      ]
+    },
+    "class_type": "SaveImage",
+    "_meta": {
+      "title": "Save Image"
+    }
+  },
+  "2775": {
+    "inputs": {
+      "string": "A full body wide shot of this person lying on a cozy couch in a model pose, the head resting on the hand, laying on the side. Soft backlighting from bright windows with soft white curtains, soft haze, a modern clean couch. Keep the exact same face, hair and identity as the reference. Only one person in the image, no other people.",
+      "strip_newlines": true
+    },
+    "class_type": "StringConstantMultiline",
+    "_meta": {
+      "title": "PROMPT"
+    }
+  },
+  "2810": {
+    "inputs": {
+      "images": [
+        "2817:6154",
+        0
+      ],
+      "filename_prefix": [
+        "2910",
+        0
+      ]
+    },
+    "class_type": "SaveImage",
+    "_meta": {
+      "title": "Save Image"
+    }
+  },
+  "2740:6371": {
+    "inputs": {
+      "clip": [
+        "528",
+        0
+      ],
+      "image": [
+        "2762",
+        0
+      ],
+      "image_b": [
+        "562",
+        0
+      ],
+      "prompt": [
+        "2791",
+        0
+      ],
+      "grounding_px": [
+        "6299",
+        0
+      ]
+    },
+    "class_type": "Krea2EditGroundedEncode",
+    "_meta": {
+      "title": "POSITIVE"
+    }
+  },
+  "2740:6372": {
+    "inputs": {
+      "clip": [
+        "528",
+        0
+      ],
+      "image": [
+        "2762",
+        0
+      ],
+      "image_b": [
+        "562",
+        0
+      ],
+      "grounding_px": [
+        "6299",
+        0
+      ],
+      "prompt": ""
+    },
+    "class_type": "Krea2EditGroundedEncode",
+    "_meta": {
+      "title": "NEGATIVE"
+    }
+  },
+  "2740:6089": {
+    "inputs": {
+      "batch_size": 1,
+      "width": [
+        "2903",
+        0
+      ],
+      "height": [
+        "2903",
+        1
+      ]
+    },
+    "class_type": "EmptyLatentImage",
+    "_meta": {
+      "title": "Empty Latent Image"
+    }
+  },
+  "2740:6090": {
+    "inputs": {
+      "seed": 42,
+      "sampler_name": "euler",
+      "scheduler": "simple",
+      "denoise": 1,
+      "model": [
+        "2740:6092",
+        0
+      ],
+      "steps": [
+        "3058",
+        0
+      ],
+      "cfg": [
+        "3061",
+        0
+      ],
+      "positive": [
+        "2740:6371",
+        0
+      ],
+      "negative": [
+        "2740:6372",
+        0
+      ],
+      "latent_image": [
+        "2740:6089",
+        0
+      ]
+    },
+    "class_type": "KSampler",
+    "_meta": {
+      "title": "KSampler"
+    }
+  },
+  "2740:6091": {
+    "inputs": {
+      "samples": [
+        "2740:6090",
+        0
+      ],
+      "vae": [
+        "529",
+        0
+      ]
+    },
+    "class_type": "VAEDecode",
+    "_meta": {
+      "title": "VAE Decode"
+    }
+  },
+  "2740:6092": {
+    "inputs": {
+      "model": [
+        "664",
+        0
+      ],
+      "vae": [
+        "529",
+        0
+      ],
+      "source_image": [
+        "2762",
+        0
+      ],
+      "source_image_b": [
+        "562",
+        0
+      ],
+      "ref_boost": [
+        "6297",
+        0
+      ],
+      "ref_boost_a": 1.0,
+      "fit_mode": "fit",
+      "source_latent": [
+        "2740:9016",
+        0
+      ],
+      "source_latent_b": [
+        "2740:9017",
+        0
+      ]
+    },
+    "class_type": "Krea2EditModelPatch",
+    "_meta": {
+      "title": "Krea2EditModelPatch"
+    }
+  },
+  "3015": {
+    "inputs": {
+      "inputcount": 3,
+      "delimiter": " ",
+      "return_list": false,
+      "string_1": [
+        "547",
+        0
+      ],
+      "string_2": [
+        "3026",
+        0
+      ],
+      "string_3": [
+        "549",
+        0
+      ]
+    },
+    "class_type": "JoinStringMulti",
+    "_meta": {
+      "title": "Join String Multi"
+    }
+  },
+  "3016": {
+    "inputs": {
+      "name": "Dataset",
+      "order": 0,
+      "image": [
+        "3029:6168",
+        0
+      ]
+    },
+    "class_type": "ImageCollect",
+    "_meta": {
+      "title": "Collect Image"
+    }
+  },
+  "3020": {
+    "inputs": {
+      "images": [
+        "3029:6168",
+        0
+      ],
+      "filename_prefix": [
+        "2910",
+        0
+      ]
+    },
+    "class_type": "SaveImage",
+    "_meta": {
+      "title": "Save Image"
+    }
+  },
+  "3024": {
+    "inputs": {
+      "name": "Dataset",
+      "order": 0,
+      "image": [
+        "3004:6161",
+        0
+      ]
+    },
+    "class_type": "ImageCollect",
+    "_meta": {
+      "title": "Collect Image"
+    }
+  },
+  "3029:6393": {
+    "inputs": {
+      "clip": [
+        "528",
+        0
+      ],
+      "image": [
+        "2762",
+        0
+      ],
+      "image_b": [
+        "562",
+        0
+      ],
+      "prompt": [
+        "3015",
+        0
+      ],
+      "grounding_px": [
+        "6299",
+        0
+      ]
+    },
+    "class_type": "Krea2EditGroundedEncode",
+    "_meta": {
+      "title": "POSITIVE"
+    }
+  },
+  "3029:6394": {
+    "inputs": {
+      "clip": [
+        "528",
+        0
+      ],
+      "image": [
+        "2762",
+        0
+      ],
+      "image_b": [
+        "562",
+        0
+      ],
+      "grounding_px": [
+        "6299",
+        0
+      ],
+      "prompt": ""
+    },
+    "class_type": "Krea2EditGroundedEncode",
+    "_meta": {
+      "title": "NEGATIVE"
+    }
+  },
+  "3029:6166": {
+    "inputs": {
+      "batch_size": 1,
+      "width": [
+        "2903",
+        0
+      ],
+      "height": [
+        "2903",
+        1
+      ]
+    },
+    "class_type": "EmptyLatentImage",
+    "_meta": {
+      "title": "Empty Latent Image"
+    }
+  },
+  "3029:6167": {
+    "inputs": {
+      "seed": 42,
+      "sampler_name": "euler",
+      "scheduler": "simple",
+      "denoise": 1,
+      "model": [
+        "3029:6169",
+        0
+      ],
+      "steps": [
+        "3058",
+        0
+      ],
+      "cfg": [
+        "3061",
+        0
+      ],
+      "positive": [
+        "3029:6393",
+        0
+      ],
+      "negative": [
+        "3029:6394",
+        0
+      ],
+      "latent_image": [
+        "3029:6166",
+        0
+      ]
+    },
+    "class_type": "KSampler",
+    "_meta": {
+      "title": "KSampler"
+    }
+  },
+  "3029:6168": {
+    "inputs": {
+      "samples": [
+        "3029:6167",
+        0
+      ],
+      "vae": [
+        "529",
+        0
+      ]
+    },
+    "class_type": "VAEDecode",
+    "_meta": {
+      "title": "VAE Decode"
+    }
+  },
+  "3029:6169": {
+    "inputs": {
+      "model": [
+        "664",
+        0
+      ],
+      "vae": [
+        "529",
+        0
+      ],
+      "source_image": [
+        "2762",
+        0
+      ],
+      "source_image_b": [
+        "562",
+        0
+      ],
+      "ref_boost": [
+        "6297",
+        0
+      ],
+      "ref_boost_a": 1.0,
+      "fit_mode": "fit",
+      "source_latent": [
+        "3029:9016",
+        0
+      ],
+      "source_latent_b": [
+        "3029:9017",
+        0
+      ]
+    },
+    "class_type": "Krea2EditModelPatch",
+    "_meta": {
+      "title": "Krea2EditModelPatch"
+    }
+  },
+  "3026": {
+    "inputs": {
+      "string": "Create a photo of this person from behind overlooking a national park canyon, arms raised above the head. Keep the exact same hair and identity as the reference. Only one person in the image, no other people.",
+      "strip_newlines": true
+    },
+    "class_type": "StringConstantMultiline",
+    "_meta": {
+      "title": "PROMPT"
+    }
+  },
+  "3004:6391": {
+    "inputs": {
+      "clip": [
+        "528",
+        0
+      ],
+      "image": [
+        "535",
+        0
+      ],
+      "image_b": [
+        "562",
+        0
+      ],
+      "prompt": [
+        "3021",
+        0
+      ],
+      "grounding_px": [
+        "6299",
+        0
+      ]
+    },
+    "class_type": "Krea2EditGroundedEncode",
+    "_meta": {
+      "title": "POSITIVE"
+    }
+  },
+  "3004:6392": {
+    "inputs": {
+      "clip": [
+        "528",
+        0
+      ],
+      "image": [
+        "535",
+        0
+      ],
+      "image_b": [
+        "562",
+        0
+      ],
+      "grounding_px": [
+        "6299",
+        0
+      ],
+      "prompt": ""
+    },
+    "class_type": "Krea2EditGroundedEncode",
+    "_meta": {
+      "title": "NEGATIVE"
+    }
+  },
+  "3004:6159": {
+    "inputs": {
+      "batch_size": 1,
+      "width": [
+        "2903",
+        0
+      ],
+      "height": [
+        "2903",
+        1
+      ]
+    },
+    "class_type": "EmptyLatentImage",
+    "_meta": {
+      "title": "Empty Latent Image"
+    }
+  },
+  "3004:6160": {
+    "inputs": {
+      "seed": 42,
+      "sampler_name": "euler",
+      "scheduler": "simple",
+      "denoise": 1,
+      "model": [
+        "3004:6162",
+        0
+      ],
+      "steps": [
+        "3058",
+        0
+      ],
+      "cfg": [
+        "3061",
+        0
+      ],
+      "positive": [
+        "3004:6391",
+        0
+      ],
+      "negative": [
+        "3004:6392",
+        0
+      ],
+      "latent_image": [
+        "3004:6159",
+        0
+      ]
+    },
+    "class_type": "KSampler",
+    "_meta": {
+      "title": "KSampler"
+    }
+  },
+  "3004:6161": {
+    "inputs": {
+      "samples": [
+        "3004:6160",
+        0
+      ],
+      "vae": [
+        "529",
+        0
+      ]
+    },
+    "class_type": "VAEDecode",
+    "_meta": {
+      "title": "VAE Decode"
+    }
+  },
+  "3004:6162": {
+    "inputs": {
+      "model": [
+        "664",
+        0
+      ],
+      "vae": [
+        "529",
+        0
+      ],
+      "source_image": [
+        "535",
+        0
+      ],
+      "source_image_b": [
+        "562",
+        0
+      ],
+      "ref_boost": [
+        "6297",
+        0
+      ],
+      "ref_boost_a": 1.0,
+      "fit_mode": "fit",
+      "source_latent": [
+        "3004:9016",
+        0
+      ],
+      "source_latent_b": [
+        "3004:9017",
+        0
+      ]
+    },
+    "class_type": "Krea2EditModelPatch",
+    "_meta": {
+      "title": "Krea2EditModelPatch"
+    }
+  },
+  "2772": {
+    "inputs": {
+      "string": "Extreme close-up of this person's frontal face against a plain white background, neutral expression, frontal view. The head fills the entire frame, face visible in detail. Match the exact same skin tone, hairstyle and facial proportions as the reference. Symmetrical front view looking directly into the camera. Only one person in the image, no other people.",
+      "strip_newlines": true
+    },
+    "class_type": "StringConstantMultiline",
+    "_meta": {
+      "title": "PROMPT"
+    }
+  },
+  "2750": {
+    "inputs": {
+      "string": "A close-up of this person: make them smile with an open mouth. Do not change the appearance, style or facial structure - keep the identity perfectly consistent with the reference. Change the background to a sunny flower field with alpine mountains; one side of the face is lit by strong sunlight, the other side is in shadow. Only one person in the image, no other people.",
+      "strip_newlines": true
+    },
+    "class_type": "StringConstantMultiline",
+    "_meta": {
+      "title": "PROMPT"
+    }
+  },
+  "2809": {
+    "inputs": {
+      "images": [
+        "2674:6035",
+        0
+      ],
+      "filename_prefix": [
+        "2910",
+        0
+      ]
+    },
+    "class_type": "SaveImage",
+    "_meta": {
+      "title": "Save Image"
+    }
+  },
+  "2791": {
+    "inputs": {
+      "inputcount": 3,
+      "delimiter": " ",
+      "return_list": false,
+      "string_1": [
+        "547",
+        0
+      ],
+      "string_2": [
+        "2789",
+        0
+      ],
+      "string_3": [
+        "549",
+        0
+      ]
+    },
+    "class_type": "JoinStringMulti",
+    "_meta": {
+      "title": "Join String Multi"
+    }
+  },
+  "2789": {
+    "inputs": {
+      "string": "A wide shot of this person in a full body pose leaning against a car in a natural pose at night, with clean reflections on the car. Keep the exact same face, hair and identity as the reference. Only one person in the image, no other people.",
+      "strip_newlines": true
+    },
+    "class_type": "StringConstantMultiline",
+    "_meta": {
+      "title": "PROMPT"
+    }
+  },
+  "2816": {
+    "inputs": {
+      "images": [
+        "2740:6091",
+        0
+      ],
+      "filename_prefix": [
+        "2910",
+        0
+      ]
+    },
+    "class_type": "SaveImage",
+    "_meta": {
+      "title": "Save Image"
+    }
+  },
+  "2767": {
+    "inputs": {
+      "string": "Create a photo of this person sitting on a bench in a park holding a sandwich, wide shot. Keep the exact same face, hair, clothing and identity as the reference. Only one person in the image, no other people.",
+      "strip_newlines": true
+    },
+    "class_type": "StringConstantMultiline",
+    "_meta": {
+      "title": "PROMPT"
+    }
+  },
+  "2782": {
+    "inputs": {
+      "string": "Create a photo of this person in front of a night club at night, dark background, holding a bottle of beer with a realistic arm position. Medium shot showing the upper body. Match the skin, hairstyle and clothes exactly to the reference and keep the identity consistent. Only one person in the image, no other people.",
+      "strip_newlines": true
+    },
+    "class_type": "StringConstantMultiline",
+    "_meta": {
+      "title": "PROMPT"
+    }
+  },
+  "2814": {
+    "inputs": {
+      "images": [
+        "2746:6119",
+        0
+      ],
+      "filename_prefix": [
+        "2910",
+        0
+      ]
+    },
+    "class_type": "SaveImage",
+    "_meta": {
+      "title": "Save Image"
+    }
+  },
+  "2813": {
+    "inputs": {
+      "images": [
+        "2705:6070",
+        0
+      ],
+      "filename_prefix": [
+        "2910",
+        0
+      ]
+    },
+    "class_type": "SaveImage",
+    "_meta": {
+      "title": "Save Image"
+    }
+  },
+  "2704": {
+    "inputs": {
+      "string": "A frontal high angle close-up of this person laying in a relaxed pose in a modern hotel room bed, wearing an oversized white t-shirt, eyes closed, dark moody evening lighting. Keep the exact same face, hair and identity as the reference. Only one person in the image, no other people.",
+      "strip_newlines": true
+    },
+    "class_type": "StringConstantMultiline",
+    "_meta": {
+      "title": "PROMPT"
+    }
+  },
+  "2893": {
+    "inputs": {
+      "images.image0": [
+        "1560",
+        0
+      ],
+      "images.image1": [
+        "1899",
+        0
+      ]
+    },
+    "class_type": "BatchImagesNode",
+    "_meta": {
+      "title": "Batch Images"
+    }
+  },
+  "3018": {
+    "inputs": {
+      "images": [
+        "3004:6161",
+        0
+      ],
+      "filename_prefix": [
+        "2910",
+        0
+      ]
+    },
+    "class_type": "SaveImage",
+    "_meta": {
+      "title": "Save Image"
+    }
+  },
+  "2766": {
+    "inputs": {
+      "string": "Create a photo of this person lying on a cozy deck chair in a modern luxury apartment with a smile, hard shadows from the sunlight, a wooden floor. Keep the exact same face, hair and identity as the reference. Only one person in the image, no other people.",
+      "strip_newlines": true
+    },
+    "class_type": "StringConstantMultiline",
+    "_meta": {
+      "title": "PROMPT"
+    }
+  },
+  "3041": {
+    "inputs": {
+      "name": "Dataset",
+      "order": 0,
+      "image": [
+        "2744:6105",
+        0
+      ]
+    },
+    "class_type": "ImageCollect",
+    "_meta": {
+      "title": "Collect Image"
+    }
+  },
+  "2650": {
+    "inputs": {
+      "inputcount": 3,
+      "delimiter": " ",
+      "return_list": false,
+      "string_1": [
+        "547",
+        0
+      ],
+      "string_2": [
+        "2704",
+        0
+      ]
+    },
+    "class_type": "JoinStringMulti",
+    "_meta": {
+      "title": "Join String Multi"
+    }
+  },
+  "3014": {
+    "inputs": {
+      "string": "Create a photo of this person sitting on a rock at the beach wearing swimwear, completely wet, with waves splashing in the background. Keep the exact same face, hair and identity as the reference. Only one person in the image, no other people.",
+      "strip_newlines": true
+    },
+    "class_type": "StringConstantMultiline",
+    "_meta": {
+      "title": "PROMPT"
+    }
+  },
+  "2764": {
+    "inputs": {
+      "string": "A medium close-up of this person meditating with closed eyes: change the lighting to backlit lighting, hard sunlight from behind leaving the face in shadow. Keep the exact same face, hair and identity as the reference. Only one person in the image, no other people.",
+      "strip_newlines": true
+    },
+    "class_type": "StringConstantMultiline",
+    "_meta": {
+      "title": "PROMPT"
+    }
+  },
+  "2801": {
+    "inputs": {
+      "images": [
+        "2657:6014",
+        0
+      ],
+      "filename_prefix": [
+        "2910",
+        0
+      ]
+    },
+    "class_type": "SaveImage",
+    "_meta": {
+      "title": "Save Image"
+    }
+  },
+  "2923": {
+    "inputs": {
+      "images": [
+        "2922",
+        0
+      ]
+    },
+    "class_type": "PreviewImage",
+    "_meta": {
+      "title": "preview (Save Dataset = 2)"
+    }
+  },
+  "2053": {
+    "inputs": {
+      "filename_delimiter": "",
+      "filename_number_padding": 3,
+      "filename_number_start": "false",
+      "extension": "png",
+      "dpi": 300,
+      "quality": 100,
+      "optimize_image": "true",
+      "lossless_webp": "false",
+      "overwrite_mode": "false",
+      "show_history": "false",
+      "show_history_by_prefix": "true",
+      "embed_workflow": "true",
+      "show_previews": "true",
+      "images": [
+        "2922",
+        0
+      ],
+      "output_path": [
+        "2911",
+        0
+      ],
+      "filename_prefix": [
+        "2909",
+        0
+      ]
+    },
+    "class_type": "Image Save",
+    "_meta": {
+      "title": "Image Save"
+    }
+  },
+  "3021": {
+    "inputs": {
+      "inputcount": 3,
+      "delimiter": " ",
+      "return_list": false,
+      "string_1": [
+        "547",
+        0
+      ],
+      "string_2": [
+        "3014",
+        0
+      ],
+      "string_3": [
+        "549",
+        0
+      ]
+    },
+    "class_type": "JoinStringMulti",
+    "_meta": {
+      "title": "Join String Multi"
+    }
+  },
+  "2922": {
+    "inputs": {
+      "select": 1,
+      "sel_mode": false,
+      "input": [
+        "2893",
+        0
+      ]
+    },
+    "class_type": "ImpactInversedSwitch",
+    "_meta": {
+      "title": "Save Dataset   (1 = save  |  2 = preview only)"
+    }
+  },
+  "2721": {
+    "inputs": {
+      "inputcount": 2,
+      "delimiter": " ",
+      "return_list": false,
+      "string_1": [
+        "547",
+        0
+      ],
+      "string_2": [
+        "2768",
+        0
+      ],
+      "string_3": [
+        "549",
+        0
+      ]
+    },
+    "class_type": "JoinStringMulti",
+    "_meta": {
+      "title": "Join String Multi"
+    }
+  },
+  "2722": {
+    "inputs": {
+      "inputcount": 3,
+      "delimiter": " ",
+      "return_list": false,
+      "string_1": [
+        "547",
+        0
+      ],
+      "string_2": [
+        "2788",
+        0
+      ],
+      "string_3": [
+        "549",
+        0
+      ]
+    },
+    "class_type": "JoinStringMulti",
+    "_meta": {
+      "title": "Join String Multi"
+    }
+  },
+  "2904": {
+    "inputs": {
+      "value": "CCC"
+    },
+    "class_type": "PrimitiveString",
+    "_meta": {
+      "title": "ROOT FOLDER"
+    }
+  },
+  "2826": {
+    "inputs": {
+      "string": "Create a photo of this person from behind in a full body back view, relaxed pose with the arms hanging down, in front of a neutral white background. Keep the exact same hair and identity as the reference. Tha back fills the image.",
+      "strip_newlines": true
+    },
+    "class_type": "StringConstantMultiline",
+    "_meta": {
+      "title": "PROMPT"
+    }
+  },
+  "2744:6103": {
+    "inputs": {
+      "batch_size": 1,
+      "width": [
+        "2903",
+        0
+      ],
+      "height": [
+        "2903",
+        1
+      ]
+    },
+    "class_type": "EmptyLatentImage",
+    "_meta": {
+      "title": "Empty Latent Image"
+    }
+  },
+  "2744:6104": {
+    "inputs": {
+      "seed": 42,
+      "sampler_name": "euler",
+      "scheduler": "simple",
+      "denoise": 1,
+      "model": [
+        "2744:6106",
+        0
+      ],
+      "steps": [
+        "3058",
+        0
+      ],
+      "cfg": [
+        "3061",
+        0
+      ],
+      "positive": [
+        "2744:6376",
+        0
+      ],
+      "negative": [
+        "2744:6375",
+        0
+      ],
+      "latent_image": [
+        "2744:6103",
+        0
+      ]
+    },
+    "class_type": "KSampler",
+    "_meta": {
+      "title": "KSampler"
+    }
+  },
+  "2744:6105": {
+    "inputs": {
+      "samples": [
+        "2744:6104",
+        0
+      ],
+      "vae": [
+        "529",
+        0
+      ]
+    },
+    "class_type": "VAEDecode",
+    "_meta": {
+      "title": "VAE Decode"
+    }
+  },
+  "2744:6375": {
+    "inputs": {
+      "clip": [
+        "528",
+        0
+      ],
+      "image": [
+        "535",
+        0
+      ],
+      "image_b": [
+        "562",
+        0
+      ],
+      "grounding_px": [
+        "6299",
+        0
+      ],
+      "prompt": ""
+    },
+    "class_type": "Krea2EditGroundedEncode",
+    "_meta": {
+      "title": "NEGATIVE"
+    }
+  },
+  "2744:6376": {
+    "inputs": {
+      "clip": [
+        "528",
+        0
+      ],
+      "image": [
+        "535",
+        0
+      ],
+      "image_b": [
+        "562",
+        0
+      ],
+      "prompt": [
+        "2721",
+        0
+      ],
+      "grounding_px": [
+        "6299",
+        0
+      ]
+    },
+    "class_type": "Krea2EditGroundedEncode",
+    "_meta": {
+      "title": "POSITIVE"
+    }
+  },
+  "2744:6106": {
+    "inputs": {
+      "model": [
+        "664",
+        0
+      ],
+      "vae": [
+        "529",
+        0
+      ],
+      "source_image": [
+        "535",
+        0
+      ],
+      "source_image_b": [
+        "562",
+        0
+      ],
+      "ref_boost": [
+        "6297",
+        0
+      ],
+      "ref_boost_a": 1.0,
+      "fit_mode": "fit",
+      "source_latent": [
+        "2744:9016",
+        0
+      ]
+    },
+    "class_type": "Krea2EditModelPatch",
+    "_meta": {
+      "title": "Krea2EditModelPatch"
+    }
+  },
+  "2651:6001": {
+    "inputs": {
+      "clip": [
+        "528",
+        0
+      ],
+      "image": [
+        "562",
+        0
+      ],
+      "image_b": [
+        "562",
+        0
+      ],
+      "prompt": [
+        "2708",
+        0
+      ],
+      "grounding_px": [
+        "6299",
+        0
+      ]
+    },
+    "class_type": "Krea2EditGroundedEncode",
+    "_meta": {
+      "title": "POSITIVE"
+    }
+  },
+  "2651:6002": {
+    "inputs": {
+      "clip": [
+        "528",
+        0
+      ],
+      "image": [
+        "562",
+        0
+      ],
+      "image_b": [
+        "562",
+        0
+      ],
+      "grounding_px": [
+        "6299",
+        0
+      ],
+      "prompt": ""
+    },
+    "class_type": "Krea2EditGroundedEncode",
+    "_meta": {
+      "title": "NEGATIVE"
+    }
+  },
+  "2651:6005": {
+    "inputs": {
+      "batch_size": 1,
+      "width": [
+        "2903",
+        0
+      ],
+      "height": [
+        "2903",
+        1
+      ]
+    },
+    "class_type": "EmptyLatentImage",
+    "_meta": {
+      "title": "Empty Latent Image"
+    }
+  },
+  "2651:6006": {
+    "inputs": {
+      "seed": 42,
+      "sampler_name": "euler",
+      "scheduler": "simple",
+      "denoise": 1,
+      "model": [
+        "2651:6008",
+        0
+      ],
+      "steps": [
+        "3058",
+        0
+      ],
+      "cfg": [
+        "3061",
+        0
+      ],
+      "positive": [
+        "2651:6001",
+        0
+      ],
+      "negative": [
+        "2651:6002",
+        0
+      ],
+      "latent_image": [
+        "2651:6005",
+        0
+      ]
+    },
+    "class_type": "KSampler",
+    "_meta": {
+      "title": "KSampler"
+    }
+  },
+  "2651:6007": {
+    "inputs": {
+      "samples": [
+        "2651:6006",
+        0
+      ],
+      "vae": [
+        "529",
+        0
+      ]
+    },
+    "class_type": "VAEDecode",
+    "_meta": {
+      "title": "VAE Decode"
+    }
+  },
+  "2651:6008": {
+    "inputs": {
+      "model": [
+        "664",
+        0
+      ],
+      "vae": [
+        "529",
+        0
+      ],
+      "source_image": [
+        "562",
+        0
+      ],
+      "source_image_b": [
+        "562",
+        0
+      ],
+      "ref_boost": [
+        "6297",
+        0
+      ],
+      "ref_boost_a": 1.0,
+      "fit_mode": "fit",
+      "source_latent": [
+        "2651:9016",
+        0
+      ],
+      "source_latent_b": [
+        "2651:9017",
+        0
+      ]
+    },
+    "class_type": "Krea2EditModelPatch",
+    "_meta": {
+      "title": "Krea2EditModelPatch"
+    }
+  },
+  "537": {
+    "inputs": {
+      "number_of_faces": 1,
+      "scale_factor": 3,
+      "shift_factor": 0.45,
+      "start_index": 0,
+      "max_faces_per_image": 50,
+      "aspect_ratio": "1:1",
+      "image": [
+        "535",
+        0
+      ]
+    },
+    "class_type": "AutoCropFaces",
+    "_meta": {
+      "title": "Auto Crop Faces"
+    }
+  },
+  "2799": {
+    "inputs": {
+      "images": [
+        "2651:6007",
+        0
+      ],
+      "filename_prefix": [
+        "2910",
+        0
+      ]
+    },
+    "class_type": "SaveImage",
+    "_meta": {
+      "title": "Save Image"
+    }
+  },
+  "2905": {
+    "inputs": {
+      "value": "Anj1_KREA"
+    },
+    "class_type": "PrimitiveString",
+    "_meta": {
+      "title": "NAME (CHARACTER)"
+    }
+  },
+  "535": {
+    "inputs": {
+      "image": "ComfyUI_01828_.png"
+    },
+    "class_type": "LoadImage",
+    "_meta": {
+      "title": "Load Image"
+    }
+  },
+  "527": {
+    "inputs": {
+      "unet_name": "krea2_turbo_fp8_scaled.safetensors",
+      "weight_dtype": "default"
+    },
+    "class_type": "UNETLoader",
+    "_meta": {
+      "title": "Load Diffusion Model"
+    }
+  },
+  "2852": {
+    "inputs": {
+      "images": [
+        "2779:6140",
+        0
+      ],
+      "filename_prefix": [
+        "2910",
+        0
+      ]
+    },
+    "class_type": "SaveImage",
+    "_meta": {
+      "title": "Save Image"
+    }
+  },
+  "664": {
+    "inputs": {
+      "lora_name": "krea\\krea2_identity_edit_v1_2.safetensors",
+      "strength_model": 1,
+      "model": [
+        "527",
+        0
+      ]
+    },
+    "class_type": "LoraLoaderModelOnly",
+    "_meta": {
+      "title": "Load LoRA"
+    }
+  },
+  "2779:6139": {
+    "inputs": {
+      "seed": 42,
+      "sampler_name": "euler",
+      "scheduler": "simple",
+      "denoise": 1,
+      "model": [
+        "2779:6141",
+        0
+      ],
+      "steps": [
+        "3058",
+        0
+      ],
+      "cfg": [
+        "3061",
+        0
+      ],
+      "positive": [
+        "2779:6386",
+        0
+      ],
+      "negative": [
+        "2779:6385",
+        0
+      ],
+      "latent_image": [
+        "2779:6138",
+        0
+      ]
+    },
+    "class_type": "KSampler",
+    "_meta": {
+      "title": "KSampler"
+    }
+  },
+  "2779:6140": {
+    "inputs": {
+      "samples": [
+        "2779:6139",
+        0
+      ],
+      "vae": [
+        "529",
+        0
+      ]
+    },
+    "class_type": "VAEDecode",
+    "_meta": {
+      "title": "VAE Decode"
+    }
+  },
+  "2779:6138": {
+    "inputs": {
+      "batch_size": 1,
+      "width": [
+        "2903",
+        0
+      ],
+      "height": [
+        "2903",
+        1
+      ]
+    },
+    "class_type": "EmptyLatentImage",
+    "_meta": {
+      "title": "Empty Latent Image"
+    }
+  },
+  "2779:6385": {
+    "inputs": {
+      "clip": [
+        "528",
+        0
+      ],
+      "image": [
+        "535",
+        0
+      ],
+      "image_b": [
+        "562",
+        0
+      ],
+      "grounding_px": [
+        "6299",
+        0
+      ],
+      "prompt": ""
+    },
+    "class_type": "Krea2EditGroundedEncode",
+    "_meta": {
+      "title": "NEGATIVE"
+    }
+  },
+  "2779:6386": {
+    "inputs": {
+      "clip": [
+        "528",
+        0
+      ],
+      "image": [
+        "535",
+        0
+      ],
+      "image_b": [
+        "562",
+        0
+      ],
+      "prompt": [
+        "2778",
+        0
+      ],
+      "grounding_px": [
+        "6299",
+        0
+      ]
+    },
+    "class_type": "Krea2EditGroundedEncode",
+    "_meta": {
+      "title": "POSITIVE"
+    }
+  },
+  "2779:6141": {
+    "inputs": {
+      "model": [
+        "664",
+        0
+      ],
+      "vae": [
+        "529",
+        0
+      ],
+      "source_image": [
+        "535",
+        0
+      ],
+      "source_image_b": [
+        "562",
+        0
+      ],
+      "ref_boost": [
+        "6297",
+        0
+      ],
+      "ref_boost_a": 1.0,
+      "fit_mode": "fit",
+      "source_latent": [
+        "2779:9016",
+        0
+      ],
+      "source_latent_b": [
+        "2779:9017",
+        0
+      ]
+    },
+    "class_type": "Krea2EditModelPatch",
+    "_meta": {
+      "title": "Krea2EditModelPatch"
+    }
+  },
+  "547": {
+    "inputs": {
+      "string": "Editorial fashion photography of a young woman with voluminous dark curly hair and curtain bangs. She wears an oversized black tailored blazer over a sheer black mesh top with abstract swirl embroidery, large thin silver hoop earrings, and a long beaded necklace in black, teal, and pearl tones with an ornate enamel pendant. Keep the face, clothes and body exactly the same.",
+      "strip_newlines": false
+    },
+    "class_type": "StringConstantMultiline",
+    "_meta": {
+      "title": "STYLE [OPTIONAL]"
+    }
+  },
+  "2827": {
+    "inputs": {
+      "string": "Create a photo of this lonely person in a full body pose in front of a neutral white background, standing in a frontal A-pose, looking into the camera with a neutral expression and closed mouth. Full body view from head to feet. Keep the exact same face, hair and identity as the reference. Only one person in the image, no other people.",
+      "strip_newlines": true
+    },
+    "class_type": "StringConstantMultiline",
+    "_meta": {
+      "title": "PROMPT"
+    }
+  },
+  "2903": {
+    "inputs": {
+      "aspect_ratio": "1:1 (Square)",
+      "megapixels": 1.5,
+      "multiple": 8
+    },
+    "class_type": "ResolutionSelector",
+    "_meta": {
+      "title": "Resolution Selector"
+    }
+  },
+  "549": {
+    "inputs": {
+      "string": "Wearing black loafers.",
+      "strip_newlines": false
+    },
+    "class_type": "StringConstantMultiline",
+    "_meta": {
+      "title": "CLOTHES [OPTIONAL]"
+    }
+  },
+  "6295": {
+    "inputs": {
+      "switch": [
+        "6293",
+        0
+      ],
+      "on_false": [
+        "537",
+        0
+      ],
+      "on_true": [
+        "6292",
+        0
+      ]
+    },
+    "class_type": "ComfySwitchNode",
+    "_meta": {
+      "title": "Face source: auto / manual  (INPUT_FACE)"
+    }
+  },
+  "6296": {
+    "inputs": {
+      "switch": [
+        "6293",
+        0
+      ],
+      "on_false": [
+        "1895",
+        0
+      ],
+      "on_true": [
+        "6292",
+        0
+      ]
+    },
+    "class_type": "ComfySwitchNode",
+    "_meta": {
+      "title": "Face source: auto / manual  (REF_Image)"
+    }
+  },
+  "2907": {
+    "inputs": {
+      "value": "DATASET"
+    },
+    "class_type": "PrimitiveString",
+    "_meta": {
+      "title": "TYPE"
+    }
+  },
+  "3058": {
+    "inputs": {
+      "value": 10
+    },
+    "class_type": "PrimitiveInt",
+    "_meta": {
+      "title": "STEPS"
+    }
+  },
+  "3061": {
+    "inputs": {
+      "value": 1
+    },
+    "class_type": "PrimitiveFloat",
+    "_meta": {
+      "title": "CFG"
+    }
+  },
+  "6297": {
+    "inputs": {
+      "value": 4
+    },
+    "class_type": "PrimitiveFloat",
+    "_meta": {
+      "title": "REF BOOST"
+    }
+  },
+  "6299": {
+    "inputs": {
+      "value": 768
+    },
+    "class_type": "PrimitiveInt",
+    "_meta": {
+      "title": "GROUNDING PX"
+    }
+  },
+  "1560": {
+    "inputs": {
+      "source": "first",
+      "target_size": "first",
+      "fit": "stretch"
+    },
+    "class_type": "ImageCollectUnpack",
+    "_meta": {
+      "title": "Collected Dataset"
+    }
+  },
+  "6293": {
+    "inputs": {
+      "value": false
+    },
+    "class_type": "PrimitiveBoolean",
+    "_meta": {
+      "title": "USE MANUAL FACE"
+    }
+  },
+  "6292": {
+    "inputs": {
+      "image": "ComfyUI_01828_.png"
+    },
+    "class_type": "LoadImage",
+    "_meta": {
+      "title": "MANUAL FACE CROP  (used when USE MANUAL FACE is on)"
+    }
+  },
+  "536": {
+    "inputs": {
+      "images": [
+        "537",
+        0
+      ]
+    },
+    "class_type": "PreviewImage",
+    "_meta": {
+      "title": "Preview Image (Face Reference)"
+    }
+  },
+  "2657:9016": {
+    "inputs": {
+      "pixels": [
+        "2653",
+        0
+      ],
+      "vae": [
+        "529",
+        0
+      ]
+    },
+    "class_type": "VAEEncode",
+    "_meta": {
+      "title": "VAEEncode (restored: source_latent)"
+    }
+  },
+  "2657:9017": {
+    "inputs": {
+      "pixels": [
+        "562",
+        0
+      ],
+      "vae": [
+        "529",
+        0
+      ]
+    },
+    "class_type": "VAEEncode",
+    "_meta": {
+      "title": "VAEEncode (restored: source_latent_b)"
+    }
+  },
+  "2661:9016": {
+    "inputs": {
+      "pixels": [
+        "2762",
+        0
+      ],
+      "vae": [
+        "529",
+        0
+      ]
+    },
+    "class_type": "VAEEncode",
+    "_meta": {
+      "title": "VAEEncode (restored: source_latent)"
+    }
+  },
+  "2661:9017": {
+    "inputs": {
+      "pixels": [
+        "562",
+        0
+      ],
+      "vae": [
+        "529",
+        0
+      ]
+    },
+    "class_type": "VAEEncode",
+    "_meta": {
+      "title": "VAEEncode (restored: source_latent_b)"
+    }
+  },
+  "2663:9016": {
+    "inputs": {
+      "pixels": [
+        "535",
+        0
+      ],
+      "vae": [
+        "529",
+        0
+      ]
+    },
+    "class_type": "VAEEncode",
+    "_meta": {
+      "title": "VAEEncode (restored: source_latent)"
+    }
+  },
+  "2663:9017": {
+    "inputs": {
+      "pixels": [
+        "562",
+        0
+      ],
+      "vae": [
+        "529",
+        0
+      ]
+    },
+    "class_type": "VAEEncode",
+    "_meta": {
+      "title": "VAEEncode (restored: source_latent_b)"
+    }
+  },
+  "2674:9016": {
+    "inputs": {
+      "pixels": [
+        "2653",
+        0
+      ],
+      "vae": [
+        "529",
+        0
+      ]
+    },
+    "class_type": "VAEEncode",
+    "_meta": {
+      "title": "VAEEncode (restored: source_latent)"
+    }
+  },
+  "2674:9017": {
+    "inputs": {
+      "pixels": [
+        "562",
+        0
+      ],
+      "vae": [
+        "529",
+        0
+      ]
+    },
+    "class_type": "VAEEncode",
+    "_meta": {
+      "title": "VAEEncode (restored: source_latent_b)"
+    }
+  },
+  "2681:9016": {
+    "inputs": {
+      "pixels": [
+        "2762",
+        0
+      ],
+      "vae": [
+        "529",
+        0
+      ]
+    },
+    "class_type": "VAEEncode",
+    "_meta": {
+      "title": "VAEEncode (restored: source_latent)"
+    }
+  },
+  "2681:9017": {
+    "inputs": {
+      "pixels": [
+        "535",
+        0
+      ],
+      "vae": [
+        "529",
+        0
+      ]
+    },
+    "class_type": "VAEEncode",
+    "_meta": {
+      "title": "VAEEncode (restored: source_latent_b)"
+    }
+  },
+  "2701:9016": {
+    "inputs": {
+      "pixels": [
+        "535",
+        0
+      ],
+      "vae": [
+        "529",
+        0
+      ]
+    },
+    "class_type": "VAEEncode",
+    "_meta": {
+      "title": "VAEEncode (restored: source_latent)"
+    }
+  },
+  "2701:9017": {
+    "inputs": {
+      "pixels": [
+        "2653",
+        0
+      ],
+      "vae": [
+        "529",
+        0
+      ]
+    },
+    "class_type": "VAEEncode",
+    "_meta": {
+      "title": "VAEEncode (restored: source_latent_b)"
+    }
+  },
+  "2702:9016": {
+    "inputs": {
+      "pixels": [
+        "2653",
+        0
+      ],
+      "vae": [
+        "529",
+        0
+      ]
+    },
+    "class_type": "VAEEncode",
+    "_meta": {
+      "title": "VAEEncode (restored: source_latent)"
+    }
+  },
+  "2702:9017": {
+    "inputs": {
+      "pixels": [
+        "562",
+        0
+      ],
+      "vae": [
+        "529",
+        0
+      ]
+    },
+    "class_type": "VAEEncode",
+    "_meta": {
+      "title": "VAEEncode (restored: source_latent_b)"
+    }
+  },
+  "2703:9016": {
+    "inputs": {
+      "pixels": [
+        "2762",
+        0
+      ],
+      "vae": [
+        "529",
+        0
+      ]
+    },
+    "class_type": "VAEEncode",
+    "_meta": {
+      "title": "VAEEncode (restored: source_latent)"
+    }
+  },
+  "2703:9017": {
+    "inputs": {
+      "pixels": [
+        "562",
+        0
+      ],
+      "vae": [
+        "529",
+        0
+      ]
+    },
+    "class_type": "VAEEncode",
+    "_meta": {
+      "title": "VAEEncode (restored: source_latent_b)"
+    }
+  },
+  "2705:9016": {
+    "inputs": {
+      "pixels": [
+        "535",
+        0
+      ],
+      "vae": [
+        "529",
+        0
+      ]
+    },
+    "class_type": "VAEEncode",
+    "_meta": {
+      "title": "VAEEncode (restored: source_latent)"
+    }
+  },
+  "2705:9017": {
+    "inputs": {
+      "pixels": [
+        "562",
+        0
+      ],
+      "vae": [
+        "529",
+        0
+      ]
+    },
+    "class_type": "VAEEncode",
+    "_meta": {
+      "title": "VAEEncode (restored: source_latent_b)"
+    }
+  },
+  "2730:9016": {
+    "inputs": {
+      "pixels": [
+        "535",
+        0
+      ],
+      "vae": [
+        "529",
+        0
+      ]
+    },
+    "class_type": "VAEEncode",
+    "_meta": {
+      "title": "VAEEncode (restored: source_latent)"
+    }
+  },
+  "2730:9017": {
+    "inputs": {
+      "pixels": [
+        "562",
+        0
+      ],
+      "vae": [
+        "529",
+        0
+      ]
+    },
+    "class_type": "VAEEncode",
+    "_meta": {
+      "title": "VAEEncode (restored: source_latent_b)"
+    }
+  },
+  "2745:9016": {
+    "inputs": {
+      "pixels": [
+        "2762",
+        0
+      ],
+      "vae": [
+        "529",
+        0
+      ]
+    },
+    "class_type": "VAEEncode",
+    "_meta": {
+      "title": "VAEEncode (restored: source_latent)"
+    }
+  },
+  "2745:9017": {
+    "inputs": {
+      "pixels": [
+        "562",
+        0
+      ],
+      "vae": [
+        "529",
+        0
+      ]
+    },
+    "class_type": "VAEEncode",
+    "_meta": {
+      "title": "VAEEncode (restored: source_latent_b)"
+    }
+  },
+  "2746:9016": {
+    "inputs": {
+      "pixels": [
+        "2762",
+        0
+      ],
+      "vae": [
+        "529",
+        0
+      ]
+    },
+    "class_type": "VAEEncode",
+    "_meta": {
+      "title": "VAEEncode (restored: source_latent)"
+    }
+  },
+  "2746:9017": {
+    "inputs": {
+      "pixels": [
+        "562",
+        0
+      ],
+      "vae": [
+        "529",
+        0
+      ]
+    },
+    "class_type": "VAEEncode",
+    "_meta": {
+      "title": "VAEEncode (restored: source_latent_b)"
+    }
+  },
+  "2771:9016": {
+    "inputs": {
+      "pixels": [
+        "2653",
+        0
+      ],
+      "vae": [
+        "529",
+        0
+      ]
+    },
+    "class_type": "VAEEncode",
+    "_meta": {
+      "title": "VAEEncode (restored: source_latent)"
+    }
+  },
+  "2771:9017": {
+    "inputs": {
+      "pixels": [
+        "562",
+        0
+      ],
+      "vae": [
+        "529",
+        0
+      ]
+    },
+    "class_type": "VAEEncode",
+    "_meta": {
+      "title": "VAEEncode (restored: source_latent_b)"
+    }
+  },
+  "2774:9016": {
+    "inputs": {
+      "pixels": [
+        "2653",
+        0
+      ],
+      "vae": [
+        "529",
+        0
+      ]
+    },
+    "class_type": "VAEEncode",
+    "_meta": {
+      "title": "VAEEncode (restored: source_latent)"
+    }
+  },
+  "2774:9017": {
+    "inputs": {
+      "pixels": [
+        "562",
+        0
+      ],
+      "vae": [
+        "529",
+        0
+      ]
+    },
+    "class_type": "VAEEncode",
+    "_meta": {
+      "title": "VAEEncode (restored: source_latent_b)"
+    }
+  },
+  "2784:9016": {
+    "inputs": {
+      "pixels": [
+        "2762",
+        0
+      ],
+      "vae": [
+        "529",
+        0
+      ]
+    },
+    "class_type": "VAEEncode",
+    "_meta": {
+      "title": "VAEEncode (restored: source_latent)"
+    }
+  },
+  "2784:9017": {
+    "inputs": {
+      "pixels": [
+        "562",
+        0
+      ],
+      "vae": [
+        "529",
+        0
+      ]
+    },
+    "class_type": "VAEEncode",
+    "_meta": {
+      "title": "VAEEncode (restored: source_latent_b)"
+    }
+  },
+  "2817:9016": {
+    "inputs": {
+      "pixels": [
+        "2762",
+        0
+      ],
+      "vae": [
+        "529",
+        0
+      ]
+    },
+    "class_type": "VAEEncode",
+    "_meta": {
+      "title": "VAEEncode (restored: source_latent)"
+    }
+  },
+  "2817:9017": {
+    "inputs": {
+      "pixels": [
+        "562",
+        0
+      ],
+      "vae": [
+        "529",
+        0
+      ]
+    },
+    "class_type": "VAEEncode",
+    "_meta": {
+      "title": "VAEEncode (restored: source_latent_b)"
+    }
+  },
+  "2725:9016": {
+    "inputs": {
+      "pixels": [
+        "535",
+        0
+      ],
+      "vae": [
+        "529",
+        0
+      ]
+    },
+    "class_type": "VAEEncode",
+    "_meta": {
+      "title": "VAEEncode (restored: source_latent)"
+    }
+  },
+  "2725:9017": {
+    "inputs": {
+      "pixels": [
+        "562",
+        0
+      ],
+      "vae": [
+        "529",
+        0
+      ]
+    },
+    "class_type": "VAEEncode",
+    "_meta": {
+      "title": "VAEEncode (restored: source_latent_b)"
+    }
+  },
+  "2740:9016": {
+    "inputs": {
+      "pixels": [
+        "2762",
+        0
+      ],
+      "vae": [
+        "529",
+        0
+      ]
+    },
+    "class_type": "VAEEncode",
+    "_meta": {
+      "title": "VAEEncode (restored: source_latent)"
+    }
+  },
+  "2740:9017": {
+    "inputs": {
+      "pixels": [
+        "562",
+        0
+      ],
+      "vae": [
+        "529",
+        0
+      ]
+    },
+    "class_type": "VAEEncode",
+    "_meta": {
+      "title": "VAEEncode (restored: source_latent_b)"
+    }
+  },
+  "3029:9016": {
+    "inputs": {
+      "pixels": [
+        "2762",
+        0
+      ],
+      "vae": [
+        "529",
+        0
+      ]
+    },
+    "class_type": "VAEEncode",
+    "_meta": {
+      "title": "VAEEncode (restored: source_latent)"
+    }
+  },
+  "3029:9017": {
+    "inputs": {
+      "pixels": [
+        "562",
+        0
+      ],
+      "vae": [
+        "529",
+        0
+      ]
+    },
+    "class_type": "VAEEncode",
+    "_meta": {
+      "title": "VAEEncode (restored: source_latent_b)"
+    }
+  },
+  "3004:9016": {
+    "inputs": {
+      "pixels": [
+        "535",
+        0
+      ],
+      "vae": [
+        "529",
+        0
+      ]
+    },
+    "class_type": "VAEEncode",
+    "_meta": {
+      "title": "VAEEncode (restored: source_latent)"
+    }
+  },
+  "3004:9017": {
+    "inputs": {
+      "pixels": [
+        "562",
+        0
+      ],
+      "vae": [
+        "529",
+        0
+      ]
+    },
+    "class_type": "VAEEncode",
+    "_meta": {
+      "title": "VAEEncode (restored: source_latent_b)"
+    }
+  },
+  "2651:9016": {
+    "inputs": {
+      "pixels": [
+        "562",
+        0
+      ],
+      "vae": [
+        "529",
+        0
+      ]
+    },
+    "class_type": "VAEEncode",
+    "_meta": {
+      "title": "VAEEncode (restored: source_latent)"
+    }
+  },
+  "2651:9017": {
+    "inputs": {
+      "pixels": [
+        "562",
+        0
+      ],
+      "vae": [
+        "529",
+        0
+      ]
+    },
+    "class_type": "VAEEncode",
+    "_meta": {
+      "title": "VAEEncode (restored: source_latent_b)"
+    }
+  },
+  "2779:9016": {
+    "inputs": {
+      "pixels": [
+        "535",
+        0
+      ],
+      "vae": [
+        "529",
+        0
+      ]
+    },
+    "class_type": "VAEEncode",
+    "_meta": {
+      "title": "VAEEncode (restored: source_latent)"
+    }
+  },
+  "2779:9017": {
+    "inputs": {
+      "pixels": [
+        "562",
+        0
+      ],
+      "vae": [
+        "529",
+        0
+      ]
+    },
+    "class_type": "VAEEncode",
+    "_meta": {
+      "title": "VAEEncode (restored: source_latent_b)"
+    }
+  },
+  "2742:9016": {
+    "inputs": {
+      "pixels": [
+        "535",
+        0
+      ],
+      "vae": [
+        "529",
+        0
+      ]
+    },
+    "class_type": "VAEEncode",
+    "_meta": {
+      "title": "VAEEncode (restored: source_latent)"
+    }
+  },
+  "2744:9016": {
+    "inputs": {
+      "pixels": [
+        "535",
+        0
+      ],
+      "vae": [
+        "529",
+        0
+      ]
+    },
+    "class_type": "VAEEncode",
+    "_meta": {
+      "title": "VAEEncode (restored: source_latent)"
+    }
+  }
+}

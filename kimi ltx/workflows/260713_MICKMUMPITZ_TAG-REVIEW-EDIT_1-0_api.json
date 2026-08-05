@@ -1,0 +1,113 @@
+{
+  "6": {
+    "inputs": {
+      "batch_size": 0,
+      "start_from": 1,
+      "mode": "sequential",
+      "image_dir": [
+        "7",
+        0
+      ]
+    },
+    "class_type": "CCC_ImageBatchLoader",
+    "_meta": {
+      "title": "Image Batch Loader"
+    }
+  },
+  "16": {
+    "inputs": {
+      "bbox_format": "yxyx_normalized",
+      "edited_data_json": "",
+      "images": [
+        "6",
+        0
+      ],
+      "captions": [
+        "5",
+        0
+      ]
+    },
+    "class_type": "CCC_DatasetReviewer",
+    "_meta": {
+      "title": "Dataset Reviewer"
+    }
+  },
+  "5": {
+    "inputs": {
+      "extension": ".json",
+      "max_files": 0,
+      "folder_path": [
+        "7",
+        0
+      ]
+    },
+    "class_type": "CCC_TextBatchLoader",
+    "_meta": {
+      "title": "Text Batch Loader"
+    }
+  },
+  "7": {
+    "inputs": {
+      "value": "D:\\comfy\\ComfyUI_windows_portable\\ComfyUI\\output\\CCC\\Multiple_Realistic_02"
+    },
+    "class_type": "PrimitiveString",
+    "_meta": {
+      "title": "Insert Dataset Image Location"
+    }
+  },
+  "11": {
+    "inputs": {
+      "text": [
+        "5",
+        1
+      ]
+    },
+    "class_type": "ShowText|pysssss",
+    "_meta": {
+      "title": "Show Text 🐍"
+    }
+  },
+  "12": {
+    "inputs": {
+      "find1": "",
+      "replace1": "json",
+      "find2": "",
+      "replace2": "txt",
+      "find3": "",
+      "replace3": "",
+      "text": [
+        "11",
+        0
+      ]
+    },
+    "class_type": "CR Text Replace",
+    "_meta": {
+      "title": "🔤 CR Text Replace"
+    }
+  },
+  "9": {
+    "inputs": {
+      "filename_delimiter": "",
+      "filename_number_padding": 0,
+      "file_extension": ".json",
+      "encoding": "utf-8",
+      "filename_suffix": "",
+      "text": [
+        "16",
+        0
+      ],
+      "path": [
+        "7",
+        0
+      ],
+      "filename_prefix": [
+        "12",
+        0
+      ]
+    },
+    "class_type": "Save Text File",
+    "_meta": {
+      "title": "Override Text Files"
+    }
+  }
+}

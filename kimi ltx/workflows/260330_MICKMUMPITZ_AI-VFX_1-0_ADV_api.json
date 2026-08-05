@@ -1,0 +1,744 @@
+{
+  "2607": {
+    "inputs": {
+      "video_info": [
+        "265",
+        3
+      ]
+    },
+    "class_type": "VHS_VideoInfo",
+    "_meta": {
+      "title": "Video Info 🎥🅥🅗🅢"
+    }
+  },
+  "3334": {
+    "inputs": {
+      "vae_name": "wan_2.1_vae.safetensors"
+    },
+    "class_type": "VAELoader",
+    "_meta": {
+      "title": "Load VAE"
+    }
+  },
+  "3381": {
+    "inputs": {
+      "channel": "red",
+      "image": [
+        "3380",
+        0
+      ]
+    },
+    "class_type": "ImageToMask",
+    "_meta": {
+      "title": "Convert Image to Mask"
+    }
+  },
+  "3420": {
+    "inputs": {
+      "inputcount": 4,
+      "image_1": [
+        "280",
+        0
+      ]
+    },
+    "class_type": "ImageBatchMulti",
+    "_meta": {
+      "title": "Image Batch Multi"
+    }
+  },
+  "3329": {
+    "inputs": {
+      "shift": 6.000000000000001,
+      "model": [
+        "3327",
+        0
+      ]
+    },
+    "class_type": "ModelSamplingSD3",
+    "_meta": {
+      "title": "ModelSamplingSD3"
+    }
+  },
+  "280": {
+    "inputs": {
+      "upscale_method": "lanczos",
+      "keep_proportion": "pad_edge_pixel",
+      "pad_color": "0, 0, 0",
+      "crop_position": "center",
+      "divisible_by": 2,
+      "device": "cpu",
+      "image": [
+        "282",
+        0
+      ],
+      "width": [
+        "2845:2851",
+        0
+      ],
+      "height": [
+        "2845:2851",
+        1
+      ]
+    },
+    "class_type": "ImageResizeKJv2",
+    "_meta": {
+      "title": "Resize Image v2"
+    }
+  },
+  "3333": {
+    "inputs": {
+      "clip_name": "umt5_xxl_fp8_e4m3fn_scaled.safetensors",
+      "type": "wan",
+      "device": "default"
+    },
+    "class_type": "CLIPLoader",
+    "_meta": {
+      "title": "Load CLIP"
+    }
+  },
+  "3446": {
+    "inputs": {
+      "images": [
+        "3465",
+        1
+      ]
+    },
+    "class_type": "PreviewImage",
+    "_meta": {
+      "title": "Preview Image"
+    }
+  },
+  "3327": {
+    "inputs": {
+      "lora_name": "wan\\Wan2.1_T2V_14B_FusionX_LoRA.safetensors",
+      "strength_model": 1,
+      "model": [
+        "3326",
+        0
+      ]
+    },
+    "class_type": "LoraLoaderModelOnly",
+    "_meta": {
+      "title": "Load LoRA"
+    }
+  },
+  "282": {
+    "inputs": {
+      "image": "ComfyUI_01828_.png"
+    },
+    "class_type": "LoadImage",
+    "_meta": {
+      "title": "Start Image / Reference Image 1"
+    }
+  },
+  "3326": {
+    "inputs": {
+      "unet_name": "wan\\wan-14B_vace_skyreels_v3_R2V_e4m3fn_v1.safetensors",
+      "weight_dtype": "default"
+    },
+    "class_type": "UNETLoader",
+    "_meta": {
+      "title": "Load Diffusion Model"
+    }
+  },
+  "3106": {
+    "inputs": {
+      "loop_count": 0,
+      "filename_prefix": "AI-VFX",
+      "format": "video/h264-mp4",
+      "pingpong": false,
+      "save_output": true,
+      "images": [
+        "3228:3214",
+        0
+      ],
+      "frame_rate": [
+        "2607",
+        0
+      ],
+      "pix_fmt": "yuv420p",
+      "crf": 19,
+      "save_metadata": true,
+      "trim_to_audio": false
+    },
+    "class_type": "VHS_VideoCombine",
+    "_meta": {
+      "title": "Video Combine 🎥🅥🅗🅢"
+    }
+  },
+  "3462": {
+    "inputs": {
+      "num_fields": 4,
+      "seed_1": 1218565108,
+      "seed_2": 1218567502,
+      "seed_3": 1218564503,
+      "seed_4": 1218564480,
+      "seed_5": -1,
+      "seed_6": -1,
+      "seed_7": -1,
+      "seed_8": -1,
+      "seed_9": -1,
+      "seed_10": -1,
+      "seed_11": -1,
+      "seed_12": -1,
+      "seed_13": -1,
+      "seed_14": -1,
+      "seed_15": -1,
+      "seed_16": -1,
+      "seed_17": -1,
+      "seed_18": -1,
+      "seed_19": -1,
+      "seed_20": -1,
+      "seed_21": -1,
+      "seed_22": -1,
+      "seed_23": -1,
+      "seed_24": -1
+    },
+    "class_type": "IterSeedBatch",
+    "_meta": {
+      "title": "Iter Seed Batch"
+    }
+  },
+  "265": {
+    "inputs": {
+      "video": "warehouse_src_30fps.mp4",
+      "force_rate": 24,
+      "select_every_nth": 1,
+      "format": "None",
+      "custom_width": [
+        "2845:2851",
+        0
+      ],
+      "custom_height": [
+        "2845:2851",
+        1
+      ],
+      "frame_load_cap": [
+        "2845:1556",
+        0
+      ],
+      "skip_first_frames": [
+        "2845:361",
+        0
+      ]
+    },
+    "class_type": "VHS_LoadVideo",
+    "_meta": {
+      "title": "DRIVING VIDEO"
+    }
+  },
+  "3380": {
+    "inputs": {
+      "video": "warehouse_src_30fps.mp4",
+      "force_rate": 24,
+      "select_every_nth": 1,
+      "format": "None",
+      "custom_width": [
+        "2845:2851",
+        0
+      ],
+      "custom_height": [
+        "2845:2851",
+        1
+      ],
+      "frame_load_cap": [
+        "2845:1556",
+        0
+      ],
+      "skip_first_frames": [
+        "2845:361",
+        0
+      ]
+    },
+    "class_type": "VHS_LoadVideo",
+    "_meta": {
+      "title": "MASK"
+    }
+  },
+  "2845:1556": {
+    "inputs": {
+      "value": -1
+    },
+    "class_type": "INTConstant",
+    "_meta": {
+      "title": "frame_load_cap"
+    }
+  },
+  "2845:361": {
+    "inputs": {
+      "value": 0
+    },
+    "class_type": "INTConstant",
+    "_meta": {
+      "title": "skip"
+    }
+  },
+  "2845:2851": {
+    "inputs": {
+      "resolution": "720p",
+      "aspect_ratio": "16:9",
+      "custom_width": 896,
+      "custom_height": 512
+    },
+    "class_type": "ResolutionPicker",
+    "_meta": {
+      "title": "Resolution Picker"
+    }
+  },
+  "3465": {
+    "inputs": {
+      "num_fields": 4,
+      "string_1": "A person in modern clothes pushes open a frost-covered ancient door, cold mist pouring through. They step through onto a snowy cobblestone path. A grand castle with towers rises from frozen cliffs above a vast cracked ice lake. Snow-covered pines, moss-covered standing stones, and a distant village nestle beneath massive snow-capped mountains glowing in golden sunset light. Snowflakes drift gently as the person stops, breath visible in the cold air. Camera slowly pulls back revealing the frozen kingdom. Hyper-realistic, cinematic winter atmosphere, volumetric mist.",
+      "string_2": "The man walks forward with empty hands. A grand castle with towers rises from frozen cliffs above a vast cracked ice lake. Snow-covered pines, moss-covered standing stones, and a distant village nestle beneath massive snow-capped mountains glowing in golden sunset light. Snowflakes drift gently as the person stands still, breath visible in the cold air. Camera slowly pulls back revealing the frozen kingdom. Hyper-realistic, cinematic winter atmosphere, volumetric mist. In the end, the man pulls out Thors Hammer behind his back",
+      "string_3": "A grand castle with towers rises from frozen cliffs above a vast cracked ice lake. Snow-covered pines, moss-covered standing stones, and a distant village nestle beneath massive snow-capped mountains glowing in golden sunset light. Snowflakes drift gently as the person stands still, breath visible in the cold air. Camera slowly pulls back revealing the frozen kingdom. Hyper-realistic, cinematic winter atmosphere, volumetric mist. The man pulls out Thors Hammer",
+      "string_4": "",
+      "string_5": "",
+      "string_6": "",
+      "string_7": "",
+      "string_8": "",
+      "string_9": "",
+      "string_10": "",
+      "string_11": "",
+      "string_12": "",
+      "string_13": "",
+      "string_14": "",
+      "string_15": "",
+      "string_16": "",
+      "string_17": "",
+      "string_18": "",
+      "string_19": "",
+      "string_20": "",
+      "string_21": "",
+      "string_22": "",
+      "string_23": "",
+      "string_24": "",
+      "input_video": [
+        "265",
+        0
+      ],
+      "frames_per_iteration": [
+        "3228:3442",
+        0
+      ],
+      "num_start_frames": [
+        "3228:3443",
+        0
+      ]
+    },
+    "class_type": "IterPromptBuilder",
+    "_meta": {
+      "title": "Per-Iteration Prompts"
+    }
+  },
+  "3228:3262": {
+    "inputs": {
+      "text": "过曝，静态，细节模糊不清，字幕，风格，作品，画作，画面，静止，整体发灰，最差质量，低质量，JPEG压缩残留，丑陋的，残缺的，多余的手指，画得不好的手部，画得不好的脸部，畸形的，毁容的，形态畸形的肢体，手指融合，静止不动的画面，杂乱的背景，三条腿，背景人很多，倒着走,",
+      "clip": [
+        "3333",
+        0
+      ]
+    },
+    "class_type": "CLIPTextEncode",
+    "_meta": {
+      "title": "CLIP Text Encode (Negative Prompt)"
+    }
+  },
+  "3228:3268": {
+    "inputs": {
+      "samples": [
+        "3228:3253",
+        0
+      ],
+      "trim_amount": [
+        "3228:3255",
+        5
+      ]
+    },
+    "class_type": "TrimVideoLatent",
+    "_meta": {
+      "title": "Trim Video Latent"
+    }
+  },
+  "3228:3254": {
+    "inputs": {
+      "anything": [
+        "3228:3268",
+        0
+      ]
+    },
+    "class_type": "easy cleanGpuUsed",
+    "_meta": {
+      "title": "Clean VRAM Used"
+    }
+  },
+  "3228:3258": {
+    "inputs": {
+      "conditioning_1": [
+        "3228:3255",
+        2
+      ],
+      "conditioning_2": [
+        "3228:3255",
+        3
+      ]
+    },
+    "class_type": "ConditioningCombine",
+    "_meta": {
+      "title": "Conditioning (Combine)"
+    }
+  },
+  "3228:3257": {
+    "inputs": {
+      "nag_scale": 11,
+      "nag_alpha": 0.25,
+      "nag_tau": 2.5,
+      "input_type": "default",
+      "inplace": false,
+      "model": [
+        "3228:3255",
+        0
+      ],
+      "conditioning": [
+        "3228:3258",
+        0
+      ]
+    },
+    "class_type": "WanVideoNAG",
+    "_meta": {
+      "title": "WanVideoNAG"
+    }
+  },
+  "3228:3249": {
+    "inputs": {
+      "text": [
+        "3228:3463",
+        4
+      ],
+      "clip": [
+        "3333",
+        0
+      ]
+    },
+    "class_type": "CLIPTextEncode",
+    "_meta": {
+      "title": "CLIP Text Encode (Positive Prompt)"
+    }
+  },
+  "3228:3442": {
+    "inputs": {
+      "value": 81
+    },
+    "class_type": "PrimitiveInt",
+    "_meta": {
+      "title": "Int"
+    }
+  },
+  "3228:3443": {
+    "inputs": {
+      "value": 14
+    },
+    "class_type": "PrimitiveInt",
+    "_meta": {
+      "title": "Int"
+    }
+  },
+  "3228:3252": {
+    "inputs": {
+      "samples": [
+        "3228:3254",
+        0
+      ],
+      "vae": [
+        "3334",
+        0
+      ]
+    },
+    "class_type": "VAEDecode",
+    "_meta": {
+      "title": "VAE Decode"
+    }
+  },
+  "3228:3469": {
+    "inputs": {
+      "anything": [
+        "3228:3252",
+        0
+      ]
+    },
+    "class_type": "easy cleanGpuUsed",
+    "_meta": {
+      "title": "Clean VRAM Used"
+    }
+  },
+  "3228:3435": {
+    "inputs": {
+      "image": [
+        "3228:3463",
+        0
+      ]
+    },
+    "class_type": "GetImageSizeAndCount",
+    "_meta": {
+      "title": "Get Image Size & Count"
+    }
+  },
+  "3228:3463": {
+    "inputs": {
+      "frames_per_iteration": 81,
+      "extend_mode": "none",
+      "control_images": [
+        "265",
+        0
+      ],
+      "string_batch": [
+        "3465",
+        0
+      ],
+      "seed_batch": [
+        "3462",
+        0
+      ],
+      "mask": [
+        "3381",
+        0
+      ],
+      "overlap_frames": [
+        "3228:3275",
+        1
+      ]
+    },
+    "class_type": "MultiChannelSlicer",
+    "_meta": {
+      "title": "Multi Channel Slicer"
+    }
+  },
+  "3228:3214": {
+    "inputs": {
+      "total_iterations": 3,
+      "blend_overlap": true,
+      "resume_from_iteration": 0,
+      "save_intermediate": false,
+      "new_frames": [
+        "3228:3210",
+        0
+      ],
+      "num_start_frames": [
+        "3228:3275",
+        1
+      ]
+    },
+    "class_type": "FrameAccumulator",
+    "_meta": {
+      "title": "Frame Accumulator"
+    }
+  },
+  "3228:3275": {
+    "inputs": {
+      "num_start_frames": 14,
+      "start_image": [
+        "3228:3521",
+        0
+      ]
+    },
+    "class_type": "IterVideoRouter",
+    "_meta": {
+      "title": "Iter Video Router"
+    }
+  },
+  "3228:3514": {
+    "inputs": {
+      "boolean": false,
+      "on_true": [
+        "3228:3273",
+        0
+      ],
+      "on_false": [
+        "3228:3469",
+        0
+      ]
+    },
+    "class_type": "easy ifElse",
+    "_meta": {
+      "title": "Enable Color Match"
+    }
+  },
+  "3228:3210": {
+    "inputs": {
+      "original": [
+        "3228:3469",
+        0
+      ],
+      "processed": [
+        "3228:3514",
+        0
+      ]
+    },
+    "class_type": "IterationSwitch",
+    "_meta": {
+      "title": "Iteration Switch"
+    }
+  },
+  "3228:3273": {
+    "inputs": {
+      "method": "mvgd",
+      "strength": 1,
+      "multithread": true,
+      "image_ref": [
+        "3228:3406",
+        0
+      ],
+      "image_target": [
+        "3228:3469",
+        0
+      ]
+    },
+    "class_type": "ColorMatch",
+    "_meta": {
+      "title": "Color Match"
+    }
+  },
+  "3228:3406": {
+    "inputs": {
+      "batch_index": 0,
+      "length": 1,
+      "image": [
+        "3228:3275",
+        0
+      ]
+    },
+    "class_type": "ImageFromBatch",
+    "_meta": {
+      "title": "Get Image from Batch"
+    }
+  },
+  "3228:3253": {
+    "inputs": {
+      "steps": 5,
+      "cfg": 1,
+      "sampler_name": "res_2s",
+      "scheduler": "beta57",
+      "denoise": 1,
+      "model": [
+        "3228:3257",
+        0
+      ],
+      "seed": [
+        "3228:3463",
+        5
+      ],
+      "positive": [
+        "3228:3255",
+        1
+      ],
+      "negative": [
+        "3228:3258",
+        0
+      ],
+      "latent_image": [
+        "3228:3255",
+        4
+      ]
+    },
+    "class_type": "KSampler",
+    "_meta": {
+      "title": "KSampler"
+    }
+  },
+  "3228:3255": {
+    "inputs": {
+      "latent_in": 1,
+      "model": [
+        "3329",
+        0
+      ],
+      "positive": [
+        "3228:3249",
+        0
+      ],
+      "negative": [
+        "3228:3262",
+        0
+      ],
+      "vae": [
+        "3334",
+        0
+      ],
+      "control_video": [
+        "3228:3508",
+        0
+      ],
+      "control_masks": [
+        "3228:3508",
+        1
+      ],
+      "vace_reference": [
+        "280",
+        0
+      ],
+      "phantom_images": [
+        "3228:3521",
+        1
+      ],
+      "width": [
+        "3228:3435",
+        1
+      ],
+      "height": [
+        "3228:3435",
+        2
+      ],
+      "length": [
+        "3228:3435",
+        3
+      ]
+    },
+    "class_type": "WanVacePhantomSimpleV2",
+    "_meta": {
+      "title": "WanVacePhantomSimpleV2"
+    }
+  },
+  "3228:3508": {
+    "inputs": {
+      "blend_length": 6,
+      "blend_curve": "linear",
+      "color_match": true,
+      "start_frames": [
+        "3228:3275",
+        0
+      ],
+      "control_frames": [
+        "3228:3463",
+        0
+      ],
+      "num_start_frames": [
+        "3228:3275",
+        1
+      ],
+      "mask": [
+        "3228:3463",
+        2
+      ]
+    },
+    "class_type": "ControlCrossfadeIterationFix",
+    "_meta": {
+      "title": "Control Crossfade (Iteration Fix)"
+    }
+  },
+  "3228:3521": {
+    "inputs": {
+      "mode": "Start + Reference",
+      "reference_images": [
+        "3420",
+        0
+      ],
+      "start_image": [
+        "280",
+        0
+      ]
+    },
+    "class_type": "ImageModeRouter",
+    "_meta": {
+      "title": "Image Mode Router"
+    }
+  }
+}

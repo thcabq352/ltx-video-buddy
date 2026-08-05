@@ -1,0 +1,20 @@
+{
+ "run_id": "789502939c15",
+ "kind": "fractal",
+ "request": "web smoke",
+ "status": "done",
+ "video_path": "C:\\Users\\thcab\\Documents\\ltx2.3_agent\\kimi ltx\\outputs\\789502939c15\\fractal_789502939c15.mp4",
+ "params": {
+  "duration_s": 2.0,
+  "fps": 24,
+  "width": 256,
+  "height": 192,
+  "target": "elephant",
+  "palette": "neon",
+  "julia": false,
+  "seed": null,
+  "max_iter": 256
+ },
+ "beat_map": null,
+ "audio_path": null
+}

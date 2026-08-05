@@ -1,0 +1,714 @@
+{
+  "2607": {
+    "inputs": {
+      "video_info": [
+        "265",
+        3
+      ]
+    },
+    "class_type": "VHS_VideoInfo",
+    "_meta": {
+      "title": "Video Info 🎥🅥🅗🅢"
+    }
+  },
+  "3463": {
+    "inputs": {
+      "images": [
+        "265",
+        0
+      ]
+    },
+    "class_type": "easy imageCount",
+    "_meta": {
+      "title": "ImageCount"
+    }
+  },
+  "3517": {
+    "inputs": {
+      "enable_model_cpu_offload": true,
+      "enable_sequential_cpu_offload": false
+    },
+    "class_type": "DownloadAndLoadDepthCrafterModel",
+    "_meta": {
+      "title": "DownloadAndLoadDepthCrafterModel"
+    }
+  },
+  "3518": {
+    "inputs": {
+      "width": 720,
+      "height": 720,
+      "upscale_method": "nearest-exact",
+      "keep_proportion": "resize",
+      "pad_color": "0, 0, 0",
+      "crop_position": "center",
+      "divisible_by": 64,
+      "device": "cpu",
+      "image": [
+        "265",
+        0
+      ]
+    },
+    "class_type": "ImageResizeKJv2",
+    "_meta": {
+      "title": "Resize Image v2"
+    }
+  },
+  "3525": {
+    "inputs": {
+      "video_info": [
+        "265",
+        3
+      ]
+    },
+    "class_type": "VHS_VideoInfo",
+    "_meta": {
+      "title": "Video Info 🎥🅥🅗🅢"
+    }
+  },
+  "3528": {
+    "inputs": {
+      "detect_hand": "enable",
+      "detect_body": "enable",
+      "detect_face": "enable",
+      "resolution": 768,
+      "bbox_detector": "yolox_l.onnx",
+      "pose_estimator": "dw-ll_ucoco_384_bs5.torchscript.pt",
+      "scale_stick_for_xinsr_cn": "disable",
+      "image": [
+        "265",
+        0
+      ]
+    },
+    "class_type": "DWPreprocessor",
+    "_meta": {
+      "title": "DWPose Estimator"
+    }
+  },
+  "3546": {
+    "inputs": {
+      "mask": [
+        "3537",
+        1
+      ]
+    },
+    "class_type": "InvertMask",
+    "_meta": {
+      "title": "Invert Mask"
+    }
+  },
+  "3520": {
+    "inputs": {
+      "video_info": [
+        "265",
+        3
+      ]
+    },
+    "class_type": "VHS_VideoInfo",
+    "_meta": {
+      "title": "Video Info 🎥🅥🅗🅢"
+    }
+  },
+  "3521": {
+    "inputs": {
+      "upscale_method": "nearest-exact",
+      "keep_proportion": "resize",
+      "pad_color": "0, 0, 0",
+      "crop_position": "center",
+      "divisible_by": 2,
+      "device": "cpu",
+      "image": [
+        "3516",
+        0
+      ],
+      "width": [
+        "3520",
+        8
+      ],
+      "height": [
+        "3520",
+        9
+      ]
+    },
+    "class_type": "ImageResizeKJv2",
+    "_meta": {
+      "title": "Resize Image v2"
+    }
+  },
+  "3527": {
+    "inputs": {
+      "upscale_method": "nearest-exact",
+      "keep_proportion": "stretch",
+      "pad_color": "0, 0, 0",
+      "crop_position": "center",
+      "divisible_by": 2,
+      "device": "cpu",
+      "image": [
+        "3528",
+        0
+      ],
+      "width": [
+        "3525",
+        8
+      ],
+      "height": [
+        "3525",
+        9
+      ]
+    },
+    "class_type": "ImageResizeKJv2",
+    "_meta": {
+      "title": "Resize Image v2"
+    }
+  },
+  "3420": {
+    "inputs": {
+      "shape": "square",
+      "shape_width": 32,
+      "shape_height": 32,
+      "shape_color": "black",
+      "bg_color": "black",
+      "blur_radius": 0.5,
+      "intensity": 1,
+      "size_multiplier": 1,
+      "trailing": 2,
+      "border_width": 0,
+      "border_color": "white",
+      "coordinates": [
+        "3418",
+        0
+      ],
+      "frame_width": [
+        "3555",
+        8
+      ],
+      "frame_height": [
+        "3555",
+        9
+      ]
+    },
+    "class_type": "CreateShapeImageOnPath",
+    "_meta": {
+      "title": "Create Shape Image On Path"
+    }
+  },
+  "3580": {
+    "inputs": {
+      "x": 0,
+      "y": 0,
+      "resize_source": true,
+      "destination": [
+        "3420",
+        0
+      ],
+      "source": [
+        "265",
+        0
+      ],
+      "mask": [
+        "3586",
+        0
+      ]
+    },
+    "class_type": "ImageCompositeMasked",
+    "_meta": {
+      "title": "Image Composite Masked"
+    }
+  },
+  "3586": {
+    "inputs": {
+      "mask": [
+        "3546",
+        0
+      ]
+    },
+    "class_type": "InvertMask",
+    "_meta": {
+      "title": "Invert Mask"
+    }
+  },
+  "2845:1556": {
+    "inputs": {
+      "value": -1
+    },
+    "class_type": "INTConstant",
+    "_meta": {
+      "title": "frame_load_cap"
+    }
+  },
+  "2845:361": {
+    "inputs": {
+      "value": 0
+    },
+    "class_type": "INTConstant",
+    "_meta": {
+      "title": "skip"
+    }
+  },
+  "2845:2851": {
+    "inputs": {
+      "resolution": "720p",
+      "aspect_ratio": "16:9",
+      "custom_width": 896,
+      "custom_height": 512
+    },
+    "class_type": "ResolutionPicker",
+    "_meta": {
+      "title": "Resolution Picker"
+    }
+  },
+  "3555": {
+    "inputs": {
+      "video_info": [
+        "265",
+        3
+      ]
+    },
+    "class_type": "VHS_VideoInfo",
+    "_meta": {
+      "title": "Video Info 🎥🅥🅗🅢"
+    }
+  },
+  "3596": {
+    "inputs": {
+      "start_index": 0,
+      "num_frames": 1,
+      "masks": [
+        "3546",
+        0
+      ]
+    },
+    "class_type": "GetImageRangeFromBatch",
+    "_meta": {
+      "title": "Get Image or Mask Range From Batch"
+    }
+  },
+  "3418": {
+    "inputs": {
+      "tracking_points": "",
+      "grid_size": 50,
+      "max_num_of_points": 12,
+      "confidence_threshold": 0.04,
+      "min_distance": 200,
+      "force_offload": true,
+      "enable_backward": true,
+      "images": [
+        "265",
+        0
+      ],
+      "tracking_mask": [
+        "3597",
+        0
+      ]
+    },
+    "class_type": "CoTrackerNode",
+    "_meta": {
+      "title": "CoTracker Point Tracking"
+    }
+  },
+  "3597": {
+    "inputs": {
+      "expand": -15,
+      "tapered_corners": true,
+      "mask": [
+        "3596",
+        1
+      ]
+    },
+    "class_type": "GrowMask",
+    "_meta": {
+      "title": "Grow Mask"
+    }
+  },
+  "3604": {
+    "inputs": {
+      "image": [
+        "265",
+        0
+      ]
+    },
+    "class_type": "ImpactImageBatchToImageList",
+    "_meta": {
+      "title": "Image Batch to Image List"
+    }
+  },
+  "3378": {
+    "inputs": {
+      "frame_rate": 24,
+      "loop_count": 0,
+      "filename_prefix": "AIVFX-PREPROCESS/POSE",
+      "format": "video/h264-mp4",
+      "pingpong": false,
+      "save_output": true,
+      "images": [
+        "3527",
+        0
+      ],
+      "pix_fmt": "yuv420p",
+      "crf": 19,
+      "save_metadata": true,
+      "trim_to_audio": false
+    },
+    "class_type": "VHS_VideoCombine",
+    "_meta": {
+      "title": "SAVE PREPROCESS"
+    }
+  },
+  "3419": {
+    "inputs": {
+      "frame_rate": 24,
+      "loop_count": 0,
+      "filename_prefix": "AIVFX-PREPROCESS/TRACK",
+      "format": "video/h264-mp4",
+      "pingpong": false,
+      "save_output": true,
+      "images": [
+        "3420",
+        0
+      ],
+      "pix_fmt": "yuv420p",
+      "crf": 19,
+      "save_metadata": true,
+      "trim_to_audio": false
+    },
+    "class_type": "VHS_VideoCombine",
+    "_meta": {
+      "title": "CAMERA TRACK"
+    }
+  },
+  "3464": {
+    "inputs": {
+      "batch_index": 0,
+      "length": 1,
+      "image": [
+        "265",
+        0
+      ]
+    },
+    "class_type": "ImageFromBatch",
+    "_meta": {
+      "title": "Get Image from Batch"
+    }
+  },
+  "3516": {
+    "inputs": {
+      "force_size": true,
+      "num_inference_steps": 5,
+      "guidance_scale": 1,
+      "window_size": 81,
+      "overlap": 14,
+      "depthcrafter_model": [
+        "3517",
+        0
+      ],
+      "images": [
+        "3518",
+        0
+      ]
+    },
+    "class_type": "DepthCrafter",
+    "_meta": {
+      "title": "DepthCrafter"
+    }
+  },
+  "3606": {
+    "inputs": {
+      "low_threshold": 0.4,
+      "high_threshold": 0.8,
+      "image": [
+        "3604",
+        0
+      ]
+    },
+    "class_type": "Canny",
+    "_meta": {
+      "title": "Detect Edges (Canny)"
+    }
+  },
+  "3605": {
+    "inputs": {
+      "images": [
+        "3606",
+        0
+      ]
+    },
+    "class_type": "ImageListToImageBatch",
+    "_meta": {
+      "title": "Image List to Image Batch"
+    }
+  },
+  "3522": {
+    "inputs": {
+      "video_info": [
+        "265",
+        3
+      ]
+    },
+    "class_type": "VHS_VideoInfo",
+    "_meta": {
+      "title": "Video Info 🎥🅥🅗🅢"
+    }
+  },
+  "3523": {
+    "inputs": {
+      "upscale_method": "nearest-exact",
+      "keep_proportion": "stretch",
+      "pad_color": "0, 0, 0",
+      "crop_position": "center",
+      "divisible_by": 2,
+      "device": "cpu",
+      "image": [
+        "3605",
+        0
+      ],
+      "width": [
+        "3522",
+        8
+      ],
+      "height": [
+        "3522",
+        9
+      ]
+    },
+    "class_type": "ImageResizeKJv2",
+    "_meta": {
+      "title": "Resize Image v2"
+    }
+  },
+  "3377": {
+    "inputs": {
+      "frame_rate": 24,
+      "loop_count": 0,
+      "filename_prefix": "AIVFX-PREPROCESS/CANNY",
+      "format": "video/h264-mp4",
+      "pingpong": false,
+      "save_output": true,
+      "images": [
+        "3523",
+        0
+      ],
+      "pix_fmt": "yuv420p",
+      "crf": 19,
+      "save_metadata": true,
+      "trim_to_audio": false
+    },
+    "class_type": "VHS_VideoCombine",
+    "_meta": {
+      "title": "SAVE PREPROCESS"
+    }
+  },
+  "3001": {
+    "inputs": {
+      "frame_rate": 24,
+      "loop_count": 0,
+      "filename_prefix": "AIVFX-PREPROCESS/DEPTH",
+      "format": "video/h264-mp4",
+      "pingpong": false,
+      "save_output": true,
+      "images": [
+        "3516",
+        0
+      ],
+      "pix_fmt": "yuv420p",
+      "crf": 19,
+      "save_metadata": true,
+      "trim_to_audio": false
+    },
+    "class_type": "VHS_VideoCombine",
+    "_meta": {
+      "title": "SAVE PREPROCESS"
+    }
+  },
+  "3509": {
+    "inputs": {
+      "frame_rate": 24,
+      "loop_count": 0,
+      "filename_prefix": "AIVFX-PREPROCESS/BACKGROUND",
+      "format": "video/h264-mp4",
+      "pingpong": false,
+      "save_output": false,
+      "images": [
+        "3462",
+        0
+      ],
+      "pix_fmt": "yuv420p",
+      "crf": 19,
+      "save_metadata": true,
+      "trim_to_audio": false
+    },
+    "class_type": "VHS_VideoCombine",
+    "_meta": {
+      "title": "SAVE PREPROCESS"
+    }
+  },
+  "3382": {
+    "inputs": {
+      "filename_prefix": "AIVFX-PREPROCESS/STARTIMG",
+      "images": [
+        "3464",
+        0
+      ]
+    },
+    "class_type": "SaveImage",
+    "_meta": {
+      "title": "Save Image"
+    }
+  },
+  "265": {
+    "inputs": {
+      "video": "warehouse_src_30fps.mp4",
+      "force_rate": 0,
+      "skip_first_frames": 0,
+      "select_every_nth": 1,
+      "format": "AnimateDiff",
+      "custom_width": [
+        "2845:2851",
+        0
+      ],
+      "custom_height": [
+        "2845:2851",
+        1
+      ],
+      "frame_load_cap": [
+        "2845:1556",
+        0
+      ]
+    },
+    "class_type": "VHS_LoadVideo",
+    "_meta": {
+      "title": "INPUT VIDEO"
+    }
+  },
+  "3459": {
+    "inputs": {
+      "frame_rate": 24,
+      "loop_count": 0,
+      "filename_prefix": "AIVFX-PREPROCESS/DRIVING-VIDEO",
+      "format": "video/h264-mp4",
+      "pingpong": false,
+      "save_output": true,
+      "images": [
+        "3580",
+        0
+      ],
+      "pix_fmt": "yuv420p",
+      "crf": 19,
+      "save_metadata": true,
+      "trim_to_audio": false
+    },
+    "class_type": "VHS_VideoCombine",
+    "_meta": {
+      "title": "Video Combine 🎥🅥🅗🅢"
+    }
+  },
+  "3595": {
+    "inputs": {
+      "frame_rate": 24,
+      "loop_count": 0,
+      "filename_prefix": "AIVFX-PREPROCESS/MASK",
+      "format": "video/h264-mp4",
+      "pingpong": false,
+      "save_output": true,
+      "images": [
+        "3537",
+        2
+      ],
+      "pix_fmt": "yuv420p",
+      "crf": 19,
+      "save_metadata": true,
+      "trim_to_audio": false
+    },
+    "class_type": "VHS_VideoCombine",
+    "_meta": {
+      "title": "Video Combine 🎥🅥🅗🅢"
+    }
+  },
+  "3537": {
+    "inputs": {
+      "image": [
+        "265",
+        0
+      ],
+      "prompt": "person",
+      "output_mode": "Merged",
+      "confidence_threshold": 0.35,
+      "max_segments": 0,
+      "segment_pick": 0,
+      "mask_blur": 0,
+      "mask_offset": 0,
+      "device": "Auto",
+      "invert_output": false,
+      "unload_model": false,
+      "background": "Color",
+      "background_color": "#808080"
+    },
+    "class_type": "SAM3Segment",
+    "_meta": {
+      "title": "SAM3Segment"
+    }
+  },
+  "3548": {
+    "inputs": {
+      "frame_rate": 24,
+      "loop_count": 0,
+      "filename_prefix": "AIVFX-PREPROCESS/MASK-PLATE",
+      "format": "video/h264-mp4",
+      "pingpong": false,
+      "save_output": true,
+      "images": [
+        "3537",
+        0
+      ],
+      "pix_fmt": "yuv420p",
+      "crf": 19,
+      "save_metadata": true,
+      "trim_to_audio": false
+    },
+    "class_type": "VHS_VideoCombine",
+    "_meta": {
+      "title": "Video Combine 🎥🅥🅗🅢"
+    }
+  },
+  "3549": {
+    "inputs": {
+      "frame_rate": 24,
+      "loop_count": 0,
+      "filename_prefix": "AIVFX-PREPROCESS/MASK",
+      "format": "video/h264-mp4",
+      "pingpong": false,
+      "save_output": false,
+      "images": [
+        "3537",
+        2
+      ],
+      "pix_fmt": "yuv420p",
+      "crf": 19,
+      "save_metadata": true,
+      "trim_to_audio": false
+    },
+    "class_type": "VHS_VideoCombine",
+    "_meta": {
+      "title": "Video Combine 🎥🅥🅗🅢"
+    }
+  },
+  "3462": {
+    "inputs": {
+      "color": 8421504,
+      "width": [
+        "2845:2851",
+        0
+      ],
+      "height": [
+        "2845:2851",
+        1
+      ],
+      "batch_size": [
+        "3463",
+        0
+      ]
+    },
+    "class_type": "EmptyImage",
+    "_meta": {
+      "title": "EmptyImage 50% Grey"
+    }
+  }
+}

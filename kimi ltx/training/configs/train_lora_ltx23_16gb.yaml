@@ -1,0 +1,78 @@
+# LoRA (scene OR style) — LTX-2.3 (22B) on a 16GB card (RTX 5060 Ti)
+#
+# Trains a LoRA for the LTX-2.3 pipeline (workflows/260603_LTX2-3_3D-RENDERING_LIP-SNYC_v08,
+# master_agent). Same config works for:
+#   - SCENE LoRAs (a location / set / lighting look)   -> dataset: stills+clips of that scene
+#   - STYLE LoRAs (lego, claymation, pixel-art, ...)    -> dataset: 20-100 images in that style
+# See training/README.md for dataset prep and how to use the result.
+#
+# Run from the ai-toolkit folder:
+#   ./venv/Scripts/python.exe run.py ../training/configs/train_lora_ltx23_16gb.yaml
+---
+job: extension
+config:
+  name: "ltx23_style_lego_v1"   # output folder + filename; rename per scene/style
+  process:
+    - type: 'sd_trainer'
+      training_folder: "output"   # -> ai-toolkit/output/<name>/
+      device: cuda:0
+      trigger_word: "l3g0styl3"   # nonsense token; start every caption with it
+      network:
+        type: "lora"
+        linear: 32
+        linear_alpha: 32
+      save:
+        dtype: float16
+        save_every: 250
+        max_step_saves_to_keep: 4
+      datasets:
+        - folder_path: "../training/datasets/styles/lego"   # <- your scene/style folder
+          caption_ext: "txt"
+          caption_dropout_rate: 0.05
+          # 1 = train on stills (look/style). Raise to ~25 for short clips
+          # (motion/camera behaviour) — video training is much heavier on VRAM.
+          num_frames: 1
+          resolution: [512, 768]
+      train:
+        batch_size: 1
+        steps: 2500               # scene: 1500-2500, style: 2000-4000
+        gradient_accumulation: 1
+        train_unet: true
+        train_text_encoder: false
+        gradient_checkpointing: true
+        noise_scheduler: "flowmatch"
+        timestep_type: 'linear'
+        optimizer: "adamw8bit"
+        lr: 1e-4
+        optimizer_params:
+          weight_decay: 1e-4
+        dtype: bf16
+        cache_text_embeddings: true   # required on 16GB (do NOT combine with unload_text_encoder)
+      model:
+        # local fp8 checkpoint already in the project; ai-toolkit quantizes on load
+        name_or_path: "../models/checkpoints/ltx-2.3-22b-dev-fp8.safetensors"
+        arch: 'ltx2.3'
+        quantize: true
+        qtype: "qfloat8"
+        quantize_te: true
+        qtype_te: "qfloat8"
+        low_vram: true
+      sample:
+        sampler: "flowmatch"
+        sample_every: 250
+        sample_start_step: 0
+        width: 768
+        height: 512
+        num_frames: 1
+        fps: 24
+        prompts:
+          - "[trigger] a bear walking through a forest, wide shot"
+          - "[trigger] a woman at a desk in an office, medium shot"
+        neg: ""
+        seed: 42
+        walk_seed: true
+        guidance_scale: 3.5
+        sample_steps: 25
+meta:
+  name: "[name]"
+  version: '1.0'

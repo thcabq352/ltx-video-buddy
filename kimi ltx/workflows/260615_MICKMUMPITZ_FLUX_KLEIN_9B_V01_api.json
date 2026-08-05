@@ -1,0 +1,741 @@
+{
+  "2766": {
+    "inputs": {
+      "filename_prefix": "ComfyUI",
+      "images": [
+        "2765:3418",
+        0
+      ]
+    },
+    "class_type": "SaveImage",
+    "_meta": {
+      "title": "Save Image"
+    }
+  },
+  "7272": {
+    "inputs": {
+      "image": "change_the_eyes_of_the_child_bear_to_match_the_ones_of_the_grown_up_bear_more_like_unicolored_butto_0a68vbpn1dl76yfgg4jq.jpg"
+    },
+    "class_type": "LoadImage",
+    "_meta": {
+      "title": "Load Image"
+    }
+  },
+  "7274": {
+    "inputs": {
+      "image": "change_the_style_to_photorealistic_3d_cg_animation_she_is_a_young_female_traveller_full_body_pose-__w0xb7uvvva5nxf3vncyc_0.png"
+    },
+    "class_type": "LoadImage",
+    "_meta": {
+      "title": "Load Image"
+    }
+  },
+  "7271": {
+    "inputs": {
+      "image": "030_137_CLAY_v01.png"
+    },
+    "class_type": "LoadImage",
+    "_meta": {
+      "title": "CANNY"
+    }
+  },
+  "7288": {
+    "inputs": {
+      "low_threshold": 0.01,
+      "high_threshold": 0.41,
+      "image": [
+        "7271",
+        0
+      ]
+    },
+    "class_type": "Canny",
+    "_meta": {
+      "title": "Detect Edges (Canny)"
+    }
+  },
+  "7280": {
+    "inputs": {
+      "images": [
+        "7292",
+        0
+      ]
+    },
+    "class_type": "PreviewImage",
+    "_meta": {
+      "title": "Preview Image"
+    }
+  },
+  "1992": {
+    "inputs": {
+      "unet_name": "flux-2-klein-9b-fp8.safetensors",
+      "weight_dtype": "default"
+    },
+    "class_type": "UNETLoader",
+    "_meta": {
+      "title": "Load Diffusion Model"
+    }
+  },
+  "6228": {
+    "inputs": {
+      "lora_name": "Flux2-Klein-9B-consistency-V2.safetensors",
+      "strength_model": 0.7,
+      "model": [
+        "1992",
+        0
+      ]
+    },
+    "class_type": "LoraLoaderModelOnly",
+    "_meta": {
+      "title": "Load LoRA"
+    }
+  },
+  "362": {
+    "inputs": {
+      "clip_name": "qwen_3_8b_fp8mixed.safetensors",
+      "type": "flux2",
+      "device": "default"
+    },
+    "class_type": "CLIPLoader",
+    "_meta": {
+      "title": "Load CLIP"
+    }
+  },
+  "360": {
+    "inputs": {
+      "vae_name": "flux2-vae.safetensors"
+    },
+    "class_type": "VAELoader",
+    "_meta": {
+      "title": "Load VAE"
+    }
+  },
+  "7293": {
+    "inputs": {
+      "direction": "right",
+      "match_image_size": true,
+      "image1": [
+        "7274",
+        0
+      ],
+      "image2": [
+        "7272",
+        0
+      ]
+    },
+    "class_type": "ImageConcanate",
+    "_meta": {
+      "title": "Image Concatenate"
+    }
+  },
+  "7401": {
+    "inputs": {
+      "image": "change_the_eyes_of_the_child_bear_to_match_the_ones_of_the_grown_up_bear_more_like_unicolored_butto_0a68vbpn1dl76yfgg4jq(2).jpg"
+    },
+    "class_type": "LoadImage",
+    "_meta": {
+      "title": "Load Image"
+    }
+  },
+  "7405": {
+    "inputs": {
+      "image": "change_the_perspective_to_a_low_angle_view_shot_from_the_ground_rotate_the_camera_up_so_no_ground_c_1vip95h3s4qbtyzpnrto.jpg"
+    },
+    "class_type": "LoadImage",
+    "_meta": {
+      "title": "Load Image"
+    }
+  },
+  "7277": {
+    "inputs": {
+      "image_a": [
+        "7292",
+        0
+      ],
+      "image_b": [
+        "2765:3418",
+        0
+      ]
+    },
+    "class_type": "Image Comparer (rgthree)",
+    "_meta": {
+      "title": "Image Comparer (rgthree)"
+    }
+  },
+  "2510:2232": {
+    "inputs": {
+      "batch_size": 1,
+      "width": [
+        "2510:2233",
+        0
+      ],
+      "height": [
+        "2510:2233",
+        1
+      ]
+    },
+    "class_type": "EmptySD3LatentImage",
+    "_meta": {
+      "title": "EmptySD3LatentImage"
+    }
+  },
+  "2510:844": {
+    "inputs": {
+      "value": 4
+    },
+    "class_type": "PrimitiveInt",
+    "_meta": {
+      "title": "STEPS IMAGE SAMPLING"
+    }
+  },
+  "2510:850": {
+    "inputs": {
+      "value": 1
+    },
+    "class_type": "PrimitiveFloat",
+    "_meta": {
+      "title": "CFG"
+    }
+  },
+  "2510:2233": {
+    "inputs": {
+      "resolution": "1152p",
+      "aspect_ratio": "16:9",
+      "custom_width": 1920,
+      "custom_height": 1080
+    },
+    "class_type": "ResolutionPicker",
+    "_meta": {
+      "title": "Resolution Picker Images"
+    }
+  },
+  "2510:2511": {
+    "inputs": {
+      "value": "images"
+    },
+    "class_type": "PrimitiveStringMultiline",
+    "_meta": {
+      "title": "SCENE-NAME"
+    }
+  },
+  "2510:4852": {
+    "inputs": {
+      "value": true
+    },
+    "class_type": "PrimitiveBoolean",
+    "_meta": {
+      "title": "Enable High Quality"
+    }
+  },
+  "7421": {
+    "inputs": {
+      "value": "Turn the depth map and canny outlines into a final colored professional 3D rendering:\n\nA low angle shot looking up at three characters and the wooden ceiling. On the left of the a young brunette woman in a blue jacket, green bonnet and grey pants stands in a shocked pose. The bear in the background behind the counter holds a newspaper behind a wooden desk, looking down at her with a bored expression The bear in the background has a green cap. On the right is a young brown bear wearing red lobby boy clothes, a red jacket with golden buttons and a giant completely green backpack sticking out above his head. The young bear on the right has a friendly expression and waves. \n\nCozy hotel lobby at night setting with wooden walls, plush chairs. Cute 3D claymation style, handcrafted miniature macro photography, cinematic moody lighting, slight haze, strong bokeh on the background, colorful and professionally lit."
+    },
+    "class_type": "PrimitiveStringMultiline",
+    "_meta": {
+      "title": "PROMPT"
+    }
+  },
+  "7414": {
+    "inputs": {
+      "image": "ComfyUI_01828_.png"
+    },
+    "class_type": "LoadImage",
+    "_meta": {
+      "title": "DEPTH"
+    }
+  },
+  "2765:3412": {
+    "inputs": {
+      "guidance": 1,
+      "conditioning": [
+        "2765:3413",
+        0
+      ]
+    },
+    "class_type": "FluxGuidance",
+    "_meta": {
+      "title": "FluxGuidance"
+    }
+  },
+  "2765:3420": {
+    "inputs": {
+      "source": [
+        "2765:3419",
+        0
+      ]
+    },
+    "class_type": "Display Any (rgthree)",
+    "_meta": {
+      "title": "Display Any (rgthree)"
+    }
+  },
+  "2765:4924": {
+    "inputs": {
+      "conditioning": [
+        "2765:4919",
+        0
+      ],
+      "latent": [
+        "2765:4923",
+        0
+      ]
+    },
+    "class_type": "ReferenceLatent",
+    "_meta": {
+      "title": "Set Reference Latent"
+    }
+  },
+  "2765:3418": {
+    "inputs": {
+      "samples": [
+        "2765:3414",
+        0
+      ],
+      "vae": [
+        "360",
+        0
+      ]
+    },
+    "class_type": "VAEDecode",
+    "_meta": {
+      "title": "VAE Decode"
+    }
+  },
+  "2765:3419": {
+    "inputs": {
+      "string_b": "",
+      "delimiter": " ",
+      "string_a": [
+        "7421",
+        0
+      ]
+    },
+    "class_type": "StringConcatenate",
+    "_meta": {
+      "title": "Concatenate Text"
+    }
+  },
+  "2765:3413": {
+    "inputs": {
+      "text": [
+        "2765:3419",
+        0
+      ],
+      "clip": [
+        "362",
+        0
+      ]
+    },
+    "class_type": "CLIPTextEncode",
+    "_meta": {
+      "title": "CLIP Text Encode (Positive Prompt)"
+    }
+  },
+  "2765:4916": {
+    "inputs": {
+      "pixels": [
+        "2765:7416",
+        0
+      ],
+      "vae": [
+        "360",
+        0
+      ]
+    },
+    "class_type": "VAEEncode",
+    "_meta": {
+      "title": "VAE Encode"
+    }
+  },
+  "2765:4923": {
+    "inputs": {
+      "pixels": [
+        "2765:7417",
+        0
+      ],
+      "vae": [
+        "360",
+        0
+      ]
+    },
+    "class_type": "VAEEncode",
+    "_meta": {
+      "title": "VAE Encode"
+    }
+  },
+  "2765:4930": {
+    "inputs": {
+      "pixels": [
+        "2765:7418",
+        0
+      ],
+      "vae": [
+        "360",
+        0
+      ]
+    },
+    "class_type": "VAEEncode",
+    "_meta": {
+      "title": "VAE Encode"
+    }
+  },
+  "2765:4910": {
+    "inputs": {
+      "conditioning": [
+        "2765:3412",
+        0
+      ],
+      "latent": [
+        "2765:4909",
+        0
+      ]
+    },
+    "class_type": "ReferenceLatent",
+    "_meta": {
+      "title": "Set Reference Latent"
+    }
+  },
+  "2765:3410": {
+    "inputs": {
+      "text": "",
+      "clip": [
+        "362",
+        0
+      ]
+    },
+    "class_type": "CLIPTextEncode",
+    "_meta": {
+      "title": "CLIP Text Encode ( Negative Prompt)"
+    }
+  },
+  "2765:4917": {
+    "inputs": {
+      "conditioning": [
+        "2765:4912",
+        0
+      ],
+      "latent": [
+        "2765:4916",
+        0
+      ]
+    },
+    "class_type": "ReferenceLatent",
+    "_meta": {
+      "title": "Set Reference Latent"
+    }
+  },
+  "2765:4909": {
+    "inputs": {
+      "pixels": [
+        "2765:7409",
+        0
+      ],
+      "vae": [
+        "360",
+        0
+      ]
+    },
+    "class_type": "VAEEncode",
+    "_meta": {
+      "title": "VAE Encode"
+    }
+  },
+  "2765:4931": {
+    "inputs": {
+      "conditioning": [
+        "2765:4926",
+        0
+      ],
+      "latent": [
+        "2765:4930",
+        0
+      ]
+    },
+    "class_type": "ReferenceLatent",
+    "_meta": {
+      "title": "Set Reference Latent"
+    }
+  },
+  "2765:4919": {
+    "inputs": {
+      "boolean": [
+        "2765:4914",
+        1
+      ],
+      "on_true": [
+        "2765:4917",
+        0
+      ],
+      "on_false": [
+        "2765:4912",
+        0
+      ]
+    },
+    "class_type": "easy ifElse",
+    "_meta": {
+      "title": "If else"
+    }
+  },
+  "2765:4912": {
+    "inputs": {
+      "boolean": [
+        "2765:4907",
+        1
+      ],
+      "on_true": [
+        "2765:4910",
+        0
+      ],
+      "on_false": [
+        "2765:3412",
+        0
+      ]
+    },
+    "class_type": "easy ifElse",
+    "_meta": {
+      "title": "If else"
+    }
+  },
+  "2765:4926": {
+    "inputs": {
+      "boolean": [
+        "2765:4921",
+        1
+      ],
+      "on_true": [
+        "2765:4924",
+        0
+      ],
+      "on_false": [
+        "2765:4919",
+        0
+      ]
+    },
+    "class_type": "easy ifElse",
+    "_meta": {
+      "title": "If else"
+    }
+  },
+  "2765:4933": {
+    "inputs": {
+      "boolean": [
+        "2765:4928",
+        1
+      ],
+      "on_true": [
+        "2765:4931",
+        0
+      ],
+      "on_false": [
+        "2765:4926",
+        0
+      ]
+    },
+    "class_type": "easy ifElse",
+    "_meta": {
+      "title": "If else"
+    }
+  },
+  "2765:3411": {
+    "inputs": {
+      "value": 1034973049061992
+    },
+    "class_type": "PrimitiveInt",
+    "_meta": {
+      "title": "Int"
+    }
+  },
+  "2765:3414": {
+    "inputs": {
+      "sampler_name": "res_2s",
+      "scheduler": "beta57",
+      "denoise": 1,
+      "model": [
+        "6228",
+        0
+      ],
+      "seed": [
+        "2765:3411",
+        0
+      ],
+      "steps": [
+        "2510:844",
+        0
+      ],
+      "cfg": [
+        "2510:850",
+        0
+      ],
+      "positive": [
+        "2765:4933",
+        0
+      ],
+      "negative": [
+        "2765:3410",
+        0
+      ],
+      "latent_image": [
+        "2510:2232",
+        0
+      ]
+    },
+    "class_type": "KSampler",
+    "_meta": {
+      "title": "KSampler"
+    }
+  },
+  "2765:4907": {
+    "inputs": {
+      "image": [
+        "7292",
+        0
+      ]
+    },
+    "class_type": "ImageExists",
+    "_meta": {
+      "title": "Image Exists"
+    }
+  },
+  "2765:7409": {
+    "inputs": {
+      "padding_color": "white",
+      "interpolation": "area",
+      "image": [
+        "2765:4907",
+        0
+      ],
+      "target_width": [
+        "2510:2233",
+        0
+      ],
+      "target_height": [
+        "2510:2233",
+        1
+      ]
+    },
+    "class_type": "ResizeAndPadImage",
+    "_meta": {
+      "title": "Resize And Pad Image"
+    }
+  },
+  "2765:7416": {
+    "inputs": {
+      "padding_color": "white",
+      "interpolation": "area",
+      "image": [
+        "2765:4914",
+        0
+      ],
+      "target_width": [
+        "2510:2233",
+        0
+      ],
+      "target_height": [
+        "2510:2233",
+        1
+      ]
+    },
+    "class_type": "ResizeAndPadImage",
+    "_meta": {
+      "title": "Resize And Pad Image"
+    }
+  },
+  "2765:4921": {
+    "inputs": {
+      "image": [
+        "7405",
+        0
+      ]
+    },
+    "class_type": "ImageExists",
+    "_meta": {
+      "title": "Image Exists"
+    }
+  },
+  "2765:7417": {
+    "inputs": {
+      "padding_color": "white",
+      "interpolation": "area",
+      "image": [
+        "2765:4921",
+        0
+      ],
+      "target_width": [
+        "2510:2233",
+        0
+      ],
+      "target_height": [
+        "2510:2233",
+        1
+      ]
+    },
+    "class_type": "ResizeAndPadImage",
+    "_meta": {
+      "title": "Resize And Pad Image"
+    }
+  },
+  "2765:7418": {
+    "inputs": {
+      "padding_color": "white",
+      "interpolation": "area",
+      "image": [
+        "2765:4928",
+        0
+      ],
+      "target_width": [
+        "2510:2233",
+        0
+      ],
+      "target_height": [
+        "2510:2233",
+        1
+      ]
+    },
+    "class_type": "ResizeAndPadImage",
+    "_meta": {
+      "title": "Resize And Pad Image"
+    }
+  },
+  "2765:4928": {
+    "inputs": {
+      "image": [
+        "7401",
+        0
+      ]
+    },
+    "class_type": "ImageExists",
+    "_meta": {
+      "title": "Image Exists"
+    }
+  },
+  "2765:4914": {
+    "inputs": {
+      "image": [
+        "7293",
+        0
+      ]
+    },
+    "class_type": "ImageExists",
+    "_meta": {
+      "title": "Image Exists"
+    }
+  },
+  "7292": {
+    "inputs": {
+      "blend_factor": 0.88,
+      "blend_mode": "screen",
+      "image1": [
+        "7288",
+        0
+      ],
+      "image2": [
+        "7414",
+        0
+      ]
+    },
+    "class_type": "ImageBlend",
+    "_meta": {
+      "title": "Blend Images"
+    }
+  }
+}

@@ -1,0 +1,35 @@
+{
+ "run_id": "18b153311cc1",
+ "kind": "intake",
+ "persona": "ara",
+ "initial_request": "a sneaker commercial",
+ "history": [
+  {
+   "role": "agent",
+   "text": "Love it. Before I spin anything up \u2014 who is this for, what tone should it strike, and are there any must-haves or deal-breakers?"
+  },
+  {
+   "role": "user",
+   "text": "sneakerheads, neon, night city"
+  },
+  {
+   "role": "agent",
+   "text": "Noted \u2014 anything else I should know? (say 'just go' when ready)"
+  },
+  {
+   "role": "user",
+   "text": "just go"
+  }
+ ],
+ "brief": {
+  "refined_request": "a sneaker commercial \u2014 sneakerheads, neon, night city; just go",
+  "audience": "",
+  "tone": "",
+  "style": "",
+  "constraints": "",
+  "duration_s": null,
+  "aspect_ratio": "",
+  "music_mood": null,
+  "negatives": ""
+ }
+}

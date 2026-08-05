@@ -1,0 +1,511 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Master Agent — Studio</title>
+<style>
+  :root {
+    --bg: #0d1117; --panel: #161b22; --panel2: #1c2330; --line: #2d333b;
+    --text: #e6edf3; --dim: #8b949e; --accent: #d2a65a; --accent2: #58a6d6;
+    --ok: #3fb950; --warn: #d29922; --err: #f85149;
+  }
+  * { box-sizing: border-box; }
+  body { margin: 0; background: var(--bg); color: var(--text);
+         font: 14px/1.5 -apple-system, "Segoe UI", Roboto, sans-serif; }
+  header { display: flex; align-items: center; gap: 18px; padding: 12px 22px;
+           background: var(--panel); border-bottom: 1px solid var(--line); }
+  header h1 { font-size: 17px; margin: 0; letter-spacing: .4px; }
+  header h1 span { color: var(--accent); }
+  .dots { display: flex; gap: 14px; margin-left: auto; font-size: 12px; color: var(--dim); }
+  .dot::before { content: "●"; margin-right: 5px; color: var(--err); }
+  .dot.on::before { color: var(--ok); }
+  nav { display: flex; gap: 4px; padding: 8px 22px 0; background: var(--panel);
+        border-bottom: 1px solid var(--line); }
+  nav button { background: none; border: none; color: var(--dim); padding: 8px 16px;
+               font-size: 14px; cursor: pointer; border-bottom: 2px solid transparent; }
+  nav button.active { color: var(--text); border-bottom-color: var(--accent); }
+  main { padding: 22px; max-width: 1100px; margin: 0 auto; }
+  .tab { display: none; } .tab.active { display: block; }
+  .card { background: var(--panel); border: 1px solid var(--line); border-radius: 8px;
+          padding: 16px; margin-bottom: 16px; }
+  label { display: block; font-size: 12px; color: var(--dim); margin: 10px 0 4px; }
+  textarea, select, input[type=text], input[type=number] {
+    width: 100%; background: var(--panel2); color: var(--text);
+    border: 1px solid var(--line); border-radius: 6px; padding: 8px 10px; font: inherit; }
+  textarea { min-height: 90px; resize: vertical; }
+  .row { display: flex; gap: 12px; } .row > div { flex: 1; }
+  .btn { background: var(--accent); color: #1a1410; border: none; border-radius: 6px;
+         padding: 9px 20px; font-weight: 600; cursor: pointer; margin-top: 14px; }
+  .btn.ghost { background: var(--panel2); color: var(--text); border: 1px solid var(--line); }
+  .btn:disabled { opacity: .5; cursor: default; }
+  .badge { display: inline-block; padding: 2px 10px; border-radius: 10px; font-size: 11px;
+           font-weight: 700; text-transform: uppercase; }
+  .b-queued { background: #2d333b; color: var(--dim); }
+  .b-running { background: #1f3a5f; color: var(--accent2); }
+  .b-done { background: #12361c; color: var(--ok); }
+  .b-error { background: #3d1414; color: var(--err); }
+  .log { background: #0a0d12; border: 1px solid var(--line); border-radius: 6px;
+         padding: 10px; font: 11px/1.6 Consolas, monospace; color: #9db2c8;
+         max-height: 260px; overflow-y: auto; white-space: pre-wrap; margin-top: 10px; }
+  table { width: 100%; border-collapse: collapse; font-size: 13px; }
+  th, td { text-align: left; padding: 8px 10px; border-bottom: 1px solid var(--line); }
+  th { color: var(--dim); font-size: 11px; text-transform: uppercase; }
+  tr.click { cursor: pointer; } tr.click:hover { background: var(--panel2); }
+  .shot { border-left: 3px solid var(--accent); padding: 8px 12px; margin: 8px 0;
+          background: var(--panel2); border-radius: 0 6px 6px 0; }
+  .shot b { color: var(--accent); }
+  .shot .meta { color: var(--dim); font-size: 12px; }
+  video { max-width: 100%; border-radius: 6px; margin-top: 10px; background: #000; }
+  .score { font-weight: 700; } .score.hi { color: var(--ok); } .score.lo { color: var(--err); }
+  .hit { padding: 10px 12px; border-bottom: 1px solid var(--line); font-size: 13px; }
+  .hit .dist { color: var(--accent2); font-size: 11px; }
+  .hit pre { white-space: pre-wrap; color: var(--dim); font-size: 12px; margin: 6px 0 0; }
+  .muted { color: var(--dim); font-size: 12px; }
+  .chat { max-height: 300px; overflow-y: auto; margin-top: 10px; }
+  .msg { padding: 8px 12px; border-radius: 10px; margin: 6px 0; max-width: 85%;
+         white-space: pre-wrap; font-size: 13px; }
+  .msg.her { background: var(--panel2); border: 1px solid var(--line); }
+  .msg.me { background: #2a2416; border: 1px solid var(--accent); margin-left: auto; }
+  .chatbar { display: flex; gap: 8px; margin-top: 8px; }
+  .chatbar .btn { margin-top: 0; }
+  .skip { float: right; cursor: pointer; color: var(--dim); font-size: 12px; }
+  .skip:hover { color: var(--text); }
+  #toast { position: fixed; bottom: 20px; right: 20px; background: var(--panel2);
+           border: 1px solid var(--accent); border-radius: 8px; padding: 10px 18px;
+           display: none; }
+</style>
+</head>
+<body>
+<header>
+  <h1>MASTER <span>AGENT</span> · studio</h1>
+  <div class="dots" id="health">
+    <span class="dot" id="d-comfy">ComfyUI</span>
+    <span class="dot" id="d-ollama">Ollama</span>
+    <span class="dot" id="d-kb">KB</span>
+    <span class="dot" id="d-gpu">GPU</span>
+  </div>
+</header>
+<nav>
+  <button data-tab="create" class="active">Create</button>
+  <button data-tab="fractal">Fractal</button>
+  <button data-tab="music">Music</button>
+  <button data-tab="jobs">Jobs</button>
+  <button data-tab="runs">Runs</button>
+  <button data-tab="kb">Knowledge</button>
+  <button data-tab="models">Models</button>
+</nav>
+<main>
+  <section id="tab-create" class="tab active">
+    <div class="card" id="c-intake-panel" style="display:none">
+      <b id="c-intake-name">Ara</b> <span class="muted">· creative director — a few questions before we generate</span>
+      <span class="skip" id="c-intake-skip">skip interview</span>
+      <div class="chat" id="c-intake-chat"></div>
+      <div class="chatbar">
+        <input type="text" id="c-intake-input" placeholder="answer her… (or type: just go)">
+        <button class="btn ghost" id="c-intake-send">Send</button>
+      </div>
+    </div>
+    <div class="card">
+      <label>Brief</label>
+      <textarea id="c-request" placeholder="premium cold-brew coffee commercial, condensation on the bottle, slow pour over ice"></textarea>
+      <div class="row">
+        <div><label>Duration (s)</label><input type="number" id="c-duration" value="8" min="1" max="30"></div>
+        <div><label>Quality</label><select id="c-quality">
+          <option>draft</option><option>balanced</option><option>quality</option></select></div>
+        <div><label>Variant</label><select id="c-variant">
+          <option value="">auto (director)</option><option>base</option><option>directors</option>
+          <option>eros</option><option>lipsync</option><option>wan22</option></select></div>
+        <div><label>LLM panel</label><select id="c-panel">
+          <option value="">default (27B)</option><option>duo</option>
+          <option value="custom">custom…</option></select>
+          <input type="text" id="c-panel-custom" placeholder="ollama:gemma4:latest,kimi" style="display:none;margin-top:6px"></div>
+      </div>
+      <button class="btn ghost" id="c-preview">Preview storyboard</button>
+      <button class="btn ghost" id="c-interview">Talk it through first</button>
+      <button class="btn" id="c-generate">Generate</button>
+      <span class="muted" id="c-status"></span>
+    </div>
+    <div class="card" id="c-board" style="display:none">
+      <b>Storyboard preview</b> <span class="muted" id="c-board-meta"></span>
+      <div id="c-shots"></div>
+    </div>
+  </section>
+
+  <section id="tab-fractal" class="tab">
+    <div class="card">
+      <label>Brief (optional — goes into the run record)</label>
+      <textarea id="f-request" placeholder="title sequence zoom, infinite seahorse valley"></textarea>
+      <div class="row">
+        <div><label>Duration (s)</label><input type="number" id="f-duration" value="20" min="1" max="600"></div>
+        <div><label>Target</label><select id="f-target">
+          <option>seahorse</option><option>elephant</option><option>minibrot</option><option>spiral</option></select></div>
+        <div><label>Palette</label><select id="f-palette">
+          <option>fire</option><option>ocean</option><option>monochrome</option><option>neon</option><option>sunset</option></select></div>
+      </div>
+      <div class="row">
+        <div><label>Audio (optional — beat-reactive + mux)</label>
+          <input type="file" id="f-audio" accept="audio/*"></div>
+        <div><label>Upscale</label><select id="f-upscale">
+          <option value="">none</option><option value="rtx">RTX (fast, 4K)</option>
+          <option value="seedvr2">SeedVR2 (slow, production)</option></select></div>
+        <div><label>&nbsp;</label><label style="margin:0"><input type="checkbox" id="f-julia"> Julia mode</label></div>
+      </div>
+      <button class="btn" id="f-generate">Render fractal</button>
+      <span class="muted" id="f-status"></span>
+    </div>
+  </section>
+
+  <section id="tab-music" class="tab">
+    <div class="card" id="m-intake-panel" style="display:none">
+      <b id="m-intake-name">Ara</b> <span class="muted">· creative director — let's shape the video before we cut it</span>
+      <span class="skip" id="m-intake-skip">skip interview</span>
+      <div class="chat" id="m-intake-chat"></div>
+      <div class="chatbar">
+        <input type="text" id="m-intake-input" placeholder="answer her… (or type: just go)">
+        <button class="btn ghost" id="m-intake-send">Send</button>
+      </div>
+    </div>
+    <div class="card">
+      <label>Brief</label>
+      <textarea id="m-request" placeholder="dreamy synthwave MV, chrome grids, neon horizons — cut on the beat"></textarea>
+      <div class="row">
+        <div><label>Audio track (required)</label>
+          <input type="file" id="m-audio" accept="audio/*"></div>
+        <div><label>Visual</label><select id="m-visual">
+          <option value="shots">AI shots (ComfyUI, GPU)</option>
+          <option value="fractal">Beat-reactive fractal (CPU)</option></select></div>
+      </div>
+      <div class="row">
+        <div><label>Quality</label><select id="m-quality">
+          <option>draft</option><option>balanced</option><option>quality</option></select></div>
+        <div><label>Upscale</label><select id="m-upscale">
+          <option value="">none</option><option value="rtx">RTX (fast, 4K)</option>
+          <option value="seedvr2">SeedVR2 (slow, production)</option></select></div>
+      </div>
+      <button class="btn" id="m-generate">Make music video</button>
+      <span class="muted" id="m-status"></span>
+    </div>
+  </section>
+
+  <section id="tab-jobs" class="tab"><div id="jobs-list"></div></section>
+
+  <section id="tab-runs" class="tab">
+    <div class="card"><table id="runs-table">
+      <thead><tr><th>When</th><th>Request</th><th>Kind</th><th>Variant</th>
+      <th>Score</th><th>Status</th></tr></thead><tbody></tbody></table></div>
+    <div class="card" id="run-detail" style="display:none"></div>
+  </section>
+
+  <section id="tab-kb" class="tab">
+    <div class="card">
+      <div class="row">
+        <div style="flex:3"><label>Query</label>
+          <input type="text" id="kb-q" placeholder="what worked for a coffee ad?"></div>
+        <div><label>Collection</label><select id="kb-col">
+          <option>runs</option><option>workflows</option></select></div>
+      </div>
+      <button class="btn" id="kb-go">Search</button>
+    </div>
+    <div class="card" id="kb-hits"></div>
+  </section>
+
+  <section id="tab-models" class="tab">
+    <div class="card" id="models-body"><span class="muted">loading…</span></div>
+  </section>
+</main>
+<div id="toast"></div>
+
+<script>
+const $ = (id) => document.getElementById(id);
+const api = async (path, opts) => {
+  const r = await fetch(path, opts && {
+    method: opts.method || "POST",
+    headers: {"Content-Type": "application/json"},
+    body: JSON.stringify(opts.body || {}),
+  });
+  if (!r.ok) throw new Error((await r.json().catch(() => ({}))).detail || r.statusText);
+  return r.json();
+};
+const esc = (s) => String(s ?? "").replace(/[&<>"]/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
+const toast = (msg) => { const t = $("toast"); t.textContent = msg; t.style.display = "block";
+  setTimeout(() => t.style.display = "none", 3500); };
+
+// tabs
+document.querySelectorAll("nav button").forEach(b => b.onclick = () => {
+  document.querySelectorAll("nav button").forEach(x => x.classList.remove("active"));
+  document.querySelectorAll(".tab").forEach(x => x.classList.remove("active"));
+  b.classList.add("active"); $("tab-" + b.dataset.tab).classList.add("active");
+  if (b.dataset.tab === "runs") loadRuns();
+  if (b.dataset.tab === "models") loadModels();
+});
+
+// health
+async function loadHealth() {
+  try {
+    const h = await api("/api/health");
+    $("d-comfy").className = "dot" + (h.comfyui?.up ? " on" : "");
+    $("d-ollama").className = "dot" + (h.ollama ? " on" : "");
+    $("d-kb").className = "dot" + ((h.kb?.runs ?? 0) + (h.kb?.workflows ?? 0) > 0 ? " on" : "");
+    $("d-kb").textContent = `KB ${h.kb?.runs ?? 0}r/${h.kb?.workflows ?? 0}w`;
+    const g = h.comfyui?.gpus?.[0];
+    $("d-gpu").className = "dot" + (g ? " on" : "");
+    if (g) $("d-gpu").textContent = `GPU ${g.vram_free_gb}G free`;
+  } catch (e) { /* leave dots red */ }
+}
+
+// create
+$("c-panel").onchange = () => {
+  $("c-panel-custom").style.display = $("c-panel").value === "custom" ? "block" : "none";
+};
+function createParams() {
+  let panel = $("c-panel").value;
+  if (panel === "custom") panel = $("c-panel-custom").value.trim();
+  return {
+    request: $("c-request").value.trim(),
+    duration_s: parseFloat($("c-duration").value) || 8,
+    quality: $("c-quality").value,
+    variant: $("c-variant").value || null,
+    llm_panel: panel || null,
+  };
+}
+async function submitJob(dryRun) {
+  const p = createParams();
+  if (!p.request) return toast("Write a brief first");
+  if (!dryRun && !cIntake.armed) {
+    cIntake.start();
+    return toast("Ara wants a quick chat first — Generate again when she's done, or skip");
+  }
+  p.dry_run = dryRun;
+  $("c-status").textContent = dryRun ? " planning…" : " queued on GPU…";
+  try {
+    const job = await api("/api/jobs", {body: p});
+    pollJob(job.id, dryRun);
+    document.querySelector('nav button[data-tab="jobs"]').click();
+  } catch (e) { $("c-status").textContent = " " + e.message; }
+}
+$("c-preview").onclick = () => submitJob(true);
+$("c-generate").onclick = () => submitJob(false);
+$("c-interview").onclick = () => cIntake.start();
+
+// shared upload helper (audio files for fractal/music tabs)
+async function uploadFile(inputId) {
+  const input = $(inputId);
+  if (!input.files.length) return null;
+  const fd = new FormData();
+  fd.append("file", input.files[0]);
+  const r = await fetch("/api/upload", {method: "POST", body: fd});
+  if (!r.ok) throw new Error((await r.json().catch(() => ({}))).detail || r.statusText);
+  return (await r.json()).path;
+}
+
+// intake interview (persona chat) — default-on; Generate arms after done/skip
+function makeIntake(prefix, briefFieldId) {
+  let sid = null, personaName = "Ara";
+  const panel = $(prefix + "-panel"), chat = $(prefix + "-chat");
+  const obj = { armed: false };
+  const add = (who, text) => {
+    const d = document.createElement("div");
+    d.className = "msg " + (who === "her" ? "her" : "me");
+    d.textContent = text;
+    chat.appendChild(d); chat.scrollTop = chat.scrollHeight;
+  };
+  obj.start = async () => {
+    const idea = $(briefFieldId).value.trim();
+    if (!idea) return toast("Write a rough idea in the brief first");
+    panel.style.display = "block";
+    try {
+      const r = await api("/api/intake", {body: {request: idea}});
+      sid = r.session_id; personaName = r.persona || "Ara";
+      $(prefix + "-name").textContent = personaName;
+      chat.innerHTML = ""; add("her", r.spoken);
+      $(prefix + "-input").focus();
+    } catch (e) { toast("interview unavailable: " + e.message); obj.armed = true; }
+  };
+  obj.send = async () => {
+    if (!sid) return obj.start();
+    const inp = $(prefix + "-input");
+    const text = inp.value.trim(); if (!text) return;
+    inp.value = ""; add("me", text);
+    try {
+      const r = await api("/api/intake", {body: {session_id: sid, message: text}});
+      add("her", r.spoken);
+      if (r.done && r.refined_request) {
+        $(briefFieldId).value = r.refined_request;
+        toast(personaName + " wrote your brief — review it, then Generate");
+        sid = null; obj.armed = true;
+      }
+    } catch (e) { add("her", "(connection hiccup — try again)"); }
+  };
+  obj.skip = () => {
+    sid = null; obj.armed = true;
+    chat.innerHTML = '<div class="muted">interview skipped — your brief goes straight to generation.</div>';
+  };
+  $(prefix + "-send").onclick = obj.send;
+  $(prefix + "-skip").onclick = obj.skip;
+  $(prefix + "-input").addEventListener("keydown", e => { if (e.key === "Enter") obj.send(); });
+  return obj;
+}
+const cIntake = makeIntake("c-intake", "c-request");
+const mIntake = makeIntake("m-intake", "m-request");
+
+// fractal
+$("f-generate").onclick = async () => {
+  $("f-status").textContent = " uploading…";
+  try {
+    const audio = await uploadFile("f-audio");
+    const body = {
+      request: $("f-request").value.trim(),
+      duration_s: parseFloat($("f-duration").value) || 20,
+      target: $("f-target").value,
+      palette: $("f-palette").value,
+      julia: $("f-julia").checked,
+      audio_path: audio,
+      upscale: $("f-upscale").value || null,
+    };
+    $("f-status").textContent = " rendering on CPU…";
+    const job = await api("/api/fractal", {body});
+    pollJob(job.id, false);
+    document.querySelector('nav button[data-tab="jobs"]').click();
+    $("f-status").textContent = "";
+  } catch (e) { $("f-status").textContent = " " + e.message; }
+};
+
+// music
+$("m-generate").onclick = async () => {
+  if (!$("m-request").value.trim()) return toast("Write a brief first");
+  if (!$("m-audio").files.length) return toast("Pick an audio track first");
+  if (!mIntake.armed) { mIntake.start(); return toast("Ara wants a quick chat first — Generate again when she's done, or skip"); }
+  $("m-status").textContent = " uploading…";
+  try {
+    const audio = await uploadFile("m-audio");
+    const body = {
+      request: $("m-request").value.trim(),
+      audio_path: audio,
+      visual: $("m-visual").value,
+      quality: $("m-quality").value,
+      upscale: $("m-upscale").value || null,
+    };
+    $("m-status").textContent = " queued…";
+    const job = await api("/api/music", {body});
+    pollJob(job.id, false);
+    document.querySelector('nav button[data-tab="jobs"]').click();
+    $("m-status").textContent = "";
+  } catch (e) { $("m-status").textContent = " " + e.message; }
+};
+
+// jobs
+const seenJobs = new Map();
+async function pollJob(id, showBoard) {
+  seenJobs.set(id, showBoard);
+  refreshJobs();
+}
+async function refreshJobs() {
+  let jobs;
+  try { jobs = await api("/api/jobs"); } catch (e) { return; }
+  const box = $("jobs-list");
+  if (!jobs.length) { box.innerHTML = '<div class="card muted">no jobs yet</div>'; return; }
+  box.innerHTML = jobs.map(j => `
+    <div class="card">
+      <span class="badge b-${j.status}">${j.status}</span>
+      <b style="margin-left:8px">${esc(j.request.slice(0, 90))}</b>
+      <span class="muted"> · ${j.kind} · ${esc(j.params.quality || "")}</span>
+      ${j.error ? `<div class="muted" style="color:var(--err)">${esc(j.error)}</div>` : ""}
+      ${j.result?.video_url || j.result?.video_path ? "" : ""}
+      <div class="log" id="log-${j.id}">…</div>
+      <div id="res-${j.id}"></div>
+    </div>`).join("");
+  for (const j of jobs) {
+    const full = await api(`/api/jobs/${j.id}`).catch(() => null);
+    if (!full) continue;
+    const log = $("log-" + j.id);
+    if (log) { log.textContent = (full.log || []).join("\n"); log.scrollTop = log.scrollHeight; }
+    renderResult(j.id, full, seenJobs.get(j.id));
+  }
+}
+function renderResult(id, job, showBoard) {
+  const slot = $("res-" + id);
+  if (!slot || !job.result) return;
+  const r = job.result;
+  let html = "";
+  if (r.video_path) {
+    const url = r.video_url || null;
+    if (r.full_judge_score != null) {
+      html += `<div style="margin-top:10px"><b>full judge:</b>
+        <span class="score ${r.full_judge_pass ? "hi" : "lo"}">${(r.full_judge_score ?? 0).toFixed(2)}</span>
+        ${esc(r.full_judge_notes || "")}</div>`;
+    }
+    if (r.beat_map) html += `<div class="muted" style="margin-top:6px">${r.beat_map.bpm} BPM ·
+      ${(r.beat_map.beats || []).length} beats ·
+      ${(r.beat_map.sections || []).map(s => s.label).join(" → ")}</div>`;
+    if (url) html += `<video controls src="${url}"></video>`;
+    else html += `<div class="muted">${esc(r.video_path)}</div>`;
+  }
+  if (r.shots) {
+    html += r.shots.map(s => `<div class="shot"><b>${s.index + 1}. ${esc(s.title)}</b>
+      <span class="meta"> ${s.duration_s}s · ${esc(s.camera || "")}</span>
+      <div>${esc(s.action || "")}</div></div>`).join("");
+  }
+  if (r.global_style) html = `<div class="muted" style="margin-top:8px">style: ${esc(r.global_style)}</div>` + html;
+  slot.innerHTML = html;
+  if (showBoard && r.shots) {
+    $("c-board").style.display = "block";
+    $("c-board-meta").textContent = ` ${r.shots.length} shots · ${esc(r.global_style || "")}`;
+    $("c-shots").innerHTML = r.shots.map(s => `<div class="shot"><b>${s.index + 1}. ${esc(s.title)}</b>
+      <span class="meta"> ${s.duration_s}s · ${esc(s.camera || "")}</span>
+      <div>${esc(s.action || "")}</div>
+      <div class="meta">${esc((s.ltx_prompt || "").slice(0, 220))}</div></div>`).join("");
+    $("c-status").textContent = "";
+  }
+}
+setInterval(refreshJobs, 2500);
+
+// runs
+async function loadRuns() {
+  const runs = await api("/api/runs").catch(() => []);
+  const tb = document.querySelector("#runs-table tbody");
+  tb.innerHTML = runs.map((r, i) => `<tr class="click" data-i="${i}">
+    <td class="muted">${esc(r.ts)}</td><td>${esc(r.request.slice(0, 60))}</td>
+    <td>${r.kind}</td><td>${esc(r.variant)}</td>
+    <td class="score ${r.passed ? "hi" : "lo"}">${r.score == null ? "–" : r.score.toFixed(2)}</td>
+    <td>${esc(r.status)}</td></tr>`).join("");
+  tb.querySelectorAll("tr").forEach(tr => tr.onclick = () => {
+    const r = runs[tr.dataset.i];
+    const d = $("run-detail");
+    d.style.display = "block";
+    d.innerHTML = `<b>${esc(r.request)}</b> <span class="muted">(${r.kind} · ${esc(r.status)})</span>
+      ${r.judge_reason ? `<p class="muted">${esc(r.judge_reason)}</p>` : ""}
+      ${r.video_url ? `<video controls src="${r.video_url}"></video>` : '<p class="muted">no video file</p>'}`;
+  });
+}
+
+// knowledge
+$("kb-go").onclick = async () => {
+  const q = $("kb-q").value.trim();
+  if (!q) return;
+  const hits = await api(`/api/kb/search?q=${encodeURIComponent(q)}&collection=${$("kb-col").value}`).catch(() => []);
+  $("kb-hits").innerHTML = hits.length ? hits.map(h => `<div class="hit">
+    <span class="dist">${h.distance?.toFixed(3)}</span> <b>${esc(h.id)}</b>
+    <pre>${esc((h.text || "").slice(0, 400))}</pre></div>`).join("")
+    : '<span class="muted">no hits</span>';
+};
+
+// models
+async function loadModels() {
+  const m = await api("/api/models").catch(() => null);
+  if (!m) { $("models-body").innerHTML = '<span class="muted">failed to load</span>'; return; }
+  const bundles = Object.entries(m.bundles || {}).map(([k, v]) =>
+    `<tr><td>${esc(k)}</td><td>${v.runnable ? '<span class="score hi">runnable</span>' : '<span class="score lo">incomplete</span>'}</td>
+     <td class="muted">${esc((v.missing || []).join(", "))}</td></tr>`).join("");
+  const files = (m.files || []).map(f => `<tr><td>${esc(f.name)}</td>
+    <td>${f.size_gb} GB</td><td class="muted">${esc(f.dir)}</td></tr>`).join("");
+  $("models-body").innerHTML = `<b>Bundles</b><table>${bundles}</table>
+    <br><b>Files</b><table>${files}</table>`;
+}
+
+loadHealth();
+refreshJobs();
+setInterval(loadHealth, 15000);
+</script>
+</body>
+</html>
