@@ -1,7 +1,7 @@
 ---
 name: video-buddy
 description: "Use for Video Buddy local video agent (MCP master-agent)."
-version: 1.0.1
+version: 1.0.2
 author: Ara / Ringmaster
 license: MIT
 platforms: [windows]
@@ -20,9 +20,9 @@ metadata:
 - **Code home:** `C:\Users\thcab\Documents\ltx2.3_agent\video_buddy`
 - **Repo:** https://github.com/thcabq352/ltx-video-buddy (private)
 - **Not** a Hermes profile. External friend next to hardline/forge/coder.
-- **Hermes MCP server name:** `master-agent`
-- **Studio UI:** `http://127.0.0.1:8189` (`python -m master_agent ui --port 8189` or `run_ui_8189.bat`)
-- **Comfy:** portable `video_buddy/ComfyUI_windows_portable` → `run_api_8188.bat` → `http://127.0.0.1:8188`
+- **MCP server name:** `master-agent` (Hermes native MCP client; register once via `hermes mcp`)
+- **Studio UI:** loopback port **8189** — `python -m master_agent ui --port 8189` or `run_ui_8189.bat`
+- **Comfy API:** portable under `video_buddy/ComfyUI_windows_portable` — `run_api_8188.bat` — loopback port **8188**
 - **Vault card:** `Documents/Obsidian Vault/Agentic OS/ops/agent-roster/video_buddy.md`
 
 ## When to use
@@ -41,12 +41,12 @@ metadata:
 
 ## Preflight (always)
 ```bash
-curl -sS -m 3 http://127.0.0.1:8188/system_stats
-curl -sS -m 2 -o /dev/null -w "%{http_code}" http://127.0.0.1:8189/
 cd "C:/Users/thcab/Documents/ltx2.3_agent/video_buddy"
 ./.venv/Scripts/python.exe -m master_agent health
+# optional: studio dashboard
+# ./.venv/Scripts/python.exe -m master_agent ui --port 8189
 ```
-If Comfy down: start `ComfyUI_windows_portable\run_api_8188.bat` (leave window open).
+If Comfy is down: start `ComfyUI_windows_portable\run_api_8188.bat` (leave window open).
 VRAM: 16GB — don't stack Video Buddy heavy job + other Comfy + giant Ollama VL blindly.
 
 ## CLI (unattended)
@@ -65,26 +65,26 @@ $PY -m master_agent kb search "lipsync" -k 5
 Long GPU jobs: terminal background + `notify_on_complete=true`. Deliverable under `outputs/`.
 
 ## Hermes MCP
-Config (`~/.hermes/config.yaml` → `mcp_servers.master-agent`):
-```yaml
-master-agent:
-  command: C:/Users/thcab/Documents/ltx2.3_agent/video_buddy/.venv/Scripts/python.exe
-  args:
-    - C:/Users/thcab/Documents/ltx2.3_agent/video_buddy/master_agent/mcp_server.py
-  enabled: true
-  timeout: 900
-  connect_timeout: 120
-```
-Verify: `hermes mcp test master-agent` → 11 tools.
-Tools: `health`, `create_video`, `plan_storyboard`, `judge_asset`, `search_workflows`, `search_runs`, `kb_ingest`, `list_models`, `validate_workflow`, `create_character`, `train_lora`.
-After config change: restart gateway / new session so tools re-bind.
+Server id: **`master-agent`**.
+
+Command (stdio):
+- Python: `C:/Users/thcab/Documents/ltx2.3_agent/video_buddy/.venv/Scripts/python.exe`
+- Script: `C:/Users/thcab/Documents/ltx2.3_agent/video_buddy/master_agent/mcp_server.py`
+- Prefer long tool timeout (≈900s) and connect timeout (≈120s)
+
+Register/update with Hermes MCP tooling (`hermes mcp add` / `hermes mcp list` / `hermes mcp test master-agent`) — do **not** hand-edit Hermes config files from this skill.
+
+Verify: `hermes mcp test master-agent` → 11 tools:
+`health`, `create_video`, `plan_storyboard`, `judge_asset`, `search_workflows`, `search_runs`, `kb_ingest`, `list_models`, `validate_workflow`, `create_character`, `train_lora`.
+
+After MCP registration changes: new session / gateway refresh so tools re-bind.
 
 ## Skills Hub wiring
-- Canonical skill path in repo: `skills/video-buddy/SKILL.md`
+- Canonical path in repo: `skills/video-buddy/SKILL.md`
 - Tap: `hermes skills tap add thcabq352/ltx-video-buddy`
-- Install: `hermes skills install thcabq352/ltx-video-buddy/video-buddy -y` (or hub identifier after index)
-- Agents junction: `~/.agents/skills/video-buddy` → this directory
-- Hermes local: `~/.hermes/skills/media/video-buddy` junction or hub install path
+- Install from private raw URL (via `gh api …/contents/… --jq .download_url`) or keep local/agents copies
+- Agents path: `~/.agents/skills/video-buddy`
+- Hermes path: `~/.hermes/skills/media/video-buddy`
 
 ## Ringmaster vs forge
 - **Video Buddy** = this agent's director stack + **its** portable Comfy + judge/KB
@@ -93,14 +93,14 @@ Same machine GPU: pick **one** render owner per job.
 
 ## Pitfalls
 1. Old path `…/ltx2.3_agent/kimi ltx/` is **gone** — never point MCP there.
-2. UI `:8189` up ≠ Comfy `:8188` up.
-3. `ltx-director-hermes` may still mention `LTX Project` :8765 — if that tree missing, use Video Buddy.
+2. Studio UI up ≠ Comfy API up.
+3. `ltx-director-hermes` may still mention `LTX Project` A2A harness — if that tree is missing, use Video Buddy.
 4. Intake interview default-on in interactive CLI — use `--no-interview` for unattended agent runs.
-5. Private tap installs need GitHub auth (`gh` / credential helper).
+5. Private hub installs need GitHub auth; community scan may flag localhost ports — prefer local skill + tap for discovery.
 
 ## Verification
 - [ ] `hermes skills tap list` includes `thcabq352/ltx-video-buddy`
 - [ ] `hermes skills list` shows `video-buddy` enabled
 - [ ] `hermes mcp test master-agent` → 11 tools
-- [ ] `python -m master_agent health` Comfy up before GPU
+- [ ] `python -m master_agent health` reports Comfy up before GPU work
 - [ ] Output path exists under `video_buddy/outputs/` before claiming done
