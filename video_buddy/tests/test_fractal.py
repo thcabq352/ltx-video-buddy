@@ -10,12 +10,19 @@ import unittest
 import numpy as np
 
 from master_agent.fractal.render import (
+    MODES,
     PALETTES,
     TARGETS,
+    center_hole_mask,
     colorize,
+    composite_rgb,
+    ensure_even_size,
     julia_smooth,
     mandelbrot_smooth,
+    paint_frames,
+    prepare_outpaint,
     render_frame,
+    soft_mask_from_gray,
     zoom_frames,
 )
 
@@ -157,6 +164,76 @@ class TestFramesAndZoom(unittest.TestCase):
             render_mod.render_frame = orig
         floor = TARGETS["seahorse"][2] / render_mod.MAX_ZOOM_DEPTH
         self.assertGreaterEqual(min(seen), floor * 0.999)
+
+
+class TestInpaintOutpaint(unittest.TestCase):
+    def test_modes_tuple(self):
+        self.assertEqual({"zoom", "inpaint", "outpaint"}, set(MODES))
+
+    def test_center_hole_mask_soft_edges(self):
+        m = center_hole_mask(64, 96, cover=0.5, feather=8)
+        self.assertEqual(m.shape, (64, 96))
+        self.assertGreater(m[32, 48], 0.9)  # center filled
+        self.assertLess(m[0, 0], 0.15)  # corner kept
+        # soft ramp exists somewhere
+        self.assertTrue(np.any((m > 0.1) & (m < 0.9)))
+
+    def test_prepare_outpaint_canvas_and_mask(self):
+        img = np.full((40, 60, 3), 180, dtype=np.uint8)
+        canvas, mask = prepare_outpaint(img, expand=10, feather=4)
+        self.assertEqual(canvas.shape, (60, 80, 3))
+        self.assertEqual(mask.shape, (60, 80))
+        # original region fully kept
+        self.assertTrue((mask[10:50, 10:70] == 0).all())
+        # far corner is full fill; first pixel outside has soft ramp
+        self.assertGreaterEqual(mask[0, 0], 0.99)
+        self.assertGreater(mask[9, 40], 0.0)
+        self.assertLess(mask[9, 40], 1.0)
+        # photo pixels preserved; borders edge-extended (not black)
+        self.assertTrue((canvas[10:50, 10:70] == 180).all())
+        self.assertTrue((canvas[0, 10:70] == 180).all())
+
+    def test_composite_blends(self):
+        base = np.zeros((8, 8, 3), dtype=np.uint8)
+        fill = np.full((8, 8, 3), 200, dtype=np.uint8)
+        mask = np.zeros((8, 8), dtype=np.float32)
+        mask[:, 4:] = 1.0
+        out = composite_rgb(base, fill, mask)
+        self.assertTrue((out[:, :4] == 0).all())
+        self.assertTrue((out[:, 4:] == 200).all())
+
+    def test_ensure_even_size_crops_odd(self):
+        odd = np.zeros((5, 7, 3), dtype=np.uint8)
+        even = ensure_even_size(odd)
+        self.assertEqual(even.shape, (4, 6, 3))
+        self.assertEqual(ensure_even_size(np.zeros((4, 6), dtype=np.float32)).shape, (4, 6))
+
+    def test_soft_mask_from_gray(self):
+        gray = np.zeros((16, 16), dtype=np.float32)
+        gray[4:12, 4:12] = 1.0
+        soft = soft_mask_from_gray(gray, feather=3)
+        self.assertGreater(soft[8, 8], 0.9)
+        self.assertLess(soft[0, 0], 0.2)
+
+    def test_paint_frames_composites_one_frame(self):
+        base = np.full((32, 48, 3), 40, dtype=np.uint8)
+        mask = center_hole_mask(32, 48, cover=0.5, feather=4)
+        frames = list(
+            paint_frames(
+                base_rgb=base,
+                mask=mask,
+                duration_s=1 / 12,
+                fps=12,
+                max_iter=32,
+                seed=1,
+            )
+        )
+        self.assertEqual(1, len(frames))
+        idx, frame = frames[0]
+        self.assertEqual(0, idx)
+        self.assertEqual((32, 48, 3), frame.shape)
+        # corner should stay close to base (outside hole)
+        self.assertLess(int(frame[0, 0].mean()), 80)
 
 
 if __name__ == "__main__":

@@ -69,7 +69,9 @@ OLLAMA_MODEL = os.getenv("OLLAMA_MODEL", "qwen3.6-27b-fable")
 # LLM provider selection: auto (ollama -> kimi -> grok) | ollama[:model] | kimi | grok
 LLM_PROVIDER = (os.getenv("LLM_PROVIDER", "auto") or "auto").strip().lower()
 
-# Storyboard LLM panel: preset (default | duo) or comma list of providers
+# Storyboard LLM panel: preset (default|local | grok | grok+local|both |
+# grok+claude | duo) or comma list (ollama[:model], grok, kimi, claude, …)
+# default/local = local 27B; grok = solo; grok+local / grok+claude = panels
 LLM_PANEL = (os.getenv("LLM_PANEL", "default") or "default").strip()
 PANEL_JUDGE = (os.getenv("PANEL_JUDGE", "ollama") or "ollama").strip()
 PANEL_MEMBER_TIMEOUT_S = int(os.getenv("PANEL_MEMBER_TIMEOUT_S", "300"))
@@ -94,6 +96,13 @@ JUDGE_VISION_WEIGHT = float(os.getenv("JUDGE_VISION_WEIGHT", "0.30"))
 
 # Director brain — LLM variant routing (falls back to keyword rules)
 DIRECTOR_LLM = os.getenv("DIRECTOR_LLM", "1").lower() in ("1", "true", "yes", "on")
+
+# Power mode — LLM proposes ComfyUI graph ops (set_widget/rewire/…) after
+# heuristic patch, grounded in /object_info + workflow RAG. Validate-gated.
+# Default off: enable with POWER_MODE=1 or --power-mode on `run` / CLI.
+POWER_MODE = os.getenv("POWER_MODE", "0").lower() in ("1", "true", "yes", "on")
+POWER_MODE_MAX_OPS = int(os.getenv("POWER_MODE_MAX_OPS", "12"))
+POWER_MODE_REPAIR = os.getenv("POWER_MODE_REPAIR", "1").lower() in ("1", "true", "yes", "on")
 
 # Knowledge base — ChromaDB RAG over workflows + run records
 KB_ENABLED = os.getenv("KB_ENABLED", "1").lower() in ("1", "true", "yes", "on")

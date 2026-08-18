@@ -105,6 +105,59 @@ def cmd_validate(args: argparse.Namespace) -> int:
     return 0 if all(r.ok for r in reports) else 1
 
 
+def cmd_power_tune(args: argparse.Namespace) -> int:
+    """Dry-run power mode: heuristic patch + LLM graph ops + validate (no GPU)."""
+    from master_agent.comfy.power_mode import power_tune
+    from master_agent.comfy.workflow_patcher import load_and_patch_workflow
+    from master_agent.config import get_quality_profile
+
+    profile = get_quality_profile(args.quality)
+    try:
+        wf, meta = load_and_patch_workflow(
+            args.variant,
+            prompt=args.request,
+            duration_s=args.duration,
+            seed=args.seed,
+            steps=profile.get("steps"),
+            width=int(profile.get("max_width") or 768),
+            height=int(profile.get("max_height") or 512),
+        )
+    except Exception as e:
+        print(f"FAIL  patch: {e}")
+        return 1
+
+    result = power_tune(
+        wf,
+        request=args.request,
+        provider=args.provider,
+        log=print,
+    )
+    payload = result.to_dict()
+    payload["variant"] = args.variant
+    payload["patch_meta"] = {k: meta.get(k) for k in ("seed", "steps", "cfg", "width", "height", "frames") if k in meta}
+
+    if args.out:
+        out = Path(args.out)
+        out.parent.mkdir(parents=True, exist_ok=True)
+        out.write_text(json.dumps(result.workflow, indent=1) + "\n", encoding="utf-8")
+        print(f"wrote workflow: {out}")
+
+    if args.json:
+        print(json.dumps(payload, indent=1, default=str))
+    else:
+        print(f"reason:  {result.reason or '(none)'}")
+        print(f"ops:     {len(result.ops)} proposed, {len(result.applied)} applied")
+        print(f"valid:   {result.valid}")
+        print(f"rag:     {result.rag_used}")
+        if result.error:
+            print(f"error:   {result.error}")
+        for e in result.validation_errors[:8]:
+            print(f"  ERR {e}")
+        for o in result.applied[:12]:
+            print(f"  + {o}")
+    return 0 if result.valid or not result.ops else 2
+
+
 def cmd_run(args: argparse.Namespace) -> int:
     from master_agent.config import (
         JUDGE_ENABLED,
@@ -194,6 +247,9 @@ def cmd_run(args: argparse.Namespace) -> int:
         max_full_judge_rounds=args.max_full_judge_rounds or MAX_FULL_JUDGE_ROUNDS,
         llm_panel=args.llm_panel,
         panel_judge=args.panel_judge,
+        power_mode=True if getattr(args, "power_mode", False) else (
+            False if getattr(args, "no_power_mode", False) else None
+        ),
         client=client,
     )
     print()
@@ -289,9 +345,14 @@ def cmd_fractal(args: argparse.Namespace) -> int:
     from master_agent.config import FRACTAL_DEFAULTS
     from master_agent.fractal.pipeline import run_fractal
 
+    mode = getattr(args, "mode", None) or "zoom"
+    if mode in ("inpaint", "outpaint") and not args.image:
+        print(f"FAIL  fractal --mode {mode} needs --image <file>")
+        return 2
     request = _maybe_interview(args.request or "", no_interview=args.no_interview)
     rec = run_fractal(
         request,
+        mode=mode,
         duration_s=args.duration,
         fps=args.fps or FRACTAL_DEFAULTS["fps"],
         width=args.width,
@@ -301,6 +362,11 @@ def cmd_fractal(args: argparse.Namespace) -> int:
         seed=args.seed,
         julia=args.julia,
         audio_path=args.audio,
+        image_path=args.image,
+        mask_path=getattr(args, "mask", None),
+        expand=getattr(args, "expand", 128),
+        cover=getattr(args, "cover", 0.4),
+        feather=getattr(args, "feather", 28),
     )
     video = rec["video_path"]
     if args.upscale:
@@ -410,6 +476,7 @@ def cmd_ui(args: argparse.Namespace) -> int:
     from master_agent.web.app import app
 
     print(f"Master Agent studio: http://{args.host}:{args.port}")
+    print("  Voice chat: open in Chrome/Edge → Voice tab (mic + spoken replies)")
     uvicorn.run(app, host=args.host, port=args.port, log_level="warning")
     return 0
 
@@ -674,19 +741,39 @@ def main(argv: list[str] | None = None) -> int:
     p.add_argument("--storyboard", choices=["smart", "always", "multi_only", "off"],
                    help="storyboard mode (default: env STORYBOARD_MODE or smart)")
     p.add_argument("--llm-panel",
-                   help="storyboard LLM panel: preset (default | duo) or comma list, "
-                        "e.g. ollama:qwen3.6-27b-fable,ollama:gemma4:latest")
+                   help="storyboard LLM panel: preset (default|local | grok | "
+                        "grok+local|both | grok+claude | duo) or comma list")
     p.add_argument("--panel-judge",
                    help="provider that picks the winning storyboard (default: env PANEL_JUDGE or ollama)")
     p.add_argument("--max-full-judge-rounds", type=int, default=None,
                    help="full-video judge re-gen budget (multi-segment)")
     p.add_argument("--dry-run", action="store_true",
                    help="storyboard + patch + validate all segments, no GPU queue")
+    p.add_argument("--power-mode", action="store_true",
+                   help="LLM graph ops after patch (object_info + RAG; validate-gated)")
+    p.add_argument("--no-power-mode", action="store_true",
+                   help="disable power mode even if POWER_MODE=1")
     p.add_argument("--upscale", choices=["rtx", "seedvr2"], default=None,
                    help="post-stage upscale of the final video")
     p.add_argument("--no-interview", action="store_true",
                    help="skip the persona intake interview")
     p.set_defaults(func=cmd_run)
+
+    p = sub.add_parser(
+        "power-tune",
+        help="dry-run power mode: patch variant + LLM graph ops + validate (no GPU)",
+    )
+    p.add_argument("request", help="creative brief / intent for the graph edit")
+    p.add_argument("--variant", default="base",
+                   choices=["base", "eros", "directors", "lipsync", "wan22", "flux"],
+                   help="workflow variant template (default base)")
+    p.add_argument("--quality", choices=["draft", "balanced", "quality"], default="draft")
+    p.add_argument("--duration", type=float, default=5.0)
+    p.add_argument("--seed", type=int)
+    p.add_argument("--provider", help="LLM provider (ollama|grok|kimi|auto)")
+    p.add_argument("--json", action="store_true", help="print machine-readable result")
+    p.add_argument("--out", help="write patched workflow JSON to this path")
+    p.set_defaults(func=cmd_power_tune)
 
     p = sub.add_parser("persona", help="personas: list | show <name>")
     p.add_argument("persona_command", choices=["list", "show"])
@@ -700,12 +787,27 @@ def main(argv: list[str] | None = None) -> int:
     p.add_argument("--quality", choices=["draft", "balanced", "quality"], help="quality profile (--go)")
     p.set_defaults(func=cmd_brief)
 
-    p = sub.add_parser("fractal", help="procedural fractal deep-zoom video (CPU only)")
+    p = sub.add_parser(
+        "fractal",
+        help="procedural fractal video: zoom | inpaint | outpaint (CPU only)",
+    )
     p.add_argument("request", nargs="?", default="", help="optional brief (for the run record)")
+    p.add_argument("--mode", choices=["zoom", "inpaint", "outpaint"], default="zoom",
+                   help="zoom=deep-zoom; inpaint=fill a hole; outpaint=expand canvas borders")
+    p.add_argument("--image", help="source image for inpaint/outpaint")
+    p.add_argument("--mask", help="inpaint mask image (white=fill); default: center ellipse")
+    p.add_argument("--expand", type=int, default=128,
+                   help="outpaint border thickness in pixels (default 128)")
+    p.add_argument("--cover", type=float, default=0.4,
+                   help="inpaint center-hole size as fraction of frame (default 0.4)")
+    p.add_argument("--feather", type=int, default=28,
+                   help="soft edge radius in pixels for inpaint/outpaint (default 28)")
     p.add_argument("--duration", type=float, default=20.0, help="seconds (default 20)")
     p.add_argument("--fps", type=int, default=None, help="frames per second (default 24)")
-    p.add_argument("--width", type=int, default=768)
-    p.add_argument("--height", type=int, default=512)
+    p.add_argument("--width", type=int, default=768,
+                   help="zoom mode width (inpaint/outpaint use the image size)")
+    p.add_argument("--height", type=int, default=512,
+                   help="zoom mode height (inpaint/outpaint use the image size)")
     p.add_argument("--target", default="seahorse",
                    choices=["seahorse", "elephant", "minibrot", "spiral"],
                    help="zoom target (default seahorse)")
@@ -734,7 +836,8 @@ def main(argv: list[str] | None = None) -> int:
     p.add_argument("--no-judge", action="store_true", help="skip the judge loop")
     p.add_argument("--max-judge-rounds", type=int, default=None, help="judge retry budget")
     p.add_argument("--llm-panel",
-                   help="storyboard LLM panel: preset (default | duo) or comma list")
+                   help="storyboard LLM panel: preset (default|local | grok | "
+                        "grok+local|both | grok+claude | duo) or comma list")
     p.add_argument("--panel-judge",
                    help="provider that picks the winning storyboard")
     p.add_argument("--upscale", choices=["rtx", "seedvr2"], default=None,

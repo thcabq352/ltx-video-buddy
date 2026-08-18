@@ -229,8 +229,16 @@ class IntakeSession:
 
     @staticmethod
     def _wants_out(text: str) -> bool:
-        low = text.lower().strip().rstrip(".!")
-        return any(low == p or low.startswith(p + " ") for p in _BAIL_PHRASES)
+        # Normalize punctuation so "wrap it up — just go" still bails
+        low = re.sub(r"[,;:–—\-]+", " ", (text or "").lower())
+        low = re.sub(r"\s+", " ", low).strip().rstrip(".!")
+        return any(
+            low == p
+            or low.startswith(p + " ")
+            or low.endswith(" " + p)
+            or f" {p} " in f" {low} "
+            for p in _BAIL_PHRASES
+        )
 
     def _write_record(self) -> None:
         RUNS_DIR.mkdir(parents=True, exist_ok=True)
@@ -245,7 +253,7 @@ class IntakeSession:
         }
         try:
             (RUNS_DIR / f"{ts}_{self.id}_intake.json").write_text(
-                json.dumps(record, indent=1, default=str), encoding="utf-8"
+                json.dumps(record, indent=1, default=str) + "\n", encoding="utf-8"
             )
         except OSError:
             pass

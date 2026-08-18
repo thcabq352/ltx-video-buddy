@@ -1,7 +1,7 @@
 {
- "generated_at": "2026-08-03T17:42:48.039070Z",
- "models_dir": "C:\\Users\\thcab\\Documents\\ltx2.3_agent\\kimi ltx\\models",
- "comfyui_models_dir": "C:\\Users\\thcab\\Documents\\ltx2.3_agent\\kimi ltx\\ComfyUI_windows_portable\\ComfyUI\\models",
+ "generated_at": "2026-08-05T09:29:32.829210Z",
+ "models_dir": "C:\\Users\\thcab\\Documents\\ltx2.3_agent\\video_buddy\\models",
+ "comfyui_models_dir": "C:\\Users\\thcab\\Documents\\ltx2.3_agent\\video_buddy\\ComfyUI_windows_portable\\ComfyUI\\models",
  "entries": [
   {
    "name": "ltx-2.3-22b-dev-fp8.safetensors",
@@ -84,6 +84,46 @@
    "partial": false
   },
   {
+   "name": "LTX-2.3-dev-Q4_K_S.gguf",
+   "rel_path": "diffusion_models/gguf/LTX-2.3-dev-Q4_K_S.gguf",
+   "folder": "diffusion_models",
+   "role": "diffusion",
+   "size_bytes": 16706375424,
+   "mtime": "2026-08-05T06:43:01.559891Z",
+   "root": "project",
+   "partial": false
+  },
+  {
+   "name": "Qwen-Image-Edit-2509-Q5_0.gguf",
+   "rel_path": "diffusion_models/gguf/Qwen-Image-Edit-2509-Q5_0.gguf",
+   "folder": "diffusion_models",
+   "role": "diffusion",
+   "size_bytes": 14400813600,
+   "mtime": "2026-08-04T01:31:29.958946Z",
+   "root": "project",
+   "partial": false
+  },
+  {
+   "name": "qwen-image-edit-2511-Q5_0.gguf",
+   "rel_path": "diffusion_models/gguf/qwen-image-edit-2511-Q5_0.gguf",
+   "folder": "diffusion_models",
+   "role": "diffusion",
+   "size_bytes": 14400813664,
+   "mtime": "2026-08-04T01:27:10.014302Z",
+   "root": "project",
+   "partial": false
+  },
+  {
+   "name": "wan-14B_vace_skyreels_v3_R2V_e4m3fn_v1-Q4_K_M.gguf",
+   "rel_path": "diffusion_models/gguf/wan-14B_vace_skyreels_v3_R2V_e4m3fn_v1-Q4_K_M.gguf",
+   "folder": "diffusion_models",
+   "role": "diffusion",
+   "size_bytes": 11627589408,
+   "mtime": "2026-08-04T01:31:29.584329Z",
+   "root": "project",
+   "partial": false
+  },
+  {
    "name": "ideogram4_fp8_scaled.safetensors",
    "rel_path": "diffusion_models/ideogram4_fp8_scaled.safetensors",
    "folder": "diffusion_models",
@@ -100,6 +140,16 @@
    "role": "diffusion",
    "size_bytes": 9280741293,
    "mtime": "2026-07-30T23:50:08.899390Z",
+   "root": "project",
+   "partial": false
+  },
+  {
+   "name": "krea2_turbo_fp8_scaled.safetensors",
+   "rel_path": "diffusion_models/krea2_turbo_fp8_scaled.safetensors",
+   "folder": "diffusion_models",
+   "role": "diffusion",
+   "size_bytes": 13141730784,
+   "mtime": "2026-08-04T04:27:54.998395Z",
    "root": "project",
    "partial": false
   },
@@ -164,6 +214,16 @@
    "partial": false
   },
   {
+   "name": "wan-14B_vace_skyreels_v3_R2V_e4m3fn_v1.safetensors",
+   "rel_path": "diffusion_models/wan/wan-14B_vace_skyreels_v3_R2V_e4m3fn_v1.safetensors",
+   "folder": "diffusion_models",
+   "role": "diffusion",
+   "size_bytes": 17344681528,
+   "mtime": "2026-08-04T01:31:24.847657Z",
+   "root": "project",
+   "partial": false
+  },
+  {
    "name": "wan2.2_t2v_high_noise_14B_fp8_scaled.safetensors",
    "rel_path": "diffusion_models/wan/wan2.2_t2v_high_noise_14B_fp8_scaled.safetensors",
    "folder": "diffusion_models",
@@ -184,6 +244,36 @@
    "partial": false
   },
   {
+   "name": "z_image_turbo_bf16.safetensors",
+   "rel_path": "diffusion_models/z_image/z_image_turbo_bf16.safetensors",
+   "folder": "diffusion_models",
+   "role": "diffusion",
+   "size_bytes": 12309866400,
+   "mtime": "2026-08-04T05:42:51.210501Z",
+   "root": "project",
+   "partial": false
+  },
+  {
+   "name": "ltx-2.3-spatial-upscaler-x2-1.1.safetensors",
+   "rel_path": "latent_upscale_models/ltx-2.3-spatial-upscaler-x2-1.1.safetensors",
+   "folder": "latent_upscale_models",
+   "role": "other",
+   "size_bytes": 995743560,
+   "mtime": "2026-08-05T06:38:02.837761Z",
+   "root": "project",
+   "partial": false
+  },
+  {
+   "name": "flux-2-klein-9B-360-erp-outpaint-lora_V1.safetensors",
+   "rel_path": "loras/flux-2-klein-9B-360-erp-outpaint-lora_V1.safetensors",
+   "folder": "loras",
+   "role": "lora",
+   "size_bytes": 82867136,
+   "mtime": "2026-08-05T06:37:00.560233Z",
+   "root": "project",
+   "partial": false
+  },
+  {
    "name": "Flux2-Klein-9B-consistency-V2.safetensors",
    "rel_path": "loras/Flux2-Klein-9B-consistency-V2.safetensors",
    "folder": "loras",
@@ -194,12 +284,62 @@
    "partial": false
   },
   {
+   "name": "krea2_identity_edit_v1_2.safetensors",
+   "rel_path": "loras/krea/krea2_identity_edit_v1_2.safetensors",
+   "folder": "loras",
+   "role": "lora",
+   "size_bytes": 1828256432,
+   "mtime": "2026-08-04T04:28:29.868168Z",
+   "root": "project",
+   "partial": false
+  },
+  {
+   "name": "ltx-2-19b-ic-lora-union-control-ref0.5.safetensors",
+   "rel_path": "loras/ltx/ltx-2-19b-ic-lora-union-control-ref0.5.safetensors",
+   "folder": "loras",
+   "role": "lora",
+   "size_bytes": 654465296,
+   "mtime": "2026-08-04T01:32:00.286243Z",
+   "root": "project",
+   "partial": false
+  },
+  {
+   "name": "LTX-2.3-OmniNFT-RL-Lora_bf16.safetensors",
+   "rel_path": "loras/ltx/LTX-2.3-OmniNFT-RL-Lora_bf16.safetensors",
+   "folder": "loras",
+   "role": "lora",
+   "size_bytes": 616948520,
+   "mtime": "2026-08-04T02:32:57.141125Z",
+   "root": "project",
+   "partial": false
+  },
+  {
+   "name": "ltx-2-19b-ic-lora-detailer.safetensors",
+   "rel_path": "loras/ltx-2-19b-ic-lora-detailer.safetensors",
+   "folder": "loras",
+   "role": "lora",
+   "size_bytes": 2617401920,
+   "mtime": "2026-08-04T01:32:12.950018Z",
+   "root": "project",
+   "partial": false
+  },
+  {
    "name": "ltx-2.3-22b-distilled-1.1_lora-dynamic_fro09_avg_rank_111_bf16.safetensors",
    "rel_path": "loras/ltx-2.3-22b-distilled-1.1_lora-dynamic_fro09_avg_rank_111_bf16.safetensors",
    "folder": "loras",
    "role": "lora",
    "size_bytes": 2741024390,
    "mtime": "2026-07-20T13:40:20.582405Z",
+   "root": "project",
+   "partial": false
+  },
+  {
+   "name": "ltx-2.3-22b-distilled-lora-384-1.1.safetensors",
+   "rel_path": "loras/ltx-2.3-22b-distilled-lora-384-1.1.safetensors",
+   "folder": "loras",
+   "role": "lora",
+   "size_bytes": 7605507256,
+   "mtime": "2026-08-04T01:33:03.561983Z",
    "root": "project",
    "partial": false
   },
@@ -220,6 +360,46 @@
    "role": "lora",
    "size_bytes": 2466665072,
    "mtime": "2026-07-20T14:33:23.896184Z",
+   "root": "project",
+   "partial": false
+  },
+  {
+   "name": "ltx-2.3-id-lora-talkvid-3k.safetensors",
+   "rel_path": "loras/ltx-2.3-id-lora-talkvid-3k.safetensors",
+   "folder": "loras",
+   "role": "lora",
+   "size_bytes": 1157884304,
+   "mtime": "2026-08-05T06:37:25.640890Z",
+   "root": "project",
+   "partial": false
+  },
+  {
+   "name": "251018_MICKMUMPITZ_QWEN-EDIT_360_03.safetensors",
+   "rel_path": "loras/qwen/251018_MICKMUMPITZ_QWEN-EDIT_360_03.safetensors",
+   "folder": "loras",
+   "role": "lora",
+   "size_bytes": 295146160,
+   "mtime": "2026-08-04T01:26:17.912346Z",
+   "root": "project",
+   "partial": false
+  },
+  {
+   "name": "Qwen-Image-Edit-2511-Lightning-4steps-V1.0-fp32.safetensors",
+   "rel_path": "loras/qwen/Qwen-Image-Edit-2511-Lightning-4steps-V1.0-fp32.safetensors",
+   "folder": "loras",
+   "role": "lora",
+   "size_bytes": 1698951104,
+   "mtime": "2026-08-04T01:31:15.400666Z",
+   "root": "project",
+   "partial": false
+  },
+  {
+   "name": "Qwen-Image-Lightning-4steps-V2.0.safetensors",
+   "rel_path": "loras/qwen/Qwen-Image-Lightning-4steps-V2.0.safetensors",
+   "folder": "loras",
+   "role": "lora",
+   "size_bytes": 1698951104,
+   "mtime": "2026-08-04T01:24:04.856179Z",
    "root": "project",
    "partial": false
   },
@@ -264,12 +444,32 @@
    "partial": false
   },
   {
+   "name": "Wan2.1_T2V_14B_FusionX_LoRA.safetensors",
+   "rel_path": "loras/wan/Wan2.1_T2V_14B_FusionX_LoRA.safetensors",
+   "folder": "loras",
+   "role": "lora",
+   "size_bytes": 316822496,
+   "mtime": "2026-08-04T01:31:30.142181Z",
+   "root": "project",
+   "partial": false
+  },
+  {
    "name": "Wan21_T2V_14B_lightx2v_cfg_step_distill_lora_rank32.safetensors",
    "rel_path": "loras/wan/Wan21_T2V_14B_lightx2v_cfg_step_distill_lora_rank32.safetensors",
    "folder": "loras",
    "role": "lora",
    "size_bytes": 316822496,
    "mtime": "2026-07-30T23:57:05.779285Z",
+   "root": "project",
+   "partial": false
+  },
+  {
+   "name": "Z-Image-Turbo-Fun-Controlnet-Union-2.1-2601-8steps.safetensors",
+   "rel_path": "model_patches/Z-Image-Turbo-Fun-Controlnet-Union-2.1-2601-8steps.safetensors",
+   "folder": "model_patches",
+   "role": "other",
+   "size_bytes": 6712485600,
+   "mtime": "2026-08-04T05:42:36.624004Z",
    "root": "project",
    "partial": false
   },
@@ -314,6 +514,16 @@
    "partial": false
   },
   {
+   "name": "gemma_3_12B_it_fp8_scaled.safetensors",
+   "rel_path": "text_encoders/gemma_3_12B_it_fp8_scaled.safetensors",
+   "folder": "text_encoders",
+   "role": "text_encoder",
+   "size_bytes": 13205434827,
+   "mtime": "2026-08-05T06:44:24.894861Z",
+   "root": "project",
+   "partial": false
+  },
+  {
    "name": "ltx-2.3_text_projection_bf16.safetensors",
    "rel_path": "text_encoders/ltx-2.3_text_projection_bf16.safetensors",
    "folder": "text_encoders",
@@ -324,12 +534,32 @@
    "partial": false
   },
   {
+   "name": "qwen_2.5_vl_7b_fp8_scaled.safetensors",
+   "rel_path": "text_encoders/qwen/qwen_2.5_vl_7b_fp8_scaled.safetensors",
+   "folder": "text_encoders",
+   "role": "text_encoder",
+   "size_bytes": 9384670680,
+   "mtime": "2026-08-04T01:25:57.712821Z",
+   "root": "project",
+   "partial": false
+  },
+  {
    "name": "qwen3.5_2b_bf16.safetensors",
    "rel_path": "text_encoders/qwen3.5_2b_bf16.safetensors",
    "folder": "text_encoders",
    "role": "text_encoder",
    "size_bytes": 4548221488,
    "mtime": "2026-07-28T17:59:42.381524Z",
+   "root": "project",
+   "partial": false
+  },
+  {
+   "name": "qwen3vl_4b_bf16.safetensors",
+   "rel_path": "text_encoders/qwen3vl_4b_bf16.safetensors",
+   "folder": "text_encoders",
+   "role": "text_encoder",
+   "size_bytes": 8875719384,
+   "mtime": "2026-08-04T04:28:13.881993Z",
    "root": "project",
    "partial": false
   },
@@ -440,6 +670,26 @@
    "role": "vae",
    "size_bytes": 364855188,
    "mtime": "2026-07-20T13:24:46.543880Z",
+   "root": "project",
+   "partial": false
+  },
+  {
+   "name": "LTX23_video_vae_bf16.safetensors",
+   "rel_path": "vae/LTX23_video_vae_bf16.safetensors",
+   "folder": "vae",
+   "role": "vae",
+   "size_bytes": 1452258578,
+   "mtime": "2026-08-05T06:38:34.116164Z",
+   "root": "project",
+   "partial": false
+  },
+  {
+   "name": "qwen_image_vae.safetensors",
+   "rel_path": "vae/qwen/qwen_image_vae.safetensors",
+   "folder": "vae",
+   "role": "vae",
+   "size_bytes": 253806246,
+   "mtime": "2026-08-04T01:21:15.402742Z",
    "root": "project",
    "partial": false
   },

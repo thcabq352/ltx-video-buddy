@@ -32,6 +32,13 @@ class JobRequest(BaseModel):
     variant: Optional[str] = None
     llm_panel: Optional[str] = None
     dry_run: bool = False
+    # Local paths under state/uploads/ (from /api/upload); uploaded into ComfyUI on run
+    image_path: Optional[str] = None  # start frame for i2v
+    audio_path: Optional[str] = None  # lipsync / audio conditioning
+    video_path: Optional[str] = None  # source video (lipsync)
+    upscale: Optional[str] = None
+    seed: Optional[int] = None
+    storyboard: Optional[str] = None
 
 
 class JudgeRequest(BaseModel):
@@ -42,6 +49,7 @@ class JudgeRequest(BaseModel):
 
 class FractalRequest(BaseModel):
     request: str = ""
+    mode: str = "zoom"  # zoom | inpaint | outpaint
     duration_s: float = 20.0
     fps: int = 24
     width: int = 768
@@ -51,6 +59,11 @@ class FractalRequest(BaseModel):
     julia: bool = False
     seed: Optional[int] = None
     audio_path: Optional[str] = None
+    image_path: Optional[str] = None  # required for inpaint/outpaint
+    mask_path: Optional[str] = None  # optional inpaint mask (white=fill)
+    expand: int = 128  # outpaint border px
+    cover: float = 0.4  # inpaint center-hole fraction
+    feather: int = 28
     upscale: Optional[str] = None
 
 
@@ -69,6 +82,15 @@ class IntakeRequest(BaseModel):
     message: Optional[str] = None  # subsequent user reply
 
 
+class PowerTuneRequest(BaseModel):
+    request: str
+    variant: str = "base"
+    quality: str = "draft"
+    duration_s: float = 5.0
+    seed: Optional[int] = None
+    provider: Optional[str] = None
+
+
 # ── pages & media ───────────────────────────────────────
 
 
@@ -82,7 +104,11 @@ def videos(rel_path: str):
     """Serve generated videos for playback (path-guarded to OUTPUTS_DIR)."""
     base = OUTPUTS_DIR.resolve()
     target = (base / rel_path).resolve()
-    if not str(target).startswith(str(base)) or not target.is_file():
+    try:
+        target.relative_to(base)
+    except ValueError:
+        raise HTTPException(404, "video not found")
+    if not target.is_file():
         raise HTTPException(404, "video not found")
     return FileResponse(target)
 
@@ -98,6 +124,7 @@ def api_health() -> dict[str, Any]:
 
     out: dict[str, Any] = {
         "ollama": provider_available("ollama"),
+        "grok": provider_available("grok"),
         "kb": {
             "workflows": collection_count(COLLECTION_WORKFLOWS),
             "runs": collection_count(COLLECTION_RUNS),
@@ -122,6 +149,29 @@ def api_health() -> dict[str, Any]:
     return out
 
 
+_FRACTAL_TARGETS = {"seahorse", "elephant", "minibrot", "spiral"}
+_FRACTAL_PALETTES = {"fire", "ocean", "monochrome", "neon", "sunset"}
+_UPSCALE_METHODS = {None, "rtx", "seedvr2"}
+_STORYBOARD_MODES = {None, "smart", "always", "multi_only", "off"}
+
+
+def _require_upload_path(path: Optional[str], label: str) -> Optional[str]:
+    """Ensure optional media path exists and lives under state/uploads/."""
+    if not path:
+        return None
+    from master_agent.config import STATE_DIR
+
+    p = Path(path).resolve()
+    uploads = (STATE_DIR / "uploads").resolve()
+    try:
+        p.relative_to(uploads)
+    except ValueError:
+        raise HTTPException(400, f"{label} must be an uploaded file under state/uploads/")
+    if not p.is_file():
+        raise HTTPException(400, f"{label} not found: {path}")
+    return str(p)
+
+
 @app.post("/api/jobs")
 def api_submit_job(req: JobRequest):
     if not req.request.strip():
@@ -130,6 +180,13 @@ def api_submit_job(req: JobRequest):
         raise HTTPException(400, "quality must be draft|balanced|quality")
     if req.variant not in (None, "base", "directors", "eros", "lipsync", "wan22"):
         raise HTTPException(400, "unknown variant")
+    if req.upscale not in _UPSCALE_METHODS:
+        raise HTTPException(400, "upscale must be rtx|seedvr2")
+    if req.storyboard not in _STORYBOARD_MODES:
+        raise HTTPException(400, "storyboard must be smart|always|multi_only|off")
+    image_path = _require_upload_path(req.image_path, "image")
+    audio_path = _require_upload_path(req.audio_path, "audio")
+    video_path = _require_upload_path(req.video_path, "video")
     kind = "dry-run" if req.dry_run else "run"
     job = MANAGER.submit(
         kind,
@@ -138,6 +195,12 @@ def api_submit_job(req: JobRequest):
         quality=req.quality,
         variant=req.variant,
         llm_panel=req.llm_panel,
+        image_path=image_path,
+        audio_path=audio_path,
+        video_path=video_path,
+        upscale=req.upscale,
+        seed=req.seed,
+        storyboard=req.storyboard,
     )
     return job.to_dict()
 
@@ -155,24 +218,37 @@ def api_get_job(job_id: str):
     return job.to_dict(with_log=True)
 
 
-_FRACTAL_TARGETS = {"seahorse", "elephant", "minibrot", "spiral"}
-_FRACTAL_PALETTES = {"fire", "ocean", "monochrome", "neon", "sunset"}
-_UPSCALE_METHODS = {None, "rtx", "seedvr2"}
+_FRACTAL_MODES = {"zoom", "inpaint", "outpaint"}
 
 
 @app.post("/api/fractal")
 def api_fractal(req: FractalRequest):
+    mode = (req.mode or "zoom").strip().lower()
+    if mode not in _FRACTAL_MODES:
+        raise HTTPException(400, f"mode must be one of {sorted(_FRACTAL_MODES)}")
     if req.target not in _FRACTAL_TARGETS:
         raise HTTPException(400, f"target must be one of {sorted(_FRACTAL_TARGETS)}")
     if req.palette not in _FRACTAL_PALETTES:
         raise HTTPException(400, f"palette must be one of {sorted(_FRACTAL_PALETTES)}")
     if req.upscale not in _UPSCALE_METHODS:
         raise HTTPException(400, "upscale must be rtx|seedvr2")
-    if req.audio_path and not Path(req.audio_path).is_file():
-        raise HTTPException(400, f"audio not found: {req.audio_path}")
+    if mode in ("inpaint", "outpaint") and not req.image_path:
+        raise HTTPException(400, f"mode={mode} requires image_path (upload an image first)")
+    if req.duration_s <= 0 or req.duration_s > 600:
+        raise HTTPException(400, "duration_s must be in (0, 600]")
+    if req.expand < 0 or req.expand > 1024:
+        raise HTTPException(400, "expand must be 0..1024")
+    if not (0.05 <= req.cover <= 0.95):
+        raise HTTPException(400, "cover must be 0.05..0.95")
+    if req.feather < 0 or req.feather > 256:
+        raise HTTPException(400, "feather must be 0..256")
+    audio_path = _require_upload_path(req.audio_path, "audio") if req.audio_path else None
+    image_path = _require_upload_path(req.image_path, "image") if req.image_path else None
+    mask_path = _require_upload_path(req.mask_path, "mask") if req.mask_path else None
     job = MANAGER.submit(
         "fractal",
-        req.request.strip() or f"fractal {req.target}/{req.palette}",
+        req.request.strip() or f"fractal {mode} {req.target}/{req.palette}",
+        mode=mode,
         duration_s=req.duration_s,
         fps=req.fps,
         width=req.width,
@@ -181,7 +257,12 @@ def api_fractal(req: FractalRequest):
         palette=req.palette,
         julia=req.julia,
         seed=req.seed,
-        audio_path=req.audio_path,
+        audio_path=audio_path,
+        image_path=image_path,
+        mask_path=mask_path,
+        expand=req.expand,
+        cover=req.cover,
+        feather=req.feather,
         upscale=req.upscale,
     )
     return job.to_dict()
@@ -197,12 +278,13 @@ def api_music(req: MusicRequest):
         raise HTTPException(400, "quality must be draft|balanced|quality")
     if req.upscale not in _UPSCALE_METHODS:
         raise HTTPException(400, "upscale must be rtx|seedvr2")
-    if not Path(req.audio_path).is_file():
-        raise HTTPException(400, f"audio not found: {req.audio_path}")
+    if not (req.audio_path or "").strip():
+        raise HTTPException(400, "audio_path required")
+    audio_path = _require_upload_path(req.audio_path, "audio")
     job = MANAGER.submit(
         "music",
         req.request.strip(),
-        audio_path=req.audio_path,
+        audio_path=audio_path,
         visual=req.visual,
         quality=req.quality,
         seed=req.seed,
@@ -211,20 +293,40 @@ def api_music(req: MusicRequest):
     return job.to_dict()
 
 
+# Max single upload size (images / audio / video for ComfyUI inputs)
+_UPLOAD_MAX_BYTES = 500 * 1024 * 1024  # 500 MB
+
+
 @app.post("/api/upload")
 async def api_upload(file: UploadFile = File(...)):
-    """Save an uploaded media file (e.g. a music track) under state/uploads/."""
+    """Save an uploaded media file under state/uploads/ (images, audio, video)."""
     from master_agent.config import STATE_DIR
     import uuid as _uuid
 
     uploads = STATE_DIR / "uploads"
     uploads.mkdir(parents=True, exist_ok=True)
     safe_name = Path(file.filename or "upload.bin").name
+    # strip path tricks
+    safe_name = safe_name.replace("\\", "/").split("/")[-1] or "upload.bin"
     dest = uploads / f"{_uuid.uuid4().hex[:8]}_{safe_name}"
+    written = 0
     with dest.open("wb") as f:
         while chunk := await file.read(1 << 20):
+            written += len(chunk)
+            if written > _UPLOAD_MAX_BYTES:
+                f.close()
+                dest.unlink(missing_ok=True)
+                raise HTTPException(413, f"file too large (max {_UPLOAD_MAX_BYTES // (1024 * 1024)} MB)")
             f.write(chunk)
-    return {"path": str(dest), "name": safe_name}
+    if written == 0:
+        dest.unlink(missing_ok=True)
+        raise HTTPException(400, "empty upload")
+    return {
+        "path": str(dest),
+        "name": safe_name,
+        "size_bytes": written,
+        "content_type": file.content_type or "",
+    }
 
 
 # ── intake interview (persona chat) ─────────────────────
@@ -238,6 +340,51 @@ def api_persona():
 
     p = load_persona()
     return {"slug": p.slug, "name": p.name}
+
+
+@app.post("/api/power-tune")
+def api_power_tune(req: PowerTuneRequest):
+    """Dry-run agent power mode: patch + LLM graph ops + validate (no GPU)."""
+    from master_agent.comfy.power_mode import power_tune
+    from master_agent.comfy.workflow_patcher import load_and_patch_workflow
+    from master_agent.config import get_quality_profile
+
+    if not req.request.strip():
+        raise HTTPException(400, "request must not be empty")
+    if req.variant not in ("base", "eros", "directors", "lipsync", "wan22", "flux"):
+        raise HTTPException(400, "unknown variant")
+    if req.quality not in ("draft", "balanced", "quality"):
+        raise HTTPException(400, "quality must be draft|balanced|quality")
+    profile = get_quality_profile(req.quality)
+    try:
+        wf, meta = load_and_patch_workflow(
+            req.variant,
+            prompt=req.request.strip(),
+            duration_s=req.duration_s,
+            seed=req.seed,
+            steps=profile.get("steps"),
+            width=int(profile.get("max_width") or 768),
+            height=int(profile.get("max_height") or 512),
+        )
+    except Exception as e:
+        raise HTTPException(400, f"patch failed: {e}") from e
+    logs: list[str] = []
+    result = power_tune(
+        wf,
+        request=req.request.strip(),
+        provider=req.provider,
+        log=logs.append,
+    )
+    out = result.to_dict()
+    out["variant"] = req.variant
+    out["log"] = logs
+    out["patch_meta"] = {
+        k: meta.get(k)
+        for k in ("seed", "steps", "cfg", "width", "height", "frames")
+        if k in meta
+    }
+    # Do not return full workflow by default (large); include node count only
+    return out
 
 
 @app.post("/api/intake")
