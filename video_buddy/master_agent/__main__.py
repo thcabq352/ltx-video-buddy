@@ -8,7 +8,8 @@ Commands:
   run                 Orchestrated video generation (storyboard -> judge -> stitch)
   fractal             Procedural fractal deep-zoom video (CPU only, no ComfyUI)
   music               Beat-synced music video from an audio track
-  persona list|show   Intake personas (default: ara)
+  persona list|show|set   Intake voice (default: ara)
+  soul list|show|set      Standing values (default: studio)
   brief               Interview-only: rough idea -> creative brief (--go to generate)
   character create|list   CCC stage: bible -> Flux sheet -> captioned dataset
   lora setup|train|validate  Flux LoRA training via ai-toolkit + vision validation
@@ -26,6 +27,12 @@ from master_agent.comfy.client import ComfyClient, ComfyClientError
 from master_agent.comfy.validator import format_report, validate_workflow_file
 from master_agent.config import WORKFLOWS_DIR, ensure_dirs
 from master_agent.models.inventory import format_summary, scan_inventory
+
+
+def cmd_setup(args: argparse.Namespace) -> int:
+    from master_agent.setup import cmd_setup as run_setup
+
+    return run_setup(do_fix=bool(args.fix))
 
 
 def cmd_health(args: argparse.Namespace) -> int:
@@ -293,22 +300,64 @@ def _maybe_interview(request: str, *, no_interview: bool = False) -> str:
 
 
 def cmd_persona(args: argparse.Namespace) -> int:
-    from master_agent.config import PERSONA
-    from master_agent.persona.persona import list_personas, load_persona
+    import master_agent.config as cfg
+    from master_agent.persona.persona import list_personas, load_persona, set_active_persona
 
     if args.persona_command == "list":
         for p in list_personas():
-            mark = "*" if p.slug == PERSONA else " "
+            mark = "*" if p.slug == cfg.PERSONA else " "
             print(f"{mark} {p.slug:10s} {p.name:10s} {p.path}")
-        print(f"\n* = active (PERSONA env, default 'ara'). Add your own: state/personas/<name>.md")
+        print("\n* = active. Switch with: python -m master_agent persona set <slug>")
+        print("  Add your own: state/personas/<name>.md")
         return 0
-    # show
+    if args.persona_command == "set":
+        if not args.name:
+            print("FAIL  pass a persona slug: persona set exec")
+            return 2
+        try:
+            persona = set_active_persona(args.name, session="cli")
+        except ValueError as e:
+            print(f"FAIL  {e}")
+            return 1
+        print(f"OK    persona={persona.slug} ({persona.name})")
+        return 0
     try:
-        persona = load_persona(args.name)
+        persona = load_persona(args.name or None)
     except ValueError as e:
         print(f"FAIL  {e}")
         return 1
     print(persona.system_prompt)
+    return 0
+
+
+def cmd_soul(args: argparse.Namespace) -> int:
+    import master_agent.config as cfg
+    from master_agent.persona.soul import list_souls, load_soul, set_active_soul
+
+    if args.soul_command == "list":
+        for s in list_souls():
+            mark = "*" if s.slug == cfg.SOUL else " "
+            print(f"{mark} {s.slug:10s} {s.name:10s} {s.path}")
+        print("\n* = active. Switch with: python -m master_agent soul set <slug>")
+        print("  Add your own: state/souls/<name>.md")
+        return 0
+    if args.soul_command == "set":
+        if not args.name:
+            print("FAIL  pass a soul slug: soul set play")
+            return 2
+        try:
+            soul = set_active_soul(args.name, session="cli")
+        except ValueError as e:
+            print(f"FAIL  {e}")
+            return 1
+        print(f"OK    soul={soul.slug} ({soul.name})")
+        return 0
+    try:
+        soul = load_soul(args.name or None)
+    except ValueError as e:
+        print(f"FAIL  {e}")
+        return 1
+    print(soul.system_prompt)
     return 0
 
 
@@ -475,7 +524,7 @@ def cmd_ui(args: argparse.Namespace) -> int:
         return 1
     from master_agent.web.app import app
 
-    print(f"Master Agent studio: http://{args.host}:{args.port}")
+    print(f"VIDEO BUDDY studio: http://{args.host}:{args.port}")
     print("  Voice chat: open in Chrome/Edge → Voice tab (mic + spoken replies)")
     uvicorn.run(app, host=args.host, port=args.port, log_level="warning")
     return 0
@@ -685,6 +734,61 @@ def _lora_setup(toolkit_dir) -> int:
     return 0
 
 
+def _parse_override_flags(flags: list[str]) -> dict[str, dict]:
+    overrides: dict[str, dict] = {}
+    for raw in flags or []:
+        if "=" not in raw or "." not in raw.split("=", 1)[0]:
+            raise ValueError(f"override must look like NODE.FIELD=VALUE, got {raw!r}")
+        left, value = raw.split("=", 1)
+        node_id, field = left.split(".", 1)
+        try:
+            parsed = json.loads(value)
+        except json.JSONDecodeError:
+            parsed = value
+        overrides.setdefault(node_id, {})[field] = parsed
+    return overrides
+
+
+def cmd_comfy(args: argparse.Namespace) -> int:
+    from master_agent.comfy.cli_run import LintError, lint_or_raise, prepare_run
+
+    try:
+        overrides = _parse_override_flags(args.set)
+        workflow = None
+        if args.workflow_json:
+            p = Path(args.workflow_json)
+            raw = p.read_text(encoding="utf-8") if p.is_file() else args.workflow_json
+            workflow = json.loads(raw)
+        prepared = prepare_run(
+            args.mode,
+            workflow=workflow,
+            template_path=args.template,
+            variant=args.variant,
+            prompt=args.prompt,
+            overrides=overrides,
+        )
+    except Exception as e:
+        print(f"FAIL  {e}")
+        return 1
+    try:
+        client = ComfyClient()
+        object_info, _src = client.load_object_info(prefer_live=True)
+        lint_or_raise(prepared, object_info)
+    except LintError as e:
+        print(f"FAIL  {e}")
+        return 1
+    except Exception as e:
+        print(f"WARN  linter skipped ({e})")
+    if args.out:
+        out = Path(args.out)
+        out.parent.mkdir(parents=True, exist_ok=True)
+        out.write_text(json.dumps(prepared, indent=1) + "\n", encoding="utf-8")
+        print(f"wrote {out}")
+    else:
+        print(json.dumps({"ok": True, "nodes": len(prepared)}, indent=1))
+    return 0
+
+
 def main(argv: list[str] | None = None) -> int:
     # Windows console is cp1252 — never crash on LLM-emitted unicode (e.g. →)
     for stream in (sys.stdout, sys.stderr):
@@ -693,8 +797,12 @@ def main(argv: list[str] | None = None) -> int:
         except Exception:
             pass
     ensure_dirs()
-    parser = argparse.ArgumentParser(prog="master_agent")
+    parser = argparse.ArgumentParser(prog="python -m master_agent", description="VIDEO BUDDY")
     sub = parser.add_subparsers(dest="command", required=True)
+
+    p = sub.add_parser("setup", help="check or install local dependencies")
+    p.add_argument("--fix", action="store_true", help="create venv, pip install, Playwright, .env, ffmpeg, Ollama models")
+    p.set_defaults(func=cmd_setup)
 
     p = sub.add_parser("health", help="check ComfyUI reachability")
     p.set_defaults(func=cmd_health)
@@ -770,15 +878,20 @@ def main(argv: list[str] | None = None) -> int:
     p.add_argument("--quality", choices=["draft", "balanced", "quality"], default="draft")
     p.add_argument("--duration", type=float, default=5.0)
     p.add_argument("--seed", type=int)
-    p.add_argument("--provider", help="LLM provider (ollama|grok|kimi|auto)")
+    p.add_argument("--provider", help="LLM provider (ollama|grok|auto)")
     p.add_argument("--json", action="store_true", help="print machine-readable result")
     p.add_argument("--out", help="write patched workflow JSON to this path")
     p.set_defaults(func=cmd_power_tune)
 
-    p = sub.add_parser("persona", help="personas: list | show <name>")
-    p.add_argument("persona_command", choices=["list", "show"])
-    p.add_argument("name", nargs="?", default="", help="persona slug (show)")
+    p = sub.add_parser("persona", help="personas: list | show | set <slug>")
+    p.add_argument("persona_command", choices=["list", "show", "set"])
+    p.add_argument("name", nargs="?", default="", help="persona slug (show/set)")
     p.set_defaults(func=cmd_persona)
+
+    p = sub.add_parser("soul", help="souls: list | show | set <slug>")
+    p.add_argument("soul_command", choices=["list", "show", "set"])
+    p.add_argument("name", nargs="?", default="", help="soul slug (show/set)")
+    p.set_defaults(func=cmd_soul)
 
     p = sub.add_parser("brief", help="interview-only: turn a rough idea into a creative brief")
     p.add_argument("request", help="your rough idea (natural language)")
@@ -869,7 +982,22 @@ def main(argv: list[str] | None = None) -> int:
     p.add_argument("--validate", action="store_true", help="validate after training")
     p.set_defaults(func=cmd_lora)
 
+    p = sub.add_parser("comfy", help="comfy run: raw JSON, template+overrides, or generate")
+    p.add_argument("comfy_command", choices=["run"])
+    p.add_argument("--mode", choices=["raw", "template", "generate"], default="generate")
+    p.add_argument("--json", dest="workflow_json", help="pasted/path API workflow JSON (raw)")
+    p.add_argument("--template", help="template workflow path")
+    p.add_argument("--variant", default="base")
+    p.add_argument("--prompt", default="")
+    p.add_argument("--set", action="append", default=[], metavar="NODE.FIELD=VALUE",
+                   help="expert override, e.g. 12.steps=8 (repeatable)")
+    p.add_argument("--out", help="write prepared workflow JSON")
+    p.set_defaults(func=cmd_comfy)
+
     args = parser.parse_args(argv)
+    from master_agent.control.versioned_config import announce_config
+
+    print(announce_config(), flush=True)
     return args.func(args)
 
 

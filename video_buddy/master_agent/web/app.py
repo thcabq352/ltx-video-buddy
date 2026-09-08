@@ -1,4 +1,4 @@
-"""FastAPI app — the Master Agent web dashboard.
+"""FastAPI app — the VIDEO BUDDY web dashboard.
 
 Run: python -m master_agent ui --port 8189
 """
@@ -7,10 +7,11 @@ from __future__ import annotations
 
 import json
 import time
+from contextlib import asynccontextmanager
 from pathlib import Path
 from typing import Any, Optional
 
-from fastapi import FastAPI, File, HTTPException, Query, UploadFile
+from fastapi import FastAPI, File, HTTPException, Query, Request, UploadFile
 from fastapi.responses import FileResponse
 from pydantic import BaseModel
 
@@ -19,7 +20,16 @@ from master_agent.web.jobs import MANAGER
 
 STATIC_DIR = Path(__file__).resolve().parent / "static"
 
-app = FastAPI(title="ComfyUI Master Agent", docs_url=None, redoc_url=None)
+
+@asynccontextmanager
+async def _lifespan(_app: FastAPI):
+    from master_agent.control.versioned_config import announce_config
+
+    print(announce_config(), flush=True)
+    yield
+
+
+app = FastAPI(title="VIDEO BUDDY", docs_url=None, redoc_url=None, lifespan=_lifespan)
 
 
 # ── models ──────────────────────────────────────────────
@@ -91,6 +101,20 @@ class PowerTuneRequest(BaseModel):
     provider: Optional[str] = None
 
 
+class ComfyPrepareRequest(BaseModel):
+    mode: str = "template"
+    workflow: Optional[dict[str, Any]] = None
+    template: Optional[str] = None
+    variant: Optional[str] = None
+    prompt: str = ""
+    overrides: Optional[dict[str, dict[str, Any]]] = None
+
+
+class ComfyWorkflowBody(BaseModel):
+    workflow: dict[str, Any]
+    request: str = "comfy run"
+
+
 # ── pages & media ───────────────────────────────────────
 
 
@@ -130,6 +154,12 @@ def api_health() -> dict[str, Any]:
             "runs": collection_count(COLLECTION_RUNS),
         },
     }
+    try:
+        from master_agent.control.versioned_config import get_versioned_config
+
+        out["config_hash"] = get_versioned_config().snapshot()["hash"]
+    except Exception:
+        pass
     try:
         stats = ComfyClient().health()
         devices = stats.get("devices") or []
@@ -336,10 +366,64 @@ _intake_sessions: dict[str, Any] = {}
 
 @app.get("/api/persona")
 def api_persona():
-    from master_agent.persona.persona import load_persona
+    import master_agent.config as cfg
+    from master_agent.persona.persona import list_personas, load_persona
 
     p = load_persona()
-    return {"slug": p.slug, "name": p.name}
+    return {
+        "slug": p.slug,
+        "name": p.name,
+        "active": cfg.PERSONA,
+        "items": [
+            {"slug": i.slug, "name": i.name, "active": i.slug == cfg.PERSONA}
+            for i in list_personas()
+        ],
+    }
+
+
+@app.post("/api/persona")
+def api_persona_set(payload: dict[str, Any]):
+    from master_agent.persona.persona import set_active_persona
+
+    slug = str(payload.get("slug") or "").strip()
+    if not slug:
+        raise HTTPException(400, "slug required")
+    try:
+        p = set_active_persona(slug, session=str(payload.get("session") or "studio"))
+    except ValueError as e:
+        raise HTTPException(400, str(e)) from e
+    return api_persona()
+
+
+@app.get("/api/soul")
+def api_soul():
+    import master_agent.config as cfg
+    from master_agent.persona.soul import list_souls, load_soul
+
+    s = load_soul()
+    return {
+        "slug": s.slug,
+        "name": s.name,
+        "active": cfg.SOUL,
+        "items": [
+            {"slug": i.slug, "name": i.name, "active": i.slug == cfg.SOUL}
+            for i in list_souls()
+        ],
+    }
+
+
+@app.post("/api/soul")
+def api_soul_set(payload: dict[str, Any]):
+    from master_agent.persona.soul import set_active_soul
+
+    slug = str(payload.get("slug") or "").strip()
+    if not slug:
+        raise HTTPException(400, "slug required")
+    try:
+        s = set_active_soul(slug, session=str(payload.get("session") or "studio"))
+    except ValueError as e:
+        raise HTTPException(400, str(e)) from e
+    return api_soul()
 
 
 @app.post("/api/power-tune")
@@ -385,6 +469,69 @@ def api_power_tune(req: PowerTuneRequest):
     }
     # Do not return full workflow by default (large); include node count only
     return out
+
+
+@app.get("/api/comfy/templates")
+def api_comfy_templates():
+    from master_agent.comfy.cli_run import list_templates
+
+    return {"items": list_templates()}
+
+
+@app.post("/api/comfy/prepare")
+def api_comfy_prepare(req: ComfyPrepareRequest):
+    from master_agent.comfy.cli_run import editable_fields, prepare_run
+
+    mode = (req.mode or "template").strip().lower()
+    if mode not in ("raw", "template", "generate"):
+        raise HTTPException(400, "mode must be raw|template|generate")
+    try:
+        workflow = prepare_run(
+            mode,
+            workflow=req.workflow,
+            template_path=req.template,
+            variant=req.variant,
+            prompt=req.prompt,
+            overrides=req.overrides,
+        )
+    except (ValueError, FileNotFoundError, KeyError, json.JSONDecodeError) as e:
+        raise HTTPException(400, str(e)) from e
+    return {
+        "ok": True,
+        "mode": mode,
+        "nodes": len(workflow),
+        "fields": editable_fields(workflow),
+        "workflow": workflow,
+    }
+
+
+@app.post("/api/comfy/lint")
+def api_comfy_lint(req: ComfyWorkflowBody):
+    from master_agent.comfy.cli_run import lint_report
+    from master_agent.comfy.client import ComfyClient
+
+    try:
+        object_info, source = ComfyClient().load_object_info(prefer_live=True)
+    except Exception as e:
+        raise HTTPException(503, f"cannot load /object_info: {e}") from e
+    report = lint_report(req.workflow, object_info)
+    report["object_info"] = source
+    return report
+
+
+@app.post("/api/comfy/run")
+def api_comfy_run(req: ComfyWorkflowBody):
+    from master_agent.comfy.cli_run import unwrap_workflow
+
+    try:
+        workflow = unwrap_workflow(req.workflow)
+    except ValueError as e:
+        raise HTTPException(400, str(e)) from e
+    if not any(isinstance(node, dict) and "class_type" in node for node in workflow.values()):
+        raise HTTPException(400, "workflow has no Comfy nodes")
+    label = (req.request or "comfy run").strip() or "comfy run"
+    job = MANAGER.submit("comfy-run", label, workflow=workflow)
+    return job.to_dict()
 
 
 @app.post("/api/intake")
@@ -517,3 +664,110 @@ def api_judge(req: JudgeRequest):
             heuristic_issues=issues,
         )
     return res.to_dict()
+
+
+# A2A sits beside MCP (master_agent/mcp_server.py). Protocol lives in a2a/.
+_A2A = None
+
+
+def _a2a_store():
+    global _A2A
+    if _A2A is None:
+        from master_agent.a2a.protocol import TaskStore
+
+        _A2A = TaskStore()
+    return _A2A
+
+
+def _a2a_bind(request: Request) -> tuple[str, int]:
+    host = request.url.hostname or "127.0.0.1"
+    port = request.url.port or 8189
+    return host, port
+
+
+@app.get("/.well-known/agent.json")
+def a2a_agent_card(request: Request):
+    from master_agent.a2a.protocol import agent_card
+
+    host, port = _a2a_bind(request)
+    return agent_card(host=host, port=port)
+
+
+@app.post("/a2a")
+def a2a_rpc(payload: dict[str, Any], request: Request):
+    from master_agent.a2a.protocol import handle_rpc, submit_orchestrator
+
+    store = _a2a_store()
+    host, port = _a2a_bind(request)
+    return handle_rpc(
+        payload,
+        store=store,
+        submit=lambda tid, body: submit_orchestrator(tid, body, store),
+        host=host,
+        port=port,
+    )
+
+
+class ControlUpdate(BaseModel):
+    judge_strictness: Optional[float] = None
+    learning_rate: Optional[float] = None
+    cost_vram_threshold_gb: Optional[float] = None
+    render_budget_cap_vram_min: Optional[float] = None
+    judge_score_threshold: Optional[float] = None
+    persona: Optional[str] = None
+    soul: Optional[str] = None
+    reset_budget: bool = False
+    session: Optional[str] = None
+
+
+def _control_payload() -> dict[str, Any]:
+    from master_agent.control.budget import get_project_budget
+    from master_agent.control.versioned_config import get_versioned_config
+
+    store = get_versioned_config()
+    snap = store.snapshot()
+    budget = get_project_budget().snapshot()
+    values = snap["values"]
+    from master_agent.persona.persona import list_personas
+    from master_agent.persona.soul import list_souls
+
+    persona = str(values.get("persona") or "ara")
+    soul = str(values.get("soul") or "studio")
+    return {
+        "hash": snap["hash"],
+        "judge_strictness": values.get("judge_strictness"),
+        "learning_rate": values.get("learning_rate"),
+        "cost_vram_threshold_gb": values.get("cost_vram_threshold_gb"),
+        "judge_score_threshold": values.get("judge_score_threshold"),
+        "render_budget_cap_vram_min": budget["cap"],
+        "render_budget_used_vram_min": budget["used"],
+        "persona": persona,
+        "soul": soul,
+        "personas": [{"slug": p.slug, "name": p.name} for p in list_personas()],
+        "souls": [{"slug": s.slug, "name": s.name} for s in list_souls()],
+        "budget": budget,
+        "history": store.history(10),
+    }
+
+
+@app.get("/api/control")
+def api_control_get():
+    return _control_payload()
+
+
+@app.post("/api/control")
+def api_control_post(req: ControlUpdate):
+    from master_agent.control.budget import get_project_budget
+    from master_agent.control.versioned_config import get_versioned_config
+
+    session = (req.session or "studio").strip() or "studio"
+    updates = req.model_dump(exclude_none=True)
+    updates.pop("reset_budget", None)
+    updates.pop("session", None)
+    store = get_versioned_config()
+    if updates:
+        store.set_values(updates, session=session, sync_budget=True)
+    if req.reset_budget:
+        get_project_budget().reset_used()
+        store.sync_used(0.0)
+    return _control_payload()

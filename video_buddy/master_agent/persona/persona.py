@@ -11,7 +11,8 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Optional
 
-from master_agent.config import PERSONA, PERSONA_DIR
+from master_agent.config import PERSONA_DIR
+from master_agent.persona.files import heading_name, overlay_markdown, pick_slug
 
 BUNDLED_DIR = Path(__file__).resolve().parent / "personas"
 
@@ -27,20 +28,12 @@ class Persona:
         return {"slug": self.slug, "name": self.name, "path": str(self.path)}
 
 
-def _persona_name(text: str, fallback: str) -> str:
-    for line in text.splitlines():
-        line = line.strip()
-        if line.startswith("# "):
-            return line[2:].strip() or fallback
-    return fallback
-
-
 def _load_file(path: Path) -> Persona:
     text = path.read_text(encoding="utf-8")
     slug = path.stem.lower()
     return Persona(
         slug=slug,
-        name=_persona_name(text, slug.title()),
+        name=heading_name(text, slug.title()),
         path=path,
         system_prompt=text.strip(),
     )
@@ -48,19 +41,20 @@ def _load_file(path: Path) -> Persona:
 
 def list_personas() -> list[Persona]:
     """Bundled personas overlaid with user personas (same slug wins)."""
-    by_slug: dict[str, Path] = {}
-    for d in (BUNDLED_DIR, PERSONA_DIR):
-        if d.is_dir():
-            for p in sorted(d.glob("*.md")):
-                by_slug[p.stem.lower()] = p
-    return [_load_file(p) for p in by_slug.values()]
+    return [_load_file(path) for path in overlay_markdown(BUNDLED_DIR, PERSONA_DIR)]
 
 
 def load_persona(name: Optional[str] = None) -> Persona:
-    """Load by slug; default from config.PERSONA (env PERSONA, default ara)."""
-    slug = (name or PERSONA or "ara").strip().lower()
-    for persona in list_personas():
-        if persona.slug == slug:
-            return persona
-    available = ", ".join(p.slug for p in list_personas()) or "(none)"
-    raise ValueError(f"unknown persona {slug!r} — available: {available}")
+    """Load by slug; default from the live PERSONA setting (env, then runtime)."""
+    import master_agent.config as cfg
+
+    slug = (name or cfg.PERSONA or "ara").strip().lower()
+    return pick_slug(list_personas(), slug, kind="persona")
+
+
+def set_active_persona(slug: str, *, session: str = "cli") -> Persona:
+    persona = load_persona(slug)
+    from master_agent.control.versioned_config import get_versioned_config
+
+    get_versioned_config().set_values({"persona": persona.slug}, session=session)
+    return persona

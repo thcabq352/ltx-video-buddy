@@ -17,6 +17,7 @@ from master_agent.persona.intake import (
     run_interview_cli,
 )
 from master_agent.persona.persona import list_personas, load_persona
+from master_agent.persona.soul import list_souls, load_soul
 
 
 class _FakeResp:
@@ -41,12 +42,20 @@ class TestPersonaLoading(unittest.TestCase):
         slugs = {p.slug for p in list_personas()}
         self.assertIn("ara", slugs)
         self.assertIn("exec", slugs)
+        self.assertIn("zod", slugs)
         ara = load_persona("ara")
         self.assertEqual("Ara", ara.name)
         self.assertIn("creative director", ara.system_prompt)
+        zod = load_persona("zod")
+        self.assertEqual("Zod", zod.name)
+        self.assertIn("Admarel", zod.system_prompt)
+        self.assertIn("Katie Street Killers", zod.system_prompt)
 
     def test_default_is_ara(self):
-        self.assertEqual("ara", load_persona().slug)
+        import master_agent.config as cfg
+
+        with patch.object(cfg, "PERSONA", "ara"):
+            self.assertEqual("ara", load_persona().slug)
 
     def test_user_override_wins(self):
         with TemporaryDirectory() as td:
@@ -61,6 +70,27 @@ class TestPersonaLoading(unittest.TestCase):
         with self.assertRaises(ValueError) as ctx:
             load_persona("nobody")
         self.assertIn("ara", str(ctx.exception))
+
+
+class TestSoulLoading(unittest.TestCase):
+    def test_bundled_studio_and_play_load(self):
+        slugs = {s.slug for s in list_souls()}
+        self.assertIn("studio", slugs)
+        self.assertIn("play", slugs)
+        studio = load_soul("studio")
+        self.assertEqual("Studio", studio.name)
+        self.assertIn("local production studio", studio.system_prompt)
+
+    def test_default_is_studio(self):
+        import master_agent.config as cfg
+
+        with patch.object(cfg, "SOUL", "studio"):
+            self.assertEqual("studio", load_soul().slug)
+
+    def test_unknown_soul_lists_available(self):
+        with self.assertRaises(ValueError) as ctx:
+            load_soul("nobody")
+        self.assertIn("studio", str(ctx.exception))
 
 
 class TestCreativeBrief(unittest.TestCase):

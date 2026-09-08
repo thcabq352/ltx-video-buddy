@@ -1,0 +1,30 @@
+{
+  "id": "axis-fail",
+  "title": "this coverage fails axis",
+  "scene": {
+    "id": "sc-1",
+    "num": "1",
+    "slug": "INT. TENT - NIGHT",
+    "synopsis": "Ada wants the coat off the hook before Ben sees it.",
+    "text": "ADA wants the coat. BEN will not let her take it.",
+    "characters": ["ADA", "BEN"]
+  },
+  "shots": [
+    {
+      "id": "sh-1",
+      "num": "01",
+      "scene_id": "sc-1",
+      "size": "MCU",
+      "angle": "eye",
+      "desc": "Ada looks camera left"
+    },
+    {
+      "id": "sh-2",
+      "num": "02",
+      "scene_id": "sc-1",
+      "size": "MCU",
+      "angle": "reverse",
+      "desc": "Ben also looks camera left"
+    }
+  ]
+}

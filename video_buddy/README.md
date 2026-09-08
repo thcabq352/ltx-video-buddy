@@ -1,47 +1,72 @@
-# ComfyUI Master Agent
+# VIDEO BUDDY
 
-Autonomous video production agent with ComfyUI (portable, API on :8188) as the
+Autonomous video production studio with ComfyUI (API on :8188) as the
 rendering engine. Current components: ComfyUI bridge (API client, workflow
 patcher, workflow validator), model inventory scanner, orchestrator state
 machine, and a heuristic + LLM judge loop.
 
-- **LLM:** local-first — `qwen3.6-27b-fable` via Ollama (imported from a local
-  GGUF with `ollama create`; see `state/Modelfile.qwen36-fable`) drives the
-  director, storyboard and judge. Fallback chain for `LLM_PROVIDER=auto`:
-  ollama → kimi (kimi-code CLI OAuth, automatic) → grok (Hermes `xai-oauth` or
+- **LLM:** local-first — `qwen3-vl-heretic` via Ollama (Qwen3-VL 9B-class)
+  drives the director, storyboard, text judge, and vision judge. Fallback
+  chain for `LLM_PROVIDER=auto`: ollama → grok (Hermes `xai-oauth` or
   `XAI_API_KEY`). Claude is an optional storyboard panel member
   (`ANTHROPIC_API_KEY`).
 - **Models:** LTX 2.3 weights under `models/` (see `models/README.md`), 16GB RTX 5060 Ti profile
 - **Workflows:** API-format JSON templates under `workflows/`
 
-## Setup
+## Install (Windows / macOS / Linux)
 
-```powershell
-python -m venv .venv
-.venv\Scripts\python.exe -m pip install -r requirements.txt
-copy .env.example .env
+Need **Python 3.10+** on PATH. Then from this `video_buddy` folder run one command — it creates `.venv`, installs pip packages, Playwright Chromium, copies `.env`, and tries to install **ffmpeg** plus Ollama models (`qwen3-vl-heretic`, `nomic-embed-text`).
+
+**Windows (PowerShell or cmd):**
+
+```bat
+install.bat
 ```
 
-Start ComfyUI (leave the window open):
+or `powershell -File install.ps1` or `python install.py`
 
+**macOS / Linux:**
+
+```bash
+chmod +x install.sh
+./install.sh
 ```
+
+or `python3 install.py`
+
+Re-check anytime:
+
+```bash
+python -m master_agent setup          # report
+python -m master_agent setup --fix    # install anything still missing
+```
+
+`--fix` will use `winget` (Windows), `brew` (macOS), or `apt-get` (Debian/Ubuntu) for ffmpeg when those tools are present. Ollama itself is a one-click app from https://ollama.com/download — the installer pulls the models once `ollama` is on PATH.
+
+Then start the render engine and the studio:
+
+```bash
+# Windows portable Comfy (leave the window open):
 ComfyUI_windows_portable\run_api_8188.bat
+
+# macOS / Linux: run your ComfyUI with --port 8188
+# or set COMFYUI_URL if it is not http://127.0.0.1:8188
+
+python -m master_agent health
+python -m master_agent ui --port 8189
 ```
 
-## External dependencies (not pip-installable)
+Hybrid page scrape lives in `master_agent/scrape`: httpx first, Playwright+stealth on login walls, robots.txt, 5 MiB cap. Judge strictness and learning-rate knobs: `JUDGE_STRICTNESS`, `LEARNING_RATE` (also on the Create tab). Cost gate: `COST_VRAM_THRESHOLD_GB`. Render budget: `RENDER_BUDGET_CAP_VRAM_MIN` / running total in `state/control/` — scenes that would exceed the cap are paused for review. Knob moves append to versioned config history; startup prints `config_hash=…`. A2A card at `/.well-known/agent.json` alongside the existing MCP server.
 
-- **ffmpeg** on PATH — frame extraction, concat, audio muxing (imageio-ffmpeg
-  or a system build both work).
-- **Ollama** — local LLMs + embeddings: `ollama pull nomic-embed-text` (KB),
-  the 27B director model via `ollama create` (see
-  `state/Modelfile.qwen36-fable`), `qwen3-vl:30b` for the vision judge.
-- **ComfyUI portable** (`ComfyUI_windows_portable/`) — self-contained embedded
-  python; custom node packs live in `ComfyUI/custom_nodes/` and its pip deps
-  are managed with its own `python_embeded\python.exe`, not the project venv.
+## External dependencies (installer covers most of these)
+
+- **ffmpeg** on PATH — frame extraction, concat, audio muxing. `setup --fix` installs it when a package manager is available.
+- **Ollama** — local LLMs + embeddings. After the app is installed: `ollama pull nomic-embed-text` and `ollama pull qwen3-vl-heretic` (also done by `setup --fix`).
+- **ComfyUI** on `:8188` — Windows portable lives in `ComfyUI_windows_portable/`. On macOS/Linux point `COMFYUI_URL` at your own Comfy. Custom node pip deps stay in Comfy's python, not this venv.
 - **ai-toolkit** (LoRA training only) — separate clone + own venv, set up with
   `python -m master_agent lora setup`. The project venv is untouched.
 - **Model weights** (~450GB curated, not in git) — reproduced with
-  `python state/download_models.py` (idempotent, skips existing files).
+  `python state/download_models.py` (idempotent, skips existing files). Not part of `install.py`.
 
 ## CLI
 
@@ -62,11 +87,11 @@ python -m master_agent run "..." --no-judge  # skip the judge loop
 python -m master_agent run "premium coffee commercial" --duration 8 --quality draft
 python -m master_agent run "..." --duration 8 --dry-run        # storyboard + validate, no GPU
 python -m master_agent run "..." --storyboard off              # skip shot cards
-python -m master_agent run "..." --llm-panel local             # local 27B only (default)
+python -m master_agent run "..." --llm-panel local             # local VL heretic only (default)
 python -m master_agent run "..." --llm-panel grok              # Grok solo
 python -m master_agent run "..." --llm-panel grok+local        # Grok + local, judge picks
 python -m master_agent run "..." --llm-panel grok+claude       # Grok + Claude, judge picks
-python -m master_agent run "..." --llm-panel ollama:gemma4:latest,kimi   # custom panel
+python -m master_agent run "..." --llm-panel ollama:gemma4:latest,grok   # custom panel
 ```
 
 The validator checks class types, required inputs, widget values, link type
@@ -103,7 +128,7 @@ POLL → RESOLVE → JUDGE → DONE/ERROR`.
 - The **Judge** (separate from the executor) scores each clip with three
   merged legs: heuristics (file size, duration vs. requested, frame-diff
   motion via ffmpeg), a text-LLM verdict, and a **vision evaluator** —
-  `qwen3-vl:30b` reviews extracted frames for temporal consistency, subject
+  `qwen3-vl-heretic` reviews extracted frames for temporal consistency, subject
   lock and artifacts (`VISION_ENABLED=0` to disable). Weights:
   `JUDGE_HEURISTIC_WEIGHT` / `JUDGE_LLM_WEIGHT` / `JUDGE_VISION_WEIGHT`,
   renormalized over whichever legs are available. Below threshold the judge
@@ -112,7 +137,7 @@ POLL → RESOLVE → JUDGE → DONE/ERROR`.
   `seed` — whitelist, clamped) and regenerates, up to `--max-judge-rounds`.
 - Every run writes a JSON record to `state/runs/` (params, judge history,
   transitions) — the seed of the later self-learning knowledge base.
-- Variant routing is LLM-driven (`orchestrator/director.py`): the local 27B
+- Variant routing is LLM-driven (`orchestrator/director.py`): the local VL heretic
   picks `base | directors | eros | lipsync | wan22` from the request,
   validated against known variants with keyword rules as fallback
   (`DIRECTOR_LLM=0` for rules-only). Hard constraints always win:
@@ -127,11 +152,11 @@ profile) go through `orchestrator/pipeline.py`:
    action, continuity language, per-shot LTX prompt); heuristic fallback when
    no LLM is available. Modes: `smart` (default) / `always` / `multi_only` /
    `off`. Panel presets (`--llm-panel`, env `LLM_PANEL`): `default` /
-   `local` = local 27B alone (local-first), `grok` = Grok solo,
-   `grok+local` / `both` / `panel` = Grok + local 27B, `grok+claude` =
+   `local` = local VL heretic alone (local-first), `grok` = Grok solo,
+   `grok+local` / `both` / `panel` = Grok + local VL, `grok+claude` =
    Grok + Claude. Multi-member panels use a judge LLM (`--panel-judge`,
    env `PANEL_JUDGE`, default `ollama`) to pick or blend. Legacy `duo` =
-   27B + `gemma4:latest`. Custom CSV works (`ollama:<model>`, `kimi`,
+   VL heretic + `gemma4:latest`. Custom CSV works (`ollama:<model>`,
    `grok`, `claude`); unavailable members are skipped, never fatal.
    Panel details land in the run record as `panel_meta`.
 2. **Per-segment generation** — each shot runs the full orchestrator loop
@@ -200,26 +225,29 @@ video through ComfyUI:
   VHS_LoadVideo → SeedVR2 → VHS_VideoCombine chain on the `models/SEEDVR2/`
   weights.
 
-## Persona & intake interview (default-on)
+## Persona, soul & intake interview (default-on)
 
-Before anything is generated, the agent's persona interviews you — audience,
-tone, look, must-haves, deal-breakers — and synthesizes a creative brief that
-becomes the pipeline request. Default persona is **Ara**: the warmth and wit
-of Grok's Ara, recalibrated for business (she talks audience, brand and
-deliverables, not just vibes).
+Before anything is generated, the agent's **persona** interviews you —
+audience, tone, look, must-haves, deal-breakers — and synthesizes a creative
+brief that becomes the pipeline request. **Soul** is the studio's standing
+values; it stays put when you change the interview voice. Default persona is
+**Ara**; default soul is **studio** (bundled alternative: `play`).
 
 - **CLI** — interactive runs (`run`, `music`, `fractal`) open the interview
   first; type `just go` / `skip` to bail out early, `--no-interview` to
   bypass entirely (`INTAKE_ENABLED=0` disables globally; non-TTY runs skip
   automatically). `python -m master_agent brief "rough idea"` runs the
-  interview only (`--go` chains straight into generation);
-  `python -m master_agent persona list|show` manages personas.
-- **Web** — the Create and Music tabs open a chat with Ara before the first
-  Generate; her refined brief lands in the Brief box (editable) when she's
-  done. "skip interview" bypasses.
-- **Personas are files** — `master_agent/persona/personas/<slug>.md`
-  (bundled: `ara`, `exec`). Drop your own `<name>.md` in `state/personas/`
-  (same slug overrides bundled) and select with `PERSONA=<slug>`.
+  interview only (`--go` chains straight into generation).
+  `python -m master_agent persona list|show|set <slug>` and
+  `python -m master_agent soul list|show|set <slug>` switch identity at
+  runtime (logged in versioned config history).
+- **Web** — Create tab Persona / Soul selects, plus intake chat on Create,
+  Voice, and Music. The refined brief lands in the Brief box (editable).
+  "skip interview" bypasses.
+- **Files** — bundled personas in `master_agent/persona/personas/` (`ara`,
+  `exec`, `zod`); souls in `master_agent/persona/souls/` (`studio`, `play`). Drop
+  `<name>.md` in `state/personas/` or `state/souls/` to add or override.
+  Env defaults: `PERSONA=ara`, `SOUL=studio`.
 - Every interview writes `state/runs/<ts>_<id>_intake.json` (`kind:
   "intake"`) so the knowledge base learns your preferences over time.
 - No LLM available? The intake degrades to a canned opener and folds your
@@ -283,13 +311,15 @@ python -m master_agent ui --port 8189    # http://127.0.0.1:8189
 
 FastAPI + single-file dashboard (`master_agent/web/`). Tabs: **Create**
 (brief → storyboard preview or full GPU run, variant/panel pickers),
-**Voice** (Chrome/Edge mic interview via Web Speech API — speak to the
-agent, she answers out loud; hands-free loop optional), **Fractal**
-(CPU deep-zoom / inpaint / outpaint), **Music** (beat-synced MV), **Jobs**
-(live logs + playback), **Runs**, **Knowledge**, **Models**. Create and
-Music intake chat bars also get mic + speak-replies toggles. Health strip:
-ComfyUI/GPU/Ollama/Grok/KB. Jobs run in-process; one GPU job at a time.
-Localhost single-user — no auth. Voice needs Chrome or Edge + mic permission.
+**Comfy** (JSON / field editor for `comfy run` — load a template, change
+values, lint, queue), **Voice** (Chrome/Edge mic interview via Web Speech
+API — speak to the agent, spoken replies; hands-free loop optional),
+**Fractal** (CPU deep-zoom / inpaint / outpaint), **Music** (beat-synced
+MV), **Jobs** (live logs + playback), **Runs**, **Knowledge**, **Models**.
+Create and Music intake chat bars also get mic + speak-replies toggles.
+Health strip: ComfyUI/GPU/Ollama/Grok/KB. Jobs run in-process; one GPU job
+at a time. Localhost single-user — no auth. Voice needs Chrome or Edge +
+mic permission.
 
 ## Hermes MCP server
 
@@ -321,13 +351,13 @@ Ollama models (19-27GB) and can take several minutes — allow long timeouts.
 
 - **Persona & intake interview** (`master_agent/persona/`): the agent now
   interviews the user before generating anything and turns the conversation
-  into a structured creative brief. Default persona **Ara** (Grok-Ara
-  warmth, business-calibrated) + strict `exec`; personas are markdown files
-  with user overrides in `state/personas/` (`PERSONA` env). Default-on in
-  CLI (`--no-interview` to skip) and web (chat panels on Create/Music,
-  `POST /api/intake`, `/api/persona`); new `brief` and `persona` CLI
-  subcommands; interviews recorded as `kind: "intake"` run records.
-  104 pytest green.
+  into a structured creative brief. Default persona **Ara** + soul
+  **studio** (or `play`); personas and souls are markdown files with user
+  overrides in `state/personas/` and `state/souls/`. Switch at runtime via
+  CLI (`persona set` / `soul set`), Create-tab selects, or `PERSONA` /
+  `SOUL` env. Default-on in CLI (`--no-interview` to skip) and web
+  (`POST /api/intake`, `/api/persona`, `/api/soul`). Interviews recorded as
+  `kind: "intake"` run records.
 
 ## Status (2026-08-04, second pass)
 

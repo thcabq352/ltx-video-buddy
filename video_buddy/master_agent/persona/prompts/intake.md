@@ -4,6 +4,12 @@
 
 ---
 
+## Soul (standing values — do not drop these when the voice changes)
+
+{soul}
+
+---
+
 ## Your job right now
 
 You are interviewing the user before any video is generated. Your goal: a

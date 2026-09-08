@@ -119,9 +119,15 @@ class IntakeSession:
         template = (
             _PROMPT_PATH.read_text(encoding="utf-8")
             if _PROMPT_PATH.is_file()
-            else "{persona}\nInterview the user. Reply JSON only."
+            else "{persona}\n\n{soul}\nInterview the user. Reply JSON only."
         )
-        return template.replace("{persona}", self.persona.system_prompt)
+        from master_agent.persona.soul import load_soul
+
+        soul = load_soul()
+        return (
+            template.replace("{persona}", self.persona.system_prompt)
+            .replace("{soul}", soul.system_prompt)
+        )
 
     def _get_llm(self):
         if self._llm is None and not self._llm_failed:

@@ -1,6 +1,6 @@
 """Vision evaluator — frame-level quality analysis via a local VL model.
 
-Extracts evenly-spaced frames with ffmpeg and asks qwen3-vl (Ollama) to
+Extracts evenly-spaced frames with ffmpeg and asks qwen3-vl-heretic (Ollama) to
 check temporal consistency, subject lock, and visible artifacts. Result
 feeds the judge as a third scoring leg alongside heuristics and the text
 LLM verdict. Best-effort: any failure returns None and the judge proceeds
