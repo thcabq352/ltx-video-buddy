@@ -208,6 +208,15 @@
     .wf-split { grid-template-columns: 1fr; }
   }
 
+  .about-hero h2 { font-size: 22px; letter-spacing: .5px; }
+  .about-hero h2 span { color: var(--accent); }
+  .about-facts { width: 100%; }
+  .about-facts th { width: 140px; }
+  .cli {
+    background: #0a0d12; border: 1px solid var(--line); border-radius: 6px;
+    padding: 10px 12px; font: 12px/1.65 Consolas, monospace; color: #9db2c8;
+    overflow-x: auto; white-space: pre; margin: 8px 0 0;
+  }
   @media (max-width: 640px) {
     main { padding: 14px; }
     header { padding: 10px 14px; }
@@ -237,6 +246,7 @@
   <button data-tab="runs">Runs</button>
   <button data-tab="kb">Knowledge</button>
   <button data-tab="models">Models</button>
+  <button data-tab="about">About</button>
 </nav>
 <main>
   <section id="tab-create" class="tab active">
@@ -608,6 +618,32 @@
   <section id="tab-models" class="tab">
     <div class="card" id="models-body"><span class="muted">loading…</span></div>
   </section>
+
+  <section id="tab-about" class="tab">
+    <div class="card about-hero">
+      <h2>VIDEO <span>BUDDY</span></h2>
+      <div class="sub" id="about-tagline">Local ComfyUI video studio. Drive Comfy from the CLI first.</div>
+      <div class="muted" id="about-version"></div>
+    </div>
+    <div class="card">
+      <h2>Drive Comfy from the CLI first</h2>
+      <div class="sub">Agents queue this studio's Comfy with <code>python -m master_agent</code> — not this tab, not Comfy's own UI. Studio is the optional human dashboard.</div>
+      <pre class="cli" id="about-cli">python -m master_agent health
+python -m master_agent comfy run --mode generate --prompt "BRIEF" --variant base
+python -m master_agent run "BRIEF" --quality draft --duration 3 --no-interview
+python -m master_agent about</pre>
+    </div>
+    <div class="card">
+      <h2>This studio</h2>
+      <table class="about-facts">
+        <tbody id="about-facts">
+          <tr><th>Comfy</th><td>:8188</td></tr>
+          <tr><th>Studio</th><td>:8189</td></tr>
+          <tr><th>Package</th><td>master_agent · MCP master-agent</td></tr>
+        </tbody>
+      </table>
+    </div>
+  </section>
 </main>
 <div id="toast"></div>
 
@@ -662,7 +698,55 @@ document.querySelectorAll("nav button").forEach(b => b.onclick = () => {
   if (b.dataset.tab === "models") loadModels();
   if (b.dataset.tab === "jobs") refreshJobs();
   if (b.dataset.tab === "comfy") loadComfyTab();
+  if (b.dataset.tab === "about") loadAbout();
 });
+
+async function loadAbout() {
+  try {
+    const a = await api("/api/about");
+    if ($("about-tagline") && a.tagline) $("about-tagline").textContent = a.tagline;
+    if ($("about-version")) {
+      $("about-version").textContent = [
+        a.version ? "v" + a.version : "",
+        a.repo || "",
+      ].filter(Boolean).join(" · ");
+    }
+    const drive = a.drive || {};
+    if ($("about-cli")) {
+      $("about-cli").textContent = [
+        drive.health,
+        drive.graph,
+        drive.director,
+        "python -m master_agent about",
+      ].filter(Boolean).join("\n");
+    }
+    const ident = a.identity || {};
+    const persona = ident.persona || {};
+    const soul = ident.soul || {};
+    const models = a.models || {};
+    const comfy = a.comfy || {};
+    const studio = a.studio || {};
+    const rows = [
+      ["Comfy", comfy.url || ":8188"],
+      ["Studio", (studio.url || ":8189") + " (optional)"],
+      ["Persona", (persona.slug || "") + (persona.name ? " (" + persona.name + ")" : "")],
+      ["Soul", (soul.slug || "") + (soul.name ? " (" + soul.name + ")" : "")],
+      ["Local model", models.ollama || ""],
+      ["LLM chain", models.llm_provider || "auto"],
+      ["Package", (a.package || "master_agent") + " · MCP " + (a.mcp_id || "master-agent")],
+      ["Personas", (a.personas || []).join(", ")],
+      ["Souls", (a.souls || []).join(", ")],
+    ];
+    const body = $("about-facts");
+    if (body) {
+      body.innerHTML = rows.map(([k, v]) =>
+        `<tr><th>${esc(k)}</th><td>${esc(v)}</td></tr>`
+      ).join("");
+    }
+  } catch (e) {
+    if ($("about-version")) $("about-version").textContent = String(e.message || e);
+  }
+}
 
 // health
 async function loadHealth() {

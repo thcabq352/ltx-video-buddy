@@ -140,6 +140,13 @@ def videos(rel_path: str):
 # ── api ─────────────────────────────────────────────────
 
 
+@app.get("/api/about")
+def api_about() -> dict[str, Any]:
+    from master_agent.about import studio_about
+
+    return studio_about()
+
+
 @app.get("/api/health")
 def api_health() -> dict[str, Any]:
     from master_agent.comfy.client import ComfyClient

@@ -43,7 +43,7 @@ python -m master_agent setup --fix    # install anything still missing
 
 `--fix` will use `winget` (Windows), `brew` (macOS), or `apt-get` (Debian/Ubuntu) for ffmpeg when those tools are present. Ollama itself is a one-click app from https://ollama.com/download — the installer pulls the models once `ollama` is on PATH.
 
-Then start the render engine and the studio:
+Then start Comfy and drive it from the CLI (studio UI is optional):
 
 ```bash
 # Windows portable Comfy (leave the window open):
@@ -53,7 +53,9 @@ ComfyUI_windows_portable\run_api_8188.bat
 # or set COMFYUI_URL if it is not http://127.0.0.1:8188
 
 python -m master_agent health
-python -m master_agent ui --port 8189
+python -m master_agent comfy run --mode generate --prompt "a test shot" --variant base
+# optional dashboard:
+# python -m master_agent ui --port 8189
 ```
 
 Hybrid page scrape lives in `master_agent/scrape`: httpx first, Playwright+stealth on login walls, robots.txt, 5 MiB cap. Judge strictness and learning-rate knobs: `JUDGE_STRICTNESS`, `LEARNING_RATE` (also on the Create tab). Cost gate: `COST_VRAM_THRESHOLD_GB`. Render budget: `RENDER_BUDGET_CAP_VRAM_MIN` / running total in `state/control/` — scenes that would exceed the cap are paused for review. Knob moves append to versioned config history; startup prints `config_hash=…`. A2A card at `/.well-known/agent.json` alongside the existing MCP server.
@@ -71,12 +73,19 @@ Hybrid page scrape lives in `master_agent/scrape`: httpx first, Playwright+steal
 ## CLI
 
 ```bash
+python -m master_agent about               # studio identity card
 python -m master_agent health              # ComfyUI reachable? GPU stats
 python -m master_agent fetch-object-info   # cache node registry to state/object_info.json
 python -m master_agent scan-models         # scan models/ → state/model_inventory.json
 python -m master_agent validate file.json  # validate one workflow
 python -m master_agent validate --all      # validate everything in workflows/
 python -m master_agent validate --all --offline  # no server needed (uses cache)
+
+# Drive Comfy from the CLI first (lint + queue + copy into outputs/):
+python -m master_agent comfy run --mode generate --prompt "neon rain" --variant base
+python -m master_agent comfy run --mode template --template base --set 12.steps=8
+python -m master_agent comfy run --mode raw --json workflow.json
+python -m master_agent comfy run --mode template --template lipsync --prepare --out prepared.json
 
 # Orchestrated generation (the Director):
 python -m master_agent run "cinematic close-up of rain on a window" --quality draft --duration 3
@@ -315,7 +324,8 @@ FastAPI + single-file dashboard (`master_agent/web/`). Tabs: **Create**
 values, lint, queue), **Voice** (Chrome/Edge mic interview via Web Speech
 API — speak to the agent, spoken replies; hands-free loop optional),
 **Fractal** (CPU deep-zoom / inpaint / outpaint), **Music** (beat-synced
-MV), **Jobs** (live logs + playback), **Runs**, **Knowledge**, **Models**.
+MV), **Jobs** (live logs + playback), **Runs**, **Knowledge**, **Models**,
+**About** (studio card — same as `python -m master_agent about`).
 Create and Music intake chat bars also get mic + speak-replies toggles.
 Health strip: ComfyUI/GPU/Ollama/Grok/KB. Jobs run in-process; one GPU job
 at a time. Localhost single-user — no auth. Voice needs Chrome or Edge +

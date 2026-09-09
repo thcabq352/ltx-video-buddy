@@ -12,14 +12,22 @@ python install.py
 
 Windows: `install.bat`. macOS / Linux: `./install.sh`. Re-check with `python -m master_agent setup`; install missing pieces with `--fix`.
 
+## About
+
+`python -m master_agent about` prints the studio card (also `GET /api/about` and the studio About tab). VIDEO BUDDY is the local ComfyUI studio; package `master_agent`; MCP `master-agent`.
+
 ## Run
+
+Drive Comfy from the CLI first. Studio `:8189` is optional.
 
 ```powershell
 .\.venv\Scripts\python.exe -m master_agent health
+.\.venv\Scripts\python.exe -m master_agent comfy run --mode generate --prompt "BRIEF" --variant base
+.\.venv\Scripts\python.exe -m master_agent run "BRIEF" --quality draft --duration 3 --no-interview
 .\.venv\Scripts\python.exe -m master_agent ui --port 8189
 ```
 
-Comfy portable is `:8188` (`ComfyUI_windows_portable\run_api_8188.bat`). Studio is `:8189`. Do not treat a live studio tab as proof Comfy is up.
+`comfy run` prepares, lints, queues, and copies into `outputs/`. `--prepare` stops before the GPU queue. Comfy portable is `:8188` (`ComfyUI_windows_portable\run_api_8188.bat`). Studio is `:8189`. Do not treat a live studio tab as proof Comfy is up.
 
 ## Identity
 

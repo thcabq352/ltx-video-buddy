@@ -14,6 +14,8 @@ Commands:
   character create|list   CCC stage: bible -> Flux sheet -> captioned dataset
   lora setup|train|validate  Flux LoRA training via ai-toolkit + vision validation
   download-flux       One-time Flux fp8 weights download (~17GB)
+  comfy run           Drive ComfyUI from the CLI (prepare + lint + queue)
+  about               Print the studio identity card
 """
 
 from __future__ import annotations
@@ -27,6 +29,17 @@ from master_agent.comfy.client import ComfyClient, ComfyClientError
 from master_agent.comfy.validator import format_report, validate_workflow_file
 from master_agent.config import WORKFLOWS_DIR, ensure_dirs
 from master_agent.models.inventory import format_summary, scan_inventory
+
+
+def cmd_about(args: argparse.Namespace) -> int:
+    from master_agent.about import format_about, studio_about
+
+    card = studio_about()
+    if args.json:
+        print(json.dumps(card, indent=1))
+        return 0
+    print(format_about(card), end="")
+    return 0
 
 
 def cmd_setup(args: argparse.Namespace) -> int:
@@ -750,7 +763,7 @@ def _parse_override_flags(flags: list[str]) -> dict[str, dict]:
 
 
 def cmd_comfy(args: argparse.Namespace) -> int:
-    from master_agent.comfy.cli_run import LintError, lint_or_raise, prepare_run
+    from master_agent.comfy.cli_run import LintError, execute_prepared, lint_or_raise, prepare_run
 
     try:
         overrides = _parse_override_flags(args.set)
@@ -770,22 +783,30 @@ def cmd_comfy(args: argparse.Namespace) -> int:
     except Exception as e:
         print(f"FAIL  {e}")
         return 1
-    try:
-        client = ComfyClient()
-        object_info, _src = client.load_object_info(prefer_live=True)
-        lint_or_raise(prepared, object_info)
-    except LintError as e:
-        print(f"FAIL  {e}")
-        return 1
-    except Exception as e:
-        print(f"WARN  linter skipped ({e})")
     if args.out:
         out = Path(args.out)
         out.parent.mkdir(parents=True, exist_ok=True)
         out.write_text(json.dumps(prepared, indent=1) + "\n", encoding="utf-8")
         print(f"wrote {out}")
-    else:
-        print(json.dumps({"ok": True, "nodes": len(prepared)}, indent=1))
+    if args.prepare:
+        try:
+            client = ComfyClient()
+            object_info, _src = client.load_object_info(prefer_live=True)
+            lint_or_raise(prepared, object_info)
+        except LintError as e:
+            print(f"FAIL  {e}")
+            return 1
+        except Exception as e:
+            print(f"WARN  linter skipped ({e})")
+        if not args.out:
+            print(json.dumps({"ok": True, "nodes": len(prepared)}, indent=1))
+        return 0
+    try:
+        rec = execute_prepared(prepared)
+    except Exception as e:
+        print(f"FAIL  {e}")
+        return 1
+    print(json.dumps(rec, indent=1))
     return 0
 
 
@@ -799,6 +820,10 @@ def main(argv: list[str] | None = None) -> int:
     ensure_dirs()
     parser = argparse.ArgumentParser(prog="python -m master_agent", description="VIDEO BUDDY")
     sub = parser.add_subparsers(dest="command", required=True)
+
+    p = sub.add_parser("about", help="print the VIDEO BUDDY identity card")
+    p.add_argument("--json", action="store_true", help="machine-readable output")
+    p.set_defaults(func=cmd_about)
 
     p = sub.add_parser("setup", help="check or install local dependencies")
     p.add_argument("--fix", action="store_true", help="create venv, pip install, Playwright, .env, ffmpeg, Ollama models")
@@ -982,16 +1007,24 @@ def main(argv: list[str] | None = None) -> int:
     p.add_argument("--validate", action="store_true", help="validate after training")
     p.set_defaults(func=cmd_lora)
 
-    p = sub.add_parser("comfy", help="comfy run: raw JSON, template+overrides, or generate")
+    p = sub.add_parser(
+        "comfy",
+        help="drive ComfyUI from the CLI: prepare, lint, queue, copy into outputs/",
+    )
     p.add_argument("comfy_command", choices=["run"])
     p.add_argument("--mode", choices=["raw", "template", "generate"], default="generate")
     p.add_argument("--json", dest="workflow_json", help="pasted/path API workflow JSON (raw)")
-    p.add_argument("--template", help="template workflow path")
+    p.add_argument("--template", help="template slug or path under workflows/")
     p.add_argument("--variant", default="base")
     p.add_argument("--prompt", default="")
     p.add_argument("--set", action="append", default=[], metavar="NODE.FIELD=VALUE",
                    help="expert override, e.g. 12.steps=8 (repeatable)")
-    p.add_argument("--out", help="write prepared workflow JSON")
+    p.add_argument("--out", help="write prepared workflow JSON (still queues unless --prepare)")
+    p.add_argument(
+        "--prepare",
+        action="store_true",
+        help="lint and write JSON only; do not queue Comfy",
+    )
     p.set_defaults(func=cmd_comfy)
 
     args = parser.parse_args(argv)

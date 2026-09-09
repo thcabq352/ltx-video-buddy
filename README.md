@@ -60,9 +60,9 @@ you.** You bring the intent; it brings the craft.
 
 | Interface | Use |
 |---|---|
-| **CLI** | `python -m master_agent run "..."` — full pipeline, flags for everything |
-| **Web studio** | `python -m master_agent ui` — VIDEO BUDDY dashboard (Create / Comfy / Voice / Fractal / Music / Jobs) |
-| **MCP server** | Exposes the agent as tools (`create_video`, `plan_storyboard`, `judge_asset`, …) to MCP clients |
+| **CLI (first)** | Drive Comfy with `python -m master_agent comfy run`. Full director pipeline is `run "..."`. |
+| **Web studio** | `python -m master_agent ui` — optional human dashboard (Create / Comfy / Voice / Fractal / Music / Jobs) |
+| **MCP server** | Hermes tools (`create_video`, `plan_storyboard`, `judge_asset`, …) after the CLI path works |
 
 ## Architecture
 

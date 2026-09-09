@@ -31,6 +31,9 @@ class TestStudioHtml(unittest.TestCase):
         self.assertIn("Hands-free", html)
         self.assertIn("c-budget-cap", html)
         self.assertIn("c-config-hist", html)
+        self.assertIn('data-tab="about"', html)
+        self.assertIn("tab-about", html)
+        self.assertIn("Drive Comfy from the CLI first", html)
 
 
 class TestHealth(unittest.TestCase):
@@ -47,6 +50,15 @@ class TestHealth(unittest.TestCase):
         self.assertTrue(data["comfyui"]["up"])
         self.assertEqual(data["comfyui"]["gpus"][0]["vram_free_gb"], 16.0)
         self.assertTrue(data["ollama"])
+
+    def test_about_card(self):
+        client = TestClient(app)
+        r = client.get("/api/about")
+        self.assertEqual(r.status_code, 200)
+        data = r.json()
+        self.assertEqual(data["name"], "VIDEO BUDDY")
+        self.assertEqual(data["drive"]["first"], "cli")
+        self.assertIn("comfy run", data["drive"]["graph"])
 
 
 class TestJobs(unittest.TestCase):
