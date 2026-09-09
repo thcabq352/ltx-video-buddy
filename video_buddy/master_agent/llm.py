@@ -1,10 +1,7 @@
-"""LLM client — local Ollama main (user pivot: local-only first), Kimi/Grok optional.
+"""LLM client — local Ollama main (user pivot: local-only first), Grok optional.
 
-Provider chain for ``auto`` (default): ollama -> kimi -> grok.
-Main model: ``qwen3.6-27b-fable`` (local GGUF import, see ``OLLAMA_MODEL``).
-Kimi authenticates with the kimi-code CLI's OAuth identity
-(``master_agent.kimi_oauth``); ``KIMI_API_KEY`` is the fallback.
-Note: k3 thinking models reject any temperature other than 1.
+Provider chain for ``auto`` (default): ollama -> grok.
+Main model: ``qwen3-vl-heretic`` (local Qwen3-VL 9B-class, see ``OLLAMA_MODEL``).
 """
 
 from __future__ import annotations
@@ -16,10 +13,6 @@ import time
 from langchain_openai import ChatOpenAI
 
 from master_agent.config import (
-    KIMI_BASE_URL,
-    KIMI_MAX_TOKENS,
-    KIMI_MODEL,
-    KIMI_API_KEY,
     LLM_PROVIDER,
     OLLAMA_MODEL,
     OLLAMA_URL,
@@ -48,27 +41,9 @@ def _ollama_up() -> bool:
     return up
 
 
-def _has_kimi_api_key() -> bool:
-    key = (KIMI_API_KEY or "").strip()
-    return bool(key) and not key.startswith("your_")
-
-
-def kimi_available() -> bool:
-    if _has_kimi_api_key():
-        return True
-    try:
-        from master_agent.kimi_oauth import token_available
-
-        return token_available()
-    except Exception:
-        return False
-
-
 def provider_available(spec: str) -> bool:
-    """spec: kimi | ollama[:model] | grok | claude"""
+    """spec: ollama[:model] | grok | claude"""
     name = (spec or "").split(":", 1)[0].strip().lower()
-    if name == "kimi":
-        return kimi_available()
     if name == "ollama":
         return _ollama_up()
     if name == "grok":
@@ -87,27 +62,6 @@ def provider_available(spec: str) -> bool:
 
 
 # --- model construction -----------------------------------------------------
-
-
-def _kimi_llm(temperature: float) -> ChatOpenAI:
-    from master_agent.kimi_oauth import resolve_access_token
-
-    try:
-        api_key, source = resolve_access_token(), "kimi-oauth"
-    except Exception:
-        if not _has_kimi_api_key():
-            raise
-        api_key, source = KIMI_API_KEY, "api_key"
-    # k3 thinking models reject any temperature other than 1
-    return ChatOpenAI(
-        model=os.getenv("KIMI_MODEL", KIMI_MODEL),
-        api_key=api_key,
-        base_url=KIMI_BASE_URL,
-        temperature=1,
-        max_tokens=KIMI_MAX_TOKENS,
-        timeout=600,
-        default_headers={"X-LTX-Agent-Auth": source},
-    )
 
 
 def _ollama_llm(model: str, temperature: float) -> ChatOpenAI:
@@ -132,12 +86,12 @@ def _grok_llm(temperature: float) -> ChatOpenAI:
 
 
 def get_llm(temperature: float = 0.2, provider: str | None = None) -> ChatOpenAI:
-    """Build a chat model for a provider spec; ``auto`` tries kimi -> ollama -> grok."""
+    """Build a chat model for a provider spec; ``auto`` tries ollama -> grok."""
     spec = (provider or LLM_PROVIDER or "auto").strip().lower()
     if spec != "auto":
         return _llm_for(spec, temperature)
     errors: list[str] = []
-    for candidate in ("ollama", "kimi", "grok"):
+    for candidate in ("ollama", "grok"):
         if not provider_available(candidate):
             continue
         try:
@@ -145,20 +99,18 @@ def get_llm(temperature: float = 0.2, provider: str | None = None) -> ChatOpenAI
         except Exception as e:
             errors.append(f"{candidate}: {e}")
     raise RuntimeError(
-        "No LLM provider available (tried ollama -> kimi -> grok). " + "; ".join(errors)
+        "No LLM provider available (tried ollama -> grok). " + "; ".join(errors)
     )
 
 
 def _llm_for(spec: str, temperature: float) -> ChatOpenAI:
     name, _, rest = spec.partition(":")
     name = name.strip().lower()
-    if name == "kimi":
-        return _kimi_llm(temperature)
     if name == "ollama":
         return _ollama_llm(rest.strip() or OLLAMA_MODEL, temperature)
     if name == "grok":
         return _grok_llm(temperature)
-    raise RuntimeError(f"unknown LLM provider spec: {spec!r} (use kimi | ollama[:model] | grok)")
+    raise RuntimeError(f"unknown LLM provider spec: {spec!r} (use ollama[:model] | grok)")
 
 
 # --- grok auth (unchanged) --------------------------------------------------
@@ -204,7 +156,7 @@ def resolve_credentials() -> tuple[str, str]:
 
     if mode in ("xai-oauth", "auto"):
         try:
-            from master_agent.xai_oauth import resolve_access_token, XaiOauthError
+            from master_agent.xai_oauth import resolve_access_token
 
             token = resolve_access_token()
             return token, "xai-oauth"

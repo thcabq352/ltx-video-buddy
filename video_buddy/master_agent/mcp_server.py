@@ -1,4 +1,4 @@
-"""Hermes MCP server — exposes the Master Agent as sub-agent tools.
+"""Hermes MCP server — exposes VIDEO BUDDY as sub-agent tools.
 
 Run standalone (Hermes spawns it over stdio):
     .venv/Scripts/python.exe master_agent/mcp_server.py
@@ -38,7 +38,16 @@ def health() -> dict:
     from master_agent.kb.store import COLLECTION_RUNS, COLLECTION_WORKFLOWS, collection_count
     from master_agent.llm import provider_available
 
-    out: dict = {"comfyui": None, "ollama": provider_available("ollama"), "kb": {}}
+    from master_agent.control.versioned_config import get_versioned_config
+
+    snap = get_versioned_config().snapshot()
+    out: dict = {
+        "comfyui": None,
+        "ollama": provider_available("ollama"),
+        "kb": {},
+        "config_hash": snap["hash"],
+        "config": snap["values"],
+    }
     try:
         stats = ComfyClient().health()
         devices = stats.get("devices") or []
@@ -293,4 +302,10 @@ if __name__ == "__main__":
     except Exception as e:
         print(f"[mcp_server] warmup failed (tools will fall back): {e}", file=sys.stderr)
     print(f"[mcp_server] warmup {_time.time() - _t:.1f}s", file=sys.stderr)
+    try:
+        from master_agent.control.versioned_config import announce_config
+
+        print(announce_config(), file=sys.stderr, flush=True)
+    except Exception:
+        pass
     mcp.run()  # stdio transport

@@ -1,0 +1,13 @@
+{
+  "id": "no-want",
+  "title": "this scene has no want",
+  "scene": {
+    "id": "sc-1",
+    "num": "1",
+    "slug": "EXT. TENT - NIGHT",
+    "synopsis": "Rain on canvas. Neon hums.",
+    "text": "Rain on the tent. A light flickers. Nobody wants anything.",
+    "characters": []
+  },
+  "shots": []
+}

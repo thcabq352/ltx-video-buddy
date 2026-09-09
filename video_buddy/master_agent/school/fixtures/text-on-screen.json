@@ -1,0 +1,22 @@
+{
+  "id": "text-on-screen",
+  "title": "unrenderable on-screen type",
+  "scene": {
+    "id": "sc-1",
+    "num": "1",
+    "slug": "INT. STORE - DAY",
+    "synopsis": "Ada wants the clerk to see the BUY NOW card.",
+    "text": "ADA wants him to read the 8pt type.",
+    "characters": ["ADA"]
+  },
+  "shots": [
+    {
+      "id": "sh-1",
+      "desc": "tight on a card with tiny 8pt readable text overlay saying BUY NOW",
+      "angle": "insert",
+      "ltx_prompt": "tiny 8pt readable text overlay saying BUY NOW"
+    }
+  ],
+  "counter_example": "On-screen type and logos that LTX will smear.",
+  "rewrite": "Drop on-screen type and logos; show the want through action and light."
+}

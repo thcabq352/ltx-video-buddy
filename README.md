@@ -61,7 +61,7 @@ you.** You bring the intent; it brings the craft.
 | Interface | Use |
 |---|---|
 | **CLI** | `python -m master_agent run "..."` — full pipeline, flags for everything |
-| **Web studio** | `python -m master_agent ui` — dashboard with Create / Fractal / Music / Jobs / Runs / Knowledge tabs |
+| **Web studio** | `python -m master_agent ui` — VIDEO BUDDY dashboard (Create / Comfy / Voice / Fractal / Music / Jobs) |
 | **MCP server** | Exposes the agent as tools (`create_video`, `plan_storyboard`, `judge_asset`, …) to MCP clients |
 
 ## Architecture
@@ -84,36 +84,39 @@ you ──▶ persona intake ──▶ creative brief
 ```
 
 **Local-first by design:** the director, storyboard, judge, and embeddings run
-on Ollama (27B class). Cloud LLMs (Kimi, Grok, Claude) are optional fallbacks
+on Ollama (`qwen3-vl-heretic`, 9B-class VL). Cloud LLMs (Grok, Claude) are optional fallbacks
 and panel members, never a requirement.
 
 ## Quickstart
 
-```powershell
-cd "kimi ltx"
-python -m venv .venv
-.venv\Scripts\python.exe -m pip install -r requirements.txt
-copy .env.example .env          # fill in optional API keys
-```
+Need **Python 3.10+**. From `video_buddy/` run the installer — it creates `.venv`, installs pip deps, Playwright Chromium, copies `.env`, and tries to install ffmpeg + Ollama models.
 
-Start the render engine, then talk to the agent:
+**Windows:** `install.bat`  
+**macOS / Linux:** `./install.sh`  
+**Any OS:** `python install.py`
 
 ```bash
-ComfyUI_windows_portable\run_api_8188.bat
+cd video_buddy
+python install.py
+python -m master_agent setup          # re-check anytime
+python -m master_agent ui --port 8189
+```
 
+Start ComfyUI on `:8188` (Windows portable: `ComfyUI_windows_portable\run_api_8188.bat`). Then:
+
+```bash
 python -m master_agent run "cinematic close-up of rain on a window"
 python -m master_agent music "dreamy synthwave MV" --audio track.mp3
-python -m master_agent ui --port 8189        # web studio
 ```
 
 Model weights (~450GB curated) are reproduced on any machine with
 `python state/download_models.py`. Full operator docs live in
-[`kimi ltx/README.md`](video_buddy/README.md).
+[`video_buddy/README.md`](video_buddy/README.md).
 
 ## Repository layout
 
 ```
-kimi ltx/
+video_buddy/
 ├── master_agent/      # the agent: orchestrator, director, judge, persona,
 │                      # KB, characters/LoRA, music, fractal, upscale, web, MCP
 ├── workflows/         # curated ComfyUI workflow library + manifests + guides

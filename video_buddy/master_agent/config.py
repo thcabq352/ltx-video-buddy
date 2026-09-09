@@ -54,24 +54,17 @@ XAI_API_KEY = os.getenv("XAI_API_KEY", "")
 SPACEXAI_MODEL = os.getenv("SPACEXAI_MODEL", "grok-4.5")
 XAI_BASE_URL = "https://api.x.ai/v1"
 
-# Kimi — main LLM (video director / storyboard / judge).
-# Auth: kimi-code CLI OAuth (~/.kimi-code/credentials), KIMI_API_KEY as fallback.
-KIMI_BASE_URL = os.getenv("KIMI_BASE_URL", "https://api.kimi.com/coding/v1")
-KIMI_MODEL = os.getenv("KIMI_MODEL", "k3-256k")
-KIMI_API_KEY = os.getenv("KIMI_API_KEY", "")
-KIMI_MAX_TOKENS = int(os.getenv("KIMI_MAX_TOKENS", "8192"))
-
 # Local Ollama — MAIN LLM (user pivot: local-only first).
-# qwen3.6-27b-fable = Qwen3.6-27B-Fable-Fus-711 GGUF imported via `ollama create`
+# Local text + vision: Qwen3-VL Heretic (9B-class, already on this machine)
 OLLAMA_URL = os.getenv("OLLAMA_URL", "http://127.0.0.1:11434").rstrip("/")
-OLLAMA_MODEL = os.getenv("OLLAMA_MODEL", "qwen3.6-27b-fable")
+OLLAMA_MODEL = os.getenv("OLLAMA_MODEL", "qwen3-vl-heretic")
 
-# LLM provider selection: auto (ollama -> kimi -> grok) | ollama[:model] | kimi | grok
+# LLM provider selection: auto (ollama -> grok) | ollama[:model] | grok
 LLM_PROVIDER = (os.getenv("LLM_PROVIDER", "auto") or "auto").strip().lower()
 
 # Storyboard LLM panel: preset (default|local | grok | grok+local|both |
-# grok+claude | duo) or comma list (ollama[:model], grok, kimi, claude, …)
-# default/local = local 27B; grok = solo; grok+local / grok+claude = panels
+# grok+claude | duo) or comma list (ollama[:model], grok, claude, …)
+# default/local = local VL heretic; grok = solo; grok+local / grok+claude = panels
 LLM_PANEL = (os.getenv("LLM_PANEL", "default") or "default").strip()
 PANEL_JUDGE = (os.getenv("PANEL_JUDGE", "ollama") or "ollama").strip()
 PANEL_MEMBER_TIMEOUT_S = int(os.getenv("PANEL_MEMBER_TIMEOUT_S", "300"))
@@ -84,12 +77,18 @@ CLAUDE_MODEL = os.getenv("CLAUDE_MODEL", "claude-sonnet-4-5")
 JUDGE_ENABLED = os.getenv("JUDGE_ENABLED", "1").lower() in ("1", "true", "yes", "on")
 MAX_JUDGE_ROUNDS = int(os.getenv("MAX_JUDGE_ROUNDS", "3"))
 JUDGE_SCORE_THRESHOLD = float(os.getenv("JUDGE_SCORE_THRESHOLD", "0.78"))
+JUDGE_STRICTNESS = float(os.getenv("JUDGE_STRICTNESS", "0.5"))
+LEARNING_RATE = float(os.getenv("LEARNING_RATE", "0.3"))
+COST_VRAM_THRESHOLD_GB = float(os.getenv("COST_VRAM_THRESHOLD_GB", "14.5"))
+# Project render budget: cumulative VRAM-minutes (vram_gb * time_s / 60)
+RENDER_BUDGET_CAP_VRAM_MIN = float(os.getenv("RENDER_BUDGET_CAP_VRAM_MIN", "80"))
+RENDER_BUDGET_USED_VRAM_MIN = float(os.getenv("RENDER_BUDGET_USED_VRAM_MIN", "0"))
 JUDGE_HEURISTIC_WEIGHT = float(os.getenv("JUDGE_HEURISTIC_WEIGHT", "0.45"))
 JUDGE_LLM_WEIGHT = float(os.getenv("JUDGE_LLM_WEIGHT", "0.55"))
 
-# Vision evaluator — local VL model (qwen3-vl) as a third judge leg
+# Vision evaluator — same local VL as the text path (qwen3-vl-heretic)
 VISION_ENABLED = os.getenv("VISION_ENABLED", "1").lower() in ("1", "true", "yes", "on")
-VISION_MODEL = os.getenv("VISION_MODEL", "qwen3-vl:30b")
+VISION_MODEL = os.getenv("VISION_MODEL", "qwen3-vl-heretic")
 VISION_FRAMES = int(os.getenv("VISION_FRAMES", "4"))
 VISION_TIMEOUT_S = int(os.getenv("VISION_TIMEOUT_S", "900"))
 JUDGE_VISION_WEIGHT = float(os.getenv("JUDGE_VISION_WEIGHT", "0.30"))
@@ -280,6 +279,8 @@ LORA_SCORE_THRESHOLD = float(os.getenv("LORA_SCORE_THRESHOLD", str(JUDGE_SCORE_T
 # Persona & pre-generation intake interview
 PERSONA = (os.getenv("PERSONA", "ara") or "ara").strip().lower()
 PERSONA_DIR = STATE_DIR / "personas"  # user personas override bundled ones
+SOUL = (os.getenv("SOUL", "studio") or "studio").strip().lower()
+SOUL_DIR = STATE_DIR / "souls"  # user souls override bundled ones
 INTAKE_ENABLED = os.getenv("INTAKE_ENABLED", "1").lower() in ("1", "true", "yes", "on")
 INTAKE_MAX_ROUNDS = int(os.getenv("INTAKE_MAX_ROUNDS", "6"))
 

@@ -21,7 +21,7 @@ from pathlib import Path
 from typing import Any, Optional
 
 from master_agent.comfy.client import ComfyClient, ComfyClientError
-from master_agent.comfy.validator import validate_workflow
+from master_agent.comfy.linter import LintBlocked, hard_gate, lint_workflow
 from master_agent.comfy.workflow_patcher import load_and_patch_workflow
 from master_agent.config import (
     DOWNSCALE_LADDER,
@@ -134,10 +134,12 @@ class Orchestrator:
         except ComfyClientError as e:
             st.fail(f"cannot load /object_info: {e}")
             return False
-        report = validate_workflow(
-            self._workflow, object_info, file_label=f"run:{st.run_id}", object_info_source=source
+        report = lint_workflow(
+            self._workflow, object_info, file_label=f"run:{st.run_id}"
         )
-        if not report.ok:
+        try:
+            hard_gate(report)
+        except LintBlocked:
             details = "; ".join(str(i) for i in report.errors[:5])
             st.fail(f"workflow validation failed ({len(report.errors)} errors): {details}")
             return False

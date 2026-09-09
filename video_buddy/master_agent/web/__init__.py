@@ -1,1 +1,1 @@
-"""Web UI package — FastAPI dashboard for the Master Agent."""
+"""Web UI package — FastAPI dashboard for VIDEO BUDDY."""

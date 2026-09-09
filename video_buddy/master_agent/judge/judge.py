@@ -21,6 +21,15 @@ from master_agent.config import (
 from master_agent.judge.probe import frame_notes
 
 
+def _effective_threshold(threshold: float | None) -> float:
+    if threshold is not None:
+        return threshold
+    from master_agent.config import JUDGE_STRICTNESS
+    from master_agent.control.strictness import scale_threshold
+
+    return scale_threshold(JUDGE_SCORE_THRESHOLD, JUDGE_STRICTNESS)
+
+
 def _vision_review_safe(
     video_path: str | None,
     *,
@@ -111,7 +120,7 @@ def decide_action(
     critical: bool,
     threshold: float | None = None,
 ) -> str:
-    thr = threshold if threshold is not None else JUDGE_SCORE_THRESHOLD
+    thr = _effective_threshold(threshold)
     if judge_retries >= max_rounds:
         return "accept"  # budget exhausted — keep best
     if critical and not prompt_rewrite and not param_hints:
@@ -144,7 +153,7 @@ def judge_segment(
     judge_enabled: bool = True,
 ) -> JudgeResult:
     """Heuristic + optional LLM judge for one generated clip."""
-    thr = threshold if threshold is not None else JUDGE_SCORE_THRESHOLD
+    thr = _effective_threshold(threshold)
     max_r = max_rounds if max_rounds is not None else MAX_JUDGE_ROUNDS
     issues = [str(i.get("detail") or i.get("code") or i) for i in (heuristic_issues or [])]
     critical = is_critical_fail(heuristic_issues)
@@ -242,7 +251,7 @@ def judge_full_video(
     Heuristic leg = segment-score average (floored by file size); LLM verdict
     may name weak shots as "shot:N" for selective re-generation.
     """
-    thr = threshold if threshold is not None else JUDGE_SCORE_THRESHOLD
+    thr = _effective_threshold(threshold)
     notes = frame_notes(video_path)
     seg_avg = (
         sum(segment_scores) / len(segment_scores) if segment_scores else 0.75

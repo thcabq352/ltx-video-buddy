@@ -1,13 +1,13 @@
 """LLM panel — fan one prompt out to several providers, collect candidates.
 
-Local-first (default): the local ``qwen3.6-27b-fable`` alone.
+Local-first (default): the local ``qwen3-vl-heretic`` alone.
 Named presets:
   - ``default`` / ``local`` — local only
   - ``grok`` — Grok solo (cloud)
   - ``both`` / ``panel`` / ``grok+local`` — Grok + local (judge picks)
   - ``grok+claude`` — Grok + Claude (judge picks)
-  - ``duo`` — two local models (27B + gemma4), legacy
-Custom comma lists still work (``kimi``, ``claude``, ``ollama:<model>``, …).
+  - ``duo`` — two local models (VL heretic + gemma4), legacy
+Custom comma lists still work (``claude``, ``ollama:<model>``, ``grok``, …).
 Unavailable or failing members are skipped with a log line, never fatal.
 """
 
@@ -79,8 +79,6 @@ def _skip_reason(spec: str) -> str:
         return "Ollama not reachable"
     if name == "grok":
         return "Grok auth missing (xai-oauth or XAI_API_KEY)"
-    if name == "kimi":
-        return "Kimi auth missing (kimi-oauth or KIMI_API_KEY)"
     return "provider unavailable"
 
 

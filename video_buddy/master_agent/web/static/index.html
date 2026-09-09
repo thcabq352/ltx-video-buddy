@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Master Agent — Studio</title>
+<title>VIDEO BUDDY — Studio</title>
 <style>
   :root {
     --bg: #0d1117; --panel: #161b22; --panel2: #1c2330; --line: #2d333b;
@@ -54,6 +54,13 @@
   .b-running { background: #1f3a5f; color: var(--accent2); }
   .b-done { background: #12361c; color: var(--ok); }
   .b-error { background: #3d1414; color: var(--err); }
+  .b-paused { background: #3d2e14; color: var(--warn); }
+  .meter { height: 8px; background: #0a0d12; border-radius: 99px; overflow: hidden;
+           border: 1px solid var(--line); margin-top: 6px; }
+  .meter > i { display: block; height: 100%; width: 0; background: var(--accent); }
+  .meter.hot > i { background: var(--err); }
+  .diff-old { color: var(--dim); text-decoration: line-through; margin-right: 6px; }
+  .diff-new { color: var(--accent); }
   .log { background: #0a0d12; border: 1px solid var(--line); border-radius: 6px;
          padding: 10px; font: 11px/1.6 Consolas, monospace; color: #9db2c8;
          max-height: 260px; overflow-y: auto; white-space: pre-wrap; margin-top: 10px; }
@@ -180,6 +187,27 @@
   }
   .chat.voice-tall { max-height: 380px; min-height: 180px; }
 
+  main.wide { max-width: 1320px; }
+  .json-ed {
+    font: 12px/1.45 Consolas, "SF Mono", monospace; min-height: 380px;
+    tab-size: 2; white-space: pre;
+  }
+  .wf-split { display: grid; grid-template-columns: 1.1fr .9fr; gap: 12px; }
+  .field-scroll { max-height: 380px; overflow: auto; border: 1px solid var(--line);
+                  border-radius: 6px; background: #0a0d12; }
+  .field-scroll table { margin: 0; }
+  .field-scroll input, .field-scroll textarea {
+    width: 100%; background: var(--panel2); color: var(--text);
+    border: 1px solid var(--line); border-radius: 4px; padding: 4px 6px;
+    font: 12px/1.4 Consolas, monospace;
+  }
+  .field-scroll textarea { min-height: 44px; }
+  .drop-json { min-height: 72px; }
+
+  @media (max-width: 900px) {
+    .wf-split { grid-template-columns: 1fr; }
+  }
+
   @media (max-width: 640px) {
     main { padding: 14px; }
     header { padding: 10px 14px; }
@@ -189,13 +217,14 @@
 </head>
 <body>
 <header>
-  <h1>MASTER <span>AGENT</span> · studio</h1>
+  <h1>VIDEO <span>BUDDY</span></h1>
   <div class="dots" id="health">
     <span class="dot" id="d-comfy">ComfyUI</span>
     <span class="dot" id="d-ollama">Ollama</span>
     <span class="dot" id="d-grok">Grok</span>
     <span class="dot" id="d-kb">KB</span>
     <span class="dot" id="d-gpu">GPU</span>
+    <span class="muted" id="d-hash" title="active config hash"></span>
   </div>
 </header>
 <nav>
@@ -203,6 +232,7 @@
   <button data-tab="voice">Voice</button>
   <button data-tab="fractal">Fractal</button>
   <button data-tab="music">Music</button>
+  <button data-tab="comfy">Comfy</button>
   <button data-tab="jobs">Jobs</button>
   <button data-tab="runs">Runs</button>
   <button data-tab="kb">Knowledge</button>
@@ -211,11 +241,11 @@
 <main>
   <section id="tab-create" class="tab active">
     <div class="card" id="c-intake-panel" style="display:none">
-      <b id="c-intake-name">Ara</b> <span class="muted">· creative director — a few questions before we generate</span>
+      <b id="c-intake-name">Director</b> <span class="muted">· a few questions before we generate</span>
       <span class="skip" id="c-intake-skip">skip interview</span>
       <div class="chat" id="c-intake-chat"></div>
       <div class="chatbar">
-        <input type="text" id="c-intake-input" placeholder="answer her… (or type: just go)">
+        <input type="text" id="c-intake-input" placeholder="your reply… (or type: just go)">
         <button class="btn mic" id="c-intake-mic" type="button" title="Hold or click to talk (Chrome)">🎤</button>
         <button class="btn ghost" id="c-intake-send">Send</button>
       </div>
@@ -238,7 +268,7 @@
           <option value="">auto (director)</option><option>base</option><option>directors</option>
           <option>eros</option><option>lipsync</option><option>wan22</option></select></div>
         <div><label>LLM panel</label><select id="c-panel">
-          <option value="">local (27B)</option>
+          <option value="">local (VL heretic)</option>
           <option value="grok">grok</option>
           <option value="grok+local">grok + local</option>
           <option value="grok+claude">grok + claude</option>
@@ -246,6 +276,35 @@
           <option value="custom">custom…</option></select>
           <input type="text" id="c-panel-custom" placeholder="grok,claude,ollama:gemma4:latest" style="display:none;margin-top:6px"></div>
       </div>
+      <div class="row">
+        <div><label>Persona</label>
+          <select id="c-persona"></select></div>
+        <div><label>Soul</label>
+          <select id="c-soul"></select></div>
+      </div>
+      <div class="row">
+        <div><label>Judge strictness <span id="c-strictness-val">0.50</span></label>
+          <input type="range" id="c-strictness" min="0" max="1" step="0.05" value="0.5"></div>
+        <div><label>Learning rate <span id="c-learn-val">0.30</span></label>
+          <input type="range" id="c-learn" min="0" max="1" step="0.05" value="0.3"></div>
+        <div><label>Cost VRAM flag (GB)</label>
+          <input type="number" id="c-cost-thr" min="4" max="16" step="0.5" value="14.5"></div>
+      </div>
+      <div class="row">
+        <div>
+          <label>Render budget <span id="c-budget-used">0</span> / <span id="c-budget-cap-val">80</span> VRAM-min</label>
+          <input type="number" id="c-budget-cap" min="0" step="1" value="80">
+          <div class="meter" id="c-budget-meter"><i id="c-budget-fill"></i></div>
+        </div>
+        <div style="display:flex;align-items:flex-end">
+          <button type="button" class="btn ghost sm" id="c-budget-reset">Reset used</button>
+        </div>
+      </div>
+      <div class="muted" id="c-budget-pending">No scenes held for review.</div>
+      <div class="section-label">Config history (last 10)</div>
+      <div class="muted" id="c-config-hash"></div>
+      <table id="c-config-hist"><thead><tr><th>When</th><th>Knob</th><th>Change</th><th>Session</th></tr></thead>
+        <tbody><tr><td colspan="4" class="muted">no changes yet</td></tr></tbody></table>
 
       <div class="section-label">Media (optional)</div>
       <div class="media-grid">
@@ -391,7 +450,7 @@
     <div class="card" id="v-intake-panel" style="display:none">
       <div class="voice-hero">
         <div class="voice-orb" id="v-orb" title="Agent voice state">🎙</div>
-        <b id="v-intake-name">Ara</b>
+        <b id="v-intake-name">Director</b>
         <div class="muted" id="v-phase">ready</div>
       </div>
       <span class="skip" id="v-intake-skip">skip interview</span>
@@ -415,11 +474,11 @@
 
   <section id="tab-music" class="tab">
     <div class="card" id="m-intake-panel" style="display:none">
-      <b id="m-intake-name">Ara</b> <span class="muted">· creative director — let's shape the video before we cut it</span>
+      <b id="m-intake-name">Director</b> <span class="muted">· let's shape the video before we cut it</span>
       <span class="skip" id="m-intake-skip">skip interview</span>
       <div class="chat" id="m-intake-chat"></div>
       <div class="chatbar">
-        <input type="text" id="m-intake-input" placeholder="answer her… (or type: just go)">
+        <input type="text" id="m-intake-input" placeholder="your reply… (or type: just go)">
         <button class="btn mic" id="m-intake-mic" type="button" title="Hold or click to talk (Chrome)">🎤</button>
         <button class="btn ghost" id="m-intake-send">Send</button>
       </div>
@@ -465,6 +524,62 @@
         <button class="btn" id="m-generate">Make music video</button>
         <span class="muted" id="m-status"></span>
       </div>
+    </div>
+  </section>
+
+  <section id="tab-comfy" class="tab">
+    <div class="card">
+      <h2>Comfy run</h2>
+      <div class="sub">Load a workflow, edit values, lint, then queue — same path as <code>python -m master_agent comfy run</code></div>
+      <div class="row">
+        <div><label>Mode</label>
+          <select id="wf-mode">
+            <option value="template">template</option>
+            <option value="generate">generate</option>
+            <option value="raw">raw JSON</option>
+          </select></div>
+        <div id="wf-template-wrap"><label>Template</label>
+          <select id="wf-template"></select></div>
+        <div id="wf-variant-wrap" style="display:none"><label>Variant</label>
+          <select id="wf-variant">
+            <option>base</option><option>directors</option><option>eros</option>
+            <option>lipsync</option><option>wan22</option>
+          </select></div>
+      </div>
+      <div id="wf-prompt-wrap" style="display:none">
+        <label>Prompt (generate)</label>
+        <textarea id="wf-prompt" placeholder="cinematic rain on a window, slow push in"></textarea>
+      </div>
+      <div class="drop drop-json" id="wf-drop">
+        <input type="file" id="wf-file" accept="application/json,.json">
+        <span class="drop-title">Or drop / paste a Comfy API JSON</span>
+        <span class="drop-hint">Accepts API graphs or UI exports with a prompt wrapper</span>
+        <span class="drop-name" id="wf-file-name"></span>
+      </div>
+      <div class="actions">
+        <button class="btn" id="wf-load" type="button">Load into editor</button>
+        <button class="btn ghost" id="wf-format" type="button">Format JSON</button>
+        <button class="btn ghost" id="wf-lint" type="button">Lint</button>
+        <button class="btn" id="wf-run" type="button">Queue to Comfy</button>
+        <span class="muted" id="wf-status"></span>
+      </div>
+    </div>
+    <div class="wf-split">
+      <div class="card">
+        <h2>Values</h2>
+        <div class="sub">Scalar inputs only — graph links stay in the JSON</div>
+        <input type="text" id="wf-filter" placeholder="filter node, class, or field…">
+        <div class="field-scroll" id="wf-fields"><div class="muted" style="padding:10px">Load a workflow to edit values.</div></div>
+      </div>
+      <div class="card">
+        <h2>JSON</h2>
+        <div class="sub"><span id="wf-node-count">0 nodes</span></div>
+        <textarea id="wf-json" class="json-ed" spellcheck="false" placeholder="{}"></textarea>
+      </div>
+    </div>
+    <div class="card">
+      <h2>Lint</h2>
+      <pre class="log" id="wf-lint-out">(not linted yet)</pre>
     </div>
   </section>
 
@@ -542,9 +657,11 @@ document.querySelectorAll("nav button").forEach(b => b.onclick = () => {
   document.querySelectorAll(".tab").forEach(x => x.classList.remove("active"));
   b.classList.add("active");
   $("tab-" + b.dataset.tab).classList.add("active");
+  document.querySelector("main")?.classList.toggle("wide", b.dataset.tab === "comfy");
   if (b.dataset.tab === "runs") loadRuns();
   if (b.dataset.tab === "models") loadModels();
   if (b.dataset.tab === "jobs") refreshJobs();
+  if (b.dataset.tab === "comfy") loadComfyTab();
 });
 
 // health
@@ -560,6 +677,7 @@ async function loadHealth() {
     $("d-gpu").className = "dot" + (g ? " on" : "");
     if (g) $("d-gpu").textContent = `GPU ${g.vram_free_gb}G free`;
     else $("d-gpu").textContent = "GPU";
+    if (h.config_hash && $("d-hash")) $("d-hash").textContent = h.config_hash;
   } catch (e) { /* leave dots red */ }
 }
 
@@ -690,6 +808,8 @@ function createParams() {
     storyboard: $("c-storyboard").value || null,
     upscale: $("c-upscale").value || null,
     seed: seedRaw === "" ? null : parseInt(seedRaw, 10),
+    judge_strictness: parseFloat($("c-strictness")?.value || "0.5"),
+    learning_rate: parseFloat($("c-learn")?.value || "0.3"),
   };
 }
 async function uploadFile(inputId) {
@@ -907,7 +1027,7 @@ function createVoiceEngine(opts = {}) {
 
 // intake interview (persona chat) — default-on; Generate arms after done/skip
 function makeIntake(prefix, briefFieldId, voiceOpts = {}) {
-  let sid = null, personaName = "Ara";
+  let sid = null, personaName = "Director";
   const panel = $(prefix + "-panel"), chat = $(prefix + "-chat");
   const micBtn = $(prefix + "-mic");
   const ttsEl = $(prefix + "-tts");
@@ -969,7 +1089,7 @@ function makeIntake(prefix, briefFieldId, voiceOpts = {}) {
     voice.stopListen();
     try {
       const r = await api("/api/intake", {body: {request: idea}});
-      sid = r.session_id; personaName = r.persona || "Ara";
+      sid = r.session_id; personaName = r.persona || personaName || "Director";
       const nameEl = $(prefix + "-name");
       if (nameEl) nameEl.textContent = personaName;
       chat.innerHTML = "";
@@ -1166,7 +1286,7 @@ async function refreshJobs() {
   try { jobs = await api("/api/jobs"); } catch (e) { return; }
   const box = $("jobs-list");
   if (!jobs.length) {
-    box.innerHTML = '<div class="card muted">No jobs yet — generate from Create, Fractal, or Music.</div>';
+    box.innerHTML = '<div class="card muted">No jobs yet — generate from Create, Comfy, Fractal, or Music.</div>';
     return;
   }
   box.innerHTML = jobs.map(j => {
@@ -1284,6 +1404,170 @@ $("kb-go").onclick = async () => {
 };
 $("kb-q").addEventListener("keydown", e => { if (e.key === "Enter") $("kb-go").click(); });
 
+// comfy JSON editor
+let wfState = { workflow: null, fields: [] };
+function wfIsLink(v) {
+  return Array.isArray(v) && v.length === 2 && (typeof v[0] === "string" || typeof v[0] === "number") && typeof v[1] === "number";
+}
+function wfParse() {
+  const raw = $("wf-json").value.trim();
+  if (!raw) throw new Error("JSON editor is empty");
+  const data = JSON.parse(raw);
+  if (data && typeof data === "object" && data.prompt && typeof data.prompt === "object") return data.prompt;
+  return data;
+}
+function wfWrite(wf) {
+  wfState.workflow = wf;
+  $("wf-json").value = JSON.stringify(wf, null, 2);
+  const n = Object.values(wf).filter(v => v && typeof v === "object" && v.class_type).length;
+  if ($("wf-node-count")) $("wf-node-count").textContent = n + " nodes";
+  wfPaintFields();
+}
+function wfPaintFields() {
+  const q = ($("wf-filter")?.value || "").toLowerCase();
+  const wf = wfState.workflow || {};
+  const rows = [];
+  for (const [nid, node] of Object.entries(wf)) {
+    if (!node || typeof node !== "object" || !node.class_type) continue;
+    const title = (node._meta && node._meta.title) || node.class_type;
+    for (const [field, val] of Object.entries(node.inputs || {})) {
+      if (wfIsLink(val)) continue;
+      const blob = (nid + " " + title + " " + node.class_type + " " + field).toLowerCase();
+      if (q && !blob.includes(q)) continue;
+      rows.push({ nid, title, cls: node.class_type, field, val, kind: typeof val });
+    }
+  }
+  wfState.fields = rows;
+  const box = $("wf-fields");
+  if (!box) return;
+  if (!rows.length) {
+    box.innerHTML = '<div class="muted" style="padding:10px">No scalar fields' + (q ? " match that filter" : " — load a workflow") + ".</div>";
+    return;
+  }
+  box.innerHTML = `<table><thead><tr><th>Node</th><th>Field</th><th>Value</th></tr></thead><tbody>
+    ${rows.map((r, i) => {
+      const label = esc(r.title) + ' <span class="muted">' + esc(r.nid) + "</span>";
+      const long = typeof r.val === "string" && r.val.length > 80;
+      const shown = typeof r.val === "object" ? JSON.stringify(r.val) : String(r.val ?? "");
+      const control = r.kind === "boolean"
+        ? `<select data-i="${i}">${r.val ? '<option value="true" selected>true</option><option value="false">false</option>' : '<option value="true">true</option><option value="false" selected>false</option>'}</select>`
+        : long
+          ? `<textarea data-i="${i}">${esc(shown)}</textarea>`
+          : `<input data-i="${i}" value="${esc(shown)}">`;
+      return `<tr><td>${label}<div class="muted">${esc(r.cls)}</div></td><td>${esc(r.field)}</td><td>${control}</td></tr>`;
+    }).join("")}
+  </tbody></table>`;
+  box.querySelectorAll("input, textarea, select").forEach((el) => {
+    el.addEventListener("change", () => {
+      const row = wfState.fields[Number(el.dataset.i)];
+      if (!row || !wfState.workflow?.[row.nid]?.inputs) return;
+      let next = el.value;
+      if (row.kind === "number") next = Number(el.value);
+      else if (row.kind === "boolean") next = el.value === "true";
+      else if (typeof row.val === "object") {
+        try { next = JSON.parse(el.value); } catch (_) { next = el.value; }
+      }
+      wfState.workflow[row.nid].inputs[row.field] = next;
+      $("wf-json").value = JSON.stringify(wfState.workflow, null, 2);
+    });
+  });
+}
+function wfSyncMode() {
+  const mode = $("wf-mode")?.value || "template";
+  if ($("wf-template-wrap")) $("wf-template-wrap").style.display = mode === "template" ? "" : "none";
+  if ($("wf-variant-wrap")) $("wf-variant-wrap").style.display = mode === "generate" ? "" : "none";
+  if ($("wf-prompt-wrap")) $("wf-prompt-wrap").style.display = mode === "generate" ? "" : "none";
+}
+async function loadComfyTab() {
+  wfSyncMode();
+  if ($("wf-template")?.options.length) return;
+  const data = await api("/api/comfy/templates").catch(() => ({ items: [] }));
+  const el = $("wf-template");
+  if (!el) return;
+  const items = data.items || [];
+  el.innerHTML = items.map((it) => `<option value="${esc(it.path)}">${esc(it.name)}</option>`).join("")
+    || '<option value="">(no templates)</option>';
+}
+$("wf-mode")?.addEventListener("change", wfSyncMode);
+$("wf-filter")?.addEventListener("input", wfPaintFields);
+$("wf-format")?.addEventListener("click", () => {
+  try { wfWrite(wfParse()); toast("formatted"); }
+  catch (e) { toast(e.message); }
+});
+$("wf-load")?.addEventListener("click", async () => {
+  const mode = $("wf-mode")?.value || "template";
+  $("wf-status").textContent = " loading…";
+  try {
+    const body = { mode };
+    if (mode === "template") body.template = $("wf-template")?.value;
+    if (mode === "generate") {
+      body.variant = $("wf-variant")?.value || "base";
+      body.prompt = $("wf-prompt")?.value || "";
+    }
+    if (mode === "raw") body.workflow = wfParse();
+    const r = await api("/api/comfy/prepare", { body });
+    wfWrite(r.workflow);
+    $("wf-status").textContent = " " + r.nodes + " nodes loaded";
+    toast("workflow loaded");
+  } catch (e) {
+    $("wf-status").textContent = " " + e.message;
+    toast(e.message);
+  }
+});
+$("wf-lint")?.addEventListener("click", async () => {
+  $("wf-lint-out").textContent = "linting…";
+  try {
+    const r = await api("/api/comfy/lint", { body: { workflow: wfParse() } });
+    $("wf-lint-out").textContent = r.text || (r.ok ? "PASS" : (r.errors || []).join("\n"));
+    toast(r.ok ? "lint passed" : "lint failed");
+  } catch (e) {
+    $("wf-lint-out").textContent = e.message;
+    toast(e.message);
+  }
+});
+$("wf-run")?.addEventListener("click", async () => {
+  $("wf-status").textContent = " queueing…";
+  $("wf-run").disabled = true;
+  try {
+    const job = await api("/api/comfy/run", { body: { workflow: wfParse(), request: "comfy run" } });
+    $("wf-status").textContent = " queued " + job.id;
+    toast("queued — watch Jobs");
+    pollJob(job.id, false);
+    document.querySelector('nav button[data-tab="jobs"]')?.click();
+  } catch (e) {
+    $("wf-status").textContent = " " + e.message;
+    toast(e.message);
+  } finally {
+    $("wf-run").disabled = false;
+  }
+});
+(function bindWfDrop() {
+  const drop = $("wf-drop");
+  const file = $("wf-file");
+  if (!drop || !file) return;
+  drop.addEventListener("click", () => file.click());
+  drop.addEventListener("dragover", (e) => { e.preventDefault(); drop.classList.add("drag"); });
+  drop.addEventListener("dragleave", () => drop.classList.remove("drag"));
+  drop.addEventListener("drop", (e) => {
+    e.preventDefault();
+    drop.classList.remove("drag");
+    const f = e.dataTransfer?.files?.[0];
+    if (f) readWfFile(f);
+  });
+  file.addEventListener("change", () => { if (file.files?.[0]) readWfFile(file.files[0]); });
+  async function readWfFile(f) {
+    try {
+      const text = await f.text();
+      $("wf-json").value = text;
+      if ($("wf-file-name")) $("wf-file-name").textContent = f.name;
+      $("wf-mode").value = "raw";
+      wfSyncMode();
+      wfWrite(wfParse());
+      toast("loaded " + f.name);
+    } catch (e) { toast(e.message); }
+  }
+})();
+
 // models
 async function loadModels() {
   const m = await api("/api/models").catch(() => null);
@@ -1296,6 +1580,112 @@ async function loadModels() {
   $("models-body").innerHTML = `<b>Bundles</b><table>${bundles || '<tr><td class="muted">none</td></tr>'}</table>
     <br><b>Files</b><table>${files || '<tr><td class="muted">none</td></tr>'}</table>`;
 }
+
+function bindDial(id, labelId) {
+  const el = $(id);
+  const lab = $(labelId);
+  if (!el || !lab) return;
+  const paint = () => { lab.textContent = Number(el.value).toFixed(2); };
+  el.addEventListener("input", paint);
+  paint();
+}
+const controlSession = (() => {
+  const k = "vb-control-session";
+  try {
+    let id = sessionStorage.getItem(k);
+    if (!id) {
+      id = "studio-" + Math.random().toString(36).slice(2, 10);
+      sessionStorage.setItem(k, id);
+    }
+    return id;
+  } catch (_) {
+    return "studio";
+  }
+})();
+function paintControl(c) {
+  if (!c) return;
+  if (c.judge_strictness != null && $("c-strictness")) {
+    $("c-strictness").value = c.judge_strictness;
+    if ($("c-strictness-val")) $("c-strictness-val").textContent = Number(c.judge_strictness).toFixed(2);
+  }
+  if (c.learning_rate != null && $("c-learn")) {
+    $("c-learn").value = c.learning_rate;
+    if ($("c-learn-val")) $("c-learn-val").textContent = Number(c.learning_rate).toFixed(2);
+  }
+  if (c.cost_vram_threshold_gb != null && $("c-cost-thr")) {
+    $("c-cost-thr").value = c.cost_vram_threshold_gb;
+  }
+  const cap = c.render_budget_cap_vram_min ?? c.budget?.cap;
+  const used = c.render_budget_used_vram_min ?? c.budget?.used ?? 0;
+  if (cap != null && $("c-budget-cap")) {
+    $("c-budget-cap").value = cap;
+    if ($("c-budget-cap-val")) $("c-budget-cap-val").textContent = Number(cap).toFixed(1);
+  }
+  if ($("c-budget-used")) $("c-budget-used").textContent = Number(used).toFixed(2);
+  const pct = cap > 0 ? Math.min(100, (Number(used) / Number(cap)) * 100) : 0;
+  if ($("c-budget-fill")) $("c-budget-fill").style.width = pct + "%";
+  if ($("c-budget-meter")) $("c-budget-meter").classList.toggle("hot", pct >= 90 || !!c.budget?.paused);
+  const pending = c.budget?.pending || [];
+  if ($("c-budget-pending")) {
+    $("c-budget-pending").textContent = pending.length
+      ? ("Held for review: " + pending.map(p => p.id + " (" + Number(p.vram_min).toFixed(2) + " VRAM-min)").join(", "))
+      : "No scenes held for review.";
+  }
+  const fillSelect = (id, items, active) => {
+    const el = $(id);
+    if (!el || !items) return;
+    el.innerHTML = items.map(it =>
+      `<option value="${esc(it.slug)}"${it.slug === active ? " selected" : ""}>${esc(it.name || it.slug)}</option>`
+    ).join("");
+    if (active) el.value = active;
+  };
+  fillSelect("c-persona", c.personas, c.persona);
+  fillSelect("c-soul", c.souls, c.soul);
+  if (c.personas) {
+    const hit = (c.personas || []).find(p => p.slug === c.persona);
+    if (hit) {
+      ["c-intake-name", "v-intake-name", "m-intake-name"].forEach((id) => {
+        const el = $(id);
+        if (el) el.textContent = hit.name;
+      });
+    }
+  }
+  if ($("c-config-hash") && c.hash) $("c-config-hash").textContent = "active hash " + c.hash;
+  if ($("d-hash") && c.hash) $("d-hash").textContent = c.hash;
+  const body = $("c-config-hist")?.querySelector("tbody");
+  if (body) {
+    const rows = c.history || [];
+    body.innerHTML = rows.length
+      ? rows.slice().reverse().map(r => `<tr>
+          <td class="muted">${esc(r.ts || "")}</td>
+          <td>${esc(r.key || "")}</td>
+          <td><span class="diff-old">${esc(String(r.old))}</span><span class="diff-new">${esc(String(r.new))}</span></td>
+          <td class="muted">${esc(r.session || "")}</td>
+        </tr>`).join("")
+      : '<tr><td colspan="4" class="muted">no changes yet</td></tr>';
+  }
+}
+function postControl(extra) {
+  const body = Object.assign({ session: controlSession }, extra || {});
+  return api("/api/control", { method: "POST", body }).then(paintControl).catch(() => {});
+}
+bindDial("c-strictness", "c-strictness-val");
+bindDial("c-learn", "c-learn-val");
+const controlFields = {
+  "c-strictness": (el) => ({ judge_strictness: parseFloat(el.value) }),
+  "c-learn": (el) => ({ learning_rate: parseFloat(el.value) }),
+  "c-cost-thr": (el) => ({ cost_vram_threshold_gb: parseFloat(el.value) }),
+  "c-budget-cap": (el) => ({ render_budget_cap_vram_min: parseFloat(el.value) }),
+  "c-persona": (el) => (el.value ? { persona: el.value } : {}),
+  "c-soul": (el) => (el.value ? { soul: el.value } : {}),
+};
+["c-strictness", "c-learn", "c-cost-thr", "c-budget-cap", "c-persona", "c-soul"].forEach((id) => {
+  const el = $(id);
+  if (!el) return;
+  el.addEventListener("change", () => postControl(controlFields[id](el)));
+});
+$("c-budget-reset")?.addEventListener("click", () => postControl({ reset_budget: true }));
+api("/api/control").then(paintControl).catch(() => {});
 
 loadHealth();
 refreshJobs();

@@ -43,29 +43,29 @@ class TestResolvePanel(unittest.TestCase):
     def test_skips_unavailable(self):
         with patch("master_agent.llm_panel.provider_available") as avail:
             avail.side_effect = lambda spec: not spec.startswith("ollama:gemma")
-            res = resolve_panel("ollama:qwen3.6-27b-fable,ollama:gemma4:latest")
-        self.assertEqual(res.members, ["ollama:qwen3.6-27b-fable"])
+            res = resolve_panel("ollama:qwen3-vl-heretic,ollama:gemma4:latest")
+        self.assertEqual(res.members, ["ollama:qwen3-vl-heretic"])
         self.assertEqual(len(res.skipped), 1)
         self.assertEqual(res.skipped[0][0], "ollama:gemma4:latest")
         self.assertIn("Ollama", res.skipped[0][1])
 
     def test_custom_csv(self):
         with patch("master_agent.llm_panel.provider_available", return_value=True):
-            res = resolve_panel("kimi,grok")
-        self.assertEqual(res.members, ["kimi", "grok"])
+            res = resolve_panel("claude,grok")
+        self.assertEqual(res.members, ["claude", "grok"])
 
     def test_local_first_presets(self):
         with patch("master_agent.llm_panel.provider_available", return_value=True), patch(
-            "master_agent.llm_panel.OLLAMA_MODEL", "qwen3.6-27b-fable"
+            "master_agent.llm_panel.OLLAMA_MODEL", "qwen3-vl-heretic"
         ):
             local = resolve_panel("default")
-            self.assertEqual(local.members, ["ollama:qwen3.6-27b-fable"])
+            self.assertEqual(local.members, ["ollama:qwen3-vl-heretic"])
             self.assertEqual(resolve_panel("local").members, local.members)
 
             self.assertEqual(resolve_panel("grok").members, ["grok"])
 
             both = resolve_panel("both")
-            self.assertEqual(both.members, ["grok", "ollama:qwen3.6-27b-fable"])
+            self.assertEqual(both.members, ["grok", "ollama:qwen3-vl-heretic"])
             self.assertEqual(resolve_panel("panel").members, both.members)
             self.assertEqual(resolve_panel("grok+local").members, both.members)
 

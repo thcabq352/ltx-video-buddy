@@ -113,6 +113,9 @@ class PipelineResult:
         self.full_judge_pass: bool = False
         self.full_judge_notes: str = ""
         self.full_judge_history: list[dict[str, Any]] = []
+        self.budget: dict[str, Any] = {}
+        self.budget_held: list[dict[str, Any]] = []
+        self.budget_decisions: list[dict[str, Any]] = []
         self.messages: list[str] = []
 
     def log(self, msg: str) -> None:
@@ -136,6 +139,9 @@ class PipelineResult:
             "full_judge_pass": self.full_judge_pass,
             "full_judge_notes": self.full_judge_notes,
             "full_judge_history": self.full_judge_history,
+            "budget": self.budget,
+            "budget_held": self.budget_held,
+            "budget_decisions": self.budget_decisions,
             "messages": self.messages,
         }
 
@@ -158,6 +164,23 @@ def _write_record(result: PipelineResult) -> None:
             result.log("kb: run record ingested")
     except Exception:
         pass
+
+
+def _budget_admit(result: PipelineResult, scene_id: str, variant: Optional[str], duration_s: float) -> dict[str, Any]:
+    from master_agent.control.budget import admit_scene
+
+    row = admit_scene(scene_id, variant=variant, duration_s=duration_s)
+    result.budget_decisions.append(row)
+    result.budget = {
+        "used": row["used_after"],
+        "cap": row["cap"],
+        "paused": row["paused"],
+    }
+    result.log(
+        f"budget {row['decision']} {scene_id} +{row['cost_vram_min']} "
+        f"used={row['used_after']}/{row['cap']}"
+    )
+    return row
 
 
 def _synthetic_cards(request: str, segs: list[float]) -> list[ShotCard]:
@@ -208,6 +231,16 @@ def run_pipeline(
 
     # Single segment → plain orchestrator run (no storyboard/stitch overhead)
     if len(segs) == 1:
+        gate = _budget_admit(result, f"{run_id}:seg0", variant, segs[0])
+        if gate["decision"] == "hold":
+            result.status = "paused"
+            result.budget_held.append({"id": f"{run_id}:seg0", **gate})
+            result.error = (
+                f"render budget paused {run_id}:seg0 "
+                f"(used {gate['used_after']}/{gate['cap']} VRAM-min)"
+            )
+            _write_record(result)
+            return result
         st = orch.run(
             request,
             variant=variant,
@@ -277,8 +310,18 @@ def run_pipeline(
             power_mode=power_mode,
         )
 
-    # Per-segment generation
+    # Per-segment generation (budget can pause the remaining queue)
     for i in range(len(segs)):
+        scene_id = f"{run_id}:seg{i}"
+        gate = _budget_admit(result, scene_id, variant, segs[i])
+        if gate["decision"] == "hold":
+            result.budget_held.append({"id": scene_id, **gate})
+            for j in range(i + 1, len(segs)):
+                extra_id = f"{run_id}:seg{j}"
+                extra = _budget_admit(result, extra_id, variant, segs[j])
+                result.budget_held.append({"id": extra_id, **extra})
+            result.log(f"budget pause: {len(result.budget_held)} scene(s) held for review")
+            break
         result.log(f"--- segment {i + 1}/{len(segs)} ({segs[i]}s) ---")
         st = _gen_segment(i)
         result.messages.extend(st.messages)
@@ -294,9 +337,28 @@ def run_pipeline(
         except Exception:
             pass
 
+    if result.budget_held and not result.segment_paths:
+        result.status = "paused"
+        result.error = (
+            f"render budget paused; {len(result.budget_held)} scene(s) held for review "
+            f"(used {result.budget.get('used')}/{result.budget.get('cap')} VRAM-min)"
+        )
+        _write_record(result)
+        return result
+
     # Stitch
     final = _stitch(result, result.segment_paths, suffix="")
     if final is None:
+        _write_record(result)
+        return result
+
+    if result.budget_held:
+        result.video_path = str(Path(final).resolve())
+        result.status = "paused"
+        result.error = (
+            f"render budget paused after {len(result.segment_paths)} scene(s); "
+            f"{len(result.budget_held)} held for review"
+        )
         _write_record(result)
         return result
 
@@ -329,6 +391,12 @@ def run_pipeline(
                 result.storyboard = [c.to_dict() for c in cards]
             for wi in weak:
                 if wi < 0 or wi >= len(segs):
+                    continue
+                regen_id = f"{run_id}:seg{wi}:r{fr + 1}"
+                regen_gate = _budget_admit(result, regen_id, variant, segs[wi])
+                if regen_gate["decision"] == "hold":
+                    result.budget_held.append({"id": regen_id, **regen_gate})
+                    result.log(f"budget hold skip regen {regen_id}")
                     continue
                 regen = _gen_segment(wi, seed_bump=777 * (fr + 1) + wi)
                 result.messages.extend(regen.messages)

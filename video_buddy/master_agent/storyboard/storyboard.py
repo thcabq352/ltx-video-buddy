@@ -81,6 +81,7 @@ def build_storyboard(
     memory_context: str = "",
     rag_context: str = "",
     global_style: str = "",
+    school: dict | None = None,
 ) -> tuple[list[ShotCard], str]:
     """Return (shots, global_style). Uses LLM when available, else heuristic."""
     segs = [float(s) for s in (segment_durations or [5.0])]
@@ -97,10 +98,23 @@ def build_storyboard(
     )
     if llm_shots:
         shots, style = llm_shots
-        return _align_to_durations(shots, segs), style or global_style
+        aligned = _align_to_durations(shots, segs)
+        return _apply_tutor(aligned, user_request, school), style or global_style
 
     shots = _heuristic_storyboard(user_request, segs, variant=variant)
-    return shots, global_style or _default_style(user_request)
+    return _apply_tutor(shots, user_request, school), global_style or _default_style(user_request)
+
+
+def _apply_tutor(shots: list[ShotCard], user_request: str, school: dict | None) -> list[ShotCard]:
+    if not (school or {}).get("enabled"):
+        return shots
+    try:
+        from master_agent.school.tutor import tutor_storyboard
+
+        scene = {"synopsis": user_request, "text": user_request, "characters": []}
+        return tutor_storyboard(shots, scene=scene, school=school)
+    except Exception:
+        return shots
 
 
 def storyboard_to_markdown(shots: list[ShotCard], *, global_style: str = "") -> str:

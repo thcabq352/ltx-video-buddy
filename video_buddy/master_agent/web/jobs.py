@@ -39,7 +39,7 @@ class _Tee(io.TextIOBase):
 @dataclass
 class Job:
     id: str
-    kind: str  # run | dry-run | fractal | music
+    kind: str  # run | dry-run | fractal | music | comfy-run
     request: str
     params: dict[str, Any]
     status: str = "queued"  # queued | running | done | error
@@ -100,7 +100,7 @@ class JobManager:
 
     def _work(self, job: Job) -> None:
         tee = _Tee(job._log, sys.stdout)
-        needs_gpu = job.kind == "run" or (
+        needs_gpu = job.kind in ("run", "comfy-run") or (
             job.kind == "music" and job.params.get("visual") != "fractal"
         )
         if needs_gpu:
@@ -123,9 +123,14 @@ class JobManager:
                 self._do_fractal(job)
             elif job.kind == "music":
                 self._do_music(job)
+            elif job.kind == "comfy-run":
+                self._do_comfy_run(job)
             else:
                 raise ValueError(f"unknown job kind {job.kind!r}")
-            job.status = "done" if job.error is None else "error"
+            if job.status == "paused":
+                pass
+            else:
+                job.status = "done" if job.error is None else "error"
         except Exception as e:
             job.status = "error"
             job.error = f"{type(e).__name__}: {e}"
@@ -184,6 +189,9 @@ class JobManager:
             }
         job.result = d
         if result.status == "error":
+            job.error = result.error
+        elif result.status == "paused":
+            job.status = "paused"
             job.error = result.error
 
     def _do_dry_run(self, job: Job) -> None:
@@ -262,6 +270,16 @@ class JobManager:
         job.result = rec
         if rec.get("status") == "error":
             job.error = rec.get("error")
+
+    def _do_comfy_run(self, job: Job) -> None:
+        from master_agent.comfy.cli_run import execute_prepared
+
+        workflow = job.params.get("workflow")
+        if not isinstance(workflow, dict):
+            raise ValueError("comfy-run requires a workflow dict")
+        rec = execute_prepared(workflow, run_id=job.id)
+        rec["video_url"] = _outputs_url(rec.get("video_path"))
+        job.result = rec
 
 
 def _outputs_url(video_path) -> Optional[str]:

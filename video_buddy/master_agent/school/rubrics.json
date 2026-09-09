@@ -1,0 +1,22 @@
+{
+  "reviewed": "2026-08-18",
+  "disclaimer": "Cited craft rules for headless exam. Not a lecture and not a production gate.",
+  "items": [
+    {
+      "id": "want-vs-need",
+      "track": "story",
+      "rule": "A scene states a want; the need is what the character actually requires.",
+      "counter_example": "A scene that is only atmosphere with no desire.",
+      "apply": "Name the want on this scene.",
+      "cite": "McKee, Story (1997)"
+    },
+    {
+      "id": "axis",
+      "track": "image",
+      "rule": "Coverage holds the 180-degree axis unless a crossing is motivated.",
+      "counter_example": "Reverse coverage that flips eyelines with no geography.",
+      "apply": "Check shot sizes and eyelines on this scene.",
+      "cite": "Bordwell and Thompson, Film Art"
+    }
+  ]
+}

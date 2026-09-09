@@ -29,6 +29,8 @@ class TestStudioHtml(unittest.TestCase):
         self.assertIn("c-intake-mic", html)
         self.assertIn("v-start", html)
         self.assertIn("Hands-free", html)
+        self.assertIn("c-budget-cap", html)
+        self.assertIn("c-config-hist", html)
 
 
 class TestHealth(unittest.TestCase):
@@ -259,6 +261,63 @@ class TestRunsAndGuards(unittest.TestCase):
             r = client.get("/api/kb/search?q=coffee&k=1")
         self.assertEqual(r.status_code, 200)
         self.assertEqual(r.json()[0]["id"], "run:x")
+
+
+class TestControlApi(unittest.TestCase):
+    def test_control_exposes_budget_and_logs_knob_change(self):
+        import master_agent.config as cfg
+        from master_agent.control import budget as budget_mod
+        from master_agent.control import versioned_config as vc_mod
+
+        saved = (
+            cfg.JUDGE_STRICTNESS,
+            cfg.LEARNING_RATE,
+            cfg.COST_VRAM_THRESHOLD_GB,
+            cfg.RENDER_BUDGET_CAP_VRAM_MIN,
+            cfg.JUDGE_SCORE_THRESHOLD,
+            cfg.RENDER_BUDGET_USED_VRAM_MIN,
+            cfg.PERSONA,
+            cfg.SOUL,
+            budget_mod._BUDGET,
+            vc_mod._STORE,
+        )
+        try:
+            with TemporaryDirectory() as td:
+                root = Path(td)
+                store = vc_mod.VersionedConfig(root / "config.json", root / "history.jsonl")
+                bud = budget_mod.RenderBudget(root / "budget.json", cap=40, used=5.0)
+                budget_mod._BUDGET = bud
+                vc_mod._STORE = store
+                client = TestClient(app)
+                r = client.get("/api/control")
+                self.assertEqual(r.status_code, 200)
+                data = r.json()
+                self.assertEqual(len(data["hash"]), 16)
+                self.assertEqual(data["render_budget_cap_vram_min"], 40)
+                self.assertEqual(data["render_budget_used_vram_min"], 5.0)
+                self.assertIn("pending", data["budget"])
+                self.assertTrue(any(p["slug"] == "ara" for p in data["personas"]))
+                self.assertTrue(any(s["slug"] == "studio" for s in data["souls"]))
+                p = client.post(
+                    "/api/control",
+                    json={"learning_rate": 0.8, "session": "web-test"},
+                )
+                self.assertEqual(p.status_code, 200)
+                hist = p.json()["history"]
+                self.assertTrue(any(h.get("key") == "learning_rate" and h.get("session") == "web-test" for h in hist))
+        finally:
+            (
+                cfg.JUDGE_STRICTNESS,
+                cfg.LEARNING_RATE,
+                cfg.COST_VRAM_THRESHOLD_GB,
+                cfg.RENDER_BUDGET_CAP_VRAM_MIN,
+                cfg.JUDGE_SCORE_THRESHOLD,
+                cfg.RENDER_BUDGET_USED_VRAM_MIN,
+                cfg.PERSONA,
+                cfg.SOUL,
+                budget_mod._BUDGET,
+                vc_mod._STORE,
+            ) = saved
 
 
 if __name__ == "__main__":
