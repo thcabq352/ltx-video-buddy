@@ -16,6 +16,7 @@ Commands:
   download-flux       One-time Flux fp8 weights download (~17GB)
   comfy run           Drive ComfyUI from the CLI (prepare + lint + queue)
   diagnose            9-frame hull fire (sec/step); does not spend shift budget
+  budget              status | reset-shift  (VRAM-min shift ledger)
   about               Print the studio identity card
 """
 
@@ -766,6 +767,28 @@ def _parse_override_flags(flags: list[str]) -> dict[str, dict]:
     return overrides
 
 
+def cmd_budget(args: argparse.Namespace) -> int:
+    from master_agent.control.budget import get_project_budget
+
+    store = get_project_budget()
+    if args.budget_command == "reset-shift":
+        row = store.reset_shift()
+        print(
+            f"OK    shift reset previous_shift_id={row['previous_shift_id']} "
+            f"previous_used={row['previous_used']} now={store.shift_id}"
+        )
+    snap = store.snapshot()
+    if args.json:
+        print(json.dumps(snap, indent=1))
+        return 0
+    print(
+        f"budget  used={snap['used']} cap={snap['cap']} paused={snap['paused']} "
+        f"shift_id={snap['shift_id']} started={snap['shift_started_at']}"
+    )
+    print(f"        pending={len(snap['pending'])} ledger={len(snap['log'])}")
+    return 0
+
+
 def cmd_diagnose(args: argparse.Namespace) -> int:
     from master_agent.comfy.diagnose import DiagnoseFailed, ScaleRefused, run_diagnose
 
@@ -1080,6 +1103,11 @@ def main(argv: list[str] | None = None) -> int:
     )
     p.add_argument("--json", action="store_true", help="machine-readable result")
     p.set_defaults(func=cmd_diagnose)
+
+    p = sub.add_parser("budget", help="render shift budget: status | reset-shift")
+    p.add_argument("budget_command", choices=["status", "reset-shift"])
+    p.add_argument("--json", action="store_true", help="machine-readable snapshot")
+    p.set_defaults(func=cmd_budget)
 
     args = parser.parse_args(argv)
     from master_agent.control.versioned_config import announce_config
