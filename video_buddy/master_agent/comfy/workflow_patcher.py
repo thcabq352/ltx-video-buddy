@@ -512,6 +512,7 @@ def load_and_patch_workflow(
     stg_blocks: Optional[list[int]] = None,
     sampler_name: Optional[str] = None,
     frames: Optional[int] = None,
+    object_info: Optional[dict[str, Any]] = None,
 ) -> tuple[dict[str, Any], dict[str, Any]]:
     """
     Returns (workflow_api_dict, meta) where meta has resolved generation params.
@@ -603,6 +604,15 @@ def load_and_patch_workflow(
 
     # Final sanitize after extras
     _sanitize_ltx_nodes(workflow)
+
+    from master_agent.comfy.graph_ops import (
+        LTX_TEACACHE_VARIANTS,
+        ensure_teacache,
+        looks_like_ltx_graph,
+    )
+
+    if variant in LTX_TEACACHE_VARIANTS or looks_like_ltx_graph(workflow):
+        ensure_teacache(workflow, object_info)
 
     meta = {
         "variant": variant,
