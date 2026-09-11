@@ -29,6 +29,14 @@ Drive Comfy from the CLI first. Studio `:8189` is optional.
 
 `comfy run` prepares, lints, queues, and copies into `outputs/`. `--prepare` stops before the GPU queue. Comfy portable is `:8188` (`ComfyUI_windows_portable\run_api_8188.bat`). Studio is `:8189`. Do not treat a live studio tab as proof Comfy is up.
 
+Diagnose the hull before any scale. This is a 9-frame short fire (steps 6–8, fixed seed), not a 121-frame burn:
+
+```powershell
+.\.venv\Scripts\python.exe -m master_agent diagnose --variant base --prompt "garden proof"
+```
+
+It always prepares + lints first, then queues the short fire, prints wall time and `sec/step`, copies into `outputs/`, and ffprobes the file. Junk (`<100KB` or `<3` frames) is FAIL. Diagnose does **not** spend shift budget. `--prepare` stops after lint. Do not walk `DOWNSCALE_LADDER` or raise resolution until the hull has recorded `sec/step`.
+
 ## Identity
 
 Persona is the interview voice. Soul is standing studio values.

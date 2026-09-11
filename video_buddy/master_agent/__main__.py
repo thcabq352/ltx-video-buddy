@@ -15,6 +15,7 @@ Commands:
   lora setup|train|validate  Flux LoRA training via ai-toolkit + vision validation
   download-flux       One-time Flux fp8 weights download (~17GB)
   comfy run           Drive ComfyUI from the CLI (prepare + lint + queue)
+  diagnose            9-frame hull fire (sec/step); does not spend shift budget
   about               Print the studio identity card
 """
 
@@ -765,6 +766,33 @@ def _parse_override_flags(flags: list[str]) -> dict[str, dict]:
     return overrides
 
 
+def cmd_diagnose(args: argparse.Namespace) -> int:
+    from master_agent.comfy.diagnose import DiagnoseFailed, ScaleRefused, run_diagnose
+
+    try:
+        rec = run_diagnose(
+            prompt=args.prompt,
+            variant=args.variant,
+            steps=args.steps,
+            seed=args.seed,
+            prepare_only=bool(args.prepare),
+            width=args.width,
+            height=args.height,
+        )
+    except ScaleRefused as e:
+        print(f"FAIL  {e}")
+        return 2
+    except DiagnoseFailed as e:
+        print(f"FAIL  {e}")
+        return 1
+    except Exception as e:
+        print(f"FAIL  {e}")
+        return 1
+    if args.json:
+        print(json.dumps({k: v for k, v in rec.items() if k != "meta"}, indent=1, default=str))
+    return 0 if rec.get("ok") else 1
+
+
 def cmd_comfy(args: argparse.Namespace) -> int:
     from master_agent.comfy.cli_run import LintError, execute_prepared, lint_or_raise, prepare_run
 
@@ -1034,6 +1062,24 @@ def main(argv: list[str] | None = None) -> int:
         help="lint and write JSON only; do not queue Comfy",
     )
     p.set_defaults(func=cmd_comfy)
+
+    p = sub.add_parser(
+        "diagnose",
+        help="9-frame hull fire: prepare + lint, then short queue; prints sec/step",
+    )
+    p.add_argument("--variant", default="base")
+    p.add_argument("--prompt", default="garden proof")
+    p.add_argument("--steps", type=int, default=None, help="sampler steps (clamped to 6-8)")
+    p.add_argument("--seed", type=int, default=None, help="fixed diagnose seed (default DIAGNOSE_SEED)")
+    p.add_argument("--width", type=int, default=None, help="refused above hull until sec/step exists")
+    p.add_argument("--height", type=int, default=None)
+    p.add_argument(
+        "--prepare",
+        action="store_true",
+        help="lint the 9-frame graph only; do not queue Comfy",
+    )
+    p.add_argument("--json", action="store_true", help="machine-readable result")
+    p.set_defaults(func=cmd_diagnose)
 
     args = parser.parse_args(argv)
     from master_agent.control.versioned_config import announce_config
