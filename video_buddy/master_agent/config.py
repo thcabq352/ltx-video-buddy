@@ -129,8 +129,16 @@ DEFAULT_STEPS = int(os.getenv("DEFAULT_STEPS", "12"))
 DEFAULT_CFG = float(os.getenv("DEFAULT_CFG", "1.0"))
 DEFAULT_FPS = 24
 DEFAULT_QUALITY = os.getenv("DEFAULT_QUALITY", "balanced")  # draft | balanced | quality
-# LTX frame counts are typically 8n+1
-DEFAULT_FRAMES = 121  # ~5s @ 24fps
+# LTX frame law: valid counts are 8n+1 with a hard minimum of 9 (never 8, never 121-by-default).
+DEFAULT_FRAMES = 9
+# Diagnose / draft hull: short fire to measure sec/step before any scale.
+DIAGNOSE_FRAMES = 9
+DIAGNOSE_STEPS_MIN = 6
+DIAGNOSE_STEPS_MAX = 8
+DIAGNOSE_STEPS = 8
+DIAGNOSE_SEED = 20260911
+DIAGNOSE_WIDTH = 768
+DIAGNOSE_HEIGHT = 512
 
 # Per-variant generation profiles: fps + frame-count snapping (LTX=8n+1, Wan=4n+1)
 VARIANT_GEN: dict[str, dict[str, int]] = {
@@ -146,6 +154,7 @@ def get_variant_gen(variant: str | None) -> dict[str, int]:
 QUALITY_PROFILES: dict[str, dict] = {
     "draft": {
         "steps": 8,
+        "frames": 9,
         "segment_max_s": 5.0,
         "max_width": 640,
         "max_height": 384,
@@ -175,12 +184,13 @@ QUALITY_PROFILES: dict[str, dict] = {
     },
 }
 
-# OOM downscale ladder: (width, height, frames)
+# OOM downscale ladder: (width, height, frames). First rungs are Rainey-safe
+# 8n+1 minima (9/17/25/…) — never open with a 121-frame burn.
 DOWNSCALE_LADDER: list[tuple[int, int, int]] = [
-    (768, 512, 121),
-    (640, 384, 97),
-    (512, 384, 73),
-    (512, 320, 49),
+    (768, 512, 9),
+    (640, 384, 17),
+    (512, 384, 25),
+    (512, 320, 33),
 ]
 
 MAX_RETRIES = int(os.getenv("MAX_RETRIES", "3"))
@@ -343,6 +353,27 @@ def get_quality_profile(name: str | None = None) -> dict:
     return dict(QUALITY_PROFILES.get(key) or QUALITY_PROFILES["balanced"])
 
 
+def is_valid_ltx_frames(n: int) -> bool:
+    """True when n is a legal LTX count: 8k+1 and at least 9."""
+    try:
+        frames = int(n)
+    except (TypeError, ValueError):
+        return False
+    return frames >= 9 and (frames - 1) % 8 == 0
+
+
+def snap_ltx_frames(n: int) -> int:
+    """Nearest valid LTX frame count (8n+1), minimum 9. Never returns 8."""
+    try:
+        raw = int(n)
+    except (TypeError, ValueError):
+        return DEFAULT_FRAMES
+    if raw <= 9:
+        return 9
+    k = max(1, round((raw - 1) / 8))
+    return k * 8 + 1
+
+
 def frames_for_duration(
     duration_s: float,
     fps: int = DEFAULT_FPS,
@@ -358,7 +389,10 @@ def frames_for_duration(
     frames = n * snap + 1
     max_frames = int(cap * fps)
     max_n = max(1, (max_frames - 1) // snap)
-    return min(frames, max_n * snap + 1)
+    frames = min(frames, max_n * snap + 1)
+    if snap == 8:
+        return snap_ltx_frames(frames)
+    return frames
 
 
 def plan_segment_durations(

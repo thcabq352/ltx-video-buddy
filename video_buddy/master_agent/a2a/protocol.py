@@ -42,7 +42,7 @@ STUDIO_PORT = 8189
 
 # Pipeline status → A2A task state. Budget hold is not a failure.
 _COMPLETED = frozenset({"completed", "done", "workflow_ready"})
-_HELD = frozenset({"paused", "held"})
+_HELD = frozenset({"paused", "held", "hold", "input-required"})
 _WORKING = frozenset({"running", "queued", "working"})
 
 

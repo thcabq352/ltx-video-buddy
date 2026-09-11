@@ -147,11 +147,14 @@ def lint_report(
     object_info: dict[str, Any],
     *,
     file_label: str = "comfy-run",
+    strict: bool = False,
 ) -> dict[str, Any]:
     from master_agent.comfy.linter import lint_workflow
     from master_agent.comfy.validator import format_report
 
-    report = lint_workflow(unwrap_workflow(workflow), object_info, file_label=file_label)
+    report = lint_workflow(
+        unwrap_workflow(workflow), object_info, file_label=file_label, strict=strict
+    )
     return {
         "ok": report.ok,
         "errors": [str(item) for item in report.errors],

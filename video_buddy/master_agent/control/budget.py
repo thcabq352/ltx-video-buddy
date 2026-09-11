@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+import uuid
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
@@ -44,6 +45,8 @@ class RenderBudget:
         self.paused = bool(loaded.get("paused", False))
         self.pending: list[dict[str, Any]] = list(loaded.get("pending") or [])
         self.log: list[dict[str, Any]] = list(loaded.get("log") or [])
+        self.shift_id = str(loaded.get("shift_id") or uuid.uuid4().hex[:12])
+        self.shift_started_at = str(loaded.get("shift_started_at") or _now())
 
     def _read(self) -> dict[str, Any]:
         if self.path.is_file():
@@ -62,6 +65,8 @@ class RenderBudget:
             "paused": self.paused,
             "pending": list(self.pending),
             "log": list(self.log),
+            "shift_id": self.shift_id,
+            "shift_started_at": self.shift_started_at,
         }
 
     def persist(self) -> None:
@@ -88,19 +93,36 @@ class RenderBudget:
         self.pending = []
         self.persist()
 
+    def reset_shift(self) -> dict[str, Any]:
+        """Archive the current shift, then zero used. Never wipe the ledger."""
+        row = {
+            "ts": _now(),
+            "event": "shift_reset",
+            "previous_used": round(self.used, 4),
+            "previous_shift_id": self.shift_id,
+        }
+        self.log.append(row)
+        self.used = 0.0
+        self.paused = False
+        self.shift_id = uuid.uuid4().hex[:12]
+        self.shift_started_at = _now()
+        self.persist()
+        return row
+
     def consider(
         self,
         scene_id: str,
         cost: dict[str, Any],
         *,
         commit: bool = True,
+        charge: bool = True,
     ) -> dict[str, Any]:
         add = vram_minutes(cost)
         used_before = self.used
         would = used_before + add
-        hold = self.paused or would > self.cap
+        hold = bool(charge) and (self.paused or would > self.cap)
         decision = "hold" if hold else "admit"
-        used_after = used_before if hold else would
+        used_after = used_before if (hold or not charge) else would
         row = {
             "ts": _now(),
             "scene_id": scene_id,
@@ -112,9 +134,10 @@ class RenderBudget:
             "paused": hold,
             "variant": cost.get("variant"),
             "frames": cost.get("frames"),
+            "charged": bool(charge) and decision == "admit",
         }
         if commit:
-            if hold:
+            if charge and hold:
                 self.paused = True
                 pending = {
                     "id": scene_id,
@@ -126,13 +149,19 @@ class RenderBudget:
                 }
                 if not any(p.get("id") == scene_id for p in self.pending):
                     self.pending.append(pending)
-            else:
+            elif charge:
                 self.used = used_after
             self.log.append(row)
             self.persist()
         return row
 
-    def apply_queue(self, scenes: list[dict[str, Any]], *, commit: bool = True) -> dict[str, Any]:
+    def apply_queue(
+        self,
+        scenes: list[dict[str, Any]],
+        *,
+        commit: bool = True,
+        charge: bool = True,
+    ) -> dict[str, Any]:
         admitted: list[dict[str, Any]] = []
         held: list[dict[str, Any]] = []
         decisions: list[dict[str, Any]] = []
@@ -142,7 +171,7 @@ class RenderBudget:
                 str(scene.get("variant") or "base"),
                 int(scene.get("frames") or 81),
             )
-            row = self.consider(scene_id, cost, commit=commit)
+            row = self.consider(scene_id, cost, commit=commit, charge=charge)
             decisions.append(row)
             tagged = dict(scene)
             tagged["budget"] = row

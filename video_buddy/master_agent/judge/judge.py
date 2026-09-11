@@ -18,7 +18,10 @@ from master_agent.config import (
     JUDGE_SCORE_THRESHOLD,
     MAX_JUDGE_ROUNDS,
 )
-from master_agent.judge.probe import frame_notes
+from master_agent.judge.probe import HEALTH_ISSUE_CODES, frame_notes
+
+HUMAN_VETO = "human_veto"
+BRIEF_ADHERENCE_LOW = 0.45
 
 
 def _effective_threshold(threshold: float | None) -> float:
@@ -62,11 +65,16 @@ class JudgeResult:
     pass_: bool
     score: float
     combined_score: float
+    look_score: float = 0.0
+    health_score: float = 0.0
+    brief_adherence: float | None = None
+    human_veto: bool = False
+    album_lock: bool = False  # judge never aesthetic-locks; Admiral/human eyes do
     issues: list[str] = field(default_factory=list)
     prompt_rewrite: str = ""
     param_hints: dict[str, Any] = field(default_factory=dict)
     reason: str = ""
-    decision: str = "accept"  # accept | rewrite | retune | skip
+    decision: str = "accept"  # accept | rewrite | retune | skip | human_veto
     heuristic_score: float = 0.0
     llm_score: float = 0.0
     vision_score: float | None = None
@@ -74,6 +82,7 @@ class JudgeResult:
     def to_dict(self) -> dict[str, Any]:
         d = asdict(self)
         d["pass"] = d.pop("pass_")
+        d["HUMAN_VETO"] = d["decision"] == HUMAN_VETO
         return d
 
 
@@ -106,7 +115,37 @@ def merge_legs(
 
 def is_critical_fail(heuristic_issues: list[dict[str, Any]] | None) -> bool:
     codes = {i.get("code") for i in (heuristic_issues or [])}
-    return bool(codes & {"missing_video", "tiny_file", "short_duration"})
+    return bool(codes & {"missing_video", "tiny_file", "short_duration", "too_few_frames"})
+
+
+def health_score_from_issues(heuristic_issues: list[dict[str, Any]] | None) -> float:
+    """File/stream health only (size, frames, duration). Not used for retries."""
+    issues = heuristic_issues or []
+    if any(i.get("code") == "missing_video" for i in issues):
+        return 0.0
+    score = 1.0
+    for item in issues:
+        if item.get("code") in HEALTH_ISSUE_CODES:
+            score = min(score, max(0.0, 1.0 - float(item.get("severity") or 0.7)))
+    return round(score, 3)
+
+
+def look_score_from_heuristic(
+    heuristic_score: float,
+    heuristic_issues: list[dict[str, Any]] | None,
+) -> float:
+    """Aesthetic/motion look with health penalties removed."""
+    issues = heuristic_issues or []
+    health_only = [i for i in issues if i.get("code") in HEALTH_ISSUE_CODES]
+    look_issues = [i for i in issues if i.get("code") not in HEALTH_ISSUE_CODES]
+    if health_only and not look_issues:
+        return 1.0 if float(heuristic_score or 0) > 0 else 0.0
+    look = float(heuristic_score or 0.0)
+    if health_only and look < 0.85:
+        look = max(look, 0.85)
+    for item in look_issues:
+        look = min(look, max(0.0, 1.0 - 0.4 * float(item.get("severity") or 0.5)))
+    return round(look, 3)
 
 
 def decide_action(
@@ -119,24 +158,34 @@ def decide_action(
     max_rounds: int,
     critical: bool,
     threshold: float | None = None,
+    look_score: float | None = None,
+    brief_adherence: float | None = None,
 ) -> str:
+    """Retry ladder keys off look_score only. combined stays for back-compat callers."""
     thr = _effective_threshold(threshold)
+    look = float(combined if look_score is None else look_score)
+    if (
+        brief_adherence is not None
+        and float(brief_adherence) < BRIEF_ADHERENCE_LOW
+        and look >= thr
+    ):
+        return HUMAN_VETO
     if judge_retries >= max_rounds:
         return "accept"  # budget exhausted — keep best
-    if critical and not prompt_rewrite and not param_hints:
+    if critical and look < thr and not prompt_rewrite and not param_hints:
         return "retune"
-    acceptable = combined >= thr and (llm_pass is not False or combined >= thr + 0.05)
-    if llm_pass is True and combined >= thr * 0.92:
+    acceptable = look >= thr and (llm_pass is not False or look >= thr + 0.05)
+    if llm_pass is True and look >= thr * 0.92:
         acceptable = True
-    if acceptable and not critical:
+    if acceptable and not (critical and look < thr):
         return "accept"
     if prompt_rewrite and prompt_rewrite.strip():
         return "rewrite"
     if param_hints:
         return "retune"
-    if critical:
+    if critical and look < thr:
         return "retune"
-    return "accept" if combined >= thr * 0.9 else "rewrite"
+    return "accept" if look >= thr * 0.9 else "rewrite"
 
 
 def judge_segment(
@@ -158,15 +207,34 @@ def judge_segment(
     issues = [str(i.get("detail") or i.get("code") or i) for i in (heuristic_issues or [])]
     critical = is_critical_fail(heuristic_issues)
 
+    health = health_score_from_issues(heuristic_issues)
+    look = look_score_from_heuristic(float(heuristic_score or 0.0), heuristic_issues)
+
     if not judge_enabled:
         combined = float(heuristic_score or 0.0)
+        decision = decide_action(
+            combined=combined,
+            llm_pass=None,
+            prompt_rewrite="",
+            param_hints={},
+            judge_retries=judge_retries,
+            max_rounds=max_r,
+            critical=critical,
+            threshold=thr,
+            look_score=look,
+        )
+        veto = decision == HUMAN_VETO
         return JudgeResult(
-            pass_=combined >= thr and not critical,
+            pass_=decision == "accept" and not critical,
             score=combined,
             combined_score=combined,
+            look_score=look,
+            health_score=health,
+            human_veto=veto,
+            album_lock=False,
             issues=issues,
             reason="Judge disabled; heuristic only",
-            decision="accept" if combined >= thr and not critical else "retune",
+            decision=decision,
             heuristic_score=combined,
             llm_score=combined,
         )
@@ -204,12 +272,31 @@ def judge_segment(
     combined = merge_legs(
         float(heuristic_score or 0.0), llm_score if llm else None, vision_score
     )
+    look = merge_legs(look, llm_score if llm else None, vision_score)
+    brief_adherence = None
+    if llm and llm.get("brief_adherence") is not None:
+        try:
+            brief_adherence = float(llm["brief_adherence"])
+        except (TypeError, ValueError):
+            brief_adherence = None
 
     # Fallback: strong heuristics alone (unless vision explicitly failed it)
     vision_failed = review is not None and not review.get("pass", True)
     if not llm and float(heuristic_score or 0) >= 0.85 and not critical and not vision_failed:
-        decision = "accept"
-        llm_pass = True
+        decision = decide_action(
+            combined=combined,
+            llm_pass=True,
+            prompt_rewrite=rewrite,
+            param_hints=hints,
+            judge_retries=judge_retries,
+            max_rounds=max_r,
+            critical=critical,
+            threshold=thr,
+            look_score=look,
+            brief_adherence=brief_adherence,
+        )
+        if decision != HUMAN_VETO:
+            decision = "accept"
     else:
         decision = decide_action(
             combined=combined,
@@ -220,17 +307,25 @@ def judge_segment(
             max_rounds=max_r,
             critical=critical,
             threshold=thr,
+            look_score=look,
+            brief_adherence=brief_adherence,
         )
 
     passed = decision == "accept"
+    veto = decision == HUMAN_VETO
     return JudgeResult(
         pass_=passed,
         score=llm_score,
         combined_score=combined,
+        look_score=look,
+        health_score=health,
+        brief_adherence=brief_adherence,
+        human_veto=veto,
+        album_lock=False,
         issues=issues,
         prompt_rewrite=rewrite,
         param_hints=hints,
-        reason=reason or f"combined={combined:.2f} decision={decision}",
+        reason=reason or f"combined={combined:.2f} look={look:.2f} decision={decision}",
         decision=decision,
         heuristic_score=float(heuristic_score or 0.0),
         llm_score=llm_score,
@@ -306,15 +401,39 @@ def judge_full_video(
     reason = str(llm.get("reason") or f"full combined={combined:.2f}")
     if review and review.get("reason"):
         reason = f"{reason} | vision: {review['reason'][:200]}"
+    health = 0.0 if not (video_path and Path(video_path).is_file()) else (
+        0.3 if Path(video_path).stat().st_size < 100_000 else 1.0
+    )
+    look = combined
+    brief_adherence = None
+    if llm and llm.get("brief_adherence") is not None:
+        try:
+            brief_adherence = float(llm["brief_adherence"])
+        except (TypeError, ValueError):
+            brief_adherence = None
+    decision = "accept" if passed else "rewrite"
+    if (
+        brief_adherence is not None
+        and brief_adherence < BRIEF_ADHERENCE_LOW
+        and look >= thr
+    ):
+        decision = HUMAN_VETO
+        passed = False
+    veto = decision == HUMAN_VETO
     return JudgeResult(
         pass_=passed,
         score=llm_score,
         combined_score=combined,
+        look_score=look,
+        health_score=health,
+        brief_adherence=brief_adherence,
+        human_veto=veto,
+        album_lock=False,
         issues=issues,
         prompt_rewrite=rewrite,
         param_hints=dict(llm.get("param_hints") or {}) if llm else {},
         reason=reason,
-        decision="accept" if passed else "rewrite",
+        decision=decision,
         heuristic_score=h,
         llm_score=llm_score,
         vision_score=vision_score,

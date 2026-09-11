@@ -50,11 +50,15 @@ def dry_run_storyboard(
     from master_agent.control.budget import RenderBudget, get_project_budget
 
     live = budget or get_project_budget()
-    preview = RenderBudget(cap=live.cap, used=live.used, ephemeral=True)
+    preview = (
+        live
+        if budget is not None
+        else RenderBudget(cap=live.cap, used=live.used, ephemeral=True)
+    )
     scenes = [
         {"id": f"dry:{i}", "cost": cost} for i, cost in enumerate(costs)
     ]
-    budget = preview.apply_queue(scenes, commit=True)
+    budget = preview.apply_queue(scenes, commit=True, charge=False)
     if budget["held"]:
         issues.append("budget")
     return {

@@ -15,6 +15,9 @@ Commands:
   lora setup|train|validate  Flux LoRA training via ai-toolkit + vision validation
   download-flux       One-time Flux fp8 weights download (~17GB)
   comfy run           Drive ComfyUI from the CLI (prepare + lint + queue)
+  diagnose            9-frame hull fire (sec/step); does not spend shift budget
+  budget              status | reset-shift  (VRAM-min shift ledger)
+  curriculum          Print LESSON_BUDDY_WORKS_HERE (L0→L5) and Part 2 gate
   about               Print the studio identity card
 """
 
@@ -29,6 +32,17 @@ from master_agent.comfy.client import ComfyClient, ComfyClientError
 from master_agent.comfy.validator import format_report, validate_workflow_file
 from master_agent.config import WORKFLOWS_DIR, ensure_dirs
 from master_agent.models.inventory import format_summary, scan_inventory
+
+
+def cmd_curriculum(args: argparse.Namespace) -> int:
+    from master_agent.curriculum import curriculum_card, format_curriculum
+
+    card = curriculum_card()
+    if args.json:
+        print(json.dumps(card, indent=1))
+        return 0
+    print(format_curriculum(card))
+    return 0
 
 
 def cmd_about(args: argparse.Namespace) -> int:
@@ -109,7 +123,10 @@ def cmd_validate(args: argparse.Namespace) -> int:
             return 1
         try:
             report = validate_workflow_file(
-                path, client=client, prefer_live=not args.offline
+                path,
+                client=client,
+                prefer_live=not args.offline,
+                strict=bool(getattr(args, "strict", False)),
             )
         except Exception as e:
             print(f"FAIL  {path}: {e}")
@@ -762,6 +779,55 @@ def _parse_override_flags(flags: list[str]) -> dict[str, dict]:
     return overrides
 
 
+def cmd_budget(args: argparse.Namespace) -> int:
+    from master_agent.control.budget import get_project_budget
+
+    store = get_project_budget()
+    if args.budget_command == "reset-shift":
+        row = store.reset_shift()
+        print(
+            f"OK    shift reset previous_shift_id={row['previous_shift_id']} "
+            f"previous_used={row['previous_used']} now={store.shift_id}"
+        )
+    snap = store.snapshot()
+    if args.json:
+        print(json.dumps(snap, indent=1))
+        return 0
+    print(
+        f"budget  used={snap['used']} cap={snap['cap']} paused={snap['paused']} "
+        f"shift_id={snap['shift_id']} started={snap['shift_started_at']}"
+    )
+    print(f"        pending={len(snap['pending'])} ledger={len(snap['log'])}")
+    return 0
+
+
+def cmd_diagnose(args: argparse.Namespace) -> int:
+    from master_agent.comfy.diagnose import DiagnoseFailed, ScaleRefused, run_diagnose
+
+    try:
+        rec = run_diagnose(
+            prompt=args.prompt,
+            variant=args.variant,
+            steps=args.steps,
+            seed=args.seed,
+            prepare_only=bool(args.prepare),
+            width=args.width,
+            height=args.height,
+        )
+    except ScaleRefused as e:
+        print(f"FAIL  {e}")
+        return 2
+    except DiagnoseFailed as e:
+        print(f"FAIL  {e}")
+        return 1
+    except Exception as e:
+        print(f"FAIL  {e}")
+        return 1
+    if args.json:
+        print(json.dumps({k: v for k, v in rec.items() if k != "meta"}, indent=1, default=str))
+    return 0 if rec.get("ok") else 1
+
+
 def cmd_comfy(args: argparse.Namespace) -> int:
     from master_agent.comfy.cli_run import LintError, execute_prepared, lint_or_raise, prepare_run
 
@@ -821,6 +887,13 @@ def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(prog="python -m master_agent", description="VIDEO BUDDY")
     sub = parser.add_subparsers(dest="command", required=True)
 
+    p = sub.add_parser(
+        "curriculum",
+        help="print LESSON_BUDDY_WORKS_HERE (L0→L5) and the Part 2 overnight gate",
+    )
+    p.add_argument("--json", action="store_true", help="machine-readable card")
+    p.set_defaults(func=cmd_curriculum)
+
     p = sub.add_parser("about", help="print the VIDEO BUDDY identity card")
     p.add_argument("--json", action="store_true", help="machine-readable output")
     p.set_defaults(func=cmd_about)
@@ -844,6 +917,11 @@ def main(argv: list[str] | None = None) -> int:
     p.add_argument("--all", "-a", action="store_true", help="validate all workflows/*.json")
     p.add_argument("--offline", action="store_true", help="use cached object_info only")
     p.add_argument("--json", action="store_true", help="machine-readable output")
+    p.add_argument(
+        "--strict",
+        action="store_true",
+        help="illegal LTX frame counts (not 8n+1, min 9) are ERROR instead of auto-correct",
+    )
     p.set_defaults(func=cmd_validate)
 
     p = sub.add_parser("kb", help="knowledge base: ingest | search | stats")
@@ -1026,6 +1104,29 @@ def main(argv: list[str] | None = None) -> int:
         help="lint and write JSON only; do not queue Comfy",
     )
     p.set_defaults(func=cmd_comfy)
+
+    p = sub.add_parser(
+        "diagnose",
+        help="9-frame hull fire: prepare + lint, then short queue; prints sec/step",
+    )
+    p.add_argument("--variant", default="base")
+    p.add_argument("--prompt", default="garden proof")
+    p.add_argument("--steps", type=int, default=None, help="sampler steps (clamped to 6-8)")
+    p.add_argument("--seed", type=int, default=None, help="fixed diagnose seed (default DIAGNOSE_SEED)")
+    p.add_argument("--width", type=int, default=None, help="refused above hull until sec/step exists")
+    p.add_argument("--height", type=int, default=None)
+    p.add_argument(
+        "--prepare",
+        action="store_true",
+        help="lint the 9-frame graph only; do not queue Comfy",
+    )
+    p.add_argument("--json", action="store_true", help="machine-readable result")
+    p.set_defaults(func=cmd_diagnose)
+
+    p = sub.add_parser("budget", help="render shift budget: status | reset-shift")
+    p.add_argument("budget_command", choices=["status", "reset-shift"])
+    p.add_argument("--json", action="store_true", help="machine-readable snapshot")
+    p.set_defaults(func=cmd_budget)
 
     args = parser.parse_args(argv)
     from master_agent.control.versioned_config import announce_config

@@ -20,7 +20,12 @@ from master_agent.config import (
     frames_for_duration,
     get_variant_gen,
     resolve_model_path,
+    snap_ltx_frames,
 )
+
+# LTX latent widgets that must stay 8n+1 and paired with audio frames_number
+LTX_LENGTH_CLASSES = frozenset({"EmptyLTXVLatentVideo", "LTXVEmptyLatentVideo"})
+LTX_AUDIO_CLASSES = frozenset({"LTXVEmptyLatentAudio"})
 
 # Preferred all-in-one checkpoint names (first that exists on disk wins as fallback)
 CHECKPOINT_FALLBACKS = [
@@ -313,6 +318,7 @@ def _heuristic_patch(workflow: dict[str, Any], values: dict[str, Any]) -> None:
             _set_input(node, "text", prompt)
 
     # Empty latent / size nodes — keep video length and audio frames_number in sync
+    ltx_frames = snap_ltx_frames(int(frames)) if frames is not None else None
     for class_type in (
         "EmptyLTXVLatentVideo",
         "EmptyHunyuanLatentVideo",
@@ -326,16 +332,19 @@ def _heuristic_patch(workflow: dict[str, Any], values: dict[str, Any]) -> None:
                 _set_input(node, "height", height)
             # EmptyLatentImage (Flux t2i) has no length/frames input
             if frames is not None and class_type != "EmptyLatentImage":
+                write = ltx_frames if class_type in LTX_LENGTH_CLASSES else frames
                 for k in ("length", "frames", "num_frames", "frame_count"):
                     if k in (node.get("inputs") or {}) or k == "length":
-                        _set_input(node, k, frames)
+                        _set_input(node, k, write)
                         break
 
     if frames is not None:
-        for _nid, node in _find_nodes_by_class(workflow, "LTXVEmptyLatentAudio"):
-            _set_input(node, "frames_number", int(frames))
-            if values.get("fps"):
-                _set_input(node, "frame_rate", int(values.get("fps") or 24))
+        paired = ltx_frames if ltx_frames is not None else int(frames)
+        for class_type in LTX_AUDIO_CLASSES:
+            for _nid, node in _find_nodes_by_class(workflow, class_type):
+                _set_input(node, "frames_number", int(paired))
+                if values.get("fps"):
+                    _set_input(node, "frame_rate", int(values.get("fps") or 24))
         for _nid, node in _find_nodes_by_class(workflow, "LTXVConditioning"):
             if values.get("fps"):
                 _set_input(node, "frame_rate", int(values.get("fps") or 24))
@@ -502,13 +511,19 @@ def load_and_patch_workflow(
     stg_scale: Optional[float] = None,
     stg_blocks: Optional[list[int]] = None,
     sampler_name: Optional[str] = None,
+    frames: Optional[int] = None,
 ) -> tuple[dict[str, Any], dict[str, Any]]:
     """
     Returns (workflow_api_dict, meta) where meta has resolved generation params.
     """
     width, height = clamp_resolution(width, height, quality="flux" if variant == "flux" else None)
     gen = get_variant_gen(variant)
-    frames = frames_for_duration(duration_s, fps=gen["fps"], snap=gen["frame_snap"])
+    if frames is None:
+        frames = frames_for_duration(duration_s, fps=gen["fps"], snap=gen["frame_snap"])
+    else:
+        frames = int(frames)
+    if int(gen["frame_snap"]) == 8:
+        frames = snap_ltx_frames(frames)
     if seed is None:
         seed = random.randint(0, 2**32 - 1)
     steps = steps if steps is not None else DEFAULT_STEPS
