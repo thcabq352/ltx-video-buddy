@@ -15,9 +15,13 @@ from pathlib import Path
 from typing import Any, Optional
 
 TINY_FILE_BYTES = 100_000
+MIN_FRAMES = 3
 SHORT_DURATION_RATIO = 0.6
 # Motion score below this means a frozen / slideshow-like clip
 DEAD_MOTION_THRESHOLD = 0.05
+HEALTH_ISSUE_CODES = frozenset(
+    {"missing_video", "tiny_file", "short_duration", "too_few_frames"}
+)
 
 
 def _which(name: str) -> Optional[str]:
@@ -135,7 +139,7 @@ def analyze(
 ) -> tuple[float, list[dict[str, Any]]]:
     """
     Heuristic quality score (0–1) + issue list for one generated clip.
-    Issue codes: missing_video, tiny_file, short_duration, dead_motion.
+    Issue codes: missing_video, tiny_file, short_duration, too_few_frames, dead_motion.
     """
     issues: list[dict[str, Any]] = []
     p = Path(video_path) if video_path else None
@@ -145,6 +149,16 @@ def analyze(
 
     score = 1.0
     probe = probe_video(p)
+    frames = probe.get("frames")
+    if frames is not None and int(frames) < MIN_FRAMES:
+        issues.append(
+            {
+                "code": "too_few_frames",
+                "severity": 1.0,
+                "detail": f"only {int(frames)} frames (min {MIN_FRAMES})",
+            }
+        )
+        score = min(score, 0.3)
     size = int(probe.get("size_bytes") or 0)
     if size < TINY_FILE_BYTES:
         issues.append(

@@ -23,9 +23,13 @@ You do **not** see pixels directly; you receive:
 {
   "pass": false,
   "score": 0.0,
+  "look_score": 0.0,
+  "brief_adherence": 0.0,
   "issues": ["..."],
   "prompt_rewrite": "improved full LTX visual prompt if fail, else empty",
   "param_hints": {"stg_scale": 1.0, "steps": 8, "cfg": 2.0},
   "reason": "one sentence"
 }
 ```
+
+`look_score` is craft/motion only. `brief_adherence` is whether the clip matches the brief. High look + low brief_adherence is a human veto, not a retry.
