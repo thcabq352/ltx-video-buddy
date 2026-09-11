@@ -85,9 +85,9 @@ def test_brief_miss_and_high_look_is_human_veto():
         heuristic_issues=[],
         judge_enabled=False,
     )
-    # no brief_adherence from heuristic-only path; album stays lockable unless veto
+    # Judge is retry/coherent-take only — Admiral/human eyes album-lock taste.
     assert result.decision != HUMAN_VETO
-    assert result.album_lock is True
+    assert result.album_lock is False
 
     # Inject LLM brief miss
     import master_agent.judge.judge as judge_mod

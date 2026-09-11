@@ -17,6 +17,7 @@ Commands:
   comfy run           Drive ComfyUI from the CLI (prepare + lint + queue)
   diagnose            9-frame hull fire (sec/step); does not spend shift budget
   budget              status | reset-shift  (VRAM-min shift ledger)
+  curriculum          Print LESSON_BUDDY_WORKS_HERE (L0→L5) and Part 2 gate
   about               Print the studio identity card
 """
 
@@ -31,6 +32,17 @@ from master_agent.comfy.client import ComfyClient, ComfyClientError
 from master_agent.comfy.validator import format_report, validate_workflow_file
 from master_agent.config import WORKFLOWS_DIR, ensure_dirs
 from master_agent.models.inventory import format_summary, scan_inventory
+
+
+def cmd_curriculum(args: argparse.Namespace) -> int:
+    from master_agent.curriculum import curriculum_card, format_curriculum
+
+    card = curriculum_card()
+    if args.json:
+        print(json.dumps(card, indent=1))
+        return 0
+    print(format_curriculum(card))
+    return 0
 
 
 def cmd_about(args: argparse.Namespace) -> int:
@@ -874,6 +886,13 @@ def main(argv: list[str] | None = None) -> int:
     ensure_dirs()
     parser = argparse.ArgumentParser(prog="python -m master_agent", description="VIDEO BUDDY")
     sub = parser.add_subparsers(dest="command", required=True)
+
+    p = sub.add_parser(
+        "curriculum",
+        help="print LESSON_BUDDY_WORKS_HERE (L0→L5) and the Part 2 overnight gate",
+    )
+    p.add_argument("--json", action="store_true", help="machine-readable card")
+    p.set_defaults(func=cmd_curriculum)
 
     p = sub.add_parser("about", help="print the VIDEO BUDDY identity card")
     p.add_argument("--json", action="store_true", help="machine-readable output")

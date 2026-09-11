@@ -69,7 +69,7 @@ class JudgeResult:
     health_score: float = 0.0
     brief_adherence: float | None = None
     human_veto: bool = False
-    album_lock: bool = True
+    album_lock: bool = False  # judge never aesthetic-locks; Admiral/human eyes do
     issues: list[str] = field(default_factory=list)
     prompt_rewrite: str = ""
     param_hints: dict[str, Any] = field(default_factory=dict)
@@ -231,7 +231,7 @@ def judge_segment(
             look_score=look,
             health_score=health,
             human_veto=veto,
-            album_lock=not veto,
+            album_lock=False,
             issues=issues,
             reason="Judge disabled; heuristic only",
             decision=decision,
@@ -321,7 +321,7 @@ def judge_segment(
         health_score=health,
         brief_adherence=brief_adherence,
         human_veto=veto,
-        album_lock=not veto,
+        album_lock=False,
         issues=issues,
         prompt_rewrite=rewrite,
         param_hints=hints,
@@ -428,7 +428,7 @@ def judge_full_video(
         health_score=health,
         brief_adherence=brief_adherence,
         human_veto=veto,
-        album_lock=not veto,
+        album_lock=False,
         issues=issues,
         prompt_rewrite=rewrite,
         param_hints=dict(llm.get("param_hints") or {}) if llm else {},

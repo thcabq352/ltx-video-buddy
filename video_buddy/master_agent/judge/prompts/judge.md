@@ -32,4 +32,4 @@ You do **not** see pixels directly; you receive:
 }
 ```
 
-`look_score` is craft/motion only. `brief_adherence` is whether the clip matches the brief. High look + low brief_adherence is a human veto, not a retry.
+`look_score` is craft/motion only. `brief_adherence` is whether the clip matches the brief. High look + low brief_adherence is a human veto, not a retry. You do **not** aesthetic album-lock — Admiral/human eyes beat the judge for taste. Discount metadata/probe noise; health is a separate score.
