@@ -340,10 +340,11 @@ def _heuristic_patch(workflow: dict[str, Any], values: dict[str, Any]) -> None:
 
     if frames is not None:
         paired = ltx_frames if ltx_frames is not None else int(frames)
-        for _nid, node in _find_nodes_by_class(workflow, "LTXVEmptyLatentAudio"):
-            _set_input(node, "frames_number", int(paired))
-            if values.get("fps"):
-                _set_input(node, "frame_rate", int(values.get("fps") or 24))
+        for class_type in LTX_AUDIO_CLASSES:
+            for _nid, node in _find_nodes_by_class(workflow, class_type):
+                _set_input(node, "frames_number", int(paired))
+                if values.get("fps"):
+                    _set_input(node, "frame_rate", int(values.get("fps") or 24))
         for _nid, node in _find_nodes_by_class(workflow, "LTXVConditioning"):
             if values.get("fps"):
                 _set_input(node, "frame_rate", int(values.get("fps") or 24))
