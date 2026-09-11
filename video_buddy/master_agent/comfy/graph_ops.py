@@ -11,6 +11,108 @@ import copy
 from dataclasses import dataclass, field
 from typing import Any, Optional
 
+# Optional speed nodes: missing from /object_info is WARNING + bypass, never a hard fail.
+# Live Comfy often only registers WanVideoTeaCache / WanVideoTeaCacheKJ — a generic
+# LTX TeaCache class_type must still bypass cleanly.
+OPTIONAL_ACCELERATOR_CLASS_TYPES = frozenset(
+    {
+        "TeaCache",
+        "TeaCacheForLTXV",
+        "LTXVTeaCache",
+        "LTXTeaCache",
+        "EasyCache",
+        "EasyCacheNode",
+        "WanVideoTeaCache",
+        "WanVideoTeaCacheKJ",
+        "CompileModel",
+        "TorchCompileModel",
+        "FBCache",
+        "FirstBlockCache",
+        "MagCache",
+        "TaylorSeer",
+        "CacheDiffusion",
+    }
+)
+_ACCELERATOR_NAME_MARKERS = (
+    "teacache",
+    "easycache",
+    "fbcache",
+    "magcache",
+    "firstblockcache",
+)
+
+
+def is_optional_accelerator(class_type: str | None) -> bool:
+    if not class_type:
+        return False
+    if class_type in OPTIONAL_ACCELERATOR_CLASS_TYPES:
+        return True
+    lowered = class_type.lower()
+    return any(marker in lowered for marker in _ACCELERATOR_NAME_MARKERS)
+
+
+def _is_link(value: Any) -> bool:
+    return (
+        isinstance(value, list)
+        and len(value) == 2
+        and isinstance(value[0], (str, int))
+        and isinstance(value[1], int)
+    )
+
+
+def _upstream_link(node: dict[str, Any]) -> list | None:
+    """Prefer a MODEL-named input link; otherwise the first typed link."""
+    inputs = node.get("inputs") if isinstance(node, dict) else None
+    if not isinstance(inputs, dict):
+        return None
+    preferred = ("model", "MODEL", "unet", "diffusion_model")
+    for key in preferred:
+        value = inputs.get(key)
+        if _is_link(value):
+            return [str(value[0]), int(value[1])]
+    for value in inputs.values():
+        if _is_link(value):
+            return [str(value[0]), int(value[1])]
+    return None
+
+
+def bypass_optional_accelerators(
+    workflow: dict[str, Any],
+    object_info: dict[str, Any] | None = None,
+) -> list[tuple[str, str]]:
+    """Rewire MODEL (or the typed upstream link) past missing speed nodes and drop them.
+
+    Does not install custom-node packs. Returns [(node_id, class_type), ...] removed.
+    """
+    registry = object_info if isinstance(object_info, dict) else {}
+    dropped: list[tuple[str, str]] = []
+    for nid, node in list(workflow.items()):
+        if not isinstance(node, dict):
+            continue
+        class_type = node.get("class_type")
+        if not is_optional_accelerator(class_type):
+            continue
+        if class_type in registry:
+            continue
+        source = _upstream_link(node)
+        sid = str(nid)
+        for other in workflow.values():
+            if not isinstance(other, dict) or other is node:
+                continue
+            inputs = other.get("inputs")
+            if not isinstance(inputs, dict):
+                continue
+            for key, value in list(inputs.items()):
+                if _is_link(value) and str(value[0]) == sid:
+                    if source is not None:
+                        inputs[key] = [source[0], source[1]]
+                    else:
+                        del inputs[key]
+        workflow.pop(sid, None)
+        dropped.append((sid, str(class_type)))
+    return dropped
+
+
 # Ops the power-mode LLM may emit
 ALLOWED_OPS = frozenset(
     {
@@ -316,8 +418,11 @@ def _op_delete_input(wf: dict[str, Any], op: dict[str, Any]) -> None:
 
 __all__ = [
     "ALLOWED_OPS",
+    "OPTIONAL_ACCELERATOR_CLASS_TYPES",
     "OpResult",
     "apply_ops",
+    "bypass_optional_accelerators",
+    "is_optional_accelerator",
     "object_info_snippets",
     "summarize_workflow",
 ]
