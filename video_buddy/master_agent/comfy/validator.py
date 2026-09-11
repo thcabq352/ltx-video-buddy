@@ -22,7 +22,13 @@ from pathlib import Path
 from typing import Any, Optional
 
 from master_agent.comfy.client import ComfyClient
+from master_agent.config import is_valid_ltx_frames, snap_ltx_frames
 from master_agent.models.inventory import Inventory, load_inventory
+
+# LTX video length + audio frames_number must stay paired 8n+1 counts.
+LTX_LENGTH_CLASSES = frozenset({"EmptyLTXVLatentVideo", "LTXVEmptyLatentVideo"})
+LTX_AUDIO_FRAME_CLASSES = frozenset({"LTXVEmptyLatentAudio"})
+LTX_LENGTH_KEYS = ("length", "frames", "num_frames", "frame_count")
 
 # Loader widget names that reference model weight files
 MODEL_INPUT_NAMES = {
@@ -261,6 +267,74 @@ def _check_range(
         report.error(node_id, input_name, f"value {value} above max {hi}")
 
 
+def _scalar_int(value: Any) -> Optional[int]:
+    if isinstance(value, bool) or not isinstance(value, int):
+        return None
+    return int(value)
+
+
+def enforce_ltx_frame_law(
+    workflow: dict[str, Any],
+    report: ValidationReport,
+    *,
+    strict: bool = False,
+) -> None:
+    """WARN + snap illegal 8n+1 counts unless --strict (ERROR). Never leave length=8."""
+    video_target: Optional[int] = None
+    for node_id, node in workflow.items():
+        if not isinstance(node, dict):
+            continue
+        class_type = node.get("class_type")
+        if class_type not in LTX_LENGTH_CLASSES:
+            continue
+        inputs = node.setdefault("inputs", {})
+        if not isinstance(inputs, dict):
+            continue
+        key = next((k for k in LTX_LENGTH_KEYS if k in inputs), "length")
+        raw = _scalar_int(inputs.get(key))
+        if raw is None:
+            continue
+        snapped = snap_ltx_frames(raw)
+        if not is_valid_ltx_frames(raw):
+            msg = (
+                f"LTX {key}={raw} is not a valid 8n+1 count (min 9); "
+                f"{'refusing' if strict else 'auto-correcting to'} {snapped}"
+            )
+            if strict:
+                report.error(str(node_id), key, msg)
+            else:
+                report.warn(str(node_id), key, msg)
+                inputs[key] = snapped
+                raw = snapped
+        if video_target is None:
+            video_target = raw if strict else int(inputs.get(key) or snapped)
+
+    for node_id, node in workflow.items():
+        if not isinstance(node, dict):
+            continue
+        if node.get("class_type") not in LTX_AUDIO_FRAME_CLASSES:
+            continue
+        inputs = node.setdefault("inputs", {})
+        if not isinstance(inputs, dict):
+            continue
+        raw = _scalar_int(inputs.get("frames_number"))
+        if raw is None:
+            continue
+        desired = video_target if video_target is not None else snap_ltx_frames(raw)
+        desired = snap_ltx_frames(desired)
+        if raw != desired:
+            msg = (
+                f"LTX frames_number={raw} must stay paired with video length "
+                f"({desired}, 8n+1 min 9); "
+                f"{'refusing' if strict else 'auto-correcting'}"
+            )
+            if strict:
+                report.error(str(node_id), "frames_number", msg)
+            else:
+                report.warn(str(node_id), "frames_number", msg)
+                inputs["frames_number"] = desired
+
+
 def validate_workflow(
     workflow: dict[str, Any],
     object_info: dict[str, Any],
@@ -268,6 +342,7 @@ def validate_workflow(
     file_label: str = "<workflow>",
     object_info_source: str = "unknown",
     inventory: Optional[Inventory] = None,
+    strict: bool = False,
 ) -> ValidationReport:
     report = ValidationReport(file=file_label, object_info_source=object_info_source)
     if inventory is None:
@@ -275,6 +350,8 @@ def validate_workflow(
             inventory = load_inventory()
         except Exception:
             inventory = None
+
+    enforce_ltx_frame_law(workflow, report, strict=strict)
 
     for node_id, node in workflow.items():
         if not isinstance(node, dict):
@@ -379,6 +456,7 @@ def validate_workflow_file(
     *,
     client: Optional[ComfyClient] = None,
     prefer_live: bool = True,
+    strict: bool = False,
 ) -> ValidationReport:
     path = Path(path)
     label = str(path)
@@ -404,6 +482,7 @@ def validate_workflow_file(
         object_info,
         file_label=label,
         object_info_source=source,
+        strict=strict,
     )
 
 

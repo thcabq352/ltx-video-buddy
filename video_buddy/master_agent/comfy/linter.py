@@ -18,8 +18,11 @@ def lint_workflow(
     object_info: dict[str, Any],
     *,
     file_label: str = "<workflow>",
+    strict: bool = False,
 ) -> ValidationReport:
-    return validate_workflow(workflow, object_info, file_label=file_label)
+    return validate_workflow(
+        workflow, object_info, file_label=file_label, strict=strict
+    )
 
 
 def hard_gate(report: ValidationReport) -> ValidationReport:

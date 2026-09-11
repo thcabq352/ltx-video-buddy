@@ -109,7 +109,10 @@ def cmd_validate(args: argparse.Namespace) -> int:
             return 1
         try:
             report = validate_workflow_file(
-                path, client=client, prefer_live=not args.offline
+                path,
+                client=client,
+                prefer_live=not args.offline,
+                strict=bool(getattr(args, "strict", False)),
             )
         except Exception as e:
             print(f"FAIL  {path}: {e}")
@@ -844,6 +847,11 @@ def main(argv: list[str] | None = None) -> int:
     p.add_argument("--all", "-a", action="store_true", help="validate all workflows/*.json")
     p.add_argument("--offline", action="store_true", help="use cached object_info only")
     p.add_argument("--json", action="store_true", help="machine-readable output")
+    p.add_argument(
+        "--strict",
+        action="store_true",
+        help="illegal LTX frame counts (not 8n+1, min 9) are ERROR instead of auto-correct",
+    )
     p.set_defaults(func=cmd_validate)
 
     p = sub.add_parser("kb", help="knowledge base: ingest | search | stats")
