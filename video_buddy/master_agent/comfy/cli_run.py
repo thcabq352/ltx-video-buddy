@@ -124,22 +124,33 @@ def prepare_run(
     variant: str | None = None,
     prompt: str = "",
     overrides: dict[str, dict[str, Any]] | None = None,
+    object_info: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
+    from master_agent.comfy.graph_ops import ensure_teacache, looks_like_ltx_graph
+
     if mode == "raw":
         if not isinstance(workflow, dict):
             raise ValueError("raw mode requires a workflow dict")
-        return apply_overrides(workflow, overrides)
-    if mode == "template":
+        wf = apply_overrides(workflow, overrides)
+    elif mode == "template":
         raw_path = Path(template_path or "")
         path = raw_path if raw_path.is_file() else resolve_template(template_path or "")
         data = json.loads(path.read_text(encoding="utf-8"))
-        return apply_overrides(unwrap_workflow(data), overrides)
-    if mode == "generate":
+        wf = apply_overrides(unwrap_workflow(data), overrides)
+    elif mode == "generate":
         from master_agent.comfy.workflow_patcher import load_and_patch_workflow
 
-        wf, _meta = load_and_patch_workflow(variant or "base", prompt=prompt or "test")
-        return apply_overrides(wf, overrides)
-    raise ValueError(f"unknown mode {mode!r}")
+        wf, _meta = load_and_patch_workflow(
+            variant or "base",
+            prompt=prompt or "test",
+            object_info=object_info,
+        )
+        wf = apply_overrides(wf, overrides)
+    else:
+        raise ValueError(f"unknown mode {mode!r}")
+    if looks_like_ltx_graph(wf):
+        ensure_teacache(wf, object_info)
+    return wf
 
 
 def lint_report(
