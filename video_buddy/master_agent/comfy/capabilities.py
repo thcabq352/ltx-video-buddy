@@ -36,8 +36,25 @@ class Capability:
     notes: str = ""
 
 
-# Tower claims vs repo wiring. class_types are Comfy node names as of the
-# cached object_info snapshot — live tower may differ (see AUDIT.md).
+# Exact YES from live tower dump 2026-09-13 (Comfy Desk, 4114 classes).
+# The markdown dump was not on this VM; names came from the operator follow-up.
+TOWER_LIVE_YES: tuple[str, ...] = (
+    "WanFunInpaintToVideo",
+    "Wan22FunControlToVideo",
+    "LanPaint_KSampler",
+    "IPAdapterFaceID",
+    "ControlNetLoader",
+    "CreateVoronoiMask",
+    "Image Perlin Power Fractal",
+    "TeaCache",
+    "WanVideoTeaCache",
+)
+TOWER_LIVE_RELATED: dict[str, tuple[str, ...]] = {
+    "warp": ("GetWarpedNoiseFromVideo",),  # no exact VideoNoiseWarp
+    "mmaudio": ("MMAudioModelLoader", "MMAudioSampler", "MMAudioVoCoder"),
+}
+
+# Tower claims vs repo wiring. Prefer live exact names over the older cache.
 CAPABILITY_CATALOG: tuple[Capability, ...] = (
     Capability(
         "ltx_t2v",
@@ -83,24 +100,28 @@ CAPABILITY_CATALOG: tuple[Capability, ...] = (
         "WAN Fun Inpaint",
         class_types=("WanFunInpaintToVideo",),
         surfaces=(),
-        notes="Present in cached object_info; no shipped API graph or patcher field.",
+        notes="Live tower YES. No shipped API graph or patcher field.",
     ),
     Capability(
         "wan_fun_control",
         "WAN Fun Control",
-        class_types=("WanFunControlToVideo", "Wan22FunControlToVideo"),
+        class_types=("Wan22FunControlToVideo", "WanFunControlToVideo"),
         surfaces=("template",),
         templates=("vb_zimage_turbo_cn",),
-        notes="Z-Image Fun-Controlnet-Union is gitignored under AI-RENDERING-EXAMPLE FILES/.",
+        notes=(
+            "Live tower YES: Wan22FunControlToVideo. No Buddy API graph. "
+            "Z-Image Fun-Controlnet-Union is gitignored under AI-RENDERING-EXAMPLE FILES/."
+        ),
     ),
     Capability(
         "wan_teacache",
         "Wan TeaCache / EasyCache",
-        class_types=("WanVideoTeaCache", "WanVideoTeaCacheKJ", "WanVideoEasyCache"),
+        class_types=("TeaCache", "WanVideoTeaCache", "WanVideoTeaCacheKJ", "WanVideoEasyCache"),
         surfaces=("bypass",),
         notes=(
-            "Bypass-only (validator). WanVideoTeaCache outputs CACHEARGS, not MODEL — "
-            "do not inject onto LTX or native UNET→KSampler graphs."
+            "Live tower YES: TeaCache + WanVideoTeaCache. Bypass-only (validator). "
+            "WanVideoTeaCache outputs CACHEARGS, not MODEL — do not inject onto LTX "
+            "or native UNET→KSampler graphs."
         ),
     ),
     Capability(
@@ -129,19 +150,24 @@ CAPABILITY_CATALOG: tuple[Capability, ...] = (
     ),
     Capability(
         "lanpaint",
-        "LanPaint",
-        class_types=("LanPaint",),
-        name_contains=("lanpaint",),
-        surfaces=(),
-        notes="HYPOTHESIS: tower pack. Not in cached object_info or any workflow JSON.",
+        "LanPaint (LanPaint_KSampler)",
+        class_types=("LanPaint_KSampler",),
+        surfaces=("bypass", "patcher"),
+        notes=(
+            "Live tower YES: LanPaint_KSampler (not a bare LanPaint class). "
+            "No graph. Patcher writes seed/steps/cfg if a template uses it; "
+            "validator bypasses if the pack is missing."
+        ),
     ),
     Capability(
         "video_noise_warp",
-        "VideoNoiseWarp",
-        class_types=("VideoNoiseWarp",),
-        name_contains=("noisewarp", "video_noise_warp"),
-        surfaces=(),
-        notes="HYPOTHESIS: tower pack. Not in cached object_info or any workflow JSON.",
+        "GetWarpedNoiseFromVideo (warp family)",
+        class_types=("GetWarpedNoiseFromVideo",),
+        surfaces=("bypass",),
+        notes=(
+            "Live tower: NO exact VideoNoiseWarp. Use GetWarpedNoiseFromVideo. "
+            "No Buddy graph. Soft-bypass if a graph names it and the pack is missing."
+        ),
     ),
     Capability(
         "sam2",
@@ -170,8 +196,8 @@ CAPABILITY_CATALOG: tuple[Capability, ...] = (
         surfaces=("template",),
         templates=(),
         notes=(
-            "SDXL ADV UI graphs contain IPAdapterUnifiedLoader (not API, not routed). "
-            "Cached object_info has easy-use FaceID wrappers only — not IPAdapter_plus native."
+            "Live tower YES: IPAdapterFaceID. SDXL ADV UI graphs also have "
+            "IPAdapterUnifiedLoader (not API, not routed). No director/patcher path."
         ),
     ),
     Capability(
@@ -179,7 +205,10 @@ CAPABILITY_CATALOG: tuple[Capability, ...] = (
         "ControlNet depth/canny SD1.5",
         class_types=("ControlNetLoader", "ControlNetApplyAdvanced", "CannyEdgePreprocessor"),
         surfaces=("template",),
-        notes="Nodes exist in cache. No director/patcher path. SDXL ADV UI graphs only.",
+        notes=(
+            "Live tower YES: ControlNetLoader. In ltx23_lipsync_v08 API + SDXL ADV UI. "
+            "Director will not pick a ControlNet path."
+        ),
     ),
     Capability(
         "realistic_vision",
@@ -194,7 +223,10 @@ CAPABILITY_CATALOG: tuple[Capability, ...] = (
         "Voronoi / Perlin fractal IMAGE nodes",
         class_types=("CreateVoronoiMask", "Image Perlin Power Fractal", "Image Perlin Noise"),
         surfaces=(),
-        notes="In cached object_info. Buddy fractal path is CPU numpy, not these nodes.",
+        notes=(
+            "Live tower YES: CreateVoronoiMask, Image Perlin Power Fractal. "
+            "Buddy fractal path is CPU numpy, not these nodes."
+        ),
     ),
     Capability(
         "fractal_cpu",
@@ -239,11 +271,12 @@ CAPABILITY_CATALOG: tuple[Capability, ...] = (
     Capability(
         "mmaudio",
         "MMAudio (video→audio)",
-        class_types=("MMAudioSampler", "MMAudioModelLoader", "OviMMAudioVAELoader"),
-        surfaces=(),
+        class_types=("MMAudioModelLoader", "MMAudioSampler", "MMAudioVoCoder"),
+        surfaces=("bypass",),
         notes=(
-            "Cache has OviMMAudioVAELoader / WanVideoEmptyMMAudioLatents only. "
-            "Music pipeline is beat-detect + mux, not MMAudio generation."
+            "Live tower: NO exact class named MMAudio. Related: MMAudioModelLoader / "
+            "Sampler / VoCoder. Music pipeline is beat-detect + mux. Soft-bypass if a "
+            "graph names MMAudio* and the pack is missing."
         ),
     ),
     Capability(
@@ -450,6 +483,8 @@ def run_probe(*, prefer_live: bool = True) -> tuple[list[CapabilityRow], str]:
 
 __all__ = [
     "CAPABILITY_CATALOG",
+    "TOWER_LIVE_RELATED",
+    "TOWER_LIVE_YES",
     "Capability",
     "CapabilityRow",
     "format_matrix",

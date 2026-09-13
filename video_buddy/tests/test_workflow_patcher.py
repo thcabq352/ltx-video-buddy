@@ -12,6 +12,7 @@ from unittest.mock import patch
 from master_agent.comfy.workflow_patcher import (
     _ensure_lora_node,
     _find_nodes_by_class,
+    _heuristic_patch,
     load_and_patch_workflow,
     load_workflow_template,
 )
@@ -170,6 +171,21 @@ class TestEnsureLoraNode(unittest.TestCase):
         wf = {"1": {"class_type": "UNETLoader", "inputs": {}}}
         self.assertIsNone(_ensure_lora_node(wf, ""))
         self.assertEqual(len(wf), 1)
+
+
+class TestLanPaintKSamplerPatch(unittest.TestCase):
+    def test_heuristic_writes_seed_steps_cfg(self):
+        wf = {
+            "1": {
+                "class_type": "LanPaint_KSampler",
+                "inputs": {"seed": 0, "steps": 20, "cfg": 7.0},
+            }
+        }
+        _heuristic_patch(wf, {"seed": 99, "steps": 8, "cfg": 1.5})
+        inputs = wf["1"]["inputs"]
+        self.assertEqual(inputs["seed"], 99)
+        self.assertEqual(inputs["steps"], 8)
+        self.assertEqual(inputs["cfg"], 1.5)
 
 
 if __name__ == "__main__":

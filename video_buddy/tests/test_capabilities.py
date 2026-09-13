@@ -9,6 +9,7 @@ from pathlib import Path
 
 from master_agent.comfy.capabilities import (
     CAPABILITY_CATALOG,
+    TOWER_LIVE_YES,
     format_matrix,
     probe_capabilities,
 )
@@ -73,6 +74,24 @@ def test_teacache_is_bypass_not_inject():
     assert "bypass" in tea.surfaces
     assert "inject" not in tea.surfaces
     assert "CACHEARGS" in tea.notes
+    assert "TeaCache" in tea.class_types
+
+
+def test_catalog_uses_live_tower_exact_names():
+    by_id = {c.id: c for c in CAPABILITY_CATALOG}
+    assert by_id["lanpaint"].class_types == ("LanPaint_KSampler",)
+    assert by_id["video_noise_warp"].class_types == ("GetWarpedNoiseFromVideo",)
+    catalog_names = {ct for c in CAPABILITY_CATALOG for ct in c.class_types}
+    for name in TOWER_LIVE_YES:
+        assert name in catalog_names, name
+
+
+def test_probe_hits_lanpaint_ksampler_and_warp():
+    info = {"LanPaint_KSampler": {}, "GetWarpedNoiseFromVideo": {}}
+    rows = {r.capability.id: r for r in probe_capabilities(info)}
+    assert rows["lanpaint"].in_object_info == ["LanPaint_KSampler"]
+    assert rows["video_noise_warp"].in_object_info == ["GetWarpedNoiseFromVideo"]
+    assert rows["lanpaint"].verdict == "partial"
 
 
 def test_format_matrix_has_header():

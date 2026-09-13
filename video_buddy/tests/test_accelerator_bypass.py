@@ -8,6 +8,7 @@ from __future__ import annotations
 from master_agent.comfy.graph_ops import (
     bypass_optional_accelerators,
     is_optional_accelerator,
+    is_optional_node,
 )
 from master_agent.comfy.validator import validate_workflow
 
@@ -96,3 +97,26 @@ def test_unknown_required_class_is_still_error():
     report = validate_workflow(wf, OBJECT_INFO, file_label="hard")
     assert not report.ok
     assert any("NotANode" in str(e) for e in report.errors)
+
+
+def test_live_tower_optional_names():
+    assert is_optional_node("LanPaint_KSampler")
+    assert is_optional_node("GetWarpedNoiseFromVideo")
+    assert is_optional_node("MMAudioSampler")
+    assert is_optional_accelerator("LanPaint_KSampler")
+    assert not is_optional_node("WanFunInpaintToVideo")
+    assert not is_optional_node("Wan22FunControlToVideo")
+    assert not is_optional_node("IPAdapterFaceID")
+    assert not is_optional_node("ControlNetLoader")
+    assert not is_optional_node("CreateVoronoiMask")
+    assert not is_optional_node("WanVideoEmptyMMAudioLatents")
+
+
+def test_missing_lanpaint_and_warp_bypass():
+    for class_type in ("LanPaint_KSampler", "GetWarpedNoiseFromVideo"):
+        wf = _graph(class_type)
+        report = validate_workflow(wf, OBJECT_INFO, file_label=class_type)
+        assert report.ok, report.errors
+        assert "2" not in wf
+        assert wf["3"]["inputs"]["model"] == ["1", 0]
+        assert any(class_type in str(w) for w in report.warnings)

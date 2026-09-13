@@ -24,7 +24,7 @@ from typing import Any, Optional
 from master_agent.comfy.client import ComfyClient
 from master_agent.comfy.graph_ops import (
     bypass_optional_accelerators,
-    is_optional_accelerator,
+    is_optional_node,
 )
 from master_agent.config import is_valid_ltx_frames, snap_ltx_frames
 from master_agent.models.inventory import Inventory, load_inventory
@@ -360,8 +360,8 @@ def validate_workflow(
         report.warn(
             nid,
             "",
-            f"optional accelerator '{class_type}' missing from object_info; bypassed "
-            "(MODEL/typed output rewired past the node; pack not auto-installed)",
+            f"optional node '{class_type}' missing from object_info; bypassed "
+            "(typed upstream rewired past the node; pack not auto-installed)",
         )
 
     enforce_ltx_frame_law(workflow, report, strict=strict)
@@ -376,11 +376,11 @@ def validate_workflow(
             continue
         info = object_info.get(class_type)
         if info is None:
-            if is_optional_accelerator(class_type):
+            if is_optional_node(class_type):
                 report.warn(
                     node_id,
                     "",
-                    f"optional accelerator '{class_type}' missing from object_info; "
+                    f"optional node '{class_type}' missing from object_info; "
                     "bypass (do not auto-install the pack)",
                 )
                 continue
