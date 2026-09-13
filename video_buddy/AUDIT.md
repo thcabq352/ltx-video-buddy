@@ -1,10 +1,13 @@
 # Video Buddy × Comfy capability audit
 
-**Scope:** repo-only investigation of whether `master_agent` discovers and drives the major ComfyUI packs Scott reports on the tower, or only a subset (LTX / old paths).
+**Scope:** whether `master_agent` discovers and drives the major ComfyUI packs Scott reports on the tower, or only a subset (LTX / old paths).
 
-**Date:** 2026-09-13  
-**Repo:** `thcabq352/ltx-video-buddy` @ this PR’s base (`main`)  
-**Comfy in this checkout:** not present (`video_buddy/ComfyUI_windows_portable/` is gitignored). Live tower was **not** queried.
+**Date:** 2026-09-13 (reconciled after merge)  
+**Repo:** `thcabq352/ltx-video-buddy` @ `main`  
+**Merged:** [PR #5](https://github.com/thcabq352/ltx-video-buddy/pull/5) (this audit + `capabilities` CLI + wan22 slug fix) then [PR #6](https://github.com/thcabq352/ltx-video-buddy/pull/6) (LTX 2.5 default catalog + scan-first download).  
+**Comfy in this checkout:** not present (`video_buddy/ComfyUI_windows_portable/` is gitignored). Live tower was **not** queried from the audit VM.
+
+Post-merge: LTX 2.5 ids are in `WORKFLOW_FILES` and the default catalog. WAN / K3NK / TeaCache wiring from this audit is **unchanged**. Re-run `python -m master_agent capabilities --offline` for the live matrix.
 
 **Evidence used**
 
@@ -44,7 +47,7 @@ Buddy still does not *queue* Fun Inpaint / LanPaint / warp / FaceID / Voronoi. S
 Buddy never synthesizes a graph from `/object_info`. The path is **template → patch → lint → `/prompt`**.
 
 ```
-brief ──▶ director.choose_variant (5 slugs)
+brief ──▶ director.choose_variant (LTX 2.3 + wan22 + ltx25_* + flux)
               │
               ▼
      workflow_patcher.load_and_patch_workflow
@@ -77,7 +80,7 @@ brief ──▶ director.choose_variant (5 slugs)
 | `video_buddy/master_agent/comfy/cli_run.py` | `comfy run` raw / template / generate |
 | `video_buddy/master_agent/comfy/power_mode.py` | LLM `set_widget` / `add_node` (schema of **current** graph only) |
 | `video_buddy/master_agent/comfy/diagnose.py` | 9-frame hull; refuses scale until `sec/step` |
-| `video_buddy/master_agent/comfy/capabilities.py` | **This PR** — read-only gap probe |
+| `video_buddy/master_agent/comfy/capabilities.py` | **PR #5** — read-only gap probe (`capabilities` CLI) |
 | `video_buddy/master_agent/orchestrator/director.py` | Variant routing allowlist = `WORKFLOW_FILES` |
 | `video_buddy/master_agent/orchestrator/machine.py` | PATCH → VALIDATE → SUBMIT; OOM walks `DOWNSCALE_LADDER` |
 | `video_buddy/master_agent/fractal/render.py` | CPU Mandelbrot/Julia — **not Comfy** |
@@ -93,12 +96,12 @@ brief ──▶ director.choose_variant (5 slugs)
 
 | Layer | Dynamic? | What is hardcoded |
 |---|---|---|
-| Director | LLM picks among **5** slugs; rules: lipsync / wan22 / directors / eros / else `base` | `WORKFLOW_FILES`, `_VARIANT_KEYWORDS` |
+| Director | LLM picks among `WORKFLOW_FILES` (LTX 2.3 five + `flux` + seven `ltx25_*`); rules: lipsync / wan22 / ltx25 keywords / directors / eros / else `base` | `WORKFLOW_FILES`, `_VARIANT_KEYWORDS` |
 | Patcher field maps | No | `manifests.yaml` `fields:` for `base`, `eros`, `directors`, `flux`, `lipsync`, `wan22`, `krea2_img` |
 | Heuristic patch | No | Class lists: `EmptyLTXVLatentVideo`, `KSampler`, `UNETLoader`, `WanVideoNAG` is **not** specially handled (wan22 uses named node ids) |
 | Validator | Yes — live/cache registry | Unknown `class_type` is a **hard fail** except optional nodes (TeaCache, `LanPaint_KSampler`, `GetWarpedNoiseFromVideo`, `MMAudio*`) |
 | TeaCache | Soft-bypass only | `OPTIONAL_ACCELERATOR_CLASS_TYPES` in `graph_ops.py` |
-| `comfy run --template` | Path or slug | **This PR:** slugs also resolve from `manifests.yaml` |
+| `comfy run --template` | Path or slug | **PR #5:** slugs also resolve from `manifests.yaml` |
 | Fractal | N/A | Numpy + ffmpeg. No Voronoi/Perlin/SAM/Fun nodes |
 | Music | Beat map + same director graphs | No MMAudio sampler |
 | KB `search_workflows` | Embedding over ingested JSON | Retrieval ≠ queue |
@@ -120,9 +123,10 @@ brief ──▶ director.choose_variant (5 slugs)
 
 | Capability | In Buddy? | How | object_info? | Gap / fix |
 |---|---|---|---|---|
-| LTX short I2V / T2V | **yes** | director `base`/`eros`/`directors`; patcher; 8n+1 + `DOWNSCALE_LADDER` | yes (`EmptyLTXVLatentVideo`, …) | Wired. Default path. |
+| LTX 2.5 distilled T2V / I2V / FLF / MSR / A2V / T2A | **yes** | director `ltx25_*` (+ research aliases); default catalog; inventory-first loaders | graphs ship `EmptyLTXVLatentVideo` / `LTXVImgToVideo` / `ComfyUILTX25MSR*` | **PR #6.** No env flag. Doctor reports GGUF→NVFP4→int8→bf16. |
+| LTX 2.3 short I2V / T2V | **yes** | director `base`/`eros`/`directors`; patcher; 8n+1 + `DOWNSCALE_LADDER` | yes (`EmptyLTXVLatentVideo`, …) | Wired. Still the default when the brief does not name 2.5. |
 | LTX lipsync | **yes** | director when `--video` / lipsync keywords | yes | Wired. |
-| Wan 2.2 T2V (Mick native high/low UNET) | **yes** | director `wan22` → `260713_VIDEO-BUDDY_WAN-2-2-VID_1-0_api.json` | yes (`WanVideoNAG`) | **Was broken** as `comfy run --template wan22` (stale `MICKMUMPITZ_*` filename). Fixed this PR. Still T2V UNETs, not I2V AIO. |
+| Wan 2.2 T2V (Mick native high/low UNET) | **yes** | director `wan22` → `260713_VIDEO-BUDDY_WAN-2-2-VID_1-0_api.json` | yes (`WanVideoNAG`) | **Was broken** as `comfy run --template wan22` (stale `MICKMUMPITZ_*` filename). Fixed in PR #5. Still T2V UNETs, not I2V AIO. |
 | K3NK WAN 2.2 AIO I2V HIGH/LOW fp8 | **hyp / no** | — | no class; no inventory name | Need weights + I2V template + `MODEL_FILES` keys. Do not spray onto `wan22` T2V loaders. |
 | WanVideoWrapper | **no** | — | **yes** (119 `WanVideo*` classes) | Native `wan22` uses `UNETLoader`+`KSamplerAdvanced`, not `WanVideoSampler`. Wrapper is unused. |
 | WAN Fun Inpaint | **no** | — | **yes** (cache + **live** `WanFunInpaintToVideo`) | No graph, no mask ingest, no patcher fields. Highest-value missing node for recursive inpaint. |
@@ -141,7 +145,7 @@ brief ──▶ director.choose_variant (5 slugs)
 | CPU fractal zoom/inpaint/outpaint | **yes** | `python -m master_agent fractal` | n/a | No recursive Comfy loop (mask → Fun Inpaint → warp → again). |
 | RAFT | **hyp / no** | — | **no** `RAFT*` (Recraft* is a different pack) | Confirm live class; not in cache. |
 | Qwen / Krea edit | **partial** | manifests + `krea2_img` field map; CCC 4.1 API | **yes** | Not in director allowlist. Character sheet uses Flux, not Krea. |
-| MickMumpitz AI-VFX / Movie Builder / CCC | **partial** | large API templates | yes (VACE, CCC_*) | Manual `comfy run --template <slug>` after this PR. Director will not route “possession VFX” here. |
+| MickMumpitz AI-VFX / Movie Builder / CCC | **partial** | large API templates | yes (VACE, CCC_*) | Manual `comfy run --template <slug>` (PR #5 slug resolve). Director will not route “possession VFX” here. |
 | MMAudio | **partial (bypass)** | music = spectral-flux beats + mux | **live related** `MMAudioModelLoader` / `Sampler` / `VoCoder` | No exact class named `MMAudio`. Not wired as a generator. |
 | SeedVR2 | **yes (post)** | `upscale.py` + `workflows/upscale_seedvr2_api.json` | **yes** | Works as a finisher. RTX method points at gitignored Mickmumpitz filename. |
 | Sage-attention | **hyp / partial** | — | **yes** patch nodes | Launch flag not in repo. No graph inserts `*SageAttention*`. Bypass list does not include them (they are not MODEL passthroughs in the TeaCache sense). |
@@ -154,6 +158,7 @@ brief ──▶ director.choose_variant (5 slugs)
 
 | Claim | In repo? | Where |
 |---|---|---|
+| LTX 2.5 default catalog + scan-first download | **yes (PR #6)** | `workflows/ltx-2.5/`, `catalog.py`, `models/weights.py`, `doctor` / `download-models --ltx25` |
 | Rainey stop-lines / 8n+1 | **yes** | `config.snap_ltx_frames`, `validator`, `AGENTS.md`, `DOWNSCALE_LADDER` first rungs 9/17/25/33 |
 | TeaCache **inject** (`ensure_teacache`) | **no** | Only `bypass_optional_accelerators` |
 | TeaCache **bypass** | **yes** | `graph_ops.py`, `validator.py`, `tests/test_accelerator_bypass.py` |
@@ -211,14 +216,28 @@ Do **not** expand `WORKFLOW_FILES` / director allowlist to every manifest slug. 
 
 ---
 
-## 7. Easy wins shipped in this PR
+## 7. Easy wins shipped in PR #5 (merged)
 
 1. **`WORKFLOW_FILES["wan22"]`** pointed at a file that does not exist (`260713_MICKMUMPITZ_WAN-2-2-VID_1-0_api.json`). Generate-mode still worked (patcher reads `manifests.yaml`). `comfy run --mode template --template wan22` and `list_templates()` silently omitted the slug. Now points at `260713_VIDEO-BUDDY_WAN-2-2-VID_1-0_api.json`.
 2. **`resolve_template` / `list_templates`** accept `manifests.yaml` slugs (`vb_aivfx_adv`, `flux`, `krea2_img`, `vb_movie_builder`, …) without adding them to the director allowlist.
 3. **`python -m master_agent capabilities [--offline] [--json]`** prints this matrix from live or cached `object_info`.
 4. **Live-name follow-up:** catalog + soft-bypass use exact Desk names (`LanPaint_KSampler`, `GetWarpedNoiseFromVideo`, `TeaCache`). Patcher writes seed/steps/cfg on `LanPaint_KSampler`. Fun Inpaint / Fun Control / FaceID stay fail-closed.
 
-Not done (intentionally): TeaCache inject, Fun Inpaint graph, director expansion, RTX upscale path (source JSON is gitignored).
+Not done (intentionally): TeaCache inject, Fun Inpaint graph, K3NK AIO I2V, RTX upscale path (source JSON is gitignored). LTX 2.5 catalog expansion landed separately in **PR #6**.
+
+### Real CLI examples (post-merge)
+
+```bash
+cd video_buddy
+python -m master_agent capabilities --offline
+python -m master_agent capabilities --json
+python -m master_agent workflows
+python -m master_agent comfy run --mode template --template wan22 --prepare
+python -m master_agent comfy run --mode template --template vb_aivfx_adv --prepare
+python -m master_agent comfy run --mode generate --variant ltx25_t2v_i2v --prompt "neon rain" --prepare
+```
+
+`--offline` uses `state/object_info.json`. `--json` includes `director_allowlist` (every `WORKFLOW_FILES` key, including `ltx25_*`) and per-row `in_buddy` / `object_info_hits`.
 
 ---
 
@@ -232,4 +251,4 @@ cd video_buddy
 .\.venv\Scripts\python.exe -m master_agent comfy run --mode template --template vb_aivfx_adv --prepare
 ```
 
-`--prepare` lints only. A live matrix that still shows Fun Inpaint / TeaCache / VACE as `object_info` hits with `in_buddy=no|partial` is the expected post-0.35.1 result until new templates land.
+`--prepare` lints only. A live matrix that still shows Fun Inpaint / TeaCache / VACE as `object_info` hits with `in_buddy=no|partial` is the expected post-0.35.1 result until new templates land. LTX 2.5 rows should read `in_buddy=yes` after PR #6.

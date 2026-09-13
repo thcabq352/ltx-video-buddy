@@ -10,8 +10,12 @@ machine, and a heuristic + LLM judge loop.
   chain for `LLM_PROVIDER=auto`: ollama → grok (Hermes `xai-oauth` or
   `XAI_API_KEY`). Claude is an optional storyboard panel member
   (`ANTHROPIC_API_KEY`).
-- **Models:** LTX 2.3 weights under `models/` (see `models/README.md`), 16GB RTX 5060 Ti profile
-- **Workflows:** API-format JSON templates under `workflows/`
+- **Models:** LTX 2.5 distilled split pack (GGUF / NVFP4 / int8 / bf16) plus
+  existing LTX 2.3 / Wan / Flux weights under `models/` — see
+  [`REQUIRED-FILES.md`](REQUIRED-FILES.md) and [`models/README.md`](models/README.md).
+  16GB RTX 5060 Ti profile (`VRAM_GB` default 16).
+- **Workflows:** default catalog under `workflows/` including
+  `workflows/ltx-2.5/` (seven LTX 2.5 API graphs, no experimental flags)
 
 ## Install (Windows / macOS / Linux)
 
@@ -67,8 +71,13 @@ Hybrid page scrape lives in `master_agent/scrape`: httpx first, Playwright+steal
 - **ComfyUI** on `:8188` — Windows portable lives in `ComfyUI_windows_portable/`. On macOS/Linux point `COMFYUI_URL` at your own Comfy. Custom node pip deps stay in Comfy's python, not this venv.
 - **ai-toolkit** (LoRA training only) — separate clone + own venv, set up with
   `python -m master_agent lora setup`. The project venv is untouched.
-- **Model weights** (~450GB curated, not in git) — reproduced with
-  `python state/download_models.py` (idempotent, skips existing files). Not part of `install.py`.
+- **Model weights** (not in git). **Scan local first** — do not assume a
+  download. `python -m master_agent doctor` reports the LTX 2.5 loader pick
+  and does **not** fetch. `python -m master_agent download-models --ltx25`
+  lists confirmed-missing / zero-byte slots; add `--yes` only after you
+  agree. Legacy Mickmumpitz / LTX 2.3 packs: `python state/download_models.py`
+  (idempotent). Neither path is part of `install.py`. See
+  [`docs/QUICKSTART.md`](docs/QUICKSTART.md).
 
 ## CLI
 
@@ -78,8 +87,9 @@ python -m master_agent health              # ComfyUI reachable? GPU stats
 python -m master_agent fetch-object-info   # cache node registry to state/object_info.json
 python -m master_agent scan-models         # scan models/ → state/model_inventory.json
 python -m master_agent workflows           # default catalog (includes LTX 2.5)
-python -m master_agent doctor              # scan deps + LTX 2.5 weights (alias of setup)
-python -m master_agent download-models --ltx25   # inventory scan; --yes only if something is missing
+python -m master_agent capabilities --offline  # Comfy pack vs Buddy wiring (no queue)
+python -m master_agent doctor              # deps + LTX 2.5 scan; does NOT fetch weights
+python -m master_agent download-models --ltx25   # list confirmed-missing; --yes only after you agree
 python -m master_agent validate file.json  # validate one workflow
 python -m master_agent validate --all      # validate everything in workflows/
 python -m master_agent validate --all --offline  # no server needed (uses cache)
@@ -87,7 +97,9 @@ python -m master_agent validate --all --offline  # no server needed (uses cache)
 # Drive Comfy from the CLI first (lint + queue + copy into outputs/):
 python -m master_agent comfy run --mode generate --prompt "neon rain" --variant base
 python -m master_agent comfy run --mode generate --prompt "neon rain" --variant ltx25_t2v_i2v
+python -m master_agent comfy run --mode generate --variant flf2v --prompt "first to last" --prepare
 python -m master_agent comfy run --mode template --template base --set 12.steps=8
+python -m master_agent comfy run --mode template --template wan22 --prepare
 python -m master_agent comfy run --mode raw --json workflow.json
 python -m master_agent comfy run --mode template --template lipsync --prepare --out prepared.json
 
@@ -108,15 +120,68 @@ python -m master_agent run "..." --llm-panel grok+claude       # Grok + Claude, 
 python -m master_agent run "..." --llm-panel ollama:gemma4:latest,grok   # custom panel
 ```
 
-**LTX 2.5** graphs (`ltx25_t2v_i2v`, `ltx25_t2v_i2v_two_stage`, `ltx25_flf2v`,
-`ltx25_msr`, `ltx25_v2v_ic_lora`, `ltx25_a2v`, `ltx25_t2a`) are in the default
-catalog — CLI `--variant`, Create-tab, Comfy-tab, `GET /api/variants`. No env
-flag. Inventory first: Buddy locates existing files under `MODELS_DIR`,
-Comfy `models/`, `EXTRA_MODELS_DIRS`, `extra_model_paths.yaml`, and the
-Hugging Face hub cache (GGUF / NVFP4 / int8 / official bf16 all count).
-Download only if the scan confirms a slot is empty
-(`download-models --ltx25` lists; add `--yes` only then). See
-[REQUIRED-FILES.md](REQUIRED-FILES.md) and [MERGE-LTX25.md](../MERGE-LTX25.md).
+**LTX 2.5** graphs are in the **default** catalog (PR #6, merged). No env
+flag. Research aliases (`t2v_i2v`, `flf2v`, …) resolve the same way.
+
+| id | alias | Use |
+|---|---|---|
+| `ltx25_t2v_i2v` | `t2v_i2v` | single-stage distilled T2V / I2V |
+| `ltx25_t2v_i2v_two_stage` | `t2v_i2v_two_stage` | latent spatial upscale |
+| `ltx25_flf2v` | `flf2v` | first + last frame |
+| `ltx25_msr` | `msr` | pic1–pic4 + background |
+| `ltx25_v2v_ic_lora` | `v2v_ic_lora` | video-to-video IC-LoRA |
+| `ltx25_a2v` | `a2v` | audio-to-video |
+| `ltx25_t2a` | `t2a` | text-to-audio |
+
+Inventory first: Buddy locates existing files under `MODELS_DIR`, Comfy
+`models/`, `EXTRA_MODELS_DIRS`, `extra_model_paths.yaml`, and the Hugging
+Face hub cache. **GGUF Q4 → NVFP4 (if `VRAM_GB` ≥ 14) → int8-convrot →
+bf16.** Official bf16 Gemma is not required if a heretic / int8 TE is
+present. Zero-byte files = missing.
+
+`doctor` reports that pick and **does not fetch**. `download-models --ltx25`
+prints the ask for confirmed-missing slots; `--yes` / `doctor --fix-models`
+only after consent. See [docs/QUICKSTART.md](docs/QUICKSTART.md),
+[REQUIRED-FILES.md](REQUIRED-FILES.md), and historical
+[MERGE-LTX25.md](../MERGE-LTX25.md).
+
+## Doctor and download-models
+
+```bash
+python -m master_agent doctor
+# VIDEO BUDDY setup
+#   OK    python       3.12.x
+#   OK    venv         project .venv ready
+#   ...
+#   OK    ltx25-weights  GGUF Q4 (…-Q4_K_M.gguf) — 16GB-class preference #1; present (…)
+# All checked dependencies are ready.
+
+python -m master_agent download-models --ltx25
+# OK    all required weights present
+#   — or an ask listing filename → dest folder → size → gated license —
+# Nothing downloaded. Re-run with --yes after you agree.   # exit 2
+
+python -m master_agent download-models --ltx25 --yes
+python -m master_agent doctor --fix-models     # same consent path
+python -m master_agent setup --fix             # deps only; still no weights
+```
+
+WAN 2.2 (`wan22`), lipsync, TeaCache soft-bypass, and Movie Builder
+(`comfy run --template vb_movie_builder`) are unchanged. K3NK AIO I2V is
+**not** wired. The research-agent LangGraph / Gradio / A2A harness was
+**not** copied.
+
+## Capabilities
+
+```bash
+python -m master_agent capabilities --offline
+python -m master_agent capabilities --json
+# Director allowlist includes base, eros, directors, lipsync, wan22, flux,
+# and every ltx25_* id. object_info is validation + this probe — not graph synthesis.
+```
+
+Live tower Fun Inpaint / FaceID / Voronoi stay **unwired**. TeaCache is
+bypass-only. Full matrix: [AUDIT.md](AUDIT.md).
 
 The validator checks class types, required inputs, widget values, link type
 integrity (match-type passthroughs like `COMFY_MATCHTYPE_V3` count as
@@ -162,9 +227,11 @@ POLL → RESOLVE → JUDGE → DONE/ERROR`.
 - Every run writes a JSON record to `state/runs/` (params, judge history,
   transitions) — the seed of the later self-learning knowledge base.
 - Variant routing is LLM-driven (`orchestrator/director.py`): the local VL heretic
-  picks `base | directors | eros | lipsync | wan22` from the request,
-  validated against known variants with keyword rules as fallback
-  (`DIRECTOR_LLM=0` for rules-only). Hard constraints always win:
+  picks among director-allowlisted catalog ids (`base`, `eros`, `directors`,
+  `lipsync`, `wan22`, and every `ltx25_*`) from the request, validated
+  against the known list with keyword rules as fallback
+  (`DIRECTOR_LLM=0` for rules-only). Keywords such as `ltx 2.5`, `flf2v`,
+  `msr`, `a2v` route to the matching 2.5 graph. Hard constraints always win:
   `--variant` forces, a source video implies lipsync.
 
 ## Multi-segment pipeline (storyboard + stitch + full judge)
@@ -371,6 +438,31 @@ threads stall ~30s per DLL on Windows.
 Latency note for MCP clients: `health`/`search_*`/`validate_workflow`/
 `kb_ingest` answer in ~2s. `judge_asset` and `create_video` cold-load large
 Ollama models (19-27GB) and can take several minutes — allow long timeouts.
+
+## Status (2026-09-13)
+
+- **LTX 2.5 default catalog (PR #6, merged).** Seven API graphs under
+  `workflows/ltx-2.5/` are first-class variants (`ltx25_t2v_i2v`,
+  `ltx25_t2v_i2v_two_stage`, `ltx25_flf2v`, `ltx25_msr`,
+  `ltx25_v2v_ic_lora`, `ltx25_a2v`, `ltx25_t2a`) plus research aliases.
+  No env flags. `python -m master_agent workflows` / Create-tab /
+  Comfy-tab / `GET /api/variants`.
+- **Inventory-first weights.** Scan `MODELS_DIR`, Comfy `models/`,
+  `EXTRA_MODELS_DIRS`, `extra_model_paths.yaml`, HF hub cache. Ask before
+  download. `doctor` reports the 16GB-class loader pick (GGUF Q4 → NVFP4 if
+  `VRAM_GB` ≥ 14 → int8-convrot → bf16) and **does not fetch**.
+  `download-models --ltx25` lists confirmed-missing (zero-byte = missing);
+  `--yes` / `doctor --fix-models` only after consent. Official bf16 Gemma
+  is not required when heretic / int8 TE is present.
+- **Not copied** from `ltx2.5-research-agent`: LangGraph research / scrape /
+  A2A / Gradio, secrets, `ltx_research_agent`. WAN / K3NK / TeaCache
+  unchanged (TeaCache still soft-bypass).
+- **Capability audit (PR #5, merged).** `python -m master_agent capabilities
+  [--offline] [--json]`. `WORKFLOW_FILES["wan22"]` points at
+  `260713_VIDEO-BUDDY_WAN-2-2-VID_1-0_api.json`. Manifest slugs resolve for
+  `comfy run --template`. Fun Inpaint / Fun Control / FaceID stay
+  fail-closed. See [AUDIT.md](AUDIT.md).
+- Operator sheet: [docs/QUICKSTART.md](docs/QUICKSTART.md).
 
 ## Status (2026-08-04, third pass)
 

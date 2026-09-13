@@ -100,3 +100,7 @@ def test_format_matrix_has_header():
     assert "Capability" in text
     assert "Director allowlist" in text
     assert "wan22" in text
+    assert "ltx25_t2v_i2v" in text
+    by_id = {r.capability.id: r for r in rows}
+    assert by_id["ltx25_t2v"].verdict == "yes"
+    assert "director" in by_id["ltx25_t2v"].capability.surfaces

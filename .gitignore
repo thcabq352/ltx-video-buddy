@@ -53,5 +53,8 @@ Thumbs.db
 .vscode/
 *.log
 
-# Investor docs are local-only (not pushed)
-video_buddy/docs/
+# Investor / white-paper materials are local-only (not pushed)
+video_buddy/docs/investor/
+video_buddy/docs/**/*.pdf
+video_buddy/docs/**/*.docx
+video_buddy/docs/**/*.pptx
