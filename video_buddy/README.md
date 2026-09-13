@@ -79,7 +79,7 @@ python -m master_agent fetch-object-info   # cache node registry to state/object
 python -m master_agent scan-models         # scan models/ → state/model_inventory.json
 python -m master_agent workflows           # default catalog (includes LTX 2.5)
 python -m master_agent doctor              # scan deps + LTX 2.5 weights (alias of setup)
-python -m master_agent download-models --ltx25   # scan LTX 2.5 weights; add --yes to fetch
+python -m master_agent download-models --ltx25   # inventory scan; --yes only if something is missing
 python -m master_agent validate file.json  # validate one workflow
 python -m master_agent validate --all      # validate everything in workflows/
 python -m master_agent validate --all --offline  # no server needed (uses cache)
@@ -111,11 +111,11 @@ python -m master_agent run "..." --llm-panel ollama:gemma4:latest,grok   # custo
 **LTX 2.5** graphs (`ltx25_t2v_i2v`, `ltx25_t2v_i2v_two_stage`, `ltx25_flf2v`,
 `ltx25_msr`, `ltx25_v2v_ic_lora`, `ltx25_a2v`, `ltx25_t2a`) are in the default
 catalog — CLI `--variant`, Create-tab, Comfy-tab, `GET /api/variants`. No env
-flag. Official Hub names are the bf16 split pack on gated
-[`Lightricks/LTX-2.5`](https://huggingface.co/Lightricks/LTX-2.5)
-(research JSON stub `ltx-2.5-22b-distilled.safetensors` is remapped). Buddy
-scans model dirs first; if weights are missing it **asks** you to download
-(`download-models --ltx25 --yes`). See
+flag. Inventory first: Buddy locates existing files under `MODELS_DIR`,
+Comfy `models/`, `EXTRA_MODELS_DIRS`, `extra_model_paths.yaml`, and the
+Hugging Face hub cache (GGUF / NVFP4 / int8 / official bf16 all count).
+Download only if the scan confirms a slot is empty
+(`download-models --ltx25` lists; add `--yes` only then). See
 [REQUIRED-FILES.md](REQUIRED-FILES.md) and [MERGE-LTX25.md](../MERGE-LTX25.md).
 
 The validator checks class types, required inputs, widget values, link type

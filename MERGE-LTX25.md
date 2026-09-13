@@ -65,11 +65,28 @@ Buddy Rainey stop-lines win: `snap_ltx_frames()` (8n+1, min 9). LTX 2.5
 variants use `fps=24`, `frame_snap=8`. Audio `frames_number` stays paired
 with video `length`.
 
-## Weights (scan first, ask, then download)
+## Weights (inventory first)
 
 See [`video_buddy/REQUIRED-FILES.md`](video_buddy/REQUIRED-FILES.md).
 
-Official Hub defaults (gated [`Lightricks/LTX-2.5`](https://huggingface.co/Lightricks/LTX-2.5)):
+**Do not assume a download is needed.** Weights may already exist under
+`MODELS_DIR`, `COMFYUI_ROOT/models`, `EXTRA_MODELS_DIRS`, Comfy
+`extra_model_paths.yaml` bases, or the Hugging Face hub cache. Workflows are
+usable by default against whichever accepted local name is found.
+
+Research JSON still uses stub `ltx-2.5-22b-distilled.safetensors` on
+`CheckpointLoaderSimple`. Buddy remaps that and rewrites the loader.
+GGUF Q4 / NVFP4 / int8-convrot / official bf16 all satisfy the transformer
+slot; heretic or official Gemma satisfies the TE.
+
+1. Scan the roots above.
+2. Slot filled → queue silently; wire that file.
+3. Confirmed missing → ask (filename, dest, size, gated note). Never auto-download.
+4. `--yes` / `doctor --fix-models` only after that ask, and only for the missing set.
+
+`setup --fix` does **not** download models.
+
+Official Hub names (reference catalog, gated [`Lightricks/LTX-2.5`](https://huggingface.co/Lightricks/LTX-2.5)):
 
 - `diffusion_models/ltx-2.5-22b-distilled-transformer-bf16.safetensors`
 - `text_encoders/gemma4-12b-with-proj-ltx-2.5-bf16.safetensors`
@@ -78,28 +95,12 @@ Official Hub defaults (gated [`Lightricks/LTX-2.5`](https://huggingface.co/Light
 - `model_patches/ltx-2.5-duration-head-bf16.safetensors`
 - `latent_upscale_models/ltx-2.5-latent-spatial-upscaler-x2-bf16-1.0.safetensors`
 
-Research JSON still uses stub `ltx-2.5-22b-distilled.safetensors` on
-`CheckpointLoaderSimple`. Buddy remaps that to the official bf16 transformer
-and rewrites the loader. 16GB-class files (`comfy-int8-convrot`, `nvfp4`,
-GGUF Q4) satisfy the transformer slot when already on disk.
-
-1. Scan configured + common Comfy `models/` trees and Hugging Face hub snapshots.
-2. Any accepted local name → queue silently. Zero-byte files are missing.
-3. Truly missing → `MissingWeightsError` with filename, dest folder, size, gated-HF note, and accepted alternatives.
-4. User agrees: `python -m master_agent download-models --ltx25 --yes` (fetches official **bf16** Hub names).
-
-Do not treat download as the default path. `setup --fix` / `doctor --fix` does **not** download models.
-`setup --fix-models` / `doctor --fix-models` is explicit consent for the **missing** set only.
-
-When several transformers are on disk, the patcher prefers GGUF Q4, then NVFP4, then int8-convrot, then official bf16.
-
 ## Tower / node prerequisites (from research README + official pack)
 
 - ComfyUI with LTX 2.5 nodes (`ComfyUI-LTXVideo` / native 0.32+ LTX 2.5).
 - VideoHelperSuite (`VHS_VideoCombine`).
 - MSR nodes: `ComfyUILTX25MSRICLoRALoader`, `ComfyUILTX25MSRMultiReferenceGuide`.
-- Official bf16 distilled 22B transformer + Gemma 4 TE + video/audio VAEs + duration head + spatial upscaler (see required files).
-- 16GB-class towers may use int8-convrot / NVFP4 / GGUF instead of the 42 GB bf16 transformer.
+- Distilled 22B transformer + Gemma 4 TE + video/audio VAEs + duration head + spatial upscaler **if those files are not already on disk** (any accepted local name counts; see required files).
 - IC-LoRA / MSR also need `ltx-2.5-22b-ic-lora-ingredients-0.9.safetensors`.
 
 Leftover LangGraph / research / Imagine / A2A pieces stay in the research repo.

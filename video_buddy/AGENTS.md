@@ -74,7 +74,7 @@ It always prepares + lints first, then queues the short fire, prints wall time a
 - **Know `sec/step` before scale.** Ada field note: 285 s/step dropped to 66.5 s/step after a lowvram / hull-sized fire. Do not climb `DOWNSCALE_LADDER` or raise frames until diagnose recorded `sec/step`.
 - **Audio field is `frames_number`** on `LTXVEmptyLatentAudio`, paired with video `length`.
 - **Missing TeaCache → bypass**, not a hard-fail. Do not auto-install packs. Live Comfy may only expose `WanVideoTeaCache` / `WanVideoTeaCacheKJ`.
-- **LTX 2.5 default catalog.** `ltx25_*` variants are listed with no env flag. Official Hub names are the bf16 split pack (`Lightricks/LTX-2.5`). Scan first (GGUF Q4 / NVFP4 / int8 / heretic TE still count); ask before download (`python -m master_agent download-models --ltx25`). Do not auto-download. Zero-byte duration-head counts as missing. Stub ckpt remaps to official bf16; local GGUF wins when present.
+- **LTX 2.5 default catalog.** `ltx25_*` variants are listed with no env flag. Inventory first — do not assume a download. Locate files via `MODELS_DIR`, Comfy `models/`, `EXTRA_MODELS_DIRS`, `extra_model_paths.yaml`, and the HF hub cache. GGUF / NVFP4 / int8 / heretic TE count. Ask only for confirmed-missing slots. Never auto-download.
 - **Tracker `DONE` can lie.** Confirm with history + `ffprobe` + size/frames. Junk `<100KB` or `<3` frames is FAIL even if the tracker says done.
 - **Port-in-use ≠ kill the cook.** If `:8188` / `:8189` is already bound, do not kill a running render. Attach or wait.
 - **Budget ~80 VRAM-min HOLD** with a shift-reset ledger. HOLD is `input-required`, not failed. `budget reset-shift` archives `previous_used` / `previous_shift_id` and never wipes history.

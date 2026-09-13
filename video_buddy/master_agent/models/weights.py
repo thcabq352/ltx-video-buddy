@@ -1,13 +1,16 @@
 """Required-weight manifest, scan-first, and ask-to-download.
 
-Product flow for any user of Video Buddy (not a one-off tower inventory):
+Inventory first. Do not assume a download is needed.
 
-1. Scan configured model dirs + common relative Comfy ``models/`` trees.
-2. If every mandatory file for the workflow is present → proceed silently.
-3. If something is missing → raise ``MissingWeightsError`` with a clear ask
-   (filename, dest folder, size, gated-HF note). Never auto-download.
-4. ``python -m master_agent download-models --ltx25 --yes`` pulls only the
-   missing set after the user agrees.
+1. Scan ``MODELS_DIR``, ``COMFYUI_ROOT/models``, ``EXTRA_MODELS_DIRS``,
+   Comfy ``extra_model_paths.yaml`` bases, common relative ``models/`` trees,
+   and Hugging Face hub snapshots.
+2. If every mandatory slot is already filled (any accepted local name) →
+   proceed silently and wire the graph to those files.
+3. If something is confirmed missing → raise ``MissingWeightsError`` with a
+   clear ask. Never auto-download.
+4. Only after consent: ``download-models --ltx25 --yes`` fetches the
+   confirmed-missing set.
 """
 
 from __future__ import annotations
@@ -293,7 +296,7 @@ def _is_usable_file(path: Path) -> bool:
 
 
 def _hf_hub_snapshot_roots() -> list[Path]:
-    """Common Hugging Face hub snapshot trees (not a one-off machine path)."""
+    """Common Hugging Face hub trees (cache env + default ~/.cache layout)."""
     hubs: list[Path] = []
     env_cache = os.environ.get("HUGGINGFACE_HUB_CACHE") or os.environ.get("HF_HUB_CACHE")
     if env_cache:
@@ -301,6 +304,9 @@ def _hf_hub_snapshot_roots() -> list[Path]:
     hf_home = os.environ.get("HF_HOME")
     if hf_home:
         hubs.append(Path(hf_home) / "hub")
+    xdg = os.environ.get("XDG_CACHE_HOME")
+    if xdg:
+        hubs.append(Path(xdg) / "huggingface" / "hub")
     hubs.append(Path.home() / ".cache" / "huggingface" / "hub")
     repos = (
         "models--Lightricks--LTX-2.5",
@@ -309,15 +315,63 @@ def _hf_hub_snapshot_roots() -> list[Path]:
     out: list[Path] = []
     for hub in hubs:
         for repo in repos:
-            snap = hub / repo / "snapshots"
+            repo_dir = hub / repo
+            if repo_dir.is_dir():
+                out.append(repo_dir)
+            snap = repo_dir / "snapshots"
             if snap.is_dir():
                 out.append(snap)
     return out
 
 
+def _extra_model_paths_yaml_roots() -> list[Path]:
+    """Comfy ``extra_model_paths.yaml`` base_path / folder entries (other volumes)."""
+    from master_agent.config import COMFYUI_ROOT, PORTABLE_ROOT, PROJECT_ROOT
+
+    candidates = (
+        Path(COMFYUI_ROOT) / "extra_model_paths.yaml",
+        Path(COMFYUI_ROOT).parent / "extra_model_paths.yaml",
+        Path(PORTABLE_ROOT) / "extra_model_paths.yaml",
+        Path(PROJECT_ROOT) / "extra_model_paths.yaml",
+        Path.cwd() / "extra_model_paths.yaml",
+    )
+    roots: list[Path] = []
+    try:
+        import yaml
+    except ImportError:
+        return roots
+    for path in candidates:
+        if not path.is_file():
+            continue
+        try:
+            data = yaml.safe_load(path.read_text(encoding="utf-8")) or {}
+        except (OSError, yaml.YAMLError):
+            continue
+        if not isinstance(data, dict):
+            continue
+        for section in data.values():
+            if not isinstance(section, dict):
+                continue
+            base = section.get("base_path")
+            base_path = Path(str(base)) if base else None
+            if base_path is not None:
+                roots.append(base_path)
+                roots.append(base_path / "models")
+            for key, val in section.items():
+                if key in {"base_path", "is_default", "custom_nodes"} or not isinstance(val, str):
+                    continue
+                folder = Path(val)
+                if not folder.is_absolute() and base_path is not None:
+                    folder = base_path / val
+                roots.append(folder)
+                if folder.name != "models":
+                    roots.append(folder.parent)
+    return roots
+
+
 def model_search_roots() -> list[Path]:
-    """Configured dirs plus common relative Comfy ``models/`` and HF hub layouts."""
-    from master_agent.config import COMFYUI_ROOT, MODELS_DIR, PROJECT_ROOT
+    """``MODELS_DIR`` plus common Comfy / HF-cache / extra-volume layouts."""
+    from master_agent.config import COMFYUI_ROOT, MODELS_DIR, PROJECT_ROOT, extra_models_dirs
 
     roots: list[Path] = []
     seen: set[Path] = set()
@@ -342,6 +396,11 @@ def model_search_roots() -> list[Path]:
     _add(cwd / "video_buddy" / "models")
     _add(cwd / "ComfyUI" / "models")
     _add(cwd / "ComfyUI_windows_portable" / "ComfyUI" / "models")
+    for extra in extra_models_dirs():
+        _add(extra)
+        _add(extra / "models")
+    for extra in _extra_model_paths_yaml_roots():
+        _add(extra)
     for snap in _hf_hub_snapshot_roots():
         _add(snap)
     return roots

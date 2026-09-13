@@ -32,6 +32,20 @@ PORTABLE_ROOT = Path(
 ).resolve()
 
 MODELS_DIR = Path(os.getenv("MODELS_DIR", str(PROJECT_ROOT / "models"))).resolve()
+
+
+def extra_models_dirs() -> list[Path]:
+    """Additional models trees (other volumes). ``EXTRA_MODELS_DIRS`` or ``LTX_MODELS_DIRS``.
+
+    Split on ``os.pathsep`` (``;`` on Windows, ``:`` on POSIX). Commas also work.
+    """
+    raw = os.getenv("EXTRA_MODELS_DIRS") or os.getenv("LTX_MODELS_DIRS") or ""
+    out: list[Path] = []
+    for part in raw.replace(",", os.pathsep).split(os.pathsep):
+        piece = part.strip().strip('"')
+        if piece:
+            out.append(Path(piece))
+    return out
 WORKFLOWS_DIR = Path(
     os.getenv("WORKFLOWS_DIR", str(PROJECT_ROOT / "workflows"))
 ).resolve()

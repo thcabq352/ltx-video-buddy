@@ -161,6 +161,37 @@ def test_transformer_prefers_gguf_over_int8(tmp_path: Path):
     assert found == gguf
 
 
+def test_extra_models_dirs_env_is_searched(tmp_path: Path, monkeypatch):
+    elsewhere = tmp_path / "other-volume" / "weights"
+    dest = elsewhere / "diffusion_models" / WEIGHT_FILES["transformer"].filename
+    dest.parent.mkdir(parents=True)
+    dest.write_bytes(b"across-drives")
+    monkeypatch.setenv("EXTRA_MODELS_DIRS", str(elsewhere))
+    from master_agent.config import extra_models_dirs
+
+    assert elsewhere in extra_models_dirs() or Path(str(elsewhere)) in extra_models_dirs()
+    found = resolve_weight(WEIGHT_FILES["transformer"], extra_models_dirs())
+    assert found == dest
+
+
+def test_extra_model_paths_yaml_base_is_searched(tmp_path: Path, monkeypatch):
+    volume = tmp_path / "comfy-on-other-disk"
+    dest = volume / "models" / "vae" / WEIGHT_FILES["video_vae"].filename
+    dest.parent.mkdir(parents=True)
+    dest.write_bytes(b"yaml-base")
+    yaml_path = tmp_path / "extra_model_paths.yaml"
+    yaml_path.write_text(
+        f"other:\n  base_path: {volume.as_posix()}\n  vae: models/vae\n",
+        encoding="utf-8",
+    )
+    monkeypatch.setattr("master_agent.config.COMFYUI_ROOT", tmp_path)
+    from master_agent.models.weights import _extra_model_paths_yaml_roots
+
+    roots = _extra_model_paths_yaml_roots()
+    found = resolve_weight(WEIGHT_FILES["video_vae"], roots)
+    assert found == dest
+
+
 def test_hf_hub_snapshot_counts_as_present(tmp_path: Path):
     snap = (
         tmp_path
