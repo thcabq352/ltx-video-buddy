@@ -18,9 +18,10 @@ from pathlib import Path
 from typing import Any, Callable, Iterable, Optional
 
 # Research-graph stub names → official Lightricks/LTX-2.5 split-pack filenames.
+# Hub listing 2026-09: https://huggingface.co/Lightricks/LTX-2.5
 STUB_ALIASES: dict[str, str] = {
     "ltx-2.5-22b-distilled.safetensors": (
-        "ltx-2.5-22b-distilled-transformer-comfy-int8-convrot.safetensors"
+        "ltx-2.5-22b-distilled-transformer-bf16.safetensors"
     ),
     "ltx-2.5-ic-lora.safetensors": "ltx-2.5-22b-ic-lora-ingredients-0.9.safetensors",
     # No public Lightricks file named "msr"; IC-LoRA Ingredients is the closest
@@ -76,20 +77,22 @@ class WeightFile:
         return tuple(seen)
 
 
-# Official Comfy-ready distilled split pack (docs.comfy.org / Lightricks/LTX-2.5).
+# Official distilled split pack on gated Lightricks/LTX-2.5 (Hub file listing).
+# Download / default-wire names are the bf16 pack. 16GB-class installs may
+# already have comfy-int8-convrot / nvfp4 / GGUF Q4 — those still count.
 WEIGHT_FILES: dict[str, WeightFile] = {
     "transformer": WeightFile(
         key="transformer",
-        filename="ltx-2.5-22b-distilled-transformer-comfy-int8-convrot.safetensors",
+        filename="ltx-2.5-22b-distilled-transformer-bf16.safetensors",
         dest_folder="diffusion_models",
         repo_id=HF_LTX25,
-        repo_filename="diffusion_models/ltx-2.5-22b-distilled-transformer-comfy-int8-convrot.safetensors",
-        size_bytes=21_500_000_000,
+        repo_filename="diffusion_models/ltx-2.5-22b-distilled-transformer-bf16.safetensors",
+        size_bytes=42_000_000_000,
         mandatory=True,
         gated=True,
-        note="Comfy-ready int8 distilled transformer (Hub default). GGUF Q4 / NVFP4 / bf16 also count.",
+        note="Official distilled transformer (bf16, 42 GB). 16GB-class: comfy-int8-convrot, nvfp4, or GGUF Q4 also count.",
         accepts=(
-            # 16GB-class preference: GGUF Q4, then NVFP4, then int8, then bf16.
+            # When several exist locally, prefer the 16GB-class file first.
             "ltx-2.5-22b-distilled-transformer-bf16-Q4_K_M.gguf",
             "ltx-2.5-22b-distilled-transformer-nvfp4.safetensors",
             "ltx-2.5-22b-distilled-transformer-comfy-int8-convrot.safetensors",
@@ -98,14 +101,14 @@ WEIGHT_FILES: dict[str, WeightFile] = {
     ),
     "text_encoder": WeightFile(
         key="text_encoder",
-        filename="gemma4-12b-with-proj-ltx-2.5-comfy-int8-convrot.safetensors",
+        filename="gemma4-12b-with-proj-ltx-2.5-bf16.safetensors",
         dest_folder="text_encoders",
         repo_id=HF_LTX25,
-        repo_filename="text_encoders/gemma4-12b-with-proj-ltx-2.5-comfy-int8-convrot.safetensors",
-        size_bytes=15_400_000_000,
+        repo_filename="text_encoders/gemma4-12b-with-proj-ltx-2.5-bf16.safetensors",
+        size_bytes=26_300_000_000,
         mandatory=True,
         gated=True,
-        note="Official Gemma 4 12B + LTX 2.5 projection (Comfy int8). Heretic int8 or official bf16 also count.",
+        note="Official Gemma 4 12B + LTX 2.5 projection (bf16, 26.3 GB). Comfy int8 or heretic int8 also count.",
         accepts=(
             "gemma4-12b-heretic-ltx25-int8convrot.safetensors",
             "gemma4-12b-with-proj-ltx-2.5-comfy-int8-convrot.safetensors",
@@ -147,7 +150,7 @@ WEIGHT_FILES: dict[str, WeightFile] = {
         size_bytes=996_000_000,
         mandatory=True,
         gated=True,
-        note="2× latent spatial upscaler — mandatory for two-stage distilled.",
+        note="2× latent spatial upscaler — official pack (required for two-stage; part of the Hub split).",
     ),
     "ic_lora": WeightFile(
         key="ic_lora",
@@ -190,36 +193,28 @@ WEIGHT_FILES: dict[str, WeightFile] = {
         repo_id=HF_LTX25,
         repo_filename="model_patches/ltx-2.5-duration-head-bf16.safetensors",
         size_bytes=3_800_000,
-        mandatory=False,
+        mandatory=True,
         gated=True,
-        note="Optional auto-duration model patch.",
+        note="Official duration-head model patch (3.8 MB). Zero-byte placeholders count as missing.",
     ),
 }
 
+# Official Hub pack keys (mandatory). IC-LoRA is a separate gated repo.
+_LTX25_OFFICIAL = (
+    "transformer",
+    "text_encoder",
+    "video_vae",
+    "audio_vae",
+    "duration_head",
+    "spatial_upscaler",
+)
+
 # Bundle → weight keys. Mandatory flags on WeightFile still apply per key.
 BUNDLES: dict[str, tuple[str, ...]] = {
-    "ltx25_core": ("transformer", "text_encoder", "video_vae", "audio_vae"),
-    "ltx25_two_stage": (
-        "transformer",
-        "text_encoder",
-        "video_vae",
-        "audio_vae",
-        "spatial_upscaler",
-    ),
-    "ltx25_iclora": (
-        "transformer",
-        "text_encoder",
-        "video_vae",
-        "audio_vae",
-        "ic_lora",
-    ),
-    "ltx25_msr": (
-        "transformer",
-        "text_encoder",
-        "video_vae",
-        "audio_vae",
-        "ic_lora",
-    ),
+    "ltx25_core": _LTX25_OFFICIAL,
+    "ltx25_two_stage": _LTX25_OFFICIAL,
+    "ltx25_iclora": (*_LTX25_OFFICIAL, "ic_lora"),
+    "ltx25_msr": (*_LTX25_OFFICIAL, "ic_lora"),
     "ltx25_all": tuple(WEIGHT_FILES.keys()),
 }
 

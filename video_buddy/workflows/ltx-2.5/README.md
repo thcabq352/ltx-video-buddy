@@ -4,8 +4,9 @@ Queueable ComfyUI API-format graphs (`POST /prompt`). Ported from
 [ltx2.5-research-agent](https://github.com/thcabq352/ltx2.5-research-agent).
 Video Buddy lists **all of these in the default catalog** — no env flag.
 
-Stub checkpoint names in the JSON (`ltx-2.5-22b-distilled.safetensors`) are
-remapped at patch time to the official `Lightricks/LTX-2.5` Comfy split pack.
+Stub checkpoint names in the JSON (`ltx-2.5-22b-distilled.safetensors` on
+`CheckpointLoaderSimple`) are remapped at patch time to the official
+`Lightricks/LTX-2.5` bf16 split pack (`UNETLoader` + Gemma 4 TE).
 See [`../../REQUIRED-FILES.md`](../../REQUIRED-FILES.md).
 
 | Buddy id | Research id | File | Notes |

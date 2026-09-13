@@ -111,8 +111,11 @@ python -m master_agent run "..." --llm-panel ollama:gemma4:latest,grok   # custo
 **LTX 2.5** graphs (`ltx25_t2v_i2v`, `ltx25_t2v_i2v_two_stage`, `ltx25_flf2v`,
 `ltx25_msr`, `ltx25_v2v_ic_lora`, `ltx25_a2v`, `ltx25_t2a`) are in the default
 catalog — CLI `--variant`, Create-tab, Comfy-tab, `GET /api/variants`. No env
-flag. Buddy scans model dirs first; if weights are missing it **asks** you to
-download (`download-models --ltx25 --yes`). See
+flag. Official Hub names are the bf16 split pack on gated
+[`Lightricks/LTX-2.5`](https://huggingface.co/Lightricks/LTX-2.5)
+(research JSON stub `ltx-2.5-22b-distilled.safetensors` is remapped). Buddy
+scans model dirs first; if weights are missing it **asks** you to download
+(`download-models --ltx25 --yes`). See
 [REQUIRED-FILES.md](REQUIRED-FILES.md) and [MERGE-LTX25.md](../MERGE-LTX25.md).
 
 The validator checks class types, required inputs, widget values, link type

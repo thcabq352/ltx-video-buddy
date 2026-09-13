@@ -69,23 +69,37 @@ with video `length`.
 
 See [`video_buddy/REQUIRED-FILES.md`](video_buddy/REQUIRED-FILES.md).
 
+Official Hub defaults (gated [`Lightricks/LTX-2.5`](https://huggingface.co/Lightricks/LTX-2.5)):
+
+- `diffusion_models/ltx-2.5-22b-distilled-transformer-bf16.safetensors`
+- `text_encoders/gemma4-12b-with-proj-ltx-2.5-bf16.safetensors`
+- `vae/ltx-2.5-video-vae-bf16.safetensors`
+- `vae/ltx-2.5-audio-vae-bf16.safetensors`
+- `model_patches/ltx-2.5-duration-head-bf16.safetensors`
+- `latent_upscale_models/ltx-2.5-latent-spatial-upscaler-x2-bf16-1.0.safetensors`
+
+Research JSON still uses stub `ltx-2.5-22b-distilled.safetensors` on
+`CheckpointLoaderSimple`. Buddy remaps that to the official bf16 transformer
+and rewrites the loader. 16GB-class files (`comfy-int8-convrot`, `nvfp4`,
+GGUF Q4) satisfy the transformer slot when already on disk.
+
 1. Scan configured + common Comfy `models/` trees and Hugging Face hub snapshots.
-2. Any accepted local name (GGUF Q4 / NVFP4 / int8 / bf16 transformer; heretic or official TE) → queue silently. Zero-byte files are missing.
+2. Any accepted local name → queue silently. Zero-byte files are missing.
 3. Truly missing → `MissingWeightsError` with filename, dest folder, size, gated-HF note, and accepted alternatives.
-4. User agrees: `python -m master_agent download-models --ltx25 --yes`
+4. User agrees: `python -m master_agent download-models --ltx25 --yes` (fetches official **bf16** Hub names).
 
 Do not treat download as the default path. `setup --fix` / `doctor --fix` does **not** download models.
 `setup --fix-models` / `doctor --fix-models` is explicit consent for the **missing** set only.
 
-When several transformers are on disk, the patcher prefers GGUF Q4, then NVFP4, then int8-convrot, then bf16.
+When several transformers are on disk, the patcher prefers GGUF Q4, then NVFP4, then int8-convrot, then official bf16.
 
 ## Tower / node prerequisites (from research README + official pack)
 
 - ComfyUI with LTX 2.5 nodes (`ComfyUI-LTXVideo` / native 0.32+ LTX 2.5).
 - VideoHelperSuite (`VHS_VideoCombine`).
 - MSR nodes: `ComfyUILTX25MSRICLoRALoader`, `ComfyUILTX25MSRMultiReferenceGuide`.
-- Distilled 22B transformer + Gemma 4 TE + video/audio VAEs (see required files).
-- Two-stage also needs the spatial latent upscaler.
+- Official bf16 distilled 22B transformer + Gemma 4 TE + video/audio VAEs + duration head + spatial upscaler (see required files).
+- 16GB-class towers may use int8-convrot / NVFP4 / GGUF instead of the 42 GB bf16 transformer.
 - IC-LoRA / MSR also need `ltx-2.5-22b-ic-lora-ingredients-0.9.safetensors`.
 
 Leftover LangGraph / research / Imagine / A2A pieces stay in the research repo.

@@ -9,10 +9,30 @@ Official split pack: gated Hugging Face repo
 (LTX-2.x Community License). Accept the license, then `huggingface-cli login`
 or set `HF_TOKEN`.
 
-Research-agent JSON still says `ltx-2.5-22b-distilled.safetensors` on
-`CheckpointLoaderSimple`. Buddy remaps that stub to the official Comfy
-transformer and rewrites the loader to `UNETLoader` + `LTXAVTextEncoderLoader`
-so the graphs run against the real split pack.
+Research-agent JSON still says `ckpt_name: ltx-2.5-22b-distilled.safetensors`
+on `CheckpointLoaderSimple` (a placeholder monolith). Buddy **intentionally
+remaps** that stub to the official split pack and rewrites the loader to
+`UNETLoader` / `UnetLoaderGGUF` + `LTXAVTextEncoderLoader` so the graphs run
+against the real Hub files below.
+
+## Official Hub pack (mandatory)
+
+Paths are relative to the repo root of `Lightricks/LTX-2.5`. Sizes from the
+Hub listing (Sep 2026).
+
+| Hub path | Dest folder | Size | Notes |
+|---|---|---|---|
+| `diffusion_models/ltx-2.5-22b-distilled-transformer-bf16.safetensors` | `models/diffusion_models/` | 42.0 GB | Official default. 16GB-class: `…-comfy-int8-convrot.safetensors` (21.5 GB) or `…-nvfp4.safetensors` (18.7 GB). Local GGUF Q4 also counts. |
+| `text_encoders/gemma4-12b-with-proj-ltx-2.5-bf16.safetensors` | `models/text_encoders/` | 26.3 GB | Official default. Comfy int8 (`…-comfy-int8-convrot.safetensors`, 15.4 GB) or heretic int8 also count. |
+| `vae/ltx-2.5-video-vae-bf16.safetensors` | `models/vae/` | 1.5 GB | `…-conv-bf16.safetensors` also counts. |
+| `vae/ltx-2.5-audio-vae-bf16.safetensors` | `models/vae/` | 365 MB | Required for T2A / A2V and AV joint graphs. |
+| `model_patches/ltx-2.5-duration-head-bf16.safetensors` | `models/model_patches/` | 3.8 MB | Official pack. Zero-byte placeholders count as **missing**. |
+| `latent_upscale_models/ltx-2.5-latent-spatial-upscaler-x2-bf16-1.0.safetensors` | `models/latent_upscale_models/` | 996 MB | Official pack (two-stage uses it). |
+
+IC-LoRA / MSR additionally need
+`ltx-2.5-22b-ic-lora-ingredients-0.9.safetensors` from gated
+[`Lightricks/LTX-2.5-22b-IC-LoRA-Ingredients`](https://huggingface.co/Lightricks/LTX-2.5-22b-IC-LoRA-Ingredients)
+→ `models/loras/`.
 
 ## One-command flow
 
@@ -33,40 +53,29 @@ Hugging Face hub snapshot (`~/.cache/huggingface/hub/models--Lightricks--LTX-2.5
 Buddy proceeds silently. Zero-byte placeholders count as **missing**.
 
 Inventory first. Do not download “just in case.” `--yes` / `--fix-models` is
-only for files the scan confirmed are absent.
+only for files the scan confirmed are absent. The download helper fetches the
+**official bf16 Hub names** above, not a 16GB stand-in.
 
-## Mandatory (default usability)
+Loader preference when several transformers already exist locally:
+**GGUF Q4 → NVFP4 → int8-convrot → official bf16**. GGUF files are wired to
+`UnetLoaderGGUF`. Official bf16 Gemma is not required if a working int8 /
+heretic TE is present.
 
-Hub download targets (gated `Lightricks/LTX-2.5`) plus local alternatives that
-already satisfy the slot on a typical 16GB-class Comfy install:
+## Optional (same Hub repo)
 
-| Slot | Hub download target | Also accepted locally | Dest | Size | Workflows |
-|---|---|---|---|---|---|
-| Transformer | `ltx-2.5-22b-distilled-transformer-comfy-int8-convrot.safetensors` | **GGUF Q4_K_M** (preferred when present), NVFP4, official bf16, research stub `ltx-2.5-22b-distilled.safetensors` | `models/diffusion_models/` (GGUF often in `…/gguf/`) | ~21.5 GB int8 / ~17 GB NVFP4 / ~11 GB Q4 | all LTX 2.5 |
-| Text encoder | `gemma4-12b-with-proj-ltx-2.5-comfy-int8-convrot.safetensors` | `gemma4-12b-heretic-ltx25-int8convrot.safetensors`, official `…-bf16.safetensors` | `models/text_encoders/` | ~15.4 GB | all LTX 2.5 |
-| Video VAE | `ltx-2.5-video-vae-bf16.safetensors` | `ltx-2.5-video-vae-conv-bf16.safetensors` | `models/vae/` | ~1.5 GB | all LTX 2.5 |
-| Audio VAE | `ltx-2.5-audio-vae-bf16.safetensors` | — | `models/vae/` | ~365 MB | all LTX 2.5 (T2A/A2V) |
-| Spatial upscaler | `ltx-2.5-latent-spatial-upscaler-x2-bf16-1.0.safetensors` | — | `models/latent_upscale_models/` | ~1.0 GB | `ltx25_t2v_i2v_two_stage` |
-| IC-LoRA | `ltx-2.5-22b-ic-lora-ingredients-0.9.safetensors` | research stubs `ltx-2.5-ic-lora.safetensors` / `ltx-2.5-msr.safetensors` | `models/loras/` | ~1.3 GB | `ltx25_v2v_ic_lora`, `ltx25_msr` |
-
-Loader preference when several transformers exist: **GGUF Q4 → NVFP4 → int8-convrot → bf16**. GGUF files are wired to `UnetLoaderGGUF`. Official bf16 Gemma is **not** required if a working int8 / heretic TE is present.
-
-## Optional
-
-| File | Dest folder | Notes |
+| Hub path | Dest folder | Notes |
 |---|---|---|
-| `ltx-2.5-22b-distilled-lora-450-bf16.safetensors` | `models/loras/` | Distilled LoRA 450. Not required for the int8 transformer pack. |
-| `ltx-2.5-latent-temporal-upscaler-x2-bf16-1.0.safetensors` | `models/latent_upscale_models/` | Temporal 2×. |
-| `ltx-2.5-duration-head-bf16.safetensors` | `models/model_patches/` | Auto-duration patch. |
+| `loras/ltx-2.5-22b-distilled-lora-450-bf16.safetensors` | `models/loras/` | Distilled LoRA 450. |
+| `latent_upscale_models/ltx-2.5-latent-temporal-upscaler-x2-bf16-1.0.safetensors` | `models/latent_upscale_models/` | Temporal 2×. |
 | `style.safetensors` / `camera-orbit.safetensors` | `models/loras/` | Research-template placeholders. Buddy bypasses these LoRA nodes if the file is absent. |
 
 `--optional` on `download-models` fetches the official optional Hub files, not user style LoRAs.
 
 ## Stub name map (research JSON → official)
 
-| Template widget | Official filename |
+| Template widget | Official Hub filename |
 |---|---|
-| `ltx-2.5-22b-distilled.safetensors` | `ltx-2.5-22b-distilled-transformer-comfy-int8-convrot.safetensors` |
+| `ltx-2.5-22b-distilled.safetensors` | `ltx-2.5-22b-distilled-transformer-bf16.safetensors` |
 | `ltx-2.5-ic-lora.safetensors` | `ltx-2.5-22b-ic-lora-ingredients-0.9.safetensors` |
 | `ltx-2.5-msr.safetensors` | same IC-LoRA Ingredients file (no public Lightricks file named “msr”) |
 
@@ -77,7 +86,7 @@ A file dropped under the **stub** name still counts as present.
 - `EmptyLTXVLatentVideo`, `LTXVEmptyLatentAudio`, `LTXVImgToVideo`, `LTXVLatentUpsampler`, `LTXVICLoRALoader`
 - `ComfyUILTX25MSRICLoRALoader`, `ComfyUILTX25MSRMultiReferenceGuide` (MSR)
 - `VHS_VideoCombine` (VideoHelperSuite)
-- `UNETLoader`, `LTXAVTextEncoderLoader`, `CLIPTextEncode`, `KSampler`
+- `UNETLoader` / `UnetLoaderGGUF`, `LTXAVTextEncoderLoader`, `CLIPTextEncode`, `KSampler`
 
 Missing **nodes** produce a clear validator / Comfy error. Missing **weights**
 produce the ask-to-download message. Workflows stay in the default menu either way.
@@ -85,5 +94,6 @@ produce the ask-to-download message. Workflows stay in the default menu either w
 ## Scan roots
 
 Buddy looks in `MODELS_DIR`, `COMFYUI_ROOT/models`, `PROJECT_ROOT/models`,
-`PROJECT_ROOT/ComfyUI/models`, the portable Comfy tree, and `./models` relative
-to the current working directory.
+`PROJECT_ROOT/ComfyUI/models`, the portable Comfy tree, `./models` relative
+to the current working directory, and Hugging Face hub snapshots for
+`Lightricks/LTX-2.5`.

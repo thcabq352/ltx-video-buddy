@@ -272,10 +272,12 @@ MODEL_FILES: dict[str, dict[str, str]] = {
 # Official LTX 2.5 Comfy split pack (no all-in-one checkpoint key — do not
 # spray the LTX 2.3 baked EROS ckpt onto these graphs).
 _LTX25_SPLIT = {
-    "diffusion": "ltx-2.5-22b-distilled-transformer-comfy-int8-convrot.safetensors",
+    "diffusion": "ltx-2.5-22b-distilled-transformer-bf16.safetensors",
     "vae": "ltx-2.5-video-vae-bf16.safetensors",
     "audio_vae": "ltx-2.5-audio-vae-bf16.safetensors",
-    "text_encoder": "gemma4-12b-with-proj-ltx-2.5-comfy-int8-convrot.safetensors",
+    "text_encoder": "gemma4-12b-with-proj-ltx-2.5-bf16.safetensors",
+    "duration_head": "ltx-2.5-duration-head-bf16.safetensors",
+    "spatial_upscaler": "ltx-2.5-latent-spatial-upscaler-x2-bf16-1.0.safetensors",
 }
 MODEL_FILES["ltx25_t2v_i2v"] = dict(_LTX25_SPLIT)
 MODEL_FILES["ltx25_t2v_i2v_two_stage"] = {

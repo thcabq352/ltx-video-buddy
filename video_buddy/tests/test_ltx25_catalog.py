@@ -129,7 +129,7 @@ def test_stub_ckpt_remapped_to_official_transformer():
         seed=1,
         duration_s=2.0,
     )
-    official = "ltx-2.5-22b-distilled-transformer-comfy-int8-convrot.safetensors"
+    official = "ltx-2.5-22b-distilled-transformer-bf16.safetensors"
     stub = "ltx-2.5-22b-distilled.safetensors"
     dumped = str(wf)
     assert stub not in dumped

@@ -5,8 +5,9 @@ Flux t2i set (16GB-friendly fp8, non-gated repos):
   - comfyanonymous/flux_text_encoders / clip_l + t5xxl  -> models/text_encoders/
   - models/vae/ae.safetensors is expected to exist already (warn only).
 
-LTX 2.5 distilled split pack lives in ``master_agent.models.weights``.
-Never auto-download those gated files — callers must pass ``yes=True``.
+LTX 2.5 official bf16 split pack lives in ``master_agent.models.weights``
+(Hub paths under ``Lightricks/LTX-2.5``). Never auto-download those gated
+files — callers must pass ``yes=True``.
 
 Files already at their destination are skipped (SKIP). Downloads go through
 the huggingface_hub cache and are then copied into models/.

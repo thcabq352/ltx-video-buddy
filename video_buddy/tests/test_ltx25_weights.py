@@ -24,14 +24,34 @@ from master_agent.models.weights import (
 
 
 def test_official_filenames_and_stub_aliases():
-    assert WEIGHT_FILES["transformer"].filename.endswith(
-        "distilled-transformer-comfy-int8-convrot.safetensors"
+    assert WEIGHT_FILES["transformer"].repo_filename == (
+        "diffusion_models/ltx-2.5-22b-distilled-transformer-bf16.safetensors"
+    )
+    assert WEIGHT_FILES["text_encoder"].repo_filename == (
+        "text_encoders/gemma4-12b-with-proj-ltx-2.5-bf16.safetensors"
+    )
+    assert WEIGHT_FILES["duration_head"].repo_filename == (
+        "model_patches/ltx-2.5-duration-head-bf16.safetensors"
+    )
+    assert WEIGHT_FILES["spatial_upscaler"].repo_filename == (
+        "latent_upscale_models/ltx-2.5-latent-spatial-upscaler-x2-bf16-1.0.safetensors"
     )
     assert STUB_ALIASES["ltx-2.5-22b-distilled.safetensors"] == WEIGHT_FILES["transformer"].filename
     assert STUB_ALIASES["ltx-2.5-ic-lora.safetensors"] == WEIGHT_FILES["ic_lora"].filename
     assert WEIGHT_FILES["transformer"].gated is True
     assert WEIGHT_FILES["transformer"].mandatory is True
+    assert WEIGHT_FILES["duration_head"].mandatory is True
+    assert WEIGHT_FILES["spatial_upscaler"].mandatory is True
     assert WEIGHT_FILES["distilled_lora"].mandatory is False
+    for key in (
+        "transformer",
+        "text_encoder",
+        "video_vae",
+        "audio_vae",
+        "duration_head",
+        "spatial_upscaler",
+    ):
+        assert key in BUNDLES["ltx25_core"]
 
 
 def test_scan_missing_on_empty_roots(tmp_path: Path):
@@ -48,9 +68,11 @@ def test_scan_missing_on_empty_roots(tmp_path: Path):
     assert "gated" in ask.lower()
     assert "Lightricks/LTX-2.5" in ask
     assert "models/diffusion_models/" in ask
-    assert "21.5 GB" in ask
+    assert "42.0 GB" in ask
     assert "also accepted locally" in ask
     assert "Q4_K_M.gguf" in ask
+    assert "duration-head-bf16.safetensors" in ask
+    assert "latent-spatial-upscaler" in ask
 
 
 def test_scan_present_is_silent_ok(tmp_path: Path):
@@ -114,6 +136,8 @@ def test_gguf_and_heretic_te_satisfy_core(tmp_path: Path):
         "text_encoders/gemma4-12b-heretic-ltx25-int8convrot.safetensors": b"te",
         "vae/ltx-2.5-video-vae-conv-bf16.safetensors": b"vae",
         "vae/ltx-2.5-audio-vae-bf16.safetensors": b"avae",
+        "model_patches/ltx-2.5-duration-head-bf16.safetensors": b"head",
+        "latent_upscale_models/ltx-2.5-latent-spatial-upscaler-x2-bf16-1.0.safetensors": b"up",
     }
     for rel, blob in files.items():
         path = root / rel
