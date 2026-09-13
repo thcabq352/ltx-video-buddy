@@ -57,6 +57,30 @@ TOWER_LIVE_RELATED: dict[str, tuple[str, ...]] = {
 # Tower claims vs repo wiring. Prefer live exact names over the older cache.
 CAPABILITY_CATALOG: tuple[Capability, ...] = (
     Capability(
+        "ltx25_t2v",
+        "LTX 2.5 distilled T2V / I2V / FLF / MSR / A2V / T2A",
+        class_types=(
+            "LTXVLatentUpsampler",
+            "LTXVICLoRALoader",
+            "ComfyUILTX25MSRICLoRALoader",
+            "ComfyUILTX25MSRMultiReferenceGuide",
+        ),
+        surfaces=("director", "patcher", "template"),
+        templates=(
+            "ltx25_t2v_i2v",
+            "ltx25_t2v_i2v_two_stage",
+            "ltx25_flf2v",
+            "ltx25_msr",
+            "ltx25_v2v_ic_lora",
+            "ltx25_a2v",
+            "ltx25_t2a",
+        ),
+        notes=(
+            "Default catalog (PR #6). No env flag. Inventory-first loaders: "
+            "GGUF Q4 → NVFP4 (VRAM≥14) → int8-convrot → bf16."
+        ),
+    ),
+    Capability(
         "ltx_t2v",
         "LTX 2.3 T2V / I2V (base / eros / directors)",
         class_types=("EmptyLTXVLatentVideo", "LTXVEmptyLatentAudio", "LTXVConcatAVLatent"),

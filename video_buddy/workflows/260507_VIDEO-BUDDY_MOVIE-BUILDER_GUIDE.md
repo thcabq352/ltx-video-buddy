@@ -1,5 +1,8 @@
 # LTX 2.3 Movie Builder Workflow — Guide (Mickmumpitz, May 4)
 
+Movie Builder stays on **LTX 2.3**. It is **not** one of the LTX 2.5 default-catalog
+graphs (`ltx25_*`). Queue it with `python -m master_agent comfy run --mode template --template vb_movie_builder` — the director will not auto-route here. For LTX 2.5 T2V/I2V see [`ltx-2.5/README.md`](ltx-2.5/README.md).
+
 Full movie-builder pipeline in ComfyUI: every shot is its own group, every group
 pulls from one shared reference at the top of the workflow, and a final assembler
 stitches the shots into a finished cut. Swap the reference image and voice sample,

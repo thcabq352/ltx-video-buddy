@@ -1,4 +1,16 @@
-# MERGE-LTX25 — research agent → Video Buddy
+# MERGE-LTX25 — historical merge notes (PR #6, merged)
+
+**Status: merged into `main` on 2026-09-13** as
+[PR #6](https://github.com/thcabq352/ltx-video-buddy/pull/6)
+(`cursor/merge-ltx25-workflows-03bf`). Capability audit
+[PR #5](https://github.com/thcabq352/ltx-video-buddy/pull/5) landed first.
+
+This file is the merge record, not the operator manual. Current usage:
+
+- [`video_buddy/docs/QUICKSTART.md`](video_buddy/docs/QUICKSTART.md) — catalog, doctor, download-models
+- [`video_buddy/REQUIRED-FILES.md`](video_buddy/REQUIRED-FILES.md) — inventory + accepted names
+- [`video_buddy/workflows/ltx-2.5/README.md`](video_buddy/workflows/ltx-2.5/README.md) — ids + invoke
+- [`video_buddy/AUDIT.md`](video_buddy/AUDIT.md) — post-merge capability matrix
 
 Upstream reference (read-only): https://github.com/thcabq352/ltx2.5-research-agent
 

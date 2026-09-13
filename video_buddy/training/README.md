@@ -1,8 +1,13 @@
 # LoRA training (scenes & styles)
 
 Train your own **scene LoRAs** (a location, set, or lighting look) and
-**style LoRAs** (lego, claymation, pixel-art, …) for the workflows in this
-project, using [ostris/ai-toolkit](../ai-toolkit) on the local 16GB GPU.
+**style LoRAs** (lego, claymation, pixel-art, …) for the **LTX 2.3** and
+**Wan 2.2** workflows in this project, using [ostris/ai-toolkit](../ai-toolkit)
+on the local 16GB GPU.
+
+Default-catalog **LTX 2.5** graphs (`ltx25_*`) are a separate distilled
+split pack — see [`../REQUIRED-FILES.md`](../REQUIRED-FILES.md). These
+training configs still target LTX-2.3 22B and Wan 2.2 14B.
 
 ## Layout
 

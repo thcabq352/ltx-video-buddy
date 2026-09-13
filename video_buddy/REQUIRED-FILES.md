@@ -27,12 +27,38 @@ Zero-byte placeholders count as **missing**.
 
 ```bash
 cd video_buddy
-python -m master_agent doctor                 # scan only (alias of setup)
+python -m master_agent doctor                 # scan only (alias of setup) — never fetches
 python -m master_agent download-models --ltx25   # scan + print ask if needed
 # only if the scan listed confirmed-missing files:
 python -m master_agent download-models --ltx25 --yes
-python -m master_agent doctor --fix-models
+python -m master_agent doctor --fix-models    # same consent path as --yes
 ```
+
+## What `doctor` checks
+
+`python -m master_agent doctor` (`setup`) prints `OK` / `NEED` for each row.
+It does **not** download LTX weights. `setup --fix` installs venv / pip /
+Playwright / `.env` / ffmpeg / Ollama models only.
+
+| Row | Pass means |
+|---|---|
+| `python` | 3.10+ |
+| `venv` | `.venv` exists |
+| `pip` | `requirements.txt` frozen into that interpreter |
+| `playwright` | package importable |
+| `env` | `.env` present |
+| `ffmpeg` | on PATH |
+| `ollama` | on PATH and `qwen3-vl-heretic` + `nomic-embed-text` listed |
+| `comfyui` | `COMFYUI_URL` `/system_stats` reachable |
+| `ltx25-weights` | `ltx25_core` scan + loader pick (GGUF / NVFP4 / int8 / bf16) |
+
+A typical ready line looks like:
+
+`OK    ltx25-weights  GGUF Q4 (…-Q4_K_M.gguf) — 16GB-class preference #1; present (…)`
+
+A duration-head that is **0 bytes** fails this row even when every other
+slot is filled. The hint then points at `download-models --ltx25`, not
+`--fix`.
 
 Set extra trees in `.env` when weights live on another drive:
 
@@ -82,6 +108,7 @@ back to that sibling tree.
 2. Else **NVFP4** if `VRAM_GB` ≥ 14 (fits a ~16GB card)
 3. Else **int8-convrot**, then official bf16
 
+Set `VRAM_GB=12` in `.env` to skip the NVFP4 rung on a smaller card.
 Official bf16 Gemma is not required if a working int8 / heretic TE is present.
 
 Research JSON still says `ckpt_name: ltx-2.5-22b-distilled.safetensors` on
