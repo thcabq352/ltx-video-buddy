@@ -12,7 +12,7 @@ From this folder, one command on any OS:
 python install.py
 ```
 
-Windows: `install.bat`. macOS / Linux: `./install.sh`. Re-check with `python -m master_agent doctor` (alias of `setup`; **does not fetch weights**). Install missing *deps* with `--fix`. Confirmed-missing LTX 2.5 weights: `python -m master_agent download-models --ltx25` then `--yes` after you agree.
+Windows: `install.bat`. macOS / Linux: `./install.sh`. Re-check with `python -m master_agent doctor` (alias of `setup`; **does not fetch weights**). Install missing *deps* with `--fix`. Confirmed-missing LTX 2.5 weights: `python -m master_agent download-models --ltx25` then `--yes` after you agree. MiniMax H3: `python -m master_agent download-models --h3` then `--yes`.
 
 ## About
 
@@ -53,6 +53,7 @@ Drive Comfy from the CLI first. Studio `:8189` is optional.
 .\.venv\Scripts\python.exe -m master_agent diagnose --variant base --prompt "garden proof"
 .\.venv\Scripts\python.exe -m master_agent comfy run --mode generate --prompt "BRIEF" --variant base
 .\.venv\Scripts\python.exe -m master_agent comfy run --mode generate --prompt "BRIEF" --variant ltx25_t2v_i2v
+.\.venv\Scripts\python.exe -m master_agent comfy run --mode generate --prompt "BRIEF" --variant h3_t2v
 .\.venv\Scripts\python.exe -m master_agent run "BRIEF" --quality draft --duration 3 --no-interview
 .\.venv\Scripts\python.exe -m master_agent ui --port 8189
 ```
@@ -78,6 +79,7 @@ It always prepares + lints first, then queues the short fire, prints wall time a
 - **Know `sec/step` before scale.** Ada field note: 285 s/step dropped to 66.5 s/step after a lowvram / hull-sized fire. Do not climb `DOWNSCALE_LADDER` or raise frames until diagnose recorded `sec/step`.
 - **Audio field is `frames_number`** on `LTXVEmptyLatentAudio`, paired with video `length`.
 - **LTX 2.5 default catalog (PR #6, merged).** `ltx25_*` variants (and research aliases `t2v_i2v` / `flf2v` / …) are listed with no env flag. Inventory first. 16GB-class loader pick: GGUF Q4 → NVFP4 (if `VRAM_GB` ≥ 14) → int8-convrot → bf16. Heretic/int8 TE counts; official bf16 Gemma is not required. Zero-byte duration-head = missing. `doctor` reports the pick and does **not** fetch. `download-models --ltx25` lists confirmed-missing; `--yes` only after the ask.
+- **MiniMax H3 default catalog.** `h3_t2v` / `h3_i2v` / `h3_flf` (fl2va) and `h3_r2v` (ref2va). Aliases `fl2va` / `ref2va`. GGUF Q4_K DiT first, then NVFP4/int8. Prefer Comfy Qwen3-VL TE (NVFP4 AWQ / int8 / int4) — GGUF TE Q4_K_M is too heavy as default. CFG stays 1.0. 16GB sweet spot: 0.6–0.8 MP, ≤12 s, 4 steps. `download-models --h3` lists confirmed-missing; `--yes` only after the ask. Do not break LTX 2.5 / WAN paths.
 - **Missing TeaCache / LanPaint_KSampler / GetWarpedNoiseFromVideo / MMAudio* → bypass**, not a hard-fail. Do not auto-install packs. Live tower (2026-09-13, 4114 classes) registers exact `TeaCache` + `WanVideoTeaCache`. There is no `VideoNoiseWarp` class — use `GetWarpedNoiseFromVideo`. Do not bypass structural nodes (`WanFunInpaintToVideo`, `Wan22FunControlToVideo`, `IPAdapterFaceID`). WAN / K3NK / TeaCache paths were **not** rewritten by the 2.5 merge.
 - **Tracker `DONE` can lie.** Confirm with history + `ffprobe` + size/frames. Junk `<100KB` or `<3` frames is FAIL even if the tracker says done.
 - **Port-in-use ≠ kill the cook.** If `:8188` / `:8189` is already bound, do not kill a running render. Attach or wait.
@@ -129,7 +131,7 @@ Use the project venv. Prefer one file at a time for GPU-adjacent work:
 .\.venv\Scripts\python.exe -m pytest tests/test_accelerator_bypass.py -q
 .\.venv\Scripts\python.exe -m pytest tests/test_judge_split.py -q
 .\.venv\Scripts\python.exe -m pytest tests/test_shift_budget.py -q
-.\.venv\Scripts\python.exe -m pytest tests/test_ltx25_catalog.py tests/test_ltx25_weights.py tests/test_capabilities.py -q
+.\.venv\Scripts\python.exe -m pytest tests/test_ltx25_catalog.py tests/test_ltx25_weights.py tests/test_h3_catalog.py tests/test_h3_weights.py tests/test_capabilities.py -q
 ```
 
 Do not commit models, `state/runs`, Comfy portable, or sibling trees (`ltx_director/`, `SOS/`, `lot/`).

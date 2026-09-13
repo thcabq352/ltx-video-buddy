@@ -45,8 +45,8 @@ Studio `:8189` is a human dashboard on the same prepare/lint/queue path. MCP is 
 ## When to use
 
 - Local brief → storyboard → validate → render → judge → stitch
-- LTX 2.5 (`ltx25_*` / research aliases) and LTX 2.3 / Wan 2.2 / lipsync / music video / fractal / Movie Builder
-- Inventory-first weights: `doctor` (no fetch) then `download-models --ltx25` if a slot is confirmed missing
+- LTX 2.5 (`ltx25_*` / research aliases), MiniMax H3 (`h3_*` / `fl2va` / `ref2va`), and LTX 2.3 / Wan 2.2 / lipsync / music video / fractal / Movie Builder
+- Inventory-first weights: `doctor` (no fetch) then `download-models --ltx25` or `--h3` if a slot is confirmed missing
 - Drive or lint a Comfy API graph (`comfy run`)
 - Character → Flux sheet → LoRA (CCC)
 - KB search over **this** studio's workflows/runs
@@ -81,12 +81,13 @@ $PY -m master_agent workflows
 $PY -m master_agent capabilities --offline
 $PY -m master_agent comfy run --mode generate --prompt "BRIEF" --variant base
 $PY -m master_agent comfy run --mode generate --prompt "BRIEF" --variant ltx25_t2v_i2v
+$PY -m master_agent comfy run --mode generate --prompt "BRIEF" --variant h3_t2v
 $PY -m master_agent comfy run --mode template --template base --set 12.steps=8
 $PY -m master_agent comfy run --mode template --template lipsync --prepare --out prepared.json
 $PY -m master_agent comfy run --mode raw --json workflow.json
 ```
 
-Templates: slugs `base`, `eros`, `directors`, `lipsync`, `wan22`, `ltx25_t2v_i2v` (and the other `ltx25_*` / research aliases `t2v_i2v`, `flf2v`, …), or a path under `workflows/`. `--set NODE.FIELD=VALUE` is repeatable. `doctor` never downloads weights. `download-models --ltx25` lists confirmed-missing slots; add `--yes` only after the ask.
+Templates: slugs `base`, `eros`, `directors`, `lipsync`, `wan22`, `ltx25_t2v_i2v` (and the other `ltx25_*` / research aliases `t2v_i2v`, `flf2v`, …), `h3_t2v` / `h3_i2v` / `h3_flf` / `h3_r2v` (aliases `fl2va`, `ref2va`), or a path under `workflows/`. `--set NODE.FIELD=VALUE` is repeatable. `doctor` never downloads weights. `download-models --ltx25` or `--h3` lists confirmed-missing slots; add `--yes` only after the ask.
 
 ## Director and other CLI
 
@@ -121,7 +122,7 @@ Canonical skill: `skills/video-buddy/SKILL.md`. Also `~/.agents/skills/video-bud
 
 ## Verification
 
-- [ ] `python -m master_agent doctor` scanned (no unexpected NEED on ltx25-weights)
+- [ ] `python -m master_agent doctor` scanned (no unexpected NEED on ltx25-weights / h3-weights)
 - [ ] `python -m master_agent health` reports Comfy up before GPU work
 - [ ] Graph jobs used `comfy run` (or `--prepare` when only linting)
 - [ ] Output path exists under `video_buddy/outputs/` before claiming done

@@ -22,6 +22,11 @@ You route a video generation request to the best workflow variant.
 - `ltx25_v2v_ic_lora` — video-to-video IC-LoRA.
 - `ltx25_a2v` — audio-to-video (needs source audio).
 - `ltx25_t2a` — text-to-audio only.
+- `h3_t2v` — MiniMax H3 fl2va text-to-AV (native stereo). Prefer when the
+  request names MiniMax / H3 / fl2va or wants native stereo audio.
+- `h3_i2v` — MiniMax H3 fl2va image-to-AV (first frame).
+- `h3_flf` — MiniMax H3 fl2va first + last frame.
+- `h3_r2v` — MiniMax H3 ref2va reference-to-AV (identity / motion / voice).
 
 ## Rules
 - Pick exactly one of the allowed variants.

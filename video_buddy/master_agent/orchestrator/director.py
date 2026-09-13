@@ -19,6 +19,10 @@ from master_agent.config import DIRECTOR_LLM, WORKFLOW_FILES
 _VARIANT_KEYWORDS = [
     ("lipsync", ("lip-sync", "lipsync", "lip sync", "lipdub", "dub")),
     ("wan22", ("wan 2.2", "wan2.2", "wan22", "photoreal", "photo-real", "stock photo", "film grain")),
+    ("h3_r2v", ("ref2va", "h3 r2v", "h3_r2v", "reference-to-video", "minimax r2v", "minimax reference")),
+    ("h3_flf", ("h3 flf", "h3_flf", "minimax first-last", "minimax flf")),
+    ("h3_i2v", ("h3 i2v", "h3_i2v", "minimax i2v", "minimax image-to-video")),
+    ("h3_t2v", ("minimax h3", "minimax-h3", "minimax_h3", "fl2va", "h3 t2v", "h3_t2v", "native stereo")),
     ("ltx25_flf2v", ("flf2v", "first-last", "first last frame", "last frame", "start and end frame")),
     ("ltx25_msr", ("multi-reference", "multi reference", "msr", "pic1", "reference sheet")),
     ("ltx25_v2v_ic_lora", ("ic-lora", "iclora", "ic lora", "video-to-video", "v2v")),

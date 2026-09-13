@@ -11,11 +11,13 @@ machine, and a heuristic + LLM judge loop.
   `XAI_API_KEY`). Claude is an optional storyboard panel member
   (`ANTHROPIC_API_KEY`).
 - **Models:** LTX 2.5 distilled split pack (GGUF / NVFP4 / int8 / bf16) plus
-  existing LTX 2.3 / Wan / Flux weights under `models/` — see
-  [`REQUIRED-FILES.md`](REQUIRED-FILES.md) and [`models/README.md`](models/README.md).
-  16GB RTX 5060 Ti profile (`VRAM_GB` default 16).
+  MiniMax H3 (GGUF Q4_K DiT + Comfy TE / VAEs) and existing LTX 2.3 / Wan /
+  Flux weights under `models/` — see [`REQUIRED-FILES.md`](REQUIRED-FILES.md)
+  and [`models/README.md`](models/README.md). 16GB RTX 5060 Ti profile
+  (`VRAM_GB` default 16).
 - **Workflows:** default catalog under `workflows/` including
-  `workflows/ltx-2.5/` (seven LTX 2.5 API graphs, no experimental flags)
+  `workflows/ltx-2.5/` (seven LTX 2.5 API graphs) and `workflows/minimax-h3/`
+  (fl2va T2V/I2V/FLF + ref2va R2V). No experimental flags.
 
 ## Install (Windows / macOS / Linux)
 
@@ -72,10 +74,10 @@ Hybrid page scrape lives in `master_agent/scrape`: httpx first, Playwright+steal
 - **ai-toolkit** (LoRA training only) — separate clone + own venv, set up with
   `python -m master_agent lora setup`. The project venv is untouched.
 - **Model weights** (not in git). **Scan local first** — do not assume a
-  download. `python -m master_agent doctor` reports the LTX 2.5 loader pick
-  and does **not** fetch. `python -m master_agent download-models --ltx25`
-  lists confirmed-missing / zero-byte slots; add `--yes` only after you
-  agree. Legacy Mickmumpitz / LTX 2.3 packs: `python state/download_models.py`
+  download. `python -m master_agent doctor` reports the LTX 2.5 and H3
+  loader picks and does **not** fetch. `python -m master_agent download-models --ltx25`
+  or `--h3` lists confirmed-missing / zero-byte slots; add `--yes` only after
+  you agree. Legacy Mickmumpitz / LTX 2.3 packs: `python state/download_models.py`
   (idempotent). Neither path is part of `install.py`. See
   [`docs/QUICKSTART.md`](docs/QUICKSTART.md).
 

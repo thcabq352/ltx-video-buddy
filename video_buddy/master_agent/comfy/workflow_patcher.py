@@ -13,13 +13,21 @@ import yaml
 from master_agent.config import (
     DEFAULT_CFG,
     DEFAULT_STEPS,
+    H3_DEFAULT_CFG,
+    H3_DEFAULT_HEIGHT,
+    H3_DEFAULT_STEPS,
+    H3_DEFAULT_WIDTH,
+    H3_MAX_DURATION_S,
     MODELS_DIR,
     MODEL_FILES,
     WORKFLOWS_DIR,
+    clamp_h3_resolution,
     clamp_resolution,
     frames_for_duration,
     get_variant_gen,
+    is_h3_variant,
     resolve_model_path,
+    snap_h3_frames,
     snap_ltx_frames,
 )
 
@@ -378,6 +386,71 @@ def _rewrite_ltx25_checkpoint_loader(workflow: dict[str, Any]) -> None:
                     inputs[key] = [te_id, 0]
 
 
+def _resolved_h3_names(bundle: str) -> tuple[str, str, str, str]:
+    """H3 16GB-class pick: GGUF Q4_K DiT + Comfy TE + official VAEs."""
+    from master_agent.models.weights import WEIGHT_FILES, resolve_weight
+
+    dit_key = "h3_ref2va" if bundle == "h3_ref2va" else "h3_fl2va"
+    dit = WEIGHT_FILES[dit_key]
+    te = WEIGHT_FILES["h3_text_encoder"]
+    vvae = WEIGHT_FILES["h3_video_vae"]
+    avae = WEIGHT_FILES["h3_audio_vae"]
+    local_dit = resolve_weight(dit)
+    local_te = resolve_weight(te)
+    local_vvae = resolve_weight(vvae)
+    local_avae = resolve_weight(avae)
+    return (
+        local_dit.name if local_dit is not None else dit.filename,
+        local_te.name if local_te is not None else te.filename,
+        local_vvae.name if local_vvae is not None else vvae.filename,
+        local_avae.name if local_avae is not None else avae.filename,
+    )
+
+
+def _set_h3_dit_loader(node: dict[str, Any], filename: str) -> None:
+    if filename.lower().endswith(".gguf"):
+        node["class_type"] = "UnetLoaderGGUF"
+        node["inputs"] = {"unet_name": filename}
+    else:
+        node["class_type"] = "UNETLoader"
+        node["inputs"] = {"unet_name": filename, "weight_dtype": "default"}
+    node.setdefault("_meta", {})["title"] = "MiniMax H3 Transformer"
+
+
+def _set_h3_clip_loader(node: dict[str, Any], filename: str) -> None:
+    if filename.lower().endswith(".gguf"):
+        node["class_type"] = "CLIPLoaderGGUF"
+        node["inputs"] = {"clip_name": filename, "type": "minimax"}
+    else:
+        node["class_type"] = "CLIPLoader"
+        node["inputs"] = {"clip_name": filename, "type": "minimax"}
+    node.setdefault("_meta", {})["title"] = "H3 Qwen3-VL TE"
+
+
+def _apply_local_h3_weights(workflow: dict[str, Any], bundle: str) -> None:
+    dit_name, te_name, video_vae, audio_vae = _resolved_h3_names(bundle)
+    for class_type in ("UNETLoader", "UnetLoaderGGUF", "DiffusionModelLoader"):
+        for _nid, node in _find_nodes_by_class(workflow, class_type):
+            inputs = node.get("inputs") or {}
+            current = inputs.get("unet_name") or inputs.get("ckpt_name") or ""
+            if isinstance(current, str) and "minimax_h3" in current.lower():
+                _set_h3_dit_loader(node, dit_name)
+    for class_type in ("CLIPLoader", "CLIPLoaderGGUF"):
+        for _nid, node in _find_nodes_by_class(workflow, class_type):
+            inputs = node.get("inputs") or {}
+            current = inputs.get("clip_name") or ""
+            if isinstance(current, str) and "minimax_h3" in current.lower():
+                _set_h3_clip_loader(node, te_name)
+    for _nid, node in _find_nodes_by_class(workflow, "VAELoader"):
+        title = str((node.get("_meta") or {}).get("title") or "").lower()
+        inputs = node.get("inputs") or {}
+        current = str(inputs.get("vae_name") or "")
+        if "audio" in title or "audio_vae" in current.lower():
+            _set_input(node, "vae_name", audio_vae)
+        elif "video" in title or "minimax_h3_video" in current.lower() or "video_vae" in current.lower():
+            _set_input(node, "vae_name", video_vae)
+
+
 def _apply_local_ltx25_weights(workflow: dict[str, Any]) -> None:
     """Prefer a local GGUF / NVFP4 / int8 / heretic TE when one is already present."""
     transformer_name, te_name = _resolved_ltx25_names()
@@ -598,6 +671,16 @@ def _heuristic_patch(workflow: dict[str, Any], values: dict[str, Any]) -> None:
                 _set_input(node, "frames_number", int(paired))
                 if values.get("fps"):
                     _set_input(node, "frame_rate", int(values.get("fps") or 24))
+        for class_type in ("MiniMaxH3ImageToVideo", "MiniMaxH3ReferenceToVideo"):
+            for _nid, node in _find_nodes_by_class(workflow, class_type):
+                if prompt is not None:
+                    _set_input(node, "prompt", prompt)
+                if width is not None:
+                    _set_input(node, "width", width)
+                if height is not None:
+                    _set_input(node, "height", height)
+                if frames is not None:
+                    _set_input(node, "length", int(frames))
         for class_type in ("LTXVImgToVideo", "LTXVConditioning"):
             for _nid, node in _find_nodes_by_class(workflow, class_type):
                 if values.get("fps") and class_type == "LTXVConditioning":
@@ -712,6 +795,10 @@ def _heuristic_patch(workflow: dict[str, Any], values: dict[str, Any]) -> None:
 
     if vae_name:
         for _nid, node in _find_nodes_by_class(workflow, "VAELoader"):
+            title = str((node.get("_meta") or {}).get("title") or "").lower()
+            current = str((node.get("inputs") or {}).get("vae_name") or "")
+            if "audio" in title or "audio_vae" in current.lower():
+                continue
             _set_input(node, "vae_name", vae_name)
 
     if lora:
@@ -808,20 +895,43 @@ def load_and_patch_workflow(
     """
     Returns (workflow_api_dict, meta) where meta has resolved generation params.
     """
-    width, height = clamp_resolution(width, height, quality="flux" if variant == "flux" else None)
+    h3 = is_h3_variant(variant)
+    if h3:
+        if width == 768 and height == 512:
+            width, height = H3_DEFAULT_WIDTH, H3_DEFAULT_HEIGHT
+        width, height = clamp_h3_resolution(width, height)
+    else:
+        width, height = clamp_resolution(width, height, quality="flux" if variant == "flux" else None)
     gen = get_variant_gen(variant)
     if frames is None:
-        frames = frames_for_duration(duration_s, fps=gen["fps"], snap=gen["frame_snap"])
+        frames = frames_for_duration(
+            duration_s,
+            fps=gen["fps"],
+            snap=gen["frame_snap"],
+            max_s=H3_MAX_DURATION_S if h3 else None,
+        )
     else:
         frames = int(frames)
-    if int(gen["frame_snap"]) == 8:
+    if h3 or int(gen["frame_snap"]) == 17:
+        frames = snap_h3_frames(frames)
+    elif int(gen["frame_snap"]) == 8:
         frames = snap_ltx_frames(frames)
     if seed is None:
         seed = random.randint(0, 2**32 - 1)
-    steps = steps if steps is not None else DEFAULT_STEPS
-    cfg = cfg if cfg is not None else DEFAULT_CFG
+    if h3:
+        steps = steps if steps is not None else H3_DEFAULT_STEPS
+        cfg = H3_DEFAULT_CFG
+    else:
+        steps = steps if steps is not None else DEFAULT_STEPS
+        cfg = cfg if cfg is not None else DEFAULT_CFG
 
-    models = MODEL_FILES.get(variant) or MODEL_FILES["base"]
+    try:
+        from master_agent.comfy.catalog import H3_ALIASES, RESEARCH_ALIASES
+
+        resolved_id = H3_ALIASES.get(variant, RESEARCH_ALIASES.get(variant, variant))
+    except Exception:
+        resolved_id = variant
+    models = MODEL_FILES.get(resolved_id) or MODEL_FILES.get(variant) or MODEL_FILES["base"]
     preferred = models.get("checkpoint") or models.get("diffusion")
     # Variants with no single all-in-one checkpoint (e.g. wan22's dual UNETs)
     # must not get a fallback LTX ckpt sprayed onto their loaders.
@@ -884,13 +994,16 @@ def load_and_patch_workflow(
 
     _apply_named_fields(workflow, field_map, values)
     _remap_stub_filenames(workflow)
-    from master_agent.models.weights import bundle_for_variant
+    from master_agent.models.weights import bundle_for_variant, is_h3_bundle, is_ltx25_bundle
 
-    if bundle_for_variant(variant):
+    bundle = bundle_for_variant(variant)
+    if is_ltx25_bundle(bundle):
         _rewrite_ltx25_checkpoint_loader(workflow)
     _heuristic_patch(workflow, values)
-    if bundle_for_variant(variant):
+    if is_ltx25_bundle(bundle):
         _apply_local_ltx25_weights(workflow)
+    if is_h3_bundle(bundle):
+        _apply_local_h3_weights(workflow, bundle or "h3_fl2va")
     if loras:
         _apply_typed_loras(workflow, loras)
     if multi_ref:

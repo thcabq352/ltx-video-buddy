@@ -164,7 +164,27 @@ VARIANT_GEN: dict[str, dict[str, int]] = {
     "ltx25_v2v_ic_lora": {"fps": 24, "frame_snap": 8},
     "ltx25_a2v": {"fps": 24, "frame_snap": 8},
     "ltx25_t2a": {"fps": 24, "frame_snap": 8},
+    "h3_t2v": {"fps": 24, "frame_snap": 17},
+    "h3_i2v": {"fps": 24, "frame_snap": 17},
+    "h3_flf": {"fps": 24, "frame_snap": 17},
+    "h3_r2v": {"fps": 24, "frame_snap": 17},
+    "fl2va": {"fps": 24, "frame_snap": 17},
+    "h3_fl2va": {"fps": 24, "frame_snap": 17},
+    "ref2va": {"fps": 24, "frame_snap": 17},
+    "h3_ref2va": {"fps": 24, "frame_snap": 17},
 }
+
+# MiniMax H3 16GB-class defaults (0.6–0.8 MP, ≤12s, 4 steps, CFG 1.0).
+H3_DEFAULT_WIDTH = 1152
+H3_DEFAULT_HEIGHT = 640
+H3_DEFAULT_STEPS = 4
+H3_DEFAULT_CFG = 1.0
+H3_MAX_DURATION_S = 12.0
+H3_MAX_MP = 0.8
+H3_FRAME_STEP = 17
+H3_FRAME_OFFSET = 5
+H3_MIN_FRAMES = 5
+H3_DEFAULT_FRAMES = 124  # ~5s at 24 fps (17*7+5)
 _DEFAULT_GEN = {"fps": DEFAULT_FPS, "frame_snap": 8}
 
 
@@ -310,6 +330,28 @@ MODEL_FILES["ltx25_msr"] = {
     "lora": "ltx-2.5-22b-ic-lora-ingredients-0.9.safetensors",
 }
 
+_H3_SPLIT = {
+    "text_encoder": "qwen3vl_32b_minimax_h3_nvfp4_awq.safetensors",
+    "vae": "minimax_h3_video_vae_fp16.safetensors",
+    "audio_vae": "minimax_h3_audio_vae_fp32.safetensors",
+}
+MODEL_FILES["h3_t2v"] = {
+    **_H3_SPLIT,
+    "diffusion": "minimax_h3_fl2va_pruned-Q4_K.gguf",
+    "lora": "minimax_h3_fl2v_turbo_4step_v1.0_768p_comfyui_bf16.safetensors",
+}
+MODEL_FILES["h3_i2v"] = dict(MODEL_FILES["h3_t2v"])
+MODEL_FILES["h3_flf"] = dict(MODEL_FILES["h3_t2v"])
+MODEL_FILES["h3_r2v"] = {
+    **_H3_SPLIT,
+    "diffusion": "minimax_h3_ref2va_pruned-Q4_K.gguf",
+    "lora": "minimax_h3_ref2v_turbo_4step_v0.1_comfyui_bf16.safetensors",
+}
+MODEL_FILES["fl2va"] = dict(MODEL_FILES["h3_t2v"])
+MODEL_FILES["h3_fl2va"] = dict(MODEL_FILES["h3_t2v"])
+MODEL_FILES["ref2va"] = dict(MODEL_FILES["h3_r2v"])
+MODEL_FILES["h3_ref2va"] = dict(MODEL_FILES["h3_r2v"])
+
 # Soft requirements: missing these warn but do not fail preflight hard-count alone
 MODEL_OPTIONAL_KEYS = frozenset({"diffusion", "checkpoint"})
 
@@ -375,6 +417,10 @@ WORKFLOW_FILES: dict[str, str] = {
     "ltx25_v2v_ic_lora": "ltx-2.5/LTX-2.5_V2V_ICLoRA_Single_Stage_Distilled_api.json",
     "ltx25_a2v": "ltx-2.5/LTX-2.5_A2V_Two_Stage_Distilled_api.json",
     "ltx25_t2a": "ltx-2.5/LTX-2.5_T2A_Single_Stage_Distilled_api.json",
+    "h3_t2v": "minimax-h3/MiniMax-H3_T2V_FL2VA_api.json",
+    "h3_i2v": "minimax-h3/MiniMax-H3_I2V_FL2VA_api.json",
+    "h3_flf": "minimax-h3/MiniMax-H3_FLF_FL2VA_api.json",
+    "h3_r2v": "minimax-h3/MiniMax-H3_R2V_REF2VA_api.json",
 }
 
 
@@ -392,6 +438,7 @@ def resolve_model_path(filename: str) -> Path | None:
     subdirs = (
         "checkpoints",
         "diffusion_models",
+        "diffusion_models/gguf",
         "loras",
         "vae",
         "text_encoders",
@@ -422,6 +469,42 @@ def is_valid_ltx_frames(n: int) -> bool:
     except (TypeError, ValueError):
         return False
     return frames >= 9 and (frames - 1) % 8 == 0
+
+
+def is_h3_variant(variant: str | None) -> bool:
+    key = (variant or "").strip().lower()
+    if not key:
+        return False
+    if key in {"h3_t2v", "h3_i2v", "h3_flf", "h3_r2v", "fl2va", "ref2va", "h3", "minimax", "minimax_h3", "h3_fl2va", "h3_ref2va"}:
+        return True
+    return key.startswith("h3") or "minimax" in key or "fl2va" in key or "ref2va" in key or "/minimax-h3/" in key
+
+
+def snap_h3_frames(n: int) -> int:
+    """Nearest valid MiniMax H3 frame count (17k+5), minimum 5."""
+    try:
+        raw = int(n)
+    except (TypeError, ValueError):
+        return H3_DEFAULT_FRAMES
+    if raw <= H3_MIN_FRAMES:
+        return H3_MIN_FRAMES
+    k = max(0, round((raw - H3_FRAME_OFFSET) / H3_FRAME_STEP))
+    return k * H3_FRAME_STEP + H3_FRAME_OFFSET
+
+
+def clamp_h3_resolution(width: int, height: int) -> tuple[int, int]:
+    """Keep H3 on a 32px grid and under the 16GB ~0.8 MP sweet spot."""
+    w = max(int(width), 256)
+    h = max(int(height), 256)
+    w = (w // 32) * 32
+    h = (h // 32) * 32
+    w = max(w, 256)
+    h = max(h, 256)
+    if (w * h) / 1_000_000.0 > H3_MAX_MP:
+        scale = (H3_MAX_MP * 1_000_000.0 / float(w * h)) ** 0.5
+        w = max(256, int(w * scale) // 32 * 32)
+        h = max(256, int(h * scale) // 32 * 32)
+    return w, h
 
 
 def snap_ltx_frames(n: int) -> int:

@@ -81,6 +81,17 @@ CAPABILITY_CATALOG: tuple[Capability, ...] = (
         ),
     ),
     Capability(
+        "h3_t2v",
+        "MiniMax H3 omni T2V / I2V / FLF / R2V (native stereo)",
+        class_types=("MiniMaxH3ImageToVideo", "MiniMaxH3ReferenceToVideo", "UnetLoaderGGUF"),
+        surfaces=("director", "patcher", "template"),
+        templates=("h3_t2v", "h3_i2v", "h3_flf", "h3_r2v"),
+        notes=(
+            "Default catalog. fl2va = t2v/i2v/flf, ref2va = r2v. "
+            "16GB pick: GGUF Q4_K DiT + Comfy TE (NVFP4/int8). CFG stays 1.0."
+        ),
+    ),
+    Capability(
         "ltx_t2v",
         "LTX 2.3 T2V / I2V (base / eros / directors)",
         class_types=("EmptyLTXVLatentVideo", "LTXVEmptyLatentAudio", "LTXVConcatAVLatent"),

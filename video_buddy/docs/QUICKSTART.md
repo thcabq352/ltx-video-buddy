@@ -9,12 +9,14 @@ python install.py                         # once: venv, pip, Playwright, .env, f
 python -m master_agent doctor             # scan only — never fetches weights
 python -m master_agent workflows          # default catalog (includes ltx25_*)
 python -m master_agent download-models --ltx25   # list confirmed-missing; add --yes only then
+python -m master_agent download-models --h3      # MiniMax H3 confirmed-missing; add --yes only then
 ```
 
 ## 1. Default catalog (no experimental flags)
 
 `python -m master_agent workflows` prints every default variant. The seven
-LTX 2.5 graphs are always listed, even if tower nodes or weights are missing.
+LTX 2.5 graphs and the four MiniMax H3 graphs are always listed, even if
+tower nodes or weights are missing.
 
 | Buddy id | Research alias | What it does |
 |---|---|---|
@@ -25,6 +27,10 @@ LTX 2.5 graphs are always listed, even if tower nodes or weights are missing.
 | `ltx25_v2v_ic_lora` | `v2v_ic_lora` | Video-to-video IC-LoRA |
 | `ltx25_a2v` | `a2v` | Audio-to-video (needs `--audio` / LoadAudio) |
 | `ltx25_t2a` | `t2a` | Text-to-audio only |
+| `h3_t2v` | `fl2va` | MiniMax H3 fl2va text-to-AV (native stereo) |
+| `h3_i2v` | — | MiniMax H3 fl2va image-to-AV |
+| `h3_flf` | — | MiniMax H3 fl2va first + last frame |
+| `h3_r2v` | `ref2va` | MiniMax H3 ref2va reference-to-AV |
 
 Existing director paths stay on the same CLI: `base`, `eros`, `directors`,
 `lipsync`, `wan22`. Manifest slugs (`vb_movie_builder`, `vb_aivfx_adv`,
@@ -45,6 +51,11 @@ python -m master_agent run "interpolate these frames" --variant flf2v --image st
 
 # research aliases resolve without an env flag
 python -m master_agent comfy run --mode generate --variant t2v_i2v --prompt "x" --prepare
+
+# MiniMax H3 (CFG 1.0, 4 steps, 0.6–0.8 MP / ≤12s on 16GB)
+python -m master_agent comfy run --mode generate --variant h3_t2v --prompt "neon rain, stereo city bed"
+python -m master_agent comfy run --mode generate --variant fl2va --prompt "x" --prepare
+python -m master_agent run "lock this face" --variant h3_r2v --image ref.png --no-interview
 
 # still-working LTX 2.3 / Wan
 python -m master_agent comfy run --mode generate --variant base --prompt "a test shot"
@@ -91,6 +102,7 @@ weights.
 | `ollama` | on PATH + `qwen3-vl-heretic` and `nomic-embed-text` pulled |
 | `comfyui` | `COMFYUI_URL` (`http://127.0.0.1:8188`) answers `/system_stats` |
 | `ltx25-weights` | scan of the `ltx25_core` bundle + **loader pick** |
+| `h3-weights` | scan of the `h3_fl2va` bundle + **loader pick** |
 
 The `ltx25-weights` line prints the 16GB-class pick, for example
 `GGUF Q4 (ltx-2.5-22b-distilled-transformer-bf16-Q4_K_M.gguf) — 16GB-class preference #1`.
@@ -125,8 +137,10 @@ python -m master_agent download-models --ltx25 --json
 ```
 
 `--ltx25` is the default bundle family (`ltx25_all` when `--ltx25` is set).
-Bundles: `ltx25_core` | `ltx25_two_stage` | `ltx25_iclora` | `ltx25_msr` |
-`ltx25_all`. IC-LoRA / MSR also need the Ingredients (or pixel-spatial) LoRA.
+`--h3` selects `h3_all` (fl2va + ref2va GGUF, Comfy TE, both VAEs). Bundles:
+`ltx25_core` | `ltx25_two_stage` | `ltx25_iclora` | `ltx25_msr` | `ltx25_all`
+| `h3_fl2va` | `h3_ref2va` | `h3_all`. IC-LoRA / MSR also need the Ingredients
+(or pixel-spatial) LoRA.
 
 Requires `HF_TOKEN` / `huggingface-cli login` with access to the gated repos.
 See [`../REQUIRED-FILES.md`](../REQUIRED-FILES.md).
@@ -158,6 +172,7 @@ class does not become a queued graph. Expected post-merge shape:
 | Capability | In Buddy? | How to invoke |
 |---|---|---|
 | LTX 2.5 distilled family | **yes** | `--variant ltx25_*` / research aliases |
+| MiniMax H3 fl2va / ref2va | **yes** | `--variant h3_t2v` / `h3_i2v` / `h3_flf` / `h3_r2v` |
 | LTX 2.3 T2V/I2V | **yes** | `--variant base` / `eros` / `directors` |
 | LTX lipsync | **yes** | `--video` or `--variant lipsync` |
 | Wan 2.2 T2V (native UNET) | **yes** | `--variant wan22` |

@@ -77,6 +77,10 @@ class TestHealth(unittest.TestCase):
             "ltx25_v2v_ic_lora",
             "ltx25_a2v",
             "ltx25_t2a",
+            "h3_t2v",
+            "h3_i2v",
+            "h3_flf",
+            "h3_r2v",
         ):
             self.assertIn(vid, ids)
 

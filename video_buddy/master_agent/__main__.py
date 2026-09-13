@@ -14,8 +14,8 @@ Commands:
   character create|list   CCC stage: bible -> Flux sheet -> captioned dataset
   lora setup|train|validate  Flux LoRA training via ai-toolkit + vision validation
   download-flux       One-time Flux fp8 weights download (~17GB)
-  download-models     Scan LTX 2.5 weights; download missing only with --yes
-  setup | doctor      Scan local deps + LTX 2.5 weights (--fix-models after you agree)
+  download-models     Scan LTX 2.5 / MiniMax H3 weights; download missing only with --yes
+  setup | doctor      Scan local deps + LTX 2.5 / H3 weights (--fix-models after you agree)
   workflows           List default catalog variants (no env flags)
   comfy run           Drive ComfyUI from the CLI (prepare + lint + queue)
   diagnose            9-frame hull fire (sec/step); does not spend shift budget
@@ -613,16 +613,21 @@ def cmd_download_flux(args: argparse.Namespace) -> int:
 
 
 def cmd_download_models(args: argparse.Namespace) -> int:
-    """Scan first; download missing LTX 2.5 weights only after --yes."""
+    """Scan first; download missing LTX 2.5 / H3 weights only after --yes."""
     from master_agent.models.weights import (
         MissingWeightsError,
         download_missing_bundle,
         scan_bundle,
     )
 
-    bundle = "ltx25_all" if args.ltx25 else "ltx25_core"
     if args.bundle:
         bundle = args.bundle
+    elif args.h3:
+        bundle = "h3_all"
+    elif args.ltx25:
+        bundle = "ltx25_all"
+    else:
+        bundle = "ltx25_core"
     status = scan_bundle(bundle)
     print(json.dumps(status.to_dict(), indent=1) if args.json else (
         "OK    all required weights present" if status.ok else status.to_dict()["ask"]
@@ -1168,10 +1173,14 @@ def main(argv: list[str] | None = None) -> int:
 
     p = sub.add_parser(
         "download-models",
-        help="scan LTX 2.5 weights; download missing only with --yes (never auto)",
+        help="scan LTX 2.5 or MiniMax H3 weights; download missing only with --yes (never auto)",
     )
     p.add_argument("--ltx25", action="store_true", default=True, help="LTX 2.5 distilled split pack (default)")
-    p.add_argument("--bundle", help="weight bundle id (ltx25_core|ltx25_two_stage|ltx25_iclora|ltx25_msr|ltx25_all)")
+    p.add_argument("--h3", action="store_true", help="MiniMax H3 GGUF + Comfy TE/VAE pack")
+    p.add_argument(
+        "--bundle",
+        help="weight bundle id (ltx25_core|ltx25_two_stage|ltx25_iclora|ltx25_msr|ltx25_all|h3_fl2va|h3_ref2va|h3_all)",
+    )
     p.add_argument("--yes", action="store_true", help="consent: download the missing mandatory set")
     p.add_argument("--optional", action="store_true", help="also fetch optional Hub files (distilled LoRA 450, temporal upscaler)")
     p.add_argument("--json", action="store_true")
