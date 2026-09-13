@@ -87,7 +87,7 @@ $PY -m master_agent comfy run --mode template --template lipsync --prepare --out
 $PY -m master_agent comfy run --mode raw --json workflow.json
 ```
 
-Templates: slugs `base`, `eros`, `directors`, `lipsync`, `wan22`, `ltx25_t2v_i2v` (and the other `ltx25_*` / research aliases `t2v_i2v`, `flf2v`, …), `h3_t2v` / `h3_i2v` / `h3_flf` / `h3_r2v` (aliases `fl2va`, `ref2va`), or a path under `workflows/`. `--set NODE.FIELD=VALUE` is repeatable. `doctor` never downloads weights. `download-models --ltx25` or `--h3` lists confirmed-missing slots; add `--yes` only after the ask.
+Templates: every `workflows/manifests.yaml` slug is director-routable and resolves for `comfy run --template` (`base`, `eros`, `directors`, `lipsync`, `wan22`, `flux`, `vb_aivfx_adv`, `vb_movie_builder`, every `ltx25_*` / research aliases `t2v_i2v`, `flf2v`, …, `h3_t2v` / `h3_i2v` / `h3_flf` / `h3_r2v` with aliases `fl2va`, `ref2va`, or a path under `workflows/`). `--set NODE.FIELD=VALUE` is repeatable. `doctor` never downloads weights. `download-models --ltx25` or `--h3` lists confirmed-missing slots; add `--yes` only after the ask. Large CCC / renderer graphs without a field map queue baked widgets — prefer `--template` for those.
 
 ## Director and other CLI
 

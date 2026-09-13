@@ -32,9 +32,11 @@ tower nodes or weights are missing.
 | `h3_flf` | — | MiniMax H3 fl2va first + last frame |
 | `h3_r2v` | `ref2va` | MiniMax H3 ref2va reference-to-AV |
 
-Existing director paths stay on the same CLI: `base`, `eros`, `directors`,
-`lipsync`, `wan22`. Manifest slugs (`vb_movie_builder`, `vb_aivfx_adv`,
-`flux`, …) resolve for `comfy run --template` without expanding the director.
+The director allowlist is every `workflows/manifests.yaml` slug (derived in
+`load_workflow_files()`). Rules + LLM can pick `base`, `eros`, `directors`,
+`lipsync`, `wan22`, `flux`, `vb_aivfx_*`, `vb_movie_builder`, CCC / renderer /
+dataset / H3 / every `ltx25_*`. `comfy run --template <slug>` is still the
+precision path for large graphs that queue with baked leftover widgets.
 
 ### Invoke
 
@@ -179,7 +181,7 @@ class does not become a queued graph. Expected post-merge shape:
 | K3NK WAN 2.2 AIO I2V | **no** | Not in `MODEL_FILES` / no graph |
 | WanVideoWrapper / Fun Inpaint / Fun Control | **no** (graphs) | Catalog / fail-closed |
 | TeaCache / `WanVideoTeaCache` | **bypass** | Missing node → WARNING + rewire; **not** inject |
-| Movie Builder / AI-VFX / CCC | **partial** | `comfy run --template vb_movie_builder` (not director-routed) |
+| Movie Builder / AI-VFX / CCC | **yes** | Director keywords (`vfx`, `movie builder`, `ccc`) or `--variant` / `--template`. CCC ADV queues baked widgets. |
 | CPU fractal | **yes** | `python -m master_agent fractal` (not Comfy Voronoi/Perlin) |
 | SeedVR2 | **yes (post)** | `--upscale seedvr2` |
 

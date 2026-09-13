@@ -399,11 +399,10 @@ MUSIC_DEFAULTS: dict[str, Any] = {
     "low_energy_s": 4.0,
 }
 
-# Director-routable variants only. Template slugs for `comfy run --template`
-# also resolve from workflows/manifests.yaml (see cli_run.resolve_template).
-# Keep this allowlist tight — expanding it lets the director LLM queue
-# 500-node VFX/CCC graphs that the patcher cannot safely parameterize.
-WORKFLOW_FILES: dict[str, str] = {
+# Historical seeds — used only if manifests.yaml is missing (broken checkout).
+# Live director allowlist is derived from workflows/manifests.yaml so every
+# shipped slug stays choosable (rules + LLM). Do not hand-duplicate slugs here.
+_WORKFLOW_FILE_SEEDS: dict[str, str] = {
     "base": "base_t2v_i2v.json",
     "eros": "eros_t2v_i2v.json",
     "directors": "directors.json",
@@ -422,6 +421,41 @@ WORKFLOW_FILES: dict[str, str] = {
     "h3_flf": "minimax-h3/MiniMax-H3_FLF_FL2VA_api.json",
     "h3_r2v": "minimax-h3/MiniMax-H3_R2V_REF2VA_api.json",
 }
+
+
+def load_manifest_workflow_files(workflows_dir: Path | None = None) -> dict[str, str]:
+    """Slug → relative JSON path from ``workflows/manifests.yaml``."""
+    root = Path(workflows_dir or WORKFLOWS_DIR)
+    path = root / "manifests.yaml"
+    if not path.is_file():
+        return {}
+    try:
+        import yaml
+
+        with path.open(encoding="utf-8") as f:
+            data = yaml.safe_load(f) or {}
+    except Exception:
+        return {}
+    out: dict[str, str] = {}
+    if not isinstance(data, dict):
+        return out
+    for slug, meta in data.items():
+        if not isinstance(meta, dict):
+            continue
+        filename = meta.get("file")
+        if isinstance(filename, str) and filename.strip():
+            out[str(slug)] = filename.replace("\\", "/")
+    return out
+
+
+def load_workflow_files(workflows_dir: Path | None = None) -> dict[str, str]:
+    """Director-routable variants: every manifests.yaml slug plus legacy seeds."""
+    files = dict(_WORKFLOW_FILE_SEEDS)
+    files.update(load_manifest_workflow_files(workflows_dir))
+    return files
+
+
+WORKFLOW_FILES: dict[str, str] = load_workflow_files()
 
 
 def ensure_dirs() -> None:

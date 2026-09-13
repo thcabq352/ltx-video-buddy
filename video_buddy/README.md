@@ -178,8 +178,10 @@ WAN 2.2 (`wan22`), lipsync, TeaCache soft-bypass, and Movie Builder
 ```bash
 python -m master_agent capabilities --offline
 python -m master_agent capabilities --json
-# Director allowlist includes base, eros, directors, lipsync, wan22, flux,
-# and every ltx25_* id. object_info is validation + this probe — not graph synthesis.
+# Director allowlist is every workflows/manifests.yaml slug (derived, not
+# hand-copied): base, eros, directors, lipsync, wan22, flux, vb_aivfx_*,
+# vb_movie_builder, every ltx25_* / h3_* id, plus CCC / renderer / air_*.
+# object_info is validation + this probe — not graph synthesis.
 ```
 
 Live tower Fun Inpaint / FaceID / Voronoi stay **unwired**. TeaCache is
@@ -229,12 +231,15 @@ POLL → RESOLVE → JUDGE → DONE/ERROR`.
 - Every run writes a JSON record to `state/runs/` (params, judge history,
   transitions) — the seed of the later self-learning knowledge base.
 - Variant routing is LLM-driven (`orchestrator/director.py`): the local VL heretic
-  picks among director-allowlisted catalog ids (`base`, `eros`, `directors`,
-  `lipsync`, `wan22`, and every `ltx25_*`) from the request, validated
+  picks among **every** `workflows/manifests.yaml` slug (`base`, `eros`,
+  `directors`, `lipsync`, `wan22`, `flux`, `vb_aivfx_*`, `vb_movie_builder`,
+  CCC / renderer / dataset / H3 / every `ltx25_*`) from the request, validated
   against the known list with keyword rules as fallback
-  (`DIRECTOR_LLM=0` for rules-only). Keywords such as `ltx 2.5`, `flf2v`,
-  `msr`, `a2v` route to the matching 2.5 graph. Hard constraints always win:
-  `--variant` forces, a source video implies lipsync.
+  (`DIRECTOR_LLM=0` for rules-only). Keywords such as `vfx` / `possession` /
+  `movie builder` / `ltx 2.5` / `flf2v` / `msr` / `a2v` route to the matching
+  graph. Hard constraints always win: `--variant` forces, a source video
+  implies lipsync. Graphs without a safe field map queue baked leftover
+  widgets — prefer `comfy run --template <slug>` for those.
 
 ## Multi-segment pipeline (storyboard + stitch + full judge)
 
@@ -460,10 +465,9 @@ Ollama models (19-27GB) and can take several minutes — allow long timeouts.
   A2A / Gradio, secrets, `ltx_research_agent`. WAN / K3NK / TeaCache
   unchanged (TeaCache still soft-bypass).
 - **Capability audit (PR #5, merged).** `python -m master_agent capabilities
-  [--offline] [--json]`. `WORKFLOW_FILES["wan22"]` points at
-  `260713_VIDEO-BUDDY_WAN-2-2-VID_1-0_api.json`. Manifest slugs resolve for
-  `comfy run --template`. Fun Inpaint / Fun Control / FaceID stay
-  fail-closed. See [AUDIT.md](AUDIT.md).
+  [--offline] [--json]`. `WORKFLOW_FILES` is derived from
+  `workflows/manifests.yaml` (every slug is director-routable). Fun Inpaint /
+  Fun Control / FaceID stay fail-closed. See [AUDIT.md](AUDIT.md).
 - Operator sheet: [docs/QUICKSTART.md](docs/QUICKSTART.md).
 
 ## Status (2026-08-04, third pass)
@@ -585,9 +589,9 @@ Ollama models (19-27GB) and can take several minutes — allow long timeouts.
   (`VARIANT_GEN` in config.py). Private LoRAs in the original graph
   (CCC4-0 character, Krea Multiple_realistic) are disabled/bypassed — they
   were never published; the four public Wan LoRAs stay active.
-- `krea2_img` is a manifest/patcher template variant (like `flux`) — usable
-  via `load_and_patch_workflow`, not video-pipeline routed (image graph).
-  `vb_ideogram` validates but needs an Ideogram API key to actually run.
+- `krea2_img` / `flux` / `vb_ideogram` are director-routable stills variants
+  (image graphs, not the video stitch pipeline). `vb_ideogram` still needs an
+  Ideogram API key to actually run.
 - Validator now understands prefix-style autogrow inputs
   (`COMFY_AUTOGROW_V3`, e.g. BatchImagesNode `images.image0`).
 

@@ -3,7 +3,8 @@
 Every first-class API graph is listed and selectable with no env flags.
 Sources (merged, first id wins for a given file):
 
-1. Explicit ``WORKFLOW_FILES`` seeds (existing I2V/T2V + LTX 2.5 + H3 ids)
+1. Explicit ``WORKFLOW_FILES`` (derived from ``workflows/manifests.yaml``
+   plus legacy seeds — every manifest slug is director-routable)
 2. ``workflows/manifests.yaml`` entries that point at a file
 3. Auto-scan ``workflows/ltx-2.5/*.json`` and ``workflows/minimax-h3/*.json``
 4. Auto-scan any other ``*_api.json`` under ``workflows/``
@@ -295,11 +296,13 @@ def load_catalog() -> tuple[CatalogEntry, ...]:
             ),
         )
 
-    # 2) Seed WORKFLOW_FILES (existing Buddy I2V/T2V / WAN / lipsync)
+    # 2) Seed WORKFLOW_FILES (manifest-derived director allowlist + legacy ids)
+    manifests = _load_manifests()
     for vid, filename in _seed_workflow_files().items():
         rel = str(filename).replace("\\", "/")
         if vid in by_id:
             continue
+        meta = manifests.get(vid) if isinstance(manifests.get(vid), dict) else {}
         _add(
             by_id,
             seen_files,
@@ -307,15 +310,15 @@ def load_catalog() -> tuple[CatalogEntry, ...]:
                 id=vid,
                 path=rel,
                 name=f"{vid} — {Path(rel).name}",
-                description=f"Built-in variant {vid}",
+                description=str((meta or {}).get("description") or f"Built-in variant {vid}"),
                 family=_family_for(vid, rel),
                 default=True,
                 source="seed",
             ),
         )
 
-    # 3) manifests.yaml
-    for vid, meta in _load_manifests().items():
+    # 3) manifests.yaml (covers any slug not already seeded)
+    for vid, meta in manifests.items():
         if not isinstance(meta, dict):
             continue
         filename = meta.get("file")

@@ -270,6 +270,8 @@ vb_ccc_adv:
   description: Consistent Character Creator v4 ADV (516 nodes — face split, detailer, upscale)
   requires: [ComfyUI-Mickmumpitz-Nodes (CCC_*), KJNodes (GetNode/SetNode/JoinStringMulti/ImageResizeKJv2),
              rgthree-comfy, ComfyUI-Easy-Use, ComfyUI-Impact-Pack, SeedVR2, ComfyUI-AutoCropFaces]
+  # director: baked_defaults — 777-node graph, no single safe prompt widget.
+  # Prefer `comfy run --template vb_ccc_adv` for precision.
 
 vb_dataset_tagger:
   file: 260713_VIDEO-BUDDY_DATASET-TAGGER_1-5_api.json
@@ -278,6 +280,7 @@ vb_dataset_tagger:
   description: Dataset auto-tagger (batch images -> caption pairs) for LoRA training data
   requires: [ComfyUI-Mickmumpitz-Nodes (CCC_ImageBatchLoader/CCC_PromptStudio/CCC_ShowImageTextPairs), KJNodes,
              ComfyUI-QwenVL (AILab_QwenVL — first run downloads Qwen3-VL weights)]
+  # director: baked_defaults — CCC_PromptStudio holds engine prompts, not a gen brief.
 
 vb_tag_review:
   file: 260713_VIDEO-BUDDY_TAG-REVIEW-EDIT_1-0_api.json
@@ -285,6 +288,7 @@ vb_tag_review:
   ui_source: 260713_VIDEO-BUDDY_TAG-REVIEW-EDIT_1-0.json
   description: Review/edit auto-generated dataset captions before LoRA training
   requires: [ComfyUI-Mickmumpitz-Nodes (CCC_DatasetReviewer/CCC_TextBatchLoader), comfyui-custom-scripts (pysssss), Comfyroll (CR Text Replace), WAS (Save Text File)]
+  # director: baked_defaults — review UI, no generation prompt.
 
 vb_ideogram:
   file: 260713_VIDEO-BUDDY_IDEOGRAM_1-0_api.json
@@ -292,6 +296,15 @@ vb_ideogram:
   ui_source: 260713_VIDEO-BUDDY_IDEOGRAM_1-0.json
   description: Ideogram API image generation with prompt builder (external API key needed)
   requires: [KJNodes (Ideogram4PromptBuilderKJ), comfyui-custom-scripts, rgthree-comfy, ComfyMathExpression]
+  fields:
+    prompt:
+      class_type: Ideogram4PromptBuilderKJ
+      index: 0
+      input: high_level_description
+    seed:
+      class_type: RandomNoise
+      index: 0
+      input: noise_seed
 
 vb_krea2_img:
   file: 260713_VIDEO-BUDDY_KREA-2-IMG_1-0_api.json
@@ -299,6 +312,25 @@ vb_krea2_img:
   ui_source: 260713_VIDEO-BUDDY_KREA-2-IMG_1-0.json
   description: Krea-2 two-pass image generation (private lora node bypassed — see krea2_img variant)
   requires: [MarkdownNote + MickmumpitzLabel only (cosmetic)]
+  fields:
+    prompt:
+      node_id: "4"
+      input: text
+    seed:
+      node_id: "7"
+      input: seed
+    width:
+      node_id: "6"
+      input: width
+    height:
+      node_id: "6"
+      input: height
+    steps:
+      node_id: "7"
+      input: steps
+    filename_prefix:
+      node_id: "20"
+      input: filename_prefix
 
 vb_wan22_vid:
   file: 260713_VIDEO-BUDDY_WAN-2-2-VID_1-0_api.json
@@ -306,6 +338,28 @@ vb_wan22_vid:
   ui_source: 260713_VIDEO-BUDDY_WAN-2-2-VID_1-0.json
   description: Wan 2.2 video generation with NAG + film grain finish (see wan22 variant)
   requires: [VideoHelperSuite (VHS_VideoCombine), rgthree-comfy, RES4LYF (Film Grain), KJNodes (WanVideoNAG)]
+  fields:
+    prompt:
+      node_id: "3"
+      input: text
+    negative_prompt:
+      node_id: "4"
+      input: text
+    seed:
+      node_id: "197"
+      input: value
+    width:
+      node_id: "5"
+      input: width
+    height:
+      node_id: "5"
+      input: height
+    frames:
+      node_id: "5"
+      input: length
+    filename_prefix:
+      node_id: "194"
+      input: filename_prefix
 
 # --- batch 2 (converted 2026-08-03) ---
 # Extra packs: gguf + ComfyUI-GGUF, ComfyUI_essentials, comfyui_controlnet_aux,
@@ -320,6 +374,22 @@ vb_qwen_edit_360:
   ui_source: 251018_VIDEO-BUDDY_QWEN-IMAGE-EDIT-360_1-1.json
   description: Qwen-Image-Edit 360 turnaround (GGUF Q5_0 + Lightning LoRAs + his 360 LoRA)
   requires: [ComfyUI-GGUF/gguf (GGUF loaders), VideoHelperSuite]
+  fields:
+    prompt:
+      node_id: "1497"
+      input: prompt
+    seed:
+      class_type: KSampler
+      index: 0
+      input: seed
+    width:
+      class_type: EmptySD3LatentImage
+      index: 0
+      input: width
+    height:
+      class_type: EmptySD3LatentImage
+      index: 0
+      input: height
 
 vb_aivfx_startimage:
   file: 260330_AI-VFX-STARTIMAGE_1-0_api.json
@@ -327,6 +397,15 @@ vb_aivfx_startimage:
   ui_source: 260330_AI-VFX-STARTIMAGE_1-0.json
   description: AI-VFX start-image generator (Qwen-Image-Edit-2511 GGUF)
   requires: [ComfyUI-GGUF/gguf]
+  fields:
+    prompt:
+      class_type: PrimitiveStringMultiline
+      index: 0
+      input: value
+    seed:
+      class_type: KSampler
+      index: 0
+      input: seed
 
 vb_aivfx_preprocess:
   file: 260330_VIDEO-BUDDY_AI-VFX_PREPROCESS_1-0_api.json
@@ -335,6 +414,7 @@ vb_aivfx_preprocess:
   description: AI-VFX preprocess (SAM3 segment, depth, cotracker, RMBG -> control videos)
   requires: [ComfyUI-RMBG (SAM3Segment — first run downloads sam3.pt), ComfyUI-DepthCrafter-Nodes,
              comfyui_cotracker_node, comfyui_controlnet_aux, triton-windows]
+  # director: baked_defaults — control-video preprocess, no generation prompt.
 
 vb_aivfx_adv:
   file: 260330_VIDEO-BUDDY_AI-VFX_1-0_ADV_api.json
@@ -342,6 +422,14 @@ vb_aivfx_adv:
   ui_source: 260330_VIDEO-BUDDY_AI-VFX_1-0_ADV.json
   description: AI-VFX compositor v1.0 (Wan VACE e4m3fn; fp32 build does not exist publicly)
   requires: [ComfyUI-WanVaceAdvanced (WanVacePhantomSimpleV2), KJNodes, VideoHelperSuite]
+  fields:
+    prompt:
+      class_type: IterPromptBuilder
+      index: 0
+      input: string_1
+    negative_prompt:
+      node_id: "3228:3262"
+      input: text
 
 vb_aivfx_adv_13:
   file: 260608_VIDEO-BUDDY_AI-VFX_1-3_ADV_api.json
@@ -349,6 +437,18 @@ vb_aivfx_adv_13:
   ui_source: 260608_VIDEO-BUDDY_AI-VFX_1-3_ADV.json
   description: AI-VFX compositor v1.3 (Wan VACE e4m3fn or Q4_K_M GGUF option)
   requires: [ComfyUI-WanVaceAdvanced, ComfyUI-GGUF/gguf, KJNodes, VideoHelperSuite]
+  fields:
+    prompt:
+      class_type: IterPromptBuilder
+      index: 0
+      input: string_1
+    negative_prompt:
+      node_id: "3228:3262"
+      input: text
+    seed:
+      class_type: KSampler
+      index: 0
+      input: seed
 
 ltx23_lipsync_v08:
   file: 260603_LTX2-3_3D-RENDERING_LIP-SNYC_v08_api.json
@@ -357,6 +457,15 @@ ltx23_lipsync_v08:
   description: LTX-2.3 3D-rendering lip-sync (clay/depth/mouth guides + OmniNFT/ic-loras)
   requires: [ComfyUI-LTXVideo, ComfyUI-Mickmumpitz-Nodes, KJNodes, VideoHelperSuite,
              comfyui_controlnet_aux, ComfyUI_essentials, ComfyUI-Easy-Use, rgthree-comfy]
+  fields:
+    # Positive CLIP text is a graph link — do not overwrite it.
+    negative_prompt:
+      node_id: "6202:5835"
+      input: text
+    seed:
+      class_type: RandomNoise
+      index: 0
+      input: noise_seed
 
 vb_ccc41_krea2:
   file: 260729_VIDEO-BUDDY_CCC_4-1_KREA2-EDIT_BETA_PUBLISH_api.json
@@ -365,6 +474,8 @@ vb_ccc41_krea2:
   description: CCC 4.1 BETA — Krea2-Edit grounded character editing (supersedes CCC 4.01 ADV)
   requires: [ComfyUI-Krea2-Ostris-Edit (Krea2EditGroundedEncode), comfyui-krea2edit (Krea2EditModelPatch),
              ComfyUI-Mickmumpitz-Nodes, KJNodes, Impact-Pack]
+  # director: baked_defaults — 48 grounded encodes; first POSITIVE is a link.
+  # Prefer `comfy run --template vb_ccc41_krea2`.
 
 # --- AI-RENDERING example projects (batch 2/3, converted 2026-08-03/04) ---
 # Bundled per-project assets were copied into ComfyUI/input/.
@@ -375,6 +486,7 @@ air_render_030:
   ui_source: AI-RENDERING-EXAMPLE FILES/030_BearMinimum_RightThisWay/030_BearMinimum_RightThisWay.json
   description: LTX-2.3 AI-rendering example (BearMinimum clay scene, right-this-way shot)
   requires: [same as ltx23_lipsync_v08]
+  # director: baked_defaults — example project; JSON often gitignored. Prefer --template.
 
 air_render_050:
   file: AI-RENDERING-EXAMPLE FILES/050_BearMinimum_Bar/050_BearMinimum_Bar_workflow_api.json
@@ -382,6 +494,7 @@ air_render_050:
   ui_source: AI-RENDERING-EXAMPLE FILES/050_BearMinimum_Bar/050_BearMinimum_Bar_workflow.json
   description: LTX-2.3 AI-rendering example (BearMinimum bar scene)
   requires: [same as ltx23_lipsync_v08]
+  # director: baked_defaults — example project; JSON often gitignored. Prefer --template.
 
 air_render_businesswoman:
   file: AI-RENDERING-EXAMPLE FILES/BusinessWoman/BusinessWoman_Workflow_api.json
@@ -389,6 +502,7 @@ air_render_businesswoman:
   ui_source: AI-RENDERING-EXAMPLE FILES/BusinessWoman/BusinessWoman_Workflow.json
   description: LTX-2.3 AI-rendering example (BusinessWoman scene)
   requires: [same as ltx23_lipsync_v08]
+  # director: baked_defaults — example project; JSON often gitignored. Prefer --template.
 
 # --- batch 3 (converted 2026-08-04) ---
 # Extra packs: ComfyUI-GIMM-VFI, mickmumpitz/ComfyUI-WanVideoWrapper (his fork),
@@ -401,6 +515,7 @@ vb_zimage_turbo_cn:
   ui_source: AI-RENDERING-EXAMPLE FILES/260303_VIDEO-BUDDY_Z-IMAGE_TURBO_CN_1-1.json
   description: Z-Image Turbo with Fun-Controlnet-Union 2.1 (lineart-guided start frames)
   requires: [ComfyUI core ModelPatchLoader (models/model_patches mapped in extra_model_paths.yaml)]
+  # director: baked_defaults — file often gitignored. Prefer --template when on disk.
 
 vb_ai_renderer_smpl:
   file: AI-RENDERING-EXAMPLE FILES/260402_VIDEO-BUDDY_AI-RENDERER_SMPL_2-1_api.json
@@ -409,6 +524,7 @@ vb_ai_renderer_smpl:
   description: AI-Renderer simple v2.1 (Wan VACE start/end frame + DepthAnythingV3 preprocess)
   requires: [mickmumpitz/ComfyUI-WanVideoWrapper (WanVideoVACEStartToEndFrame), ComfyUI-DepthAnythingV3,
              ComfyUI-WanVaceAdvanced]
+  # director: baked_defaults — file often gitignored. Prefer --template when on disk.
 
 vb_ai_renderer_adv:
   file: AI-RENDERING-EXAMPLE FILES/260402_VIDEO-BUDDY_AI-RENDERER_ADV_2-1_api.json
@@ -416,6 +532,7 @@ vb_ai_renderer_adv:
   ui_source: AI-RENDERING-EXAMPLE FILES/260402_VIDEO-BUDDY_AI-RENDERER_ADV_2-1.json
   description: AI-Renderer advanced v2.1 (+ GIMM-VFI interpolation)
   requires: [same as vb_ai_renderer_smpl, ComfyUI-GIMM-VFI]
+  # director: baked_defaults — file often gitignored. Prefer --template when on disk.
 
 vb_ai_renderer_adv_20:
   file: AI-RENDERING-EXAMPLE FILES/260225_VIDEO-BUDDY_AI-RENDERER_ADV_2-0_api.json
@@ -423,6 +540,7 @@ vb_ai_renderer_adv_20:
   ui_source: AI-RENDERING-EXAMPLE FILES/260225_VIDEO-BUDDY_AI-RENDERER_ADV_2-0.json
   description: AI-Renderer advanced v2.0 (previous revision of the ADV pipeline)
   requires: [same as vb_ai_renderer_adv]
+  # director: baked_defaults — file often gitignored. Prefer --template when on disk.
 
 vb_rtx_superres:
   file: AI-RENDERING-EXAMPLE FILES/260330_VIDEO-BUDDY_NVIDIA-RTX-SUPER-RESOLUTION_1-0_api.json
@@ -430,6 +548,7 @@ vb_rtx_superres:
   ui_source: AI-RENDERING-EXAMPLE FILES/260330_VIDEO-BUDDY_NVIDIA-RTX-SUPER-RESOLUTION_1-0.json
   description: NVIDIA RTX Video Super Resolution upscale pass
   requires: [Comfy-Org/Nvidia_RTX_Nodes_ComfyUI + nvidia-vfx (pip, pypi.nvidia.com)]
+  # director: baked_defaults — file often gitignored. Prefer --template when on disk.
 
 # --- batch 4 (converted 2026-08-05, via state/convert_ui_to_api.py) ---
 # Extra packs: ComfyUI-Olm-DragCrop, ComfyUI_preview360panorama (ProGamerGov),
@@ -446,6 +565,15 @@ vb_movie_builder:
   ui_source: 260507_VIDEO-BUDDY_MOVIE-BUILDER_1-1_ADV.json
   description: LTX 2.3 Movie Builder ADV — shot-by-shot movie pipeline (Flux 2 Klein start-frames, LTX 2.3 video+audio, voice cloning, 360 environments, ShotAssembler)
   requires: [ComfyUI-Mickmumpitz-Nodes (ShotAssembler/ShotVideoOutput/ResolutionPicker), movie_builder_shims (ShotOrder/ShotDuplicator), ComfyUI-LTXVideo, KJNodes, RES4LYF, VideoHelperSuite, ComfyUI-Easy-Use, rgthree-comfy, ComfyUI-Olm-DragCrop, ComfyUI_preview360panorama]
+  fields:
+    prompt:
+      node_id: "13383"
+      input: value
+    seed:
+      class_type: RandomNoise
+      index: 0
+      input: noise_seed
+  # Remaining shot cards stay baked. Prefer --template for multi-shot precision.
 
 # --- LTX 2.5 API pack (ported from thcabq352/ltx2.5-research-agent) ---
 # Default catalog entries. Stub ckpt names in the JSON are remapped at patch
@@ -489,24 +617,45 @@ ltx25_msr:
   format: api
   description: LTX 2.5 multi-reference (pic1–pic4 + background)
   requires: [ComfyUI-LTXVideo (ComfyUILTX25MSR*), VideoHelperSuite]
+  fields:
+    prompt: { class_type: CLIPTextEncode, index: 0, input: text }
+    seed: { class_type: KSampler, index: 0, input: seed }
+    width: { class_type: EmptyLTXVLatentVideo, index: 0, input: width }
+    height: { class_type: EmptyLTXVLatentVideo, index: 0, input: height }
+    frames: { class_type: EmptyLTXVLatentVideo, index: 0, input: length }
 
 ltx25_v2v_ic_lora:
   file: ltx-2.5/LTX-2.5_V2V_ICLoRA_Single_Stage_Distilled_api.json
   format: api
   description: LTX 2.5 video-to-video IC-LoRA
   requires: [ComfyUI-LTXVideo (LTXVICLoRALoader), VideoHelperSuite]
+  fields:
+    prompt: { class_type: CLIPTextEncode, index: 0, input: text }
+    seed: { class_type: KSampler, index: 0, input: seed }
+    width: { class_type: EmptyLTXVLatentVideo, index: 0, input: width }
+    height: { class_type: EmptyLTXVLatentVideo, index: 0, input: height }
+    frames: { class_type: EmptyLTXVLatentVideo, index: 0, input: length }
 
 ltx25_a2v:
   file: ltx-2.5/LTX-2.5_A2V_Two_Stage_Distilled_api.json
   format: api
   description: LTX 2.5 audio-to-video two-stage distilled
   requires: [ComfyUI-LTXVideo, VideoHelperSuite]
+  fields:
+    prompt: { class_type: CLIPTextEncode, index: 0, input: text }
+    seed: { class_type: KSampler, index: 0, input: seed }
+    width: { class_type: EmptyLTXVLatentVideo, index: 0, input: width }
+    height: { class_type: EmptyLTXVLatentVideo, index: 0, input: height }
+    frames: { class_type: EmptyLTXVLatentVideo, index: 0, input: length }
 
 ltx25_t2a:
   file: ltx-2.5/LTX-2.5_T2A_Single_Stage_Distilled_api.json
   format: api
   description: LTX 2.5 text-to-audio single-stage distilled
   requires: [ComfyUI-LTXVideo]
+  fields:
+    prompt: { class_type: CLIPTextEncode, index: 0, input: text }
+    frames: { class_type: LTXVEmptyLatentAudio, index: 0, input: frames_number }
 
 # --- MiniMax H3 API pack (native Comfy ≥0.30 + ComfyUI-GGUF) ---
 # Default catalog. GGUF Q4_K DiT preferred; Comfy TE + official VAEs.

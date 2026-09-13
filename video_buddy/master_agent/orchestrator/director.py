@@ -1,9 +1,11 @@
 """Director brain — LLM request routing.
 
-Decides which workflow variant a request should use. Hard constraints
-(forced variant, source video) always win; otherwise the local LLM picks,
-with the old keyword rules as fallback. The LLM never sees secrets and its
-answer is validated against the known variant list before use.
+Decides which workflow variant a request should use. The allowlist is
+every ``workflows/manifests.yaml`` slug (via ``WORKFLOW_FILES`` /
+``load_workflow_files``). Hard constraints (forced variant, source video)
+always win; otherwise the local LLM picks, with keyword rules as fallback.
+The LLM never sees secrets and its answer is validated against the known
+variant list before use.
 """
 
 from __future__ import annotations
@@ -16,8 +18,60 @@ from typing import Any, Optional
 from master_agent.comfy.catalog import default_variant_ids, is_known_variant
 from master_agent.config import DIRECTOR_LLM, WORKFLOW_FILES
 
+# First match wins. Keep specific family phrases before generic ones
+# (`vfx` / `ccc` / `shots`). Hard constraints in choose_variant still win.
 _VARIANT_KEYWORDS = [
     ("lipsync", ("lip-sync", "lipsync", "lip sync", "lipdub", "dub")),
+    ("ltx23_lipsync_v08", (
+        "3d-rendering lip", "clay lipsync", "omninft", "lip-snyc",
+        "ltx23 lipsync", "ltx 2.3 lipsync",
+    )),
+    ("vb_aivfx_preprocess", (
+        "vfx preprocess", "aivfx preprocess", "ai-vfx preprocess",
+        "sam3", "depthcrafter", "cotracker", "rmbg",
+    )),
+    ("vb_aivfx_startimage", (
+        "vfx start", "aivfx start", "ai-vfx start", "start-image",
+        "start image", "qwen start",
+    )),
+    ("vb_aivfx_adv_13", ("aivfx 1.3", "vfx 1.3", "aivfx_13", "aivfx 13", "ai-vfx 1.3")),
+    ("vb_aivfx_adv", (
+        "aivfx", "ai-vfx", "ai vfx", "possession", "vace", "phantom",
+        "composite", "vfx",
+    )),
+    ("vb_movie_builder", (
+        "movie builder", "movie-builder", "shot assembler", "shot-by-shot",
+        "feature pipeline",
+    )),
+    ("vb_ccc41_krea2", (
+        "ccc 4.1", "ccc41", "krea2-edit", "krea2 edit", "grounded character",
+    )),
+    ("vb_ccc_adv", (
+        "consistent character", "character creator", "ccc 4.01", "ccc4", "ccc",
+    )),
+    ("vb_dataset_tagger", (
+        "dataset tagger", "auto-tag", "auto tag", "caption pairs", "lora dataset",
+    )),
+    ("vb_tag_review", ("tag review", "caption review")),
+    ("vb_qwen_edit_360", (
+        "qwen edit", "qwen-image-edit", "360 turnaround", "360 panorama",
+        "equirectangular",
+    )),
+    ("vb_ideogram", ("ideogram",)),
+    ("krea2_img", ("krea2", "krea-2", "krea 2")),
+    ("flux", ("flux.1", "flux1", "character sheet", "text-to-image", "flux")),
+    ("vb_zimage_turbo_cn", ("z-image", "zimage", "fun-controlnet", "turbo cn")),
+    ("vb_rtx_superres", (
+        "rtx super", "super resolution", "nvidia superres", "rtx vsr",
+    )),
+    ("vb_ai_renderer_smpl", (
+        "renderer simple", "ai-renderer smpl", "smpl renderer",
+    )),
+    ("vb_ai_renderer_adv_20", ("renderer 2.0", "ai-renderer 2.0")),
+    ("vb_ai_renderer_adv", ("ai-renderer", "ai renderer", "renderer adv")),
+    ("air_render_030", ("bear minimum right", "right this way")),
+    ("air_render_050", ("bear minimum bar", "bear bar")),
+    ("air_render_businesswoman", ("businesswoman", "business woman")),
     ("wan22", ("wan 2.2", "wan2.2", "wan22", "photoreal", "photo-real", "stock photo", "film grain")),
     ("h3_r2v", ("ref2va", "h3 r2v", "h3_r2v", "reference-to-video", "minimax r2v", "minimax reference")),
     ("h3_flf", ("h3 flf", "h3_flf", "minimax first-last", "minimax flf")),
@@ -46,7 +100,10 @@ def _allowed_variants() -> set[str]:
 
 def rule_based_variant(request: str) -> str:
     text = (request or "").lower()
+    allowed = set(WORKFLOW_FILES)
     for variant, keywords in _VARIANT_KEYWORDS:
+        if variant not in allowed:
+            continue
         if any(k in text for k in keywords):
             return variant
     return "base"

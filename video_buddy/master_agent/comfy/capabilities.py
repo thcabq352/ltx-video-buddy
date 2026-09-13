@@ -172,9 +172,12 @@ CAPABILITY_CATALOG: tuple[Capability, ...] = (
         "vace",
         "Wan VACE / Phantom compositor",
         class_types=("WanVacePhantomSimpleV2", "WanVideoVACEStartToEndFrame", "WanVaceToVideo"),
-        surfaces=("template",),
+        surfaces=("director", "patcher", "template"),
         templates=("vb_aivfx_adv", "vb_aivfx_adv_13", "vb_ai_renderer_smpl"),
-        notes="Shipped AI-VFX API graphs. Not director-routed. Example renderer files gitignored.",
+        notes=(
+            "Director-routed (vfx / aivfx / possession / vace). "
+            "Field map writes IterPromptBuilder.string_1. Example renderer files gitignored."
+        ),
     ),
     Capability(
         "stand_in",
@@ -215,9 +218,12 @@ CAPABILITY_CATALOG: tuple[Capability, ...] = (
         "sam3_vfx_preprocess",
         "SAM3 / DepthCrafter AI-VFX preprocess",
         class_types=("SAM3Segment", "DepthCrafter"),
-        surfaces=("template",),
+        surfaces=("director", "template"),
         templates=("vb_aivfx_preprocess",),
-        notes="Template only; no agent loop that feeds masks into Fun Inpaint.",
+        notes=(
+            "Director-routed (sam3 / depthcrafter / vfx preprocess). "
+            "Queues with baked control-video widgets; no Fun Inpaint loop."
+        ),
     ),
     Capability(
         "ipadapter_faceid",
@@ -285,15 +291,18 @@ CAPABILITY_CATALOG: tuple[Capability, ...] = (
             "Krea2EditGroundedEncode",
             "Krea2EditModelPatch",
         ),
-        surfaces=("patcher", "template"),
+        surfaces=("director", "patcher", "template"),
         templates=("krea2_img", "vb_qwen_edit_360", "vb_aivfx_startimage", "vb_ccc41_krea2"),
-        notes="Templates + krea2_img field map. Not in director allowlist.",
+        notes=(
+            "Director-routed. krea2_img / qwen 360 / aivfx start-image have field maps. "
+            "CCC 4.1 queues with baked grounded-encode widgets."
+        ),
     ),
     Capability(
         "mickmumpitz_vfx",
         "MickMumpitz AI-VFX / Movie Builder / CCC",
         class_types=("WanVacePhantomSimpleV2", "CCC_PromptStudio", "ShotAssembler"),
-        surfaces=("template",),
+        surfaces=("director", "patcher", "template"),
         templates=(
             "vb_aivfx_adv",
             "vb_aivfx_adv_13",
@@ -301,7 +310,11 @@ CAPABILITY_CATALOG: tuple[Capability, ...] = (
             "vb_ccc_adv",
             "vb_ccc41_krea2",
         ),
-        notes="Large curated graphs. Director never routes here. Some example files gitignored.",
+        notes=(
+            "Director-routed (movie builder / ccc / aivfx). "
+            "CCC ADV has no safe prompt widget — baked defaults; prefer --template. "
+            "Some example files gitignored."
+        ),
     ),
     Capability(
         "mmaudio",
