@@ -11,9 +11,16 @@ import copy
 from dataclasses import dataclass, field
 from typing import Any, Optional
 
-# Optional speed nodes: missing from /object_info is WARNING + bypass, never a hard fail.
+# Optional nodes: missing from /object_info is WARNING + bypass, never a hard fail.
 # Live Comfy often only registers WanVideoTeaCache / WanVideoTeaCacheKJ — a generic
 # LTX TeaCache class_type must still bypass cleanly.
+#
+# Tower dump 2026-09-13 (Comfy Desk, 4114 classes) confirmed exact YES:
+#   TeaCache, WanVideoTeaCache, LanPaint_KSampler, GetWarpedNoiseFromVideo (family;
+#   there is NO exact VideoNoiseWarp), MMAudioModelLoader / Sampler / VoCoder.
+# Structural payload nodes (WanFunInpaintToVideo, Wan22FunControlToVideo,
+# IPAdapterFaceID, ControlNetLoader, CreateVoronoiMask) are NOT optional — if a
+# graph needs them and the pack is missing, fail closed.
 OPTIONAL_ACCELERATOR_CLASS_TYPES = frozenset(
     {
         "TeaCache",
@@ -33,6 +40,22 @@ OPTIONAL_ACCELERATOR_CLASS_TYPES = frozenset(
         "CacheDiffusion",
     }
 )
+# Enhancer / VFX packs: skip the node if this Comfy does not register it.
+OPTIONAL_TOWER_CLASS_TYPES = frozenset(
+    {
+        "LanPaint_KSampler",
+        "LanPaint",  # stale alias; live name is LanPaint_KSampler
+        "GetWarpedNoiseFromVideo",
+        "GetWarpedNoiseFromVideoAdvanced",
+        "MMAudioModelLoader",
+        "MMAudioSampler",
+        "MMAudioVoCoder",
+        "MMAudioFeatureUtils",
+    }
+)
+OPTIONAL_NODE_CLASS_TYPES = (
+    OPTIONAL_ACCELERATOR_CLASS_TYPES | OPTIONAL_TOWER_CLASS_TYPES
+)
 _ACCELERATOR_NAME_MARKERS = (
     "teacache",
     "easycache",
@@ -42,13 +65,28 @@ _ACCELERATOR_NAME_MARKERS = (
 )
 
 
-def is_optional_accelerator(class_type: str | None) -> bool:
+def is_optional_node(class_type: str | None) -> bool:
+    """True when a missing class should WARNING+bypass instead of hard-fail."""
     if not class_type:
         return False
-    if class_type in OPTIONAL_ACCELERATOR_CLASS_TYPES:
+    if class_type in OPTIONAL_NODE_CLASS_TYPES:
         return True
     lowered = class_type.lower()
-    return any(marker in lowered for marker in _ACCELERATOR_NAME_MARKERS)
+    if any(marker in lowered for marker in _ACCELERATOR_NAME_MARKERS):
+        return True
+    if lowered.startswith("lanpaint"):
+        return True
+    if "getwarpednoise" in lowered.replace("_", ""):
+        return True
+    # Exact MMAudio* gen family — not WanVideoEmptyMMAudioLatents
+    if lowered.startswith("mmaudio"):
+        return True
+    return False
+
+
+def is_optional_accelerator(class_type: str | None) -> bool:
+    """Alias kept for callers/tests; includes tower optional VFX nodes."""
+    return is_optional_node(class_type)
 
 
 def _is_link(value: Any) -> bool:
@@ -90,7 +128,7 @@ def bypass_optional_accelerators(
         if not isinstance(node, dict):
             continue
         class_type = node.get("class_type")
-        if not is_optional_accelerator(class_type):
+        if not is_optional_node(class_type):
             continue
         if class_type in registry:
             continue
@@ -419,10 +457,13 @@ def _op_delete_input(wf: dict[str, Any], op: dict[str, Any]) -> None:
 __all__ = [
     "ALLOWED_OPS",
     "OPTIONAL_ACCELERATOR_CLASS_TYPES",
+    "OPTIONAL_NODE_CLASS_TYPES",
+    "OPTIONAL_TOWER_CLASS_TYPES",
     "OpResult",
     "apply_ops",
     "bypass_optional_accelerators",
     "is_optional_accelerator",
+    "is_optional_node",
     "object_info_snippets",
     "summarize_workflow",
 ]

@@ -632,7 +632,7 @@ def _heuristic_patch(workflow: dict[str, Any], values: dict[str, Any]) -> None:
             if seed is not None:
                 _set_input(node, "noise_seed", seed)
 
-    for class_type in ("KSampler", "KSamplerAdvanced"):
+    for class_type in ("KSampler", "KSamplerAdvanced", "LanPaint_KSampler"):
         for _nid, node in _find_nodes_by_class(workflow, class_type):
             if seed is not None:
                 inputs = node.get("inputs") or {}
