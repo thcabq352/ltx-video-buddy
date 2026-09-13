@@ -133,10 +133,9 @@
   },
   "3326": {
     "inputs": {
-      "unet_name": "wan\\wan-14B_vace_skyreels_v3_R2V_e4m3fn_v1.safetensors",
-      "weight_dtype": "default"
+      "unet_name": "wan-14B_vace_skyreels_v3_R2V_e4m3fn_v1-Q4_K_M.gguf"
     },
-    "class_type": "UNETLoader",
+    "class_type": "UnetLoaderGGUF",
     "_meta": {
       "title": "Load Diffusion Model"
     }

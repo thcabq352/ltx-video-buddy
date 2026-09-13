@@ -147,17 +147,30 @@ python -m master_agent download-models --ltx25 --json
 Requires `HF_TOKEN` / `huggingface-cli login` with access to the gated repos.
 See [`../REQUIRED-FILES.md`](../REQUIRED-FILES.md).
 
-## 5. 16GB-class loader preference
+## 5. 16GB-class loader preference (all families)
 
-`VRAM_GB` defaults to `16`. When several transformers are on disk:
+`VRAM_GB` defaults to `16`. **GGUF first, then NVFP4.** Canonical table:
+`master_agent/models/vram_policy.py` (doctor prints it; catalog + `--prepare`
+inherit it). `--quality 16gb` is a first-class profile (768×512, 3 s segments).
 
-1. **GGUF Q4** (`ltx-2.5-22b-distilled-transformer-bf16-Q4_K_M.gguf`) → `UnetLoaderGGUF`
-2. Else **NVFP4** if `VRAM_GB` ≥ 14
-3. Else **int8-convrot**, then official bf16
+| Family | Default pack | Peak | Notes |
+|---|---|---|---|
+| LTX 2.5 | GGUF Q4 → NVFP4 → int8 → bf16 | 12–14 GB | Baked 768×512 / 25f. Two-stage is offload (≤2 s). |
+| MiniMax H3 | GGUF Q4_K DiT + Comfy TE | 12–14 GB | 1152×640 / 124f / 4 steps / CFG 1.0 |
+| LTX 2.3 | Distilled AIO / fp8 (EROS) | 12–14 GB | Diagnose 9-frame hull first |
+| Wan 2.2 | Dual 14B **fp8** + LightX2V | 14–16 GB offload | No T2V GGUF in catalog. 640×384 / ≤33f / 8 steps |
+| AI-VFX / VACE | Skyreels **GGUF Q4_K_M** | 12–14 GB | e4m3fn is the quality pack |
+| Flux / Krea | fp8 / **NVFP4** turbo | 10–13 GB | Krea default 1024×576, not 1920×1080 |
+| Movie Builder | Flux Klein + LTX fp8 | **needs more VRAM** | Swap LTX to `LTX-2.3-dev-Q4_K_S.gguf`; `--prepare` warns |
+| CCC ADV / 4.1 | Klein fp8 / Krea NVFP4 | **needs more VRAM** | Disable SeedVR2 + detailer; or use `flux` / `krea2_img` |
+| K3NK AIO I2V | not shipped | — | Do not invent a filename or spray onto `wan22` |
 
 A machine that already has GGUF Q4 + NVFP4 loads **GGUF Q4**. Research JSON
 still says `ckpt_name: ltx-2.5-22b-distilled.safetensors` on
 `CheckpointLoaderSimple`; Buddy remaps that stub and rewrites the loader.
+
+`--prepare` prints `WARN  vram: …` for `offload` / `needs_more_vram` slugs
+instead of claiming they fit.
 
 ## 6. Capabilities (what Buddy actually drives)
 

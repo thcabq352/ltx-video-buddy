@@ -5442,7 +5442,7 @@
   },
   "527": {
     "inputs": {
-      "unet_name": "krea2_turbo_fp8_scaled.safetensors",
+      "unet_name": "krea2_turbo_nvfp4.safetensors",
       "weight_dtype": "default"
     },
     "class_type": "UNETLoader",

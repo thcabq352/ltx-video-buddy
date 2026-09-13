@@ -661,9 +661,13 @@ def cmd_workflows(args: argparse.Namespace) -> int:
     if args.json:
         print(json.dumps(items, indent=1))
         return 0
-    print(f"{len(variants)} default catalog variant(s):")
+    print(f"{len(variants)} default catalog variant(s)  (16GB class · pack · peak):")
     for item in variants:
-        print(f"  {item['id']:<28} {item.get('path', '')}")
+        klass = item.get("vram_class") or ""
+        pack = item.get("default_pack") or ""
+        peak = item.get("expected_vram") or ""
+        extra = f"  [{klass} · {peak}] {pack}" if klass else ""
+        print(f"  {item['id']:<28} {item.get('path', '')}{extra}")
     return 0
 
 
@@ -951,6 +955,14 @@ def cmd_comfy(args: argparse.Namespace) -> int:
         print(f"wrote {out}")
     if args.prepare:
         try:
+            from master_agent.models.vram_policy import vram_warnings
+
+            mode = "template" if args.mode == "template" else "generate"
+            for warn in vram_warnings(args.variant or args.template, mode=mode):
+                print(f"WARN  {warn}")
+        except Exception:
+            pass
+        try:
             client = ComfyClient()
             object_info, _src = client.load_object_info(prefer_live=True)
             lint_or_raise(prepared, object_info)
@@ -1048,7 +1060,7 @@ def main(argv: list[str] | None = None) -> int:
     p.add_argument("request", help="what to generate (natural language)")
     p.add_argument("--variant", help="force catalog variant (see: python -m master_agent workflows)")
     p.add_argument("--duration", type=float, default=5.0, help="seconds (default 5)")
-    p.add_argument("--quality", choices=["draft", "balanced", "quality"], help="quality profile")
+    p.add_argument("--quality", choices=["draft", "balanced", "quality", "16gb"], help="quality profile")
     p.add_argument("--seed", type=int, help="fixed seed (default: random)")
     p.add_argument("--width", type=int, default=768)
     p.add_argument("--height", type=int, default=512)
@@ -1085,7 +1097,7 @@ def main(argv: list[str] | None = None) -> int:
     p.add_argument("request", help="creative brief / intent for the graph edit")
     p.add_argument("--variant", default="base",
                    help="workflow variant template (default catalog; see `workflows`)")
-    p.add_argument("--quality", choices=["draft", "balanced", "quality"], default="draft")
+    p.add_argument("--quality", choices=["draft", "balanced", "quality", "16gb"], default="draft")
     p.add_argument("--duration", type=float, default=5.0)
     p.add_argument("--seed", type=int)
     p.add_argument("--provider", help="LLM provider (ollama|grok|auto)")
@@ -1107,7 +1119,7 @@ def main(argv: list[str] | None = None) -> int:
     p.add_argument("request", help="your rough idea (natural language)")
     p.add_argument("--go", action="store_true", help="generate immediately after the interview")
     p.add_argument("--duration", type=float, default=8.0, help="seconds if the brief doesn't say (--go)")
-    p.add_argument("--quality", choices=["draft", "balanced", "quality"], help="quality profile (--go)")
+    p.add_argument("--quality", choices=["draft", "balanced", "quality", "16gb"], help="quality profile (--go)")
     p.set_defaults(func=cmd_brief)
 
     p = sub.add_parser(
@@ -1151,7 +1163,7 @@ def main(argv: list[str] | None = None) -> int:
     p.add_argument("--visual", choices=["shots", "fractal"], default="shots",
                    help="shots = ComfyUI generation per shot; fractal = CPU beat-reactive zoom")
     p.add_argument("--variant", help="force catalog variant (shots mode)")
-    p.add_argument("--quality", choices=["draft", "balanced", "quality"], help="quality profile")
+    p.add_argument("--quality", choices=["draft", "balanced", "quality", "16gb"], help="quality profile")
     p.add_argument("--seed", type=int, help="fixed seed (default: random)")
     p.add_argument("--width", type=int, default=768)
     p.add_argument("--height", type=int, default=512)

@@ -25,16 +25,16 @@
   },
   "6": {
     "class_type": "EmptyLTXVLatentVideo",
-    "inputs": { "width": 1280, "height": 720, "length": 145, "batch_size": 1 }
+    "inputs": { "width": 768, "height": 512, "length": 25, "batch_size": 1 }
   },
   "7": {
     "class_type": "LTXVImgToVideo",
     "inputs": {
       "image": ["4", 0],
       "last_frame": "last.png",
-      "width": 1280,
-      "height": 720,
-      "length": 145
+      "width": 768,
+      "height": 512,
+      "length": 25
     },
     "_meta": { "title": "First Last Frame" }
   },

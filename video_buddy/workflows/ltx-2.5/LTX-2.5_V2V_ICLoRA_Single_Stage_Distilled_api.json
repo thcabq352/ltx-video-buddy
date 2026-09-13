@@ -24,7 +24,7 @@
   },
   "5": {
     "class_type": "EmptyLTXVLatentVideo",
-    "inputs": { "width": 1280, "height": 720, "length": 145, "batch_size": 1 }
+    "inputs": { "width": 768, "height": 512, "length": 25, "batch_size": 1 }
   },
   "6": {
     "class_type": "KSampler",

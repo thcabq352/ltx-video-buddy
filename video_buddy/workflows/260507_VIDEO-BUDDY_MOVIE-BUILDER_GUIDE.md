@@ -131,9 +131,12 @@ Video + audio (LTX 2.3):
 Advanced only:
 - `flux-2-klein-9B-360-erp-outpaint-lora_V1` → models/loras/
 
-Low-VRAM alternative:
-- `LTX-2.3-dev-Q4_K_S.gguf` → models/diffusion_models/ (swap the checkpoint
-  loader for the GGUF loader; lower quality, much smaller VRAM footprint)
+Low-VRAM alternative (16GB / RTX 5060 Ti — **required**, not optional):
+- `LTX-2.3-dev-Q4_K_S.gguf` → models/diffusion_models/gguf/ (swap the LTX
+  `UNETLoader` for `UnetLoaderGGUF`; lower quality, much smaller VRAM footprint)
+- Keep Flux 2 Klein start-frames ≤1024. The 189-node ADV graph is labeled
+  `needs_more_vram` — `comfy run --prepare --template vb_movie_builder` warns.
+  For a silent 16GB default, route shots through `base` / `ltx25_t2v_i2v`.
 
 ## Required custom nodes
 

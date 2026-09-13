@@ -21,6 +21,7 @@ from master_agent.config import (
     MODELS_DIR,
     MODEL_FILES,
     WORKFLOWS_DIR,
+    WAN_MAX_DURATION_S,
     clamp_h3_resolution,
     clamp_resolution,
     frames_for_duration,
@@ -449,6 +450,59 @@ def _apply_local_h3_weights(workflow: dict[str, Any], bundle: str) -> None:
             _set_input(node, "vae_name", audio_vae)
         elif "video" in title or "minimax_h3_video" in current.lower() or "video_vae" in current.lower():
             _set_input(node, "vae_name", video_vae)
+
+
+VACE_UNET_NAMES = (
+    "wan-14B_vace_skyreels_v3_R2V_e4m3fn_v1-Q4_K_M.gguf",
+    "wan-14B_vace_skyreels_v3_R2V_e4m3fn_v1.safetensors",
+    "wan\\wan-14B_vace_skyreels_v3_R2V_e4m3fn_v1.safetensors",
+    "wan\\wan-14B_vace_skyreels_v3_R2V_e4m3fn_v1-Q4_K_M.gguf",
+)
+
+
+def _resolved_vace_unet() -> str:
+    """16GB pick: VACE GGUF Q4_K_M when present, else the e4m3fn pack."""
+    from master_agent.models.weights import find_weight_file
+
+    for name in (
+        "wan-14B_vace_skyreels_v3_R2V_e4m3fn_v1-Q4_K_M.gguf",
+        "wan-14B_vace_skyreels_v3_R2V_e4m3fn_v1.safetensors",
+    ):
+        found = find_weight_file(name)
+        if found is not None:
+            return found.name
+    return "wan-14B_vace_skyreels_v3_R2V_e4m3fn_v1-Q4_K_M.gguf"
+
+
+def _apply_local_vace_weights(workflow: dict[str, Any], variant: str | None) -> None:
+    """Rewrite VACE Skyreels UNET loaders to GGUF Q4 when that file is on disk."""
+    from master_agent.models.vram_policy import family_for_variant
+
+    if family_for_variant(variant) != "vace":
+        # Still remap if the graph already names the VACE file (template mode).
+        has_vace = False
+        for class_type in ("UNETLoader", "UnetLoaderGGUF"):
+            for _nid, node in _find_nodes_by_class(workflow, class_type):
+                current = str((node.get("inputs") or {}).get("unet_name") or "")
+                if "vace_skyreels" in current.lower() or "wan-14b_vace" in current.lower():
+                    has_vace = True
+                    break
+            if has_vace:
+                break
+        if not has_vace:
+            return
+    unet_name = _resolved_vace_unet()
+    for class_type in ("UNETLoader", "UnetLoaderGGUF"):
+        for _nid, node in _find_nodes_by_class(workflow, class_type):
+            current = str((node.get("inputs") or {}).get("unet_name") or "")
+            if "vace_skyreels" in current.lower() or "wan-14b_vace" in current.lower() or current in VACE_UNET_NAMES:
+                if unet_name.lower().endswith(".gguf"):
+                    node["class_type"] = "UnetLoaderGGUF"
+                    node["inputs"] = {"unet_name": unet_name}
+                else:
+                    node["class_type"] = "UNETLoader"
+                    node["inputs"] = {"unet_name": unet_name, "weight_dtype": "default"}
+                node.setdefault("_meta", {})["title"] = "VACE Skyreels (16GB pick)"
 
 
 def _apply_local_ltx25_weights(workflow: dict[str, Any]) -> None:
@@ -896,19 +950,34 @@ def load_and_patch_workflow(
     Returns (workflow_api_dict, meta) where meta has resolved generation params.
     """
     h3 = is_h3_variant(variant)
+    from master_agent.models.vram_policy import (
+        apply_16gb_size,
+        family_for_variant,
+        max_duration_for_variant,
+        preset_for_variant,
+    )
+
     if h3:
         if width == 768 and height == 512:
             width, height = H3_DEFAULT_WIDTH, H3_DEFAULT_HEIGHT
         width, height = clamp_h3_resolution(width, height)
     else:
-        width, height = clamp_resolution(width, height, quality="flux" if variant == "flux" else None)
+        width, height = apply_16gb_size(variant, width, height)
+        family = family_for_variant(variant)
+        if variant == "flux":
+            width, height = clamp_resolution(width, height, quality="flux")
+        elif family in {"ltx25", "ltx23", "wan", "lipsync"}:
+            width, height = clamp_resolution(width, height)
     gen = get_variant_gen(variant)
+    family_max_s = H3_MAX_DURATION_S if h3 else max_duration_for_variant(variant)
+    if family_max_s is None and family_for_variant(variant) == "wan":
+        family_max_s = WAN_MAX_DURATION_S
     if frames is None:
         frames = frames_for_duration(
             duration_s,
             fps=gen["fps"],
             snap=gen["frame_snap"],
-            max_s=H3_MAX_DURATION_S if h3 else None,
+            max_s=family_max_s,
         )
     else:
         frames = int(frames)
@@ -922,8 +991,9 @@ def load_and_patch_workflow(
         steps = steps if steps is not None else H3_DEFAULT_STEPS
         cfg = H3_DEFAULT_CFG
     else:
-        steps = steps if steps is not None else DEFAULT_STEPS
-        cfg = cfg if cfg is not None else DEFAULT_CFG
+        preset = preset_for_variant(variant)
+        steps = steps if steps is not None else int(preset.steps or DEFAULT_STEPS)
+        cfg = cfg if cfg is not None else float(preset.cfg if preset.cfg is not None else DEFAULT_CFG)
 
     try:
         from master_agent.comfy.catalog import H3_ALIASES, RESEARCH_ALIASES
@@ -1004,6 +1074,7 @@ def load_and_patch_workflow(
         _apply_local_ltx25_weights(workflow)
     if is_h3_bundle(bundle):
         _apply_local_h3_weights(workflow, bundle or "h3_fl2va")
+    _apply_local_vace_weights(workflow, variant)
     if loras:
         _apply_typed_loras(workflow, loras)
     if multi_ref:
