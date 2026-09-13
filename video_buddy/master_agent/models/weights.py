@@ -80,6 +80,21 @@ class WeightFile:
         return tuple(seen)
 
 
+# 16GB-class GPU preference for the distilled transformer (doctor + default loader).
+# 1) GGUF Q4 when present  2) NVFP4 if VRAM_GB >= 14  3) int8-convrot / bf16
+NVFP4_MIN_VRAM_GB = 14.0
+TRANSFORMER_PREFERENCE: tuple[str, ...] = (
+    "ltx-2.5-22b-distilled-transformer-bf16-Q4_K_M.gguf",
+    "ltx-2.5-22b-distilled-transformer-nvfp4.safetensors",
+    "ltx-2.5-22b-distilled-transformer-comfy-int8-convrot.safetensors",
+    "ltx-2.5-22b-distilled-transformer-bf16.safetensors",
+)
+TE_PREFERENCE: tuple[str, ...] = (
+    "gemma4-12b-heretic-ltx25-int8convrot.safetensors",
+    "gemma4-12b-with-proj-ltx-2.5-comfy-int8-convrot.safetensors",
+    "gemma4-12b-with-proj-ltx-2.5-bf16.safetensors",
+)
+
 # Official distilled split pack on gated Lightricks/LTX-2.5 (Hub file listing).
 # Download / default-wire names are the bf16 pack. 16GB-class installs may
 # already have comfy-int8-convrot / nvfp4 / GGUF Q4 — those still count.
@@ -94,13 +109,7 @@ WEIGHT_FILES: dict[str, WeightFile] = {
         mandatory=True,
         gated=True,
         note="Official distilled transformer (bf16, 42 GB). 16GB-class: comfy-int8-convrot, nvfp4, or GGUF Q4 also count.",
-        accepts=(
-            # When several exist locally, prefer the 16GB-class file first.
-            "ltx-2.5-22b-distilled-transformer-bf16-Q4_K_M.gguf",
-            "ltx-2.5-22b-distilled-transformer-nvfp4.safetensors",
-            "ltx-2.5-22b-distilled-transformer-comfy-int8-convrot.safetensors",
-            "ltx-2.5-22b-distilled-transformer-bf16.safetensors",
-        ),
+        accepts=TRANSFORMER_PREFERENCE,
     ),
     "text_encoder": WeightFile(
         key="text_encoder",
@@ -112,11 +121,7 @@ WEIGHT_FILES: dict[str, WeightFile] = {
         mandatory=True,
         gated=True,
         note="Official Gemma 4 12B + LTX 2.5 projection (bf16, 26.3 GB). Comfy int8 or heretic int8 also count.",
-        accepts=(
-            "gemma4-12b-heretic-ltx25-int8convrot.safetensors",
-            "gemma4-12b-with-proj-ltx-2.5-comfy-int8-convrot.safetensors",
-            "gemma4-12b-with-proj-ltx-2.5-bf16.safetensors",
-        ),
+        accepts=TE_PREFERENCE,
     ),
     "video_vae": WeightFile(
         key="video_vae",
@@ -470,13 +475,51 @@ def find_weight_file(filename: str, roots: Iterable[Path] | None = None) -> Path
     return None
 
 
+def transformer_preference_order(*, vram_gb: float | None = None) -> tuple[str, ...]:
+    """16GB-class pick order: GGUF → NVFP4 (if VRAM fits) → int8 → bf16 → stub."""
+    from master_agent.config import VRAM_GB
+
+    gb = float(VRAM_GB if vram_gb is None else vram_gb)
+    names: list[str] = [TRANSFORMER_PREFERENCE[0]]  # GGUF Q4
+    if gb >= NVFP4_MIN_VRAM_GB:
+        names.append(TRANSFORMER_PREFERENCE[1])  # NVFP4
+    names.extend(TRANSFORMER_PREFERENCE[2:])  # int8, official bf16
+    for stub, official in STUB_ALIASES.items():
+        if official == TRANSFORMER_PREFERENCE[-1] and stub not in names:
+            names.append(stub)
+    return tuple(names)
+
+
+def describe_transformer_pick(path: Path | None) -> str:
+    if path is None:
+        return "no local transformer"
+    name = path.name
+    if name.lower().endswith(".gguf"):
+        return f"GGUF Q4 ({name}) — 16GB-class preference #1"
+    if "nvfp4" in name.lower():
+        return f"NVFP4 ({name}) — 16GB-class preference #2"
+    if "int8-convrot" in name.lower():
+        return f"int8-convrot ({name}) — 16GB-class preference #3"
+    return f"{name} — fallback"
+
+
 def resolve_weight(weight: WeightFile, roots: Iterable[Path] | None = None) -> Path | None:
     """Best local file for a slot (preference order). None if all candidates missing/empty."""
     search = list(roots) if roots is not None else model_search_roots()
-    for name in weight.candidates:
+    order = (
+        transformer_preference_order()
+        if weight.key == "transformer"
+        else weight.candidates
+    )
+    for name in order:
         found = _search_name(name, search)
         if found is not None:
             return found
+    if weight.key == "transformer":
+        for name in weight.candidates:
+            found = _search_name(name, search)
+            if found is not None:
+                return found
     return None
 
 

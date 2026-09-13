@@ -101,10 +101,12 @@ def test_patcher_accepts_every_shipped_template():
 def test_local_gguf_rewrites_unet_loader_gguf(tmp_path, monkeypatch):
     root = tmp_path / "models"
     gguf = root / "diffusion_models" / "gguf" / "ltx-2.5-22b-distilled-transformer-bf16-Q4_K_M.gguf"
+    nvfp4 = root / "diffusion_models" / "ltx-2.5-22b-distilled-transformer-nvfp4.safetensors"
     te = root / "text_encoders" / "gemma4-12b-heretic-ltx25-int8convrot.safetensors"
     gguf.parent.mkdir(parents=True)
     te.parent.mkdir(parents=True)
     gguf.write_bytes(b"gguf")
+    nvfp4.write_bytes(b"nvfp4")
     te.write_bytes(b"te")
     monkeypatch.setattr(
         "master_agent.models.weights.model_search_roots",

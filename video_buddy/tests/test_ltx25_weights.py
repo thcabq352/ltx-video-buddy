@@ -12,14 +12,17 @@ import pytest
 from master_agent.models.weights import (
     BUNDLES,
     STUB_ALIASES,
+    TRANSFORMER_PREFERENCE,
     WEIGHT_FILES,
     MissingWeightsError,
+    describe_transformer_pick,
     download_files,
     find_weight_file,
     format_ask,
     require_weights,
     resolve_weight,
     scan_bundle,
+    transformer_preference_order,
 )
 
 
@@ -148,6 +151,34 @@ def test_gguf_and_heretic_te_satisfy_core(tmp_path: Path):
     found = resolve_weight(WEIGHT_FILES["transformer"], [root])
     assert found is not None
     assert found.name.endswith(".gguf")
+
+
+def test_transformer_prefers_gguf_over_nvfp4_and_int8(tmp_path: Path):
+    root = tmp_path / "models"
+    gguf = root / "diffusion_models" / "gguf" / TRANSFORMER_PREFERENCE[0]
+    nvfp4 = root / "diffusion_models" / TRANSFORMER_PREFERENCE[1]
+    official = root / "diffusion_models" / WEIGHT_FILES["transformer"].filename
+    gguf.parent.mkdir(parents=True)
+    gguf.write_bytes(b"gguf")
+    nvfp4.write_bytes(b"nvfp4")
+    official.write_bytes(b"bf16")
+    found = resolve_weight(WEIGHT_FILES["transformer"], [root])
+    assert found == gguf
+    assert "GGUF Q4" in describe_transformer_pick(found)
+    assert transformer_preference_order(vram_gb=16)[0].endswith(".gguf")
+    assert transformer_preference_order(vram_gb=16)[1].endswith("nvfp4.safetensors")
+
+
+def test_transformer_prefers_nvfp4_over_int8_when_no_gguf(tmp_path: Path):
+    root = tmp_path / "models"
+    nvfp4 = root / "diffusion_models" / TRANSFORMER_PREFERENCE[1]
+    int8 = root / "diffusion_models" / TRANSFORMER_PREFERENCE[2]
+    nvfp4.parent.mkdir(parents=True)
+    nvfp4.write_bytes(b"nvfp4")
+    int8.write_bytes(b"int8")
+    found = resolve_weight(WEIGHT_FILES["transformer"], [root])
+    assert found == nvfp4
+    assert "NVFP4" in describe_transformer_pick(found)
 
 
 def test_transformer_prefers_gguf_over_int8(tmp_path: Path):

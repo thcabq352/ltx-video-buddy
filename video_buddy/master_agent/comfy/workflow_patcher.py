@@ -305,7 +305,7 @@ def _bypass_missing_optional_loras(workflow: dict[str, Any]) -> list[str]:
 
 
 def _resolved_ltx25_names() -> tuple[str, str]:
-    """Local-best transformer / TE names; official Hub names if nothing is on disk."""
+    """16GB-class pick: GGUF Q4 → NVFP4 → int8/bf16. TE: heretic/int8 before official bf16."""
     from master_agent.models.weights import WEIGHT_FILES, resolve_weight
 
     transformer = WEIGHT_FILES["transformer"]

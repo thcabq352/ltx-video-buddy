@@ -76,9 +76,13 @@ back to that sibling tree.
 | Spatial upscaler | `ltx-2.5-latent-spatial-upscaler-x2-bf16-1.0.safetensors` | — |
 | IC-LoRA / MSR | `ltx-2.5-22b-ic-lora-ingredients-0.9.safetensors` | pixel-spatial IC-LoRA, stubs `ltx-2.5-ic-lora.safetensors` / `ltx-2.5-msr.safetensors` |
 
-When several transformers exist, loaders prefer **GGUF Q4 → NVFP4 → int8-convrot → bf16**.
-GGUF files use `UnetLoaderGGUF`. Official bf16 Gemma is not required if a
-working int8 / heretic TE is present.
+**16GB-class GPU preference** (doctor + default loader, `VRAM_GB` default 16):
+
+1. **GGUF Q4** when present (`UnetLoaderGGUF`)
+2. Else **NVFP4** if `VRAM_GB` ≥ 14 (fits a ~16GB card)
+3. Else **int8-convrot**, then official bf16
+
+Official bf16 Gemma is not required if a working int8 / heretic TE is present.
 
 Research JSON still says `ckpt_name: ltx-2.5-22b-distilled.safetensors` on
 `CheckpointLoaderSimple`. Buddy remaps that stub and rewrites the loader to

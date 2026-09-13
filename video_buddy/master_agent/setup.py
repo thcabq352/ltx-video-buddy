@@ -185,18 +185,26 @@ def check_ltx25_weights() -> dict[str, Any]:
         status = scan_bundle("ltx25_core")
     except Exception as exc:
         return _row("ltx25-weights", False, f"scan failed: {exc}", fix="python -m master_agent download-models --ltx25")
+    from master_agent.models.weights import describe_transformer_pick
+
+    pick = describe_transformer_pick(
+        Path(status.found_paths["transformer"]) if status.found_paths.get("transformer") else None
+    )
     if status.ok:
         found = ", ".join(Path(p).name for p in status.found_paths.values()) or "accepted local names"
-        return _row("ltx25-weights", True, f"present ({found})")
+        return _row("ltx25-weights", True, f"{pick}; present ({found})")
     names = ", ".join(w.filename for w in status.missing_mandatory[:4])
     more = f" (+{len(status.missing_mandatory) - 4} more)" if len(status.missing_mandatory) > 4 else ""
     hint = "python -m master_agent download-models --ltx25   # review confirmed-missing only, then --yes"
     if len(status.missing_mandatory) == 1 and status.missing_mandatory[0].key == "duration_head":
         hint = "duration-head is missing or zero-byte — " + hint
+    detail = f"missing {names}{more}"
+    if status.found_paths.get("transformer"):
+        detail = f"{pick}; {detail}"
     return _row(
         "ltx25-weights",
         False,
-        f"missing {names}{more}",
+        detail,
         fix=hint,
     )
 

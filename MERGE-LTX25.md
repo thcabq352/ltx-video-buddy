@@ -76,8 +76,9 @@ usable by default against whichever accepted local name is found.
 
 Research JSON still uses stub `ltx-2.5-22b-distilled.safetensors` on
 `CheckpointLoaderSimple`. Buddy remaps that and rewrites the loader.
-A typical 16GB-class Comfy install already has int8-convrot, NVFP4, and/or
-GGUF Q4 plus a heretic TE — those satisfy the slots without official bf16.
+16GB-class GPU preference (doctor + default loader): **GGUF Q4 first**, else
+NVFP4 when `VRAM_GB` ≥ 14, else int8-convrot / bf16. A typical 16GB install
+already has GGUF Q4 + NVFP4 + heretic TE — official bf16 Gemma is not required.
 Zero-byte `model_patches/ltx-2.5-duration-head-bf16.safetensors` is missing.
 Pixel-spatial IC-LoRA counts for the IC-LoRA slot. Sibling
 `ltx_director/workflows/ltx-2.5/` is a fallback for the same API JSON names.
