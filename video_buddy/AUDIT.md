@@ -47,7 +47,7 @@ Buddy still does not *queue* Fun Inpaint / LanPaint / warp / FaceID / Voronoi. S
 Buddy never synthesizes a graph from `/object_info`. The path is **template → patch → lint → `/prompt`**.
 
 ```
-brief ──▶ director.choose_variant (LTX 2.3 + wan22 + ltx25_* + flux)
+brief ──▶ director.choose_variant (every manifests.yaml slug)
               │
               ▼
      workflow_patcher.load_and_patch_workflow
@@ -96,8 +96,8 @@ brief ──▶ director.choose_variant (LTX 2.3 + wan22 + ltx25_* + flux)
 
 | Layer | Dynamic? | What is hardcoded |
 |---|---|---|
-| Director | LLM picks among `WORKFLOW_FILES` (LTX 2.3 five + `flux` + seven `ltx25_*`); rules: lipsync / wan22 / ltx25 keywords / directors / eros / else `base` | `WORKFLOW_FILES`, `_VARIANT_KEYWORDS` |
-| Patcher field maps | No | `manifests.yaml` `fields:` for `base`, `eros`, `directors`, `flux`, `lipsync`, `wan22`, `krea2_img` |
+| Director | LLM + rules pick among **every** `manifests.yaml` slug (`WORKFLOW_FILES` is derived from the manifest). Hard constraints (`--variant`, `--video` → lipsync) still win. | `load_workflow_files()`, `_VARIANT_KEYWORDS` |
+| Patcher field maps | No | `manifests.yaml` `fields:` for core LTX/Wan/Flux/H3 plus aivfx / movie_builder / qwen / ideogram / remaining `ltx25_*`. CCC ADV / preprocess / gitignored renderers stay baked-defaults. |
 | Heuristic patch | No | Class lists: `EmptyLTXVLatentVideo`, `KSampler`, `UNETLoader`, `WanVideoNAG` is **not** specially handled (wan22 uses named node ids) |
 | Validator | Yes — live/cache registry | Unknown `class_type` is a **hard fail** except optional nodes (TeaCache, `LanPaint_KSampler`, `GetWarpedNoiseFromVideo`, `MMAudio*`) |
 | TeaCache | Soft-bypass only | `OPTIONAL_ACCELERATOR_CLASS_TYPES` in `graph_ops.py` |
@@ -133,9 +133,9 @@ brief ──▶ director.choose_variant (LTX 2.3 + wan22 + ltx25_* + flux)
 | WAN Fun Control | **no** | manifests `vb_zimage_turbo_cn` only | **yes** (live `Wan22FunControlToVideo`) | Example file lives under gitignored `AI-RENDERING-EXAMPLE FILES/`. |
 | LightX2V LoRAs | **partial** | baked in wan22 Power Lora widgets | n/a (weights) | Inventory has `Wan21_T2V_14B_lightx2v_cfg_step_distill_lora_rank32`. Patcher cannot toggle it. |
 | Wan TeaCache | **partial (bypass)** | validator drops missing accel | **live YES** `TeaCache` + `WanVideoTeaCache` | **Do not inject** onto LTX or native wan22. Wrapper TeaCache is args for `WanVideoSampler` (CACHEARGS on old cache schema). |
-| VACE | **partial** | templates `vb_aivfx_adv`, `vb_aivfx_adv_13` | **yes** | Not director-routed. No possession/stand-in wiring. |
+| VACE | **yes (director)** | director `vb_aivfx_adv` / `_13` (keywords: vfx, possession, vace) | **yes** | Field map writes `IterPromptBuilder.string_1`. No Stand-In wiring. |
 | Stand-In | **no** | — | **yes** `WanVideoAddStandInLatent` | Wrapper embed node; needs a Wrapper graph. |
-| SAM2 masks | **no** | — | **yes** `SAM2Segment` | AI-VFX preprocess uses **SAM3**, and is template-only. |
+| SAM2 masks | **no** | — | **yes** `SAM2Segment` | AI-VFX preprocess uses **SAM3**, and is director-routed (`vb_aivfx_preprocess`) with baked widgets. |
 | LanPaint | **partial (bypass + patcher)** | seed/steps/cfg if a graph uses `LanPaint_KSampler` | **live YES** `LanPaint_KSampler` (not `LanPaint`) | No shipped graph. Soft-bypass if pack missing. |
 | Warp / VideoNoiseWarp | **partial (bypass)** | — | **live related** `GetWarpedNoiseFromVideo` | **No exact `VideoNoiseWarp`.** Prefer `GetWarpedNoiseFromVideo`. No graph. |
 | FaceID / IPAdapter_plus | **partial (dead UI)** | SDXL ADV **UI** graphs only | **live YES** `IPAdapterFaceID` | UI JSON is not queueable via validator. No API conversion, no director path. |
@@ -144,13 +144,13 @@ brief ──▶ director.choose_variant (LTX 2.3 + wan22 + ltx25_* + flux)
 | Voronoi / Perlin IMAGE nodes | **no** (Comfy) | — | **live YES** `CreateVoronoiMask`, `Image Perlin Power Fractal` | Buddy “fractal” is CPU Mandelbrot (`fractal/render.py`). |
 | CPU fractal zoom/inpaint/outpaint | **yes** | `python -m master_agent fractal` | n/a | No recursive Comfy loop (mask → Fun Inpaint → warp → again). |
 | RAFT | **hyp / no** | — | **no** `RAFT*` (Recraft* is a different pack) | Confirm live class; not in cache. |
-| Qwen / Krea edit | **partial** | manifests + `krea2_img` field map; CCC 4.1 API | **yes** | Not in director allowlist. Character sheet uses Flux, not Krea. |
-| MickMumpitz AI-VFX / Movie Builder / CCC | **partial** | large API templates | yes (VACE, CCC_*) | Manual `comfy run --template <slug>` (PR #5 slug resolve). Director will not route “possession VFX” here. |
+| Qwen / Krea edit | **yes (director)** | `krea2_img` / `vb_qwen_edit_360` / `vb_aivfx_startimage` field maps; CCC 4.1 API | **yes** | Director-routed. CCC 4.1 still baked-defaults. |
+| MickMumpitz AI-VFX / Movie Builder / CCC | **yes (director)** | large API templates + field maps where safe | yes (VACE, CCC_*) | Director routes `vfx` / `movie builder` / `ccc`. CCC ADV + gitignored renderers queue baked widgets — `--template` for precision. |
 | MMAudio | **partial (bypass)** | music = spectral-flux beats + mux | **live related** `MMAudioModelLoader` / `Sampler` / `VoCoder` | No exact class named `MMAudio`. Not wired as a generator. |
 | SeedVR2 | **yes (post)** | `upscale.py` + `workflows/upscale_seedvr2_api.json` | **yes** | Works as a finisher. RTX method points at gitignored Mickmumpitz filename. |
 | Sage-attention | **hyp / partial** | — | **yes** patch nodes | Launch flag not in repo. No graph inserts `*SageAttention*`. Bypass list does not include them (they are not MODEL passthroughs in the TeaCache sense). |
-| Movie Builder (LTX 2.3 ADV) | **partial** | `vb_movie_builder` API | mostly yes; `OlmDragCrop` / `PanoramaViewerNode` **missing** from cache | Would fail live validate on those two classes unless packs added or bypassed. |
-| Flux t2i (CCC sheets) | **yes (character)** | `character/sheet.py` → variant `flux` | yes | Not a director video variant. |
+| Movie Builder (LTX 2.3 ADV) | **yes (director)** | `vb_movie_builder` API + first-shot `PrimitiveStringMultiline` field map | mostly yes; `OlmDragCrop` / `PanoramaViewerNode` **missing** from cache | Would fail live validate on those two classes unless packs added or bypassed. |
+| Flux t2i (CCC sheets) | **yes** | `character/sheet.py` + director `flux` (character sheet / text-to-image) | yes | Still the stills path, now also director-routable. |
 
 ---
 
@@ -190,18 +190,24 @@ Desired (hypothesis): identity lock (FaceID / Stand-In) + VACE / Mick VFX compos
 
 What exists:
 
-1. Mick AI-VFX ADV API graphs (`WanVacePhantomSimpleV2`) — template only.
+1. Mick AI-VFX ADV API graphs (`WanVacePhantomSimpleV2`) — director-routed (`vfx` / `possession` / `vace`).
 2. `WanVideoAddStandInLatent` unused.
 3. Live `IPAdapterFaceID` exists; Buddy only has it in non-API SDXL UI graphs.
-4. Director cannot say “possession” and leave `base` LTX.
+4. Director keywords now pick `vb_aivfx_adv` for “possession”; identity lock is still missing.
 
-**Gap:** templates exist for VACE compositing; identity + control + agent routing do not.
+**Gap:** VACE compositing is director-routable; identity + control loops are not.
 
 ---
 
 ## 6. Recommended wiring plan (impact order)
 
-Do **not** expand `WORKFLOW_FILES` / director allowlist to every manifest slug. A 500-node CCC or VFX graph without a field map will queue the author’s leftover widgets.
+**Historical (superseded):** this audit originally said not to expand
+`WORKFLOW_FILES` / the director allowlist to every manifest slug, because a
+500-node CCC or VFX graph without a field map will queue the author’s leftover
+widgets. **Scott override (2026-09-13):** route **all** Video Buddy workflows
+through the director. Mitigation: derive the allowlist from `manifests.yaml`,
+add safe field maps where widgets are obvious, and document baked-default
+graphs so operators prefer `--template` for precision.
 
 1. **Fun Inpaint I2V loop (highest).** New small API template: `LoadImage` + mask (`SAM2Segment` or uploaded mask) → `WanFunInpaintToVideo` → Wan 2.2 I2V (K3NK AIO **or** Wrapper I2V, once weights are named). Patcher fields: prompt, image, mask, length. Optional director keyword `inpaint` / `heal` / `fill`. This is the fractal→inpaint on-ramp.
 2. **Live class names are now known** (Desk dump). Remaining **hyp**: K3NK weights, Realistic Vision, RAFT exact class, sage launch flag. Copy the 4114-class `/object_info` into `state/` when someone can run `fetch-object-info` on the tower.
@@ -211,7 +217,7 @@ Do **not** expand `WORKFLOW_FILES` / director allowlist to every manifest slug. 
 6. **Warp via `GetWarpedNoiseFromVideo`** (not `VideoNoiseWarp`). Soft-bypass is in; still need a graph that feeds warp into Fun Inpaint / LanPaint.
 7. **FaceID** — live class is `IPAdapterFaceID`. Convert one SDXL ADV graph to API **or** drop SD1.5 FaceID in favor of Stand-In / PulID on Wan.
 8. **MMAudio** — use `MMAudioModelLoader` / `MMAudioSampler` / `MMAudioVoCoder`. Soft-bypass is in; music pipeline is still beat-mux.
-9. **Movie Builder / CCC** — keep manual (`comfy run --template vb_movie_builder`). Soft-bypass `OlmDragCrop` / `PanoramaViewerNode` if they stay cosmetic.
+9. **Movie Builder / CCC** — now director-routable. Soft-bypass `OlmDragCrop` / `PanoramaViewerNode` if they stay cosmetic. Prefer `--template` when you need every leftover widget left alone.
 10. **Power mode** — if ever enabled for VFX, feed `object_info` snippets for *candidate* classes (Fun/VACE/SAM2), not only classes already in the graph. High risk; keep validate-gated.
 
 ---
@@ -219,7 +225,7 @@ Do **not** expand `WORKFLOW_FILES` / director allowlist to every manifest slug. 
 ## 7. Easy wins shipped in PR #5 (merged)
 
 1. **`WORKFLOW_FILES["wan22"]`** pointed at a file that does not exist (`260713_MICKMUMPITZ_WAN-2-2-VID_1-0_api.json`). Generate-mode still worked (patcher reads `manifests.yaml`). `comfy run --mode template --template wan22` and `list_templates()` silently omitted the slug. Now points at `260713_VIDEO-BUDDY_WAN-2-2-VID_1-0_api.json`.
-2. **`resolve_template` / `list_templates`** accept `manifests.yaml` slugs (`vb_aivfx_adv`, `flux`, `krea2_img`, `vb_movie_builder`, …) without adding them to the director allowlist.
+2. **`resolve_template` / `list_templates`** accept `manifests.yaml` slugs (`vb_aivfx_adv`, `flux`, `krea2_img`, `vb_movie_builder`, …). Those slugs are now also director-routable (allowlist derived from the manifest).
 3. **`python -m master_agent capabilities [--offline] [--json]`** prints this matrix from live or cached `object_info`.
 4. **Live-name follow-up:** catalog + soft-bypass use exact Desk names (`LanPaint_KSampler`, `GetWarpedNoiseFromVideo`, `TeaCache`). Patcher writes seed/steps/cfg on `LanPaint_KSampler`. Fun Inpaint / Fun Control / FaceID stay fail-closed.
 
