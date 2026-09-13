@@ -107,6 +107,30 @@ def _workflows_dir() -> Path:
     return Path(WORKFLOWS_DIR)
 
 
+def extra_ltx25_workflow_dirs() -> list[Path]:
+    """Sibling ``ltx_director/workflows/ltx-2.5`` trees (same filenames as Buddy)."""
+    from master_agent.config import PROJECT_ROOT
+
+    candidates = (
+        Path(PROJECT_ROOT).parent / "ltx_director" / "workflows" / "ltx-2.5",
+        Path(PROJECT_ROOT).parent.parent / "ltx_director" / "workflows" / "ltx-2.5",
+        Path.cwd() / "ltx_director" / "workflows" / "ltx-2.5",
+        Path.cwd().parent / "ltx_director" / "workflows" / "ltx-2.5",
+    )
+    out: list[Path] = []
+    seen: set[Path] = set()
+    for path in candidates:
+        try:
+            resolved = path.resolve()
+        except OSError:
+            continue
+        if resolved in seen or not resolved.is_dir():
+            continue
+        seen.add(resolved)
+        out.append(resolved)
+    return out
+
+
 def _seed_workflow_files() -> dict[str, str]:
     from master_agent.config import WORKFLOW_FILES
 
@@ -257,6 +281,8 @@ def load_catalog() -> tuple[CatalogEntry, ...]:
         if ltx_dir.is_dir():
             candidates.extend(sorted(ltx_dir.glob("*.json")))
         candidates.extend(sorted(root.rglob("*_api.json")))
+        for extra in extra_ltx25_workflow_dirs():
+            candidates.extend(sorted(extra.glob("*.json")))
         for path in candidates:
             try:
                 rel = path.resolve().relative_to(root.resolve()).as_posix()
@@ -333,6 +359,11 @@ def resolve_workflow_path(variant: str) -> Path:
     path = _workflows_dir() / entry.path
     if path.is_file():
         return path
+    name = Path(entry.path).name
+    for extra in extra_ltx25_workflow_dirs():
+        candidate = extra / name
+        if candidate.is_file():
+            return candidate
     raise FileNotFoundError(
         f"Workflow template not found for variant={variant}: {path}"
     )

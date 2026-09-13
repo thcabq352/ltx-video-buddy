@@ -14,6 +14,7 @@ from master_agent.comfy.catalog import (
     RESEARCH_ALIASES,
     clear_catalog_cache,
     default_variant_ids,
+    extra_ltx25_workflow_dirs,
     is_known_variant,
     list_catalog_items,
     resolve_variant,
@@ -159,3 +160,25 @@ def test_load_template_does_not_fall_back_to_base_for_ltx25():
     raw = load_workflow_template("ltx25_flf2v")
     assert _find_nodes_by_class(raw, "LTXVImgToVideo")
     assert _find_nodes_by_class(raw, "LoadImage")
+
+
+def test_resolve_workflow_falls_back_to_ltx_director_sibling(tmp_path, monkeypatch):
+    extra = tmp_path / "ltx_director" / "workflows" / "ltx-2.5"
+    extra.mkdir(parents=True)
+    name = Path(LTX25_FILES["ltx25_flf2v"]).name
+    dest = extra / name
+    dest.write_text((WORKFLOWS_DIR / LTX25_FILES["ltx25_flf2v"]).read_text(encoding="utf-8"))
+    empty = tmp_path / "empty_workflows"
+    empty.mkdir()
+    monkeypatch.setattr("master_agent.comfy.catalog._workflows_dir", lambda: empty)
+    monkeypatch.setattr("master_agent.comfy.catalog.extra_ltx25_workflow_dirs", lambda: [extra])
+    path = resolve_workflow_path("ltx25_flf2v")
+    assert path == dest
+
+
+def test_extra_ltx25_workflow_dirs_finds_sibling_tree(tmp_path, monkeypatch):
+    extra = tmp_path / "ltx_director" / "workflows" / "ltx-2.5"
+    extra.mkdir(parents=True)
+    monkeypatch.setattr("master_agent.config.PROJECT_ROOT", tmp_path / "video_buddy")
+    dirs = extra_ltx25_workflow_dirs()
+    assert extra.resolve() in [d.resolve() for d in dirs]

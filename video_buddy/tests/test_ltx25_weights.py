@@ -192,6 +192,42 @@ def test_extra_model_paths_yaml_base_is_searched(tmp_path: Path, monkeypatch):
     assert found == dest
 
 
+def test_class16_install_only_asks_for_zero_byte_duration_head(tmp_path: Path):
+    """Reference 16GB-class layout: int8 + nvfp4 + gguf + heretic TE. No official bf16."""
+    root = tmp_path / "models"
+    files = {
+        "diffusion_models/ltx-2.5-22b-distilled-transformer-comfy-int8-convrot.safetensors": b"int8",
+        "diffusion_models/ltx-2.5-22b-distilled-transformer-nvfp4.safetensors": b"nvfp4",
+        "diffusion_models/gguf/ltx-2.5-22b-distilled-transformer-bf16-Q4_K_M.gguf": b"gguf",
+        "text_encoders/gemma4-12b-heretic-ltx25-int8convrot.safetensors": b"te",
+        "vae/ltx-2.5-video-vae-bf16.safetensors": b"vae",
+        "vae/ltx-2.5-video-vae-conv-bf16.safetensors": b"vae2",
+        "vae/ltx-2.5-audio-vae-bf16.safetensors": b"avae",
+        "latent_upscale_models/ltx-2.5-latent-spatial-upscaler-x2-bf16-1.0.safetensors": b"up",
+        "loras/ltx-2.5-22b-distilled-lora-450-bf16.safetensors": b"lora",
+        "loras/ltx-2.5-22b-ic-lora-pixel-spatial-upscaler-x2-1.0.safetensors": b"iclora",
+    }
+    for rel, blob in files.items():
+        path = root / rel
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.write_bytes(blob)
+    empty = root / "model_patches" / "ltx-2.5-duration-head-bf16.safetensors"
+    empty.parent.mkdir(parents=True, exist_ok=True)
+    empty.write_bytes(b"")
+
+    core = scan_bundle("ltx25_core", roots=[root])
+    assert {w.key for w in core.missing_mandatory} == {"duration_head"}
+    assert "transformer" in core.found_paths
+    assert core.found_paths["transformer"].endswith(".gguf")
+    assert "text_encoder" in core.found_paths
+    assert "heretic" in core.found_paths["text_encoder"]
+    assert WEIGHT_FILES["transformer"].filename not in {Path(p).name for p in core.found_paths.values()}
+
+    ic = scan_bundle("ltx25_iclora", roots=[root])
+    assert "ic_lora" not in {w.key for w in ic.missing_mandatory}
+    assert Path(ic.found_paths["ic_lora"]).name.endswith("pixel-spatial-upscaler-x2-1.0.safetensors")
+
+
 def test_hf_hub_snapshot_counts_as_present(tmp_path: Path):
     snap = (
         tmp_path

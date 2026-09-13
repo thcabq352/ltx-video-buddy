@@ -1146,7 +1146,7 @@ def main(argv: list[str] | None = None) -> int:
     p.add_argument("--ltx25", action="store_true", default=True, help="LTX 2.5 distilled split pack (default)")
     p.add_argument("--bundle", help="weight bundle id (ltx25_core|ltx25_two_stage|ltx25_iclora|ltx25_msr|ltx25_all)")
     p.add_argument("--yes", action="store_true", help="consent: download the missing mandatory set")
-    p.add_argument("--optional", action="store_true", help="also fetch optional files (duration head, distilled LoRA)")
+    p.add_argument("--optional", action="store_true", help="also fetch optional Hub files (distilled LoRA 450, temporal upscaler)")
     p.add_argument("--json", action="store_true")
     p.set_defaults(func=cmd_download_models)
 

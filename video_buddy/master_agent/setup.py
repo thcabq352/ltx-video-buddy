@@ -186,14 +186,18 @@ def check_ltx25_weights() -> dict[str, Any]:
     except Exception as exc:
         return _row("ltx25-weights", False, f"scan failed: {exc}", fix="python -m master_agent download-models --ltx25")
     if status.ok:
-        return _row("ltx25-weights", True, "core LTX 2.5 split pack present")
+        found = ", ".join(Path(p).name for p in status.found_paths.values()) or "accepted local names"
+        return _row("ltx25-weights", True, f"present ({found})")
     names = ", ".join(w.filename for w in status.missing_mandatory[:4])
     more = f" (+{len(status.missing_mandatory) - 4} more)" if len(status.missing_mandatory) > 4 else ""
+    hint = "python -m master_agent download-models --ltx25   # review confirmed-missing only, then --yes"
+    if len(status.missing_mandatory) == 1 and status.missing_mandatory[0].key == "duration_head":
+        hint = "duration-head is missing or zero-byte — " + hint
     return _row(
         "ltx25-weights",
         False,
         f"missing {names}{more}",
-        fix="python -m master_agent download-models --ltx25   # review, then add --yes",
+        fix=hint,
     )
 
 

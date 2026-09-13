@@ -40,6 +40,30 @@ Set extra trees in `.env` when weights live on another drive:
 EXTRA_MODELS_DIRS=D:\ComfyUI\models
 ```
 
+## 16GB-class Comfy install (reference names)
+
+Typical files already under `video_buddy/models/` and/or `ComfyUI/models/`
+on a real 16GB+ tower. **Any one transformer name satisfies the slot** —
+official bf16 is not required. Doctor asks only for confirmed-missing or
+zero-byte files.
+
+| Path | Role |
+|---|---|
+| `diffusion_models/ltx-2.5-22b-distilled-transformer-comfy-int8-convrot.safetensors` | transformer (~20 GB) |
+| `diffusion_models/ltx-2.5-22b-distilled-transformer-nvfp4.safetensors` | transformer (~17 GB) |
+| `diffusion_models/gguf/ltx-2.5-22b-distilled-transformer-bf16-Q4_K_M.gguf` | transformer (~11 GB, preferred when present) |
+| `text_encoders/gemma4-12b-heretic-ltx25-int8convrot.safetensors` | TE (alt to official `gemma4-12b-with-proj-…`) |
+| `vae/ltx-2.5-video-vae-bf16.safetensors` / `ltx-2.5-video-vae-conv-bf16.safetensors` | video VAE |
+| `vae/ltx-2.5-audio-vae-bf16.safetensors` | audio VAE |
+| `latent_upscale_models/ltx-2.5-latent-spatial-upscaler-x2-bf16-1.0.safetensors` | two-stage / official pack |
+| `loras/ltx-2.5-22b-distilled-lora-450-bf16.safetensors` | optional distilled LoRA |
+| `loras/ltx-2.5-22b-ic-lora-pixel-spatial-upscaler-x2-1.0.safetensors` | IC-LoRA stand-in (also Ingredients) |
+| `model_patches/ltx-2.5-duration-head-bf16.safetensors` | **mandatory; 0 bytes = missing** |
+
+API graphs may also live under sibling `ltx_director/workflows/ltx-2.5/`
+(same filenames). Buddy ships copies in `workflows/ltx-2.5/` and falls
+back to that sibling tree.
+
 ## Names that already count as present
 
 | Slot | Official Hub name (if you fetch later) | Already-on-disk names that also work |
@@ -48,9 +72,9 @@ EXTRA_MODELS_DIRS=D:\ComfyUI\models
 | Text encoder | `gemma4-12b-with-proj-ltx-2.5-bf16.safetensors` | Comfy int8, `gemma4-12b-heretic-ltx25-int8convrot.safetensors` |
 | Video VAE | `ltx-2.5-video-vae-bf16.safetensors` | `ltx-2.5-video-vae-conv-bf16.safetensors` |
 | Audio VAE | `ltx-2.5-audio-vae-bf16.safetensors` | — |
-| Duration head | `ltx-2.5-duration-head-bf16.safetensors` | — |
+| Duration head | `ltx-2.5-duration-head-bf16.safetensors` | — (zero-byte is missing) |
 | Spatial upscaler | `ltx-2.5-latent-spatial-upscaler-x2-bf16-1.0.safetensors` | — |
-| IC-LoRA / MSR | `ltx-2.5-22b-ic-lora-ingredients-0.9.safetensors` | stubs `ltx-2.5-ic-lora.safetensors` / `ltx-2.5-msr.safetensors` |
+| IC-LoRA / MSR | `ltx-2.5-22b-ic-lora-ingredients-0.9.safetensors` | pixel-spatial IC-LoRA, stubs `ltx-2.5-ic-lora.safetensors` / `ltx-2.5-msr.safetensors` |
 
 When several transformers exist, loaders prefer **GGUF Q4 → NVFP4 → int8-convrot → bf16**.
 GGUF files use `UnetLoaderGGUF`. Official bf16 Gemma is not required if a

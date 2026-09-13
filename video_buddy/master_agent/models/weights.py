@@ -165,7 +165,11 @@ WEIGHT_FILES: dict[str, WeightFile] = {
         mandatory=True,
         gated=True,
         license_url=HF_ICLORA_LICENSE,
-        note="Official IC-LoRA Ingredients. Reconciles stub ltx-2.5-ic-lora.safetensors / ltx-2.5-msr.safetensors.",
+        note="Official IC-LoRA Ingredients. Pixel-spatial IC-LoRA and research stubs also count.",
+        accepts=(
+            "ltx-2.5-22b-ic-lora-ingredients-0.9.safetensors",
+            "ltx-2.5-22b-ic-lora-pixel-spatial-upscaler-x2-1.0.safetensors",
+        ),
     ),
     "distilled_lora": WeightFile(
         key="distilled_lora",
@@ -256,6 +260,7 @@ class WeightStatus:
     missing_optional: list[WeightFile] = field(default_factory=list)
     roots: list[str] = field(default_factory=list)
     bundle: str = ""
+    found_paths: dict[str, str] = field(default_factory=dict)
 
     @property
     def ok(self) -> bool:
@@ -266,7 +271,10 @@ class WeightStatus:
             "ok": self.ok,
             "bundle": self.bundle,
             "roots": self.roots,
-            "present": [w.filename for w in self.present],
+            "present": [
+                {"key": w.key, "official": w.filename, "found": self.found_paths.get(w.key, w.filename)}
+                for w in self.present
+            ],
             "missing_mandatory": [_file_row(w) for w in self.missing_mandatory],
             "missing_optional": [_file_row(w) for w in self.missing_optional],
             "ask": format_ask(self) if not self.ok else "",
@@ -499,6 +507,7 @@ def scan_bundle(bundle: str, *, roots: Iterable[Path] | None = None) -> WeightSt
         found = resolve_weight(weight, search)
         if found is not None:
             status.present.append(weight)
+            status.found_paths[weight.key] = str(found)
             continue
         if weight.mandatory:
             status.missing_mandatory.append(weight)
@@ -521,6 +530,15 @@ def format_ask(status: WeightStatus) -> str:
         "Nothing was downloaded (consent required).",
         "",
         f"Bundle: {status.bundle or 'ltx25'}",
+        "",
+        "Already present (not re-downloaded):",
+    ]
+    if status.found_paths:
+        for key, path in status.found_paths.items():
+            lines.append(f"  - {key}: {path}")
+    else:
+        lines.append("  (none)")
+    lines += [
         "",
         "Missing (mandatory):",
     ]
