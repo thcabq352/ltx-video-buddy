@@ -309,12 +309,16 @@ MUSIC_DEFAULTS: dict[str, Any] = {
     "low_energy_s": 4.0,
 }
 
+# Director-routable variants only. Template slugs for `comfy run --template`
+# also resolve from workflows/manifests.yaml (see cli_run.resolve_template).
+# Keep this allowlist tight — expanding it lets the director LLM queue
+# 500-node VFX/CCC graphs that the patcher cannot safely parameterize.
 WORKFLOW_FILES: dict[str, str] = {
     "base": "base_t2v_i2v.json",
     "eros": "eros_t2v_i2v.json",
     "directors": "directors.json",
     "lipsync": "lipsync_ia2v.json",
-    "wan22": "260713_MICKMUMPITZ_WAN-2-2-VID_1-0_api.json",
+    "wan22": "260713_VIDEO-BUDDY_WAN-2-2-VID_1-0_api.json",
 }
 
 

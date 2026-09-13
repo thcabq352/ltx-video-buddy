@@ -17,6 +17,7 @@ Commands:
   comfy run           Drive ComfyUI from the CLI (prepare + lint + queue)
   diagnose            9-frame hull fire (sec/step); does not spend shift budget
   budget              status | reset-shift  (VRAM-min shift ledger)
+  capabilities        Gap matrix: tower-ish Comfy nodes vs Buddy wiring
   curriculum          Print LESSON_BUDDY_WORKS_HERE (L0→L5) and Part 2 gate
   about               Print the studio identity card
 """
@@ -89,6 +90,32 @@ def cmd_fetch_object_info(args: argparse.Namespace) -> int:
         print(f"FAIL  {e}")
         return 1
     print(f"OK    cached {len(info)} node classes to state/object_info.json")
+    return 0
+
+
+def cmd_capabilities(args: argparse.Namespace) -> int:
+    from master_agent.comfy.capabilities import format_matrix, run_probe
+    from master_agent.config import WORKFLOW_FILES
+
+    prefer_live = not bool(args.offline)
+    try:
+        rows, source = run_probe(prefer_live=prefer_live)
+    except Exception as e:
+        print(f"FAIL  {e}")
+        return 1
+    if args.json:
+        print(
+            json.dumps(
+                {
+                    "object_info": source,
+                    "director_allowlist": sorted(WORKFLOW_FILES),
+                    "rows": [r.to_dict() for r in rows],
+                },
+                indent=1,
+            )
+        )
+        return 0
+    print(format_matrix(rows, source=source), end="")
     return 0
 
 
@@ -1127,6 +1154,14 @@ def main(argv: list[str] | None = None) -> int:
     p.add_argument("budget_command", choices=["status", "reset-shift"])
     p.add_argument("--json", action="store_true", help="machine-readable snapshot")
     p.set_defaults(func=cmd_budget)
+
+    p = sub.add_parser(
+        "capabilities",
+        help="print Comfy capability gap matrix (object_info vs Buddy wiring)",
+    )
+    p.add_argument("--offline", action="store_true", help="use cached object_info only")
+    p.add_argument("--json", action="store_true", help="machine-readable matrix")
+    p.set_defaults(func=cmd_capabilities)
 
     args = parser.parse_args(argv)
     from master_agent.control.versioned_config import announce_config

@@ -59,6 +59,20 @@ def editable_fields(workflow: dict[str, Any]) -> list[dict[str, Any]]:
     return rows
 
 
+def _manifest_files() -> dict[str, str]:
+    """Slug → relative workflow path from workflows/manifests.yaml."""
+    from master_agent.comfy.workflow_patcher import _load_manifests
+
+    out: dict[str, str] = {}
+    for slug, meta in (_load_manifests() or {}).items():
+        if not isinstance(meta, dict):
+            continue
+        filename = meta.get("file")
+        if isinstance(filename, str) and filename.strip():
+            out[str(slug)] = filename.replace("\\", "/")
+    return out
+
+
 def list_templates() -> list[dict[str, str]]:
     from master_agent.config import WORKFLOW_FILES, WORKFLOWS_DIR
 
@@ -71,6 +85,15 @@ def list_templates() -> list[dict[str, str]]:
             continue
         rel = path.relative_to(root).as_posix()
         items.append({"id": slug, "path": rel, "name": f"{slug} — {filename}", "kind": "variant"})
+        seen.add(rel)
+    for slug, filename in _manifest_files().items():
+        path = (root / filename).resolve()
+        if not path.is_file():
+            continue
+        rel = path.relative_to(root).as_posix()
+        if rel in seen:
+            continue
+        items.append({"id": slug, "path": rel, "name": f"{slug} — {filename}", "kind": "manifest"})
         seen.add(rel)
     if root.is_dir():
         for path in sorted(root.rglob("*.json")):
@@ -89,6 +112,10 @@ def resolve_template(rel: str | Path) -> Path:
         raise ValueError("template path required")
     if key in WORKFLOW_FILES:
         key = WORKFLOW_FILES[key]
+    else:
+        mapped = _manifest_files().get(key)
+        if mapped:
+            key = mapped
     raw = Path(key)
     if raw.is_absolute():
         raise ValueError("template must be a path under workflows/")
