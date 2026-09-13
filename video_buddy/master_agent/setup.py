@@ -177,6 +177,26 @@ def check_comfy() -> dict[str, Any]:
     return _row("comfyui", False, f"not reachable at {url}", fix=hint)
 
 
+def check_ltx25_weights() -> dict[str, Any]:
+    """Scan-only. Never downloads. Missing files become NEED + ask-to-download."""
+    try:
+        from master_agent.models.weights import scan_bundle
+
+        status = scan_bundle("ltx25_core")
+    except Exception as exc:
+        return _row("ltx25-weights", False, f"scan failed: {exc}", fix="python -m master_agent download-models --ltx25")
+    if status.ok:
+        return _row("ltx25-weights", True, "core LTX 2.5 split pack present")
+    names = ", ".join(w.filename for w in status.missing_mandatory[:4])
+    more = f" (+{len(status.missing_mandatory) - 4} more)" if len(status.missing_mandatory) > 4 else ""
+    return _row(
+        "ltx25-weights",
+        False,
+        f"missing {names}{more}",
+        fix="python -m master_agent download-models --ltx25   # review, then add --yes",
+    )
+
+
 def snapshot() -> list[dict[str, Any]]:
     return [
         check_python(),
@@ -187,6 +207,7 @@ def snapshot() -> list[dict[str, Any]]:
         check_ffmpeg(),
         check_ollama(),
         check_comfy(),
+        check_ltx25_weights(),
     ]
 
 
@@ -301,7 +322,30 @@ def fix() -> int:
     return print_report(snapshot())
 
 
-def cmd_setup(*, do_fix: bool) -> int:
+def cmd_setup(*, do_fix: bool, fix_models: bool = False) -> int:
+    rc = 0
     if do_fix:
-        return fix()
+        rc = fix()
+        if not fix_models:
+            return rc
+    if fix_models:
+        from master_agent.models.weights import MissingWeightsError, download_missing_bundle, format_ask, scan_bundle
+
+        status = scan_bundle("ltx25_all")
+        if status.ok:
+            print("OK    LTX 2.5 weights already present")
+            return rc
+        print(format_ask(status))
+        print()
+        print("doctor --fix-models is explicit consent to fetch the missing mandatory set.")
+        try:
+            download_missing_bundle("ltx25_all", yes=True)
+        except MissingWeightsError as exc:
+            print(f"FAIL  {exc}")
+            return 1
+        except Exception as exc:
+            print(f"FAIL  {exc}")
+            return 1
+        model_rc = print_report(snapshot())
+        return rc or model_rc
     return print_report(snapshot())

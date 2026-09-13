@@ -446,3 +446,64 @@ vb_movie_builder:
   ui_source: 260507_VIDEO-BUDDY_MOVIE-BUILDER_1-1_ADV.json
   description: LTX 2.3 Movie Builder ADV — shot-by-shot movie pipeline (Flux 2 Klein start-frames, LTX 2.3 video+audio, voice cloning, 360 environments, ShotAssembler)
   requires: [ComfyUI-Mickmumpitz-Nodes (ShotAssembler/ShotVideoOutput/ResolutionPicker), movie_builder_shims (ShotOrder/ShotDuplicator), ComfyUI-LTXVideo, KJNodes, RES4LYF, VideoHelperSuite, ComfyUI-Easy-Use, rgthree-comfy, ComfyUI-Olm-DragCrop, ComfyUI_preview360panorama]
+
+# --- LTX 2.5 API pack (ported from thcabq352/ltx2.5-research-agent) ---
+# Default catalog entries. Stub ckpt names in the JSON are remapped at patch
+# time to the official Lightricks/LTX-2.5 Comfy split pack. See REQUIRED-FILES.md.
+
+ltx25_t2v_i2v:
+  file: ltx-2.5/LTX-2.5_T2V_I2V_Single_Stage_Distilled_api.json
+  format: api
+  description: LTX 2.5 single-stage distilled T2V / I2V
+  requires: [ComfyUI-LTXVideo, VideoHelperSuite]
+  fields:
+    prompt: { class_type: CLIPTextEncode, index: 0, input: text }
+    negative_prompt: { class_type: CLIPTextEncode, index: 1, input: text }
+    seed: { class_type: KSampler, index: 0, input: seed }
+    width: { class_type: EmptyLTXVLatentVideo, index: 0, input: width }
+    height: { class_type: EmptyLTXVLatentVideo, index: 0, input: height }
+    frames: { class_type: EmptyLTXVLatentVideo, index: 0, input: length }
+
+ltx25_t2v_i2v_two_stage:
+  file: ltx-2.5/LTX-2.5_T2V_I2V_Two_Stage_Distilled_api.json
+  format: api
+  description: LTX 2.5 two-stage distilled T2V / I2V (latent spatial upscale)
+  requires: [ComfyUI-LTXVideo, VideoHelperSuite, LTXVLatentUpsampler]
+  fields:
+    prompt: { class_type: CLIPTextEncode, index: 0, input: text }
+    seed: { class_type: KSampler, index: 0, input: seed }
+    frames: { class_type: EmptyLTXVLatentVideo, index: 0, input: length }
+
+ltx25_flf2v:
+  file: ltx-2.5/LTX-2.5_FLF2V_api.json
+  format: api
+  description: LTX 2.5 first + last frame to video
+  requires: [ComfyUI-LTXVideo, VideoHelperSuite]
+  fields:
+    prompt: { class_type: CLIPTextEncode, index: 0, input: text }
+    seed: { class_type: KSampler, index: 0, input: seed }
+    frames: { class_type: EmptyLTXVLatentVideo, index: 0, input: length }
+
+ltx25_msr:
+  file: ltx-2.5/LTX-2.5_MSR_Multi_Reference_api.json
+  format: api
+  description: LTX 2.5 multi-reference (pic1–pic4 + background)
+  requires: [ComfyUI-LTXVideo (ComfyUILTX25MSR*), VideoHelperSuite]
+
+ltx25_v2v_ic_lora:
+  file: ltx-2.5/LTX-2.5_V2V_ICLoRA_Single_Stage_Distilled_api.json
+  format: api
+  description: LTX 2.5 video-to-video IC-LoRA
+  requires: [ComfyUI-LTXVideo (LTXVICLoRALoader), VideoHelperSuite]
+
+ltx25_a2v:
+  file: ltx-2.5/LTX-2.5_A2V_Two_Stage_Distilled_api.json
+  format: api
+  description: LTX 2.5 audio-to-video two-stage distilled
+  requires: [ComfyUI-LTXVideo, VideoHelperSuite]
+
+ltx25_t2a:
+  file: ltx-2.5/LTX-2.5_T2A_Single_Stage_Distilled_api.json
+  format: api
+  description: LTX 2.5 text-to-audio single-stage distilled
+  requires: [ComfyUI-LTXVideo]

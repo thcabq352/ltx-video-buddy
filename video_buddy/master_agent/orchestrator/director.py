@@ -13,14 +13,31 @@ import re
 from pathlib import Path
 from typing import Any, Optional
 
+from master_agent.comfy.catalog import default_variant_ids, is_known_variant
 from master_agent.config import DIRECTOR_LLM, WORKFLOW_FILES
 
 _VARIANT_KEYWORDS = [
     ("lipsync", ("lip-sync", "lipsync", "lip sync", "lipdub", "dub")),
     ("wan22", ("wan 2.2", "wan2.2", "wan22", "photoreal", "photo-real", "stock photo", "film grain")),
+    ("ltx25_flf2v", ("flf2v", "first-last", "first last frame", "last frame", "start and end frame")),
+    ("ltx25_msr", ("multi-reference", "multi reference", "msr", "pic1", "reference sheet")),
+    ("ltx25_v2v_ic_lora", ("ic-lora", "iclora", "ic lora", "video-to-video", "v2v")),
+    ("ltx25_a2v", ("audio-to-video", "audio to video", "a2v")),
+    ("ltx25_t2a", ("text-to-audio", "text to audio", "t2a", "audio only")),
+    ("ltx25_t2v_i2v_two_stage", ("two-stage", "two stage", "latent upscale", "ltx 2.5 two")),
+    ("ltx25_t2v_i2v", ("ltx 2.5", "ltx2.5", "ltx25", "ltx-2.5")),
     ("directors", ("director", "storyboard", "scene", "shots", "multi-shot")),
     ("eros", ("eros", "10eros")),
 ]
+
+
+def _allowed_variants() -> set[str]:
+    allowed = set(WORKFLOW_FILES.keys())
+    try:
+        allowed.update(default_variant_ids())
+    except Exception:
+        pass
+    return allowed
 
 
 def rule_based_variant(request: str) -> str:
@@ -65,7 +82,7 @@ def _llm_variant(request: str, *, fallback: str) -> Optional[str]:
     )
     payload = {
         "request": request,
-        "allowed_variants": sorted(WORKFLOW_FILES.keys()),
+        "allowed_variants": sorted(_allowed_variants()),
         "rule_based_suggestion": fallback,
     }
     try:
@@ -83,7 +100,7 @@ def _llm_variant(request: str, *, fallback: str) -> Optional[str]:
         if not isinstance(data, dict):
             return None
         variant = str(data.get("variant") or "").strip().lower()
-        return variant if variant in WORKFLOW_FILES else None
+        return variant if variant in _allowed_variants() or is_known_variant(variant) else None
     except Exception:
         return None
 

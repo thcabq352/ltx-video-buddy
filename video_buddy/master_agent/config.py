@@ -143,6 +143,13 @@ DIAGNOSE_HEIGHT = 512
 # Per-variant generation profiles: fps + frame-count snapping (LTX=8n+1, Wan=4n+1)
 VARIANT_GEN: dict[str, dict[str, int]] = {
     "wan22": {"fps": 16, "frame_snap": 4},
+    "ltx25_t2v_i2v": {"fps": 24, "frame_snap": 8},
+    "ltx25_t2v_i2v_two_stage": {"fps": 24, "frame_snap": 8},
+    "ltx25_flf2v": {"fps": 24, "frame_snap": 8},
+    "ltx25_msr": {"fps": 24, "frame_snap": 8},
+    "ltx25_v2v_ic_lora": {"fps": 24, "frame_snap": 8},
+    "ltx25_a2v": {"fps": 24, "frame_snap": 8},
+    "ltx25_t2a": {"fps": 24, "frame_snap": 8},
 }
 _DEFAULT_GEN = {"fps": DEFAULT_FPS, "frame_snap": 8}
 
@@ -262,6 +269,31 @@ MODEL_FILES: dict[str, dict[str, str]] = {
     },
 }
 
+# Official LTX 2.5 Comfy split pack (no all-in-one checkpoint key — do not
+# spray the LTX 2.3 baked EROS ckpt onto these graphs).
+_LTX25_SPLIT = {
+    "diffusion": "ltx-2.5-22b-distilled-transformer-comfy-int8-convrot.safetensors",
+    "vae": "ltx-2.5-video-vae-bf16.safetensors",
+    "audio_vae": "ltx-2.5-audio-vae-bf16.safetensors",
+    "text_encoder": "gemma4-12b-with-proj-ltx-2.5-comfy-int8-convrot.safetensors",
+}
+MODEL_FILES["ltx25_t2v_i2v"] = dict(_LTX25_SPLIT)
+MODEL_FILES["ltx25_t2v_i2v_two_stage"] = {
+    **_LTX25_SPLIT,
+    "spatial_upscaler": "ltx-2.5-latent-spatial-upscaler-x2-bf16-1.0.safetensors",
+}
+MODEL_FILES["ltx25_flf2v"] = dict(_LTX25_SPLIT)
+MODEL_FILES["ltx25_a2v"] = dict(_LTX25_SPLIT)
+MODEL_FILES["ltx25_t2a"] = dict(_LTX25_SPLIT)
+MODEL_FILES["ltx25_v2v_ic_lora"] = {
+    **_LTX25_SPLIT,
+    "lora": "ltx-2.5-22b-ic-lora-ingredients-0.9.safetensors",
+}
+MODEL_FILES["ltx25_msr"] = {
+    **_LTX25_SPLIT,
+    "lora": "ltx-2.5-22b-ic-lora-ingredients-0.9.safetensors",
+}
+
 # Soft requirements: missing these warn but do not fail preflight hard-count alone
 MODEL_OPTIONAL_KEYS = frozenset({"diffusion", "checkpoint"})
 
@@ -314,7 +346,15 @@ WORKFLOW_FILES: dict[str, str] = {
     "eros": "eros_t2v_i2v.json",
     "directors": "directors.json",
     "lipsync": "lipsync_ia2v.json",
-    "wan22": "260713_MICKMUMPITZ_WAN-2-2-VID_1-0_api.json",
+    "wan22": "260713_VIDEO-BUDDY_WAN-2-2-VID_1-0_api.json",
+    "flux": "flux_t2i.json",
+    "ltx25_t2v_i2v": "ltx-2.5/LTX-2.5_T2V_I2V_Single_Stage_Distilled_api.json",
+    "ltx25_t2v_i2v_two_stage": "ltx-2.5/LTX-2.5_T2V_I2V_Two_Stage_Distilled_api.json",
+    "ltx25_flf2v": "ltx-2.5/LTX-2.5_FLF2V_api.json",
+    "ltx25_msr": "ltx-2.5/LTX-2.5_MSR_Multi_Reference_api.json",
+    "ltx25_v2v_ic_lora": "ltx-2.5/LTX-2.5_V2V_ICLoRA_Single_Stage_Distilled_api.json",
+    "ltx25_a2v": "ltx-2.5/LTX-2.5_A2V_Two_Stage_Distilled_api.json",
+    "ltx25_t2a": "ltx-2.5/LTX-2.5_T2A_Single_Stage_Distilled_api.json",
 }
 
 
@@ -336,6 +376,8 @@ def resolve_model_path(filename: str) -> Path | None:
         "vae",
         "text_encoders",
         "unet",
+        "latent_upscale_models",
+        "model_patches",
     )
     for sub in subdirs:
         p = MODELS_DIR / sub / filename

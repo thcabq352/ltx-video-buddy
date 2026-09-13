@@ -1,15 +1,19 @@
-"""Download Flux fp8 weights into models/ (idempotent).
+"""Download Flux / LTX 2.5 weights into models/ (idempotent, consent-gated).
 
 Flux t2i set (16GB-friendly fp8, non-gated repos):
   - Comfy-Org/flux1-dev / flux1-dev-fp8.safetensors     -> models/diffusion_models/
   - comfyanonymous/flux_text_encoders / clip_l + t5xxl  -> models/text_encoders/
   - models/vae/ae.safetensors is expected to exist already (warn only).
 
+LTX 2.5 distilled split pack lives in ``master_agent.models.weights``.
+Never auto-download those gated files — callers must pass ``yes=True``.
+
 Files already at their destination are skipped (SKIP). Downloads go through
 the huggingface_hub cache and are then copied into models/.
 
 Usage:
-    python -c "from master_agent.models.download import download_flux_weights; download_flux_weights()"
+    python -m master_agent download-flux
+    python -m master_agent download-models --ltx25 --yes
 """
 
 from __future__ import annotations
@@ -34,23 +38,47 @@ FLUX_FILES: list[tuple[str, str, str]] = [
 ]
 
 
+def download_hub_file(
+    *,
+    repo_id: str,
+    repo_filename: str,
+    dest: Path,
+    progress: Callable[[str], None] = print,
+) -> Path:
+    """Download one Hub file into dest. Skips if dest already exists."""
+    if dest.is_file():
+        progress(f"SKIP {dest} (already exists)")
+        return dest
+    dest.parent.mkdir(parents=True, exist_ok=True)
+    from huggingface_hub import hf_hub_download
+    from huggingface_hub.utils import GatedRepoError
+
+    progress(f"Downloading {repo_id}/{repo_filename} ...")
+    try:
+        cached = hf_hub_download(repo_id=repo_id, filename=repo_filename)
+    except GatedRepoError as exc:
+        raise RuntimeError(
+            f"Gated repo {repo_id} — accept the license on Hugging Face and set "
+            f"HF_TOKEN (huggingface-cli login). {exc}"
+        ) from exc
+    shutil.copyfile(cached, dest)
+    progress(f"OK   {dest}")
+    return dest
+
+
 def download_flux_weights(progress: Callable[[str], None] = print) -> list[Path]:
     """Ensure all Flux weights are present under models/. Returns their paths."""
-    from huggingface_hub import hf_hub_download
-
     paths: list[Path] = []
     for repo_id, filename, sub in FLUX_FILES:
         dest = MODELS_DIR / sub / filename
-        if dest.is_file():
-            progress(f"SKIP {dest} (already exists)")
-            paths.append(dest)
-            continue
-        dest.parent.mkdir(parents=True, exist_ok=True)
-        progress(f"Downloading {repo_id}/{filename} ...")
-        cached = hf_hub_download(repo_id=repo_id, filename=filename)
-        shutil.copyfile(cached, dest)
-        progress(f"OK   {dest}")
-        paths.append(dest)
+        paths.append(
+            download_hub_file(
+                repo_id=repo_id,
+                repo_filename=filename,
+                dest=dest,
+                progress=progress,
+            )
+        )
 
     vae = MODELS_DIR / "vae" / FLUX_VAE
     if vae.is_file():

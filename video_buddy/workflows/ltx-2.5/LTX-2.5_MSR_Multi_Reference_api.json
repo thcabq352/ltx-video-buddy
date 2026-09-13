@@ -1,0 +1,70 @@
+{
+  "1": {
+    "class_type": "CheckpointLoaderSimple",
+    "inputs": { "ckpt_name": "ltx-2.5-22b-distilled.safetensors" }
+  },
+  "2": {
+    "class_type": "ComfyUILTX25MSRICLoRALoader",
+    "inputs": {
+      "model": ["1", 0],
+      "lora_name": "ltx-2.5-msr.safetensors",
+      "strength_model": 1.0
+    },
+    "_meta": { "title": "MSR LoRA" }
+  },
+  "3": {
+    "class_type": "CLIPTextEncode",
+    "inputs": { "text": "multi-reference scene, locked subjects", "clip": ["1", 1] },
+    "_meta": { "title": "Positive Prompt" }
+  },
+  "4": {
+    "class_type": "EmptyLTXVLatentVideo",
+    "inputs": { "width": 1280, "height": 720, "length": 145, "batch_size": 1 }
+  },
+  "5": {
+    "class_type": "ComfyUILTX25MSRMultiReferenceGuide",
+    "inputs": {
+      "positive": ["3", 0],
+      "negative": ["3", 0],
+      "latent": ["4", 0],
+      "pic1": "pic1.png",
+      "pic2": "pic2.png",
+      "pic3": "pic3.png",
+      "pic4": "pic4.png",
+      "background": "background.png",
+      "strength": 1.0,
+      "reference_frames": "33"
+    },
+    "_meta": { "title": "MSR Multi-Reference Guide" }
+  },
+  "6": {
+    "class_type": "LoraLoader",
+    "inputs": {
+      "model": ["2", 0],
+      "clip": ["1", 1],
+      "lora_name": "camera-orbit.safetensors",
+      "strength_model": 0.6,
+      "strength_clip": 0.6
+    },
+    "_meta": { "title": "Camera LoRA" }
+  },
+  "7": {
+    "class_type": "KSampler",
+    "inputs": {
+      "seed": 0,
+      "steps": 8,
+      "cfg": 1.0,
+      "sampler_name": "euler",
+      "scheduler": "simple",
+      "denoise": 1.0,
+      "model": ["6", 0],
+      "positive": ["5", 0],
+      "negative": ["5", 1],
+      "latent_image": ["5", 2]
+    }
+  },
+  "8": {
+    "class_type": "VHS_VideoCombine",
+    "inputs": { "frame_rate": 24, "filename_prefix": "ltx25_msr", "format": "video/h264-mp4", "images": ["7", 0] }
+  }
+}

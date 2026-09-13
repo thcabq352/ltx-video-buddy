@@ -1,0 +1,19 @@
+{
+  "1": {
+    "class_type": "CheckpointLoaderSimple",
+    "inputs": { "ckpt_name": "ltx-2.5-22b-distilled.safetensors" }
+  },
+  "2": {
+    "class_type": "CLIPTextEncode",
+    "inputs": { "text": "warm room tone and soft synth", "clip": ["1", 1] },
+    "_meta": { "title": "Positive Prompt" }
+  },
+  "3": {
+    "class_type": "LTXVEmptyLatentAudio",
+    "inputs": { "batch_size": 1, "frames_number": 145, "frame_rate": 24 }
+  },
+  "4": {
+    "class_type": "SaveAudio",
+    "inputs": { "audio": ["3", 0], "filename_prefix": "ltx25_t2a" }
+  }
+}
