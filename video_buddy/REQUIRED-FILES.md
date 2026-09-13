@@ -52,6 +52,7 @@ Playwright / `.env` / ffmpeg / Ollama models only.
 | `ffmpeg` | on PATH |
 | `ollama` | on PATH and `qwen3-vl-heretic` + `nomic-embed-text` listed |
 | `comfyui` | `COMFYUI_URL` `/system_stats` reachable |
+| `vram-policy` | Shared 16GB pack policy (GGUF Q4/Q5 → NVFP4 → int8/fp8) |
 | `ltx25-weights` | `ltx25_core` scan + loader pick (GGUF / NVFP4 / int8 / bf16) |
 | `h3-weights` | `h3_fl2va` scan + loader pick (GGUF Q4_K / NVFP4 / int8) |
 
@@ -191,3 +192,29 @@ Hubs: [`unsloth/MiniMax-H3-GGUF`](https://huggingface.co/unsloth/MiniMax-H3-GGUF
 
 Nodes: `MiniMaxH3ImageToVideo`, `MiniMaxH3ReferenceToVideo`, `UnetLoaderGGUF`,
 `CLIPLoader` (`type=minimax`), `VAEDecode` + `VAEDecodeAudio`, `CreateVideo`.
+
+## Other families (same 16GB pick, attested names only)
+
+`python -m master_agent workflows --vram` is the table. Download scans
+(never auto-fetch):
+
+```bash
+python -m master_agent download-models --wan
+python -m master_agent download-models --vace
+python -m master_agent download-models --krea
+python -m master_agent download-models --qwen
+python -m master_agent download-models --flux-pack
+```
+
+| Family | 16GB default (when present) | Hub (attested) |
+|---|---|---|
+| Wan 2.2 | `Wan2.2-T2V-A14B-HighNoise-Q4_K_S.gguf` + Lightx2v | QuantStack/Wan2.2-T2V-A14B-GGUF; fp8 fallback Comfy-Org |
+| VACE | `wan-14B_vace_skyreels_v3_R2V_e4m3fn_v1-Q4_K_M.gguf` | mickmumpitz/VACE_Skyreels_V3_R2V_Merge-GGUF |
+| Krea-2 | `krea2_turbo_nvfp4.safetensors` | Comfy-Org/Krea-2 |
+| Flux | `flux1-dev-Q4_K_S.gguf` (else `flux1-dev-fp8`) | city96/FLUX.1-dev-gguf; Comfy-Org/flux1-dev |
+| Qwen Edit | `Qwen-Image-Edit-2509-Q5_0.gguf` | QuantStack/Qwen-Image-Edit-2509-GGUF |
+| LTX 2.3 | EROS baked all-in-one | QuantStack/LTX-2.3-GGUF is optional / tight |
+
+K3NK AIO I2V: **no attested pack** (Hub search only found LoRAs). Not a default.
+Do not invent filenames. Heavy graphs (Movie Builder, CCC ADV, AI-VFX 1.0)
+print a prepare warning and point at a safer alternate.

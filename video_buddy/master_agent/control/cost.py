@@ -31,7 +31,12 @@ def estimate_cost(
     threshold_time_s: float | None = None,
 ) -> dict[str, Any]:
     key = (variant or "base").strip().lower()
-    base_vram = VARIANT_VRAM_GB.get(key, 10.0)
+    try:
+        from master_agent.models.vram_policy import expected_vram_gb
+
+        base_vram = VARIANT_VRAM_GB.get(key) or expected_vram_gb(key)
+    except Exception:
+        base_vram = VARIANT_VRAM_GB.get(key, 10.0)
     # Longer clips add latent cache pressure.
     vram = base_vram + max(0, int(frames) - 81) * 0.012
     time_s = max(1, int(frames)) * SECONDS_PER_FRAME.get(key, 2.0)

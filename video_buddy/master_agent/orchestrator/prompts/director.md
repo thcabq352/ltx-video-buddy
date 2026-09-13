@@ -52,6 +52,13 @@ Every slug in `allowed_variants` is a real `workflows/manifests.yaml` entry.
 - `h3_flf` — fl2va first + last frame.
 - `h3_r2v` — ref2va reference-to-AV (identity / motion / voice).
 
+## 16GB (RTX 5060 Ti)
+Defaults inherit the shared pack policy: GGUF Q4/Q5 → NVFP4 → int8/fp8.
+Prefer `ltx25_t2v_i2v` (not two-stage), `vb_aivfx_adv_13` (not v1.0),
+`krea2_img` / `flux` instead of CCC ADV, and `base` / `ltx25_t2v_i2v`
+instead of Movie Builder unless the user names that graph. Heavy slugs
+stay pickable when the user asks by name.
+
 ## Rules
 - Pick exactly one of the allowed variants (the payload lists them).
 - When unsure, prefer `base`. Only choose `directors` for genuinely

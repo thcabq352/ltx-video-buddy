@@ -113,7 +113,11 @@ CAPABILITY_CATALOG: tuple[Capability, ...] = (
         class_types=("WanVideoNAG", "EmptyHunyuanLatentVideo"),
         surfaces=("director", "patcher", "template"),
         templates=("wan22", "vb_wan22_vid"),
-        notes="Mickmumpitz native graph, not WanVideoWrapper Sampler. T2V UNETs only.",
+        notes=(
+            "Mickmumpitz native graph, not WanVideoWrapper Sampler. T2V UNETs only. "
+            "16GB: QuantStack GGUF Q4_K_S when present, else Comfy-Org fp8 + Lightx2v. "
+            "Sequential high/low. Dual bf16 is not a default. TeaCache bypass-only."
+        ),
     ),
     Capability(
         "k3nk_wan_aio",
@@ -121,7 +125,10 @@ CAPABILITY_CATALOG: tuple[Capability, ...] = (
         class_types=(),
         name_contains=("k3nk",),
         surfaces=(),
-        notes="HYPOTHESIS: tower weights. Not in MODEL_FILES or inventory snapshot.",
+        notes=(
+            "HYPOTHESIS: tower weights. Hub search found only K3NK LoRAs, not an AIO "
+            "I2V pack — do not invent filenames. Not a 16GB default. Use wan22 T2V."
+        ),
     ),
     Capability(
         "wan_wrapper",
@@ -166,7 +173,10 @@ CAPABILITY_CATALOG: tuple[Capability, ...] = (
         name_contains=("lightx2v",),
         surfaces=("template",),
         templates=("wan22",),
-        notes="Baked into wan22 Power Lora Loader widgets; patcher does not select them.",
+        notes=(
+            "Baked into wan22 Power Lora Loader widgets. 16GB path: "
+            "Wan21_T2V_14B_lightx2v_cfg_step_distill_lora_rank32 when present."
+        ),
     ),
     Capability(
         "vace",
@@ -176,6 +186,7 @@ CAPABILITY_CATALOG: tuple[Capability, ...] = (
         templates=("vb_aivfx_adv", "vb_aivfx_adv_13", "vb_ai_renderer_smpl"),
         notes=(
             "Director-routed (vfx / aivfx / possession / vace). "
+            "16GB default is vb_aivfx_adv_13 (Q4_K_M GGUF). v1.0 e4m3fn is heavy. "
             "Field map writes IterPromptBuilder.string_1. Example renderer files gitignored."
         ),
     ),
@@ -295,7 +306,7 @@ CAPABILITY_CATALOG: tuple[Capability, ...] = (
         templates=("krea2_img", "vb_qwen_edit_360", "vb_aivfx_startimage", "vb_ccc41_krea2"),
         notes=(
             "Director-routed. krea2_img / qwen 360 / aivfx start-image have field maps. "
-            "CCC 4.1 queues with baked grounded-encode widgets."
+            "16GB: Krea NVFP4, Qwen Edit GGUF Q5_0. CCC 4.1 is heavy (safer: krea2_img)."
         ),
     ),
     Capability(
@@ -312,6 +323,7 @@ CAPABILITY_CATALOG: tuple[Capability, ...] = (
         ),
         notes=(
             "Director-routed (movie builder / ccc / aivfx). "
+            "Movie Builder + CCC ADV are HEAVY on 16GB — safer: ltx25_t2v_i2v / flux. "
             "CCC ADV has no safe prompt widget — baked defaults; prefer --template. "
             "Some example files gitignored."
         ),

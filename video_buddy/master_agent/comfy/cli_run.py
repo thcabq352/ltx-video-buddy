@@ -168,7 +168,10 @@ def prepare_run(
     if mode == "generate":
         from master_agent.comfy.workflow_patcher import load_and_patch_workflow
 
-        wf, _meta = load_and_patch_workflow(variant or "base", prompt=prompt or "test")
+        wf, meta = load_and_patch_workflow(variant or "base", prompt=prompt or "test")
+        warn = (meta or {}).get("prepare_warning")
+        if warn:
+            print(warn)
         return apply_overrides(wf, overrides)
     raise ValueError(f"unknown mode {mode!r}")
 

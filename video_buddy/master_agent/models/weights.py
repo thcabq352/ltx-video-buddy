@@ -344,6 +344,102 @@ WEIGHT_FILES["h3_ref2v_turbo"] = WeightFile(
     note="Optional LightX2V / official 4-step turbo LoRA for ref2va. Bypassed when absent.",
 )
 
+# --- other 16GB-class families (attested names only; scan-first) -----------
+from master_agent.models.vram_policy import (
+    FLUX_PREFERENCE,
+    KREA_PREFERENCE,
+    QWEN_EDIT_PREFERENCE,
+    VACE_PREFERENCE,
+    WAN22_HIGH_PREFERENCE,
+    WAN22_LOW_PREFERENCE,
+)
+
+HF_WAN22 = "Comfy-Org/Wan_2.2_ComfyUI_Repackaged"
+HF_WAN22_GGUF = "QuantStack/Wan2.2-T2V-A14B-GGUF"
+HF_VACE_GGUF = "mickmumpitz/VACE_Skyreels_V3_R2V_Merge-GGUF"
+HF_KREA = "Comfy-Org/Krea-2"
+HF_FLUX_GGUF = "city96/FLUX.1-dev-gguf"
+HF_QWEN_EDIT = "QuantStack/Qwen-Image-Edit-2509-GGUF"
+
+WEIGHT_FILES["wan22_high"] = WeightFile(
+    key="wan22_high",
+    filename="wan2.2_t2v_high_noise_14B_fp8_scaled.safetensors",
+    dest_folder="diffusion_models",
+    repo_id=HF_WAN22,
+    repo_filename="split_files/diffusion_models/wan2.2_t2v_high_noise_14B_fp8_scaled.safetensors",
+    size_bytes=14_300_000_000,
+    mandatory=True,
+    gated=False,
+    license_url="https://huggingface.co/Comfy-Org/Wan_2.2_ComfyUI_Repackaged",
+    note="Wan 2.2 high-noise UNET. 16GB pick: QuantStack GGUF Q4_K_S when present, else Comfy-Org fp8.",
+    accepts=WAN22_HIGH_PREFERENCE,
+)
+WEIGHT_FILES["wan22_low"] = WeightFile(
+    key="wan22_low",
+    filename="wan2.2_t2v_low_noise_14B_fp8_scaled.safetensors",
+    dest_folder="diffusion_models",
+    repo_id=HF_WAN22,
+    repo_filename="split_files/diffusion_models/wan2.2_t2v_low_noise_14B_fp8_scaled.safetensors",
+    size_bytes=14_300_000_000,
+    mandatory=True,
+    gated=False,
+    license_url="https://huggingface.co/Comfy-Org/Wan_2.2_ComfyUI_Repackaged",
+    note="Wan 2.2 low-noise UNET. Sequential with high-noise + Lightx2v on 16GB.",
+    accepts=WAN22_LOW_PREFERENCE,
+)
+WEIGHT_FILES["vace"] = WeightFile(
+    key="vace",
+    filename="wan-14B_vace_skyreels_v3_R2V_e4m3fn_v1-Q4_K_M.gguf",
+    dest_folder="diffusion_models",
+    repo_id=HF_VACE_GGUF,
+    repo_filename="wan-14B_vace_skyreels_v3_R2V_e4m3fn_v1-Q4_K_M.gguf",
+    size_bytes=8_500_000_000,
+    mandatory=True,
+    gated=False,
+    license_url="https://huggingface.co/mickmumpitz/VACE_Skyreels_V3_R2V_Merge-GGUF",
+    note="VACE Skyreels Q4_K_M GGUF (16GB default). e4m3fn fp8 also counts.",
+    accepts=VACE_PREFERENCE,
+)
+WEIGHT_FILES["krea2"] = WeightFile(
+    key="krea2",
+    filename="krea2_turbo_nvfp4.safetensors",
+    dest_folder="diffusion_models",
+    repo_id=HF_KREA,
+    repo_filename="diffusion_models/krea2_turbo_nvfp4.safetensors",
+    size_bytes=7_700_000_000,
+    mandatory=True,
+    gated=False,
+    license_url="https://huggingface.co/Comfy-Org/Krea-2",
+    note="Krea-2 turbo NVFP4 (Blackwell 16GB default). int8 / fp8 also count. bf16 is not default.",
+    accepts=KREA_PREFERENCE,
+)
+WEIGHT_FILES["flux"] = WeightFile(
+    key="flux",
+    filename="flux1-dev-fp8.safetensors",
+    dest_folder="diffusion_models",
+    repo_id="Comfy-Org/flux1-dev",
+    repo_filename="flux1-dev-fp8.safetensors",
+    size_bytes=17_200_000_000,
+    mandatory=True,
+    gated=False,
+    license_url="https://huggingface.co/Comfy-Org/flux1-dev",
+    note="Flux.1-dev. 16GB pick: city96 Q4_K_S GGUF when present, else Comfy-Org fp8.",
+    accepts=FLUX_PREFERENCE,
+)
+WEIGHT_FILES["qwen_edit"] = WeightFile(
+    key="qwen_edit",
+    filename="Qwen-Image-Edit-2509-Q5_0.gguf",
+    dest_folder="diffusion_models",
+    repo_id=HF_QWEN_EDIT,
+    repo_filename="Qwen-Image-Edit-2509-Q5_0.gguf",
+    size_bytes=8_800_000_000,
+    mandatory=True,
+    gated=False,
+    license_url="https://huggingface.co/QuantStack/Qwen-Image-Edit-2509-GGUF",
+    note="Qwen-Image-Edit GGUF Q5_0 (360 + start-image). 2511 Q5_0 also counts.",
+    accepts=QWEN_EDIT_PREFERENCE,
+)
+
 # Official Hub pack keys (mandatory). IC-LoRA is a separate gated repo.
 _LTX25_OFFICIAL = (
     "transformer",
@@ -370,6 +466,11 @@ _H3_ALL = (
     "h3_fl2v_turbo",
     "h3_ref2v_turbo",
 )
+_WAN22 = ("wan22_high", "wan22_low")
+_VACE = ("vace",)
+_KREA2 = ("krea2",)
+_FLUX = ("flux",)
+_QWEN_EDIT = ("qwen_edit",)
 
 # Bundle → weight keys. Mandatory flags on WeightFile still apply per key.
 # ltx25_all stays LTX-only so adding H3 keys never pulls MiniMax into --ltx25.
@@ -382,6 +483,11 @@ BUNDLES: dict[str, tuple[str, ...]] = {
     "h3_fl2va": _H3_FL2VA,
     "h3_ref2va": _H3_REF2VA,
     "h3_all": _H3_ALL,
+    "wan22": _WAN22,
+    "vace": _VACE,
+    "krea2": _KREA2,
+    "flux": _FLUX,
+    "qwen_edit": _QWEN_EDIT,
 }
 
 # Variant id / alias → bundle
@@ -411,6 +517,15 @@ VARIANT_BUNDLES: dict[str, str] = {
     "h3": "h3_fl2va",
     "minimax_h3": "h3_fl2va",
     "minimax": "h3_fl2va",
+    "wan22": "wan22",
+    "vb_wan22_vid": "wan22",
+    "vb_aivfx_adv_13": "vace",
+    "vb_ai_renderer_smpl": "vace",
+    "krea2_img": "krea2",
+    "vb_krea2_img": "krea2",
+    "flux": "flux",
+    "vb_qwen_edit_360": "qwen_edit",
+    "vb_aivfx_startimage": "qwen_edit",
 }
 
 
@@ -644,13 +759,9 @@ def find_weight_file(filename: str, roots: Iterable[Path] | None = None) -> Path
 
 def transformer_preference_order(*, vram_gb: float | None = None) -> tuple[str, ...]:
     """16GB-class pick order: GGUF → NVFP4 (if VRAM fits) → int8 → bf16 → stub."""
-    from master_agent.config import VRAM_GB
+    from master_agent.models.vram_policy import preference_order
 
-    gb = float(VRAM_GB if vram_gb is None else vram_gb)
-    names: list[str] = [TRANSFORMER_PREFERENCE[0]]  # GGUF Q4
-    if gb >= NVFP4_MIN_VRAM_GB:
-        names.append(TRANSFORMER_PREFERENCE[1])  # NVFP4
-    names.extend(TRANSFORMER_PREFERENCE[2:])  # int8, official bf16
+    names = list(preference_order(TRANSFORMER_PREFERENCE, vram_gb=vram_gb))
     for stub, official in STUB_ALIASES.items():
         if official == TRANSFORMER_PREFERENCE[-1] and stub not in names:
             names.append(stub)
@@ -663,21 +774,10 @@ def h3_transformer_preference_order(
     vram_gb: float | None = None,
 ) -> tuple[str, ...]:
     """H3 16GB-class pick: GGUF Q4_K → NVFP4 (if VRAM fits) → int8 → fp8 → bf16."""
-    from master_agent.config import VRAM_GB
+    from master_agent.models.vram_policy import preference_order
 
     prefs = H3_REF2VA_PREFERENCE if key == "h3_ref2va" else H3_FL2VA_PREFERENCE
-    gb = float(VRAM_GB if vram_gb is None else vram_gb)
-    names: list[str] = [prefs[0]]  # GGUF Q4_K
-    nvfp4 = [n for n in prefs[1:] if "nvfp4" in n.lower()]
-    rest = [n for n in prefs[1:] if "nvfp4" not in n.lower()]
-    if gb >= NVFP4_MIN_VRAM_GB:
-        names.extend(nvfp4)
-    names.extend(rest)
-    seen: list[str] = []
-    for name in names:
-        if name and name not in seen:
-            seen.append(name)
-    return tuple(seen)
+    return preference_order(prefs, vram_gb=vram_gb)
 
 
 def describe_transformer_pick(path: Path | None) -> str:
@@ -715,6 +815,17 @@ def resolve_weight(weight: WeightFile, roots: Iterable[Path] | None = None) -> P
         order = h3_transformer_preference_order(weight.key)
     elif weight.key == "h3_text_encoder":
         order = H3_TE_PREFERENCE
+    elif weight.key in {
+        "wan22_high",
+        "wan22_low",
+        "vace",
+        "krea2",
+        "flux",
+        "qwen_edit",
+    }:
+        from master_agent.models.vram_policy import preference_order
+
+        order = preference_order(weight.candidates)
     else:
         order = weight.candidates
     for name in order:
@@ -757,7 +868,17 @@ def bundle_for_variant(variant: str | None) -> str | None:
         if "msr" in key:
             return "ltx25_msr"
         return "ltx25_core"
-    return None
+    from master_agent.models.vram_policy import family_for_slug
+
+    family = family_for_slug(key)
+    family_bundles = {
+        "wan22": "wan22",
+        "vace": "vace",
+        "krea2": "krea2",
+        "flux": "flux",
+        "qwen_edit": "qwen_edit",
+    }
+    return family_bundles.get(family)
 
 
 def is_h3_bundle(bundle: str | None) -> bool:
@@ -840,18 +961,35 @@ def format_ask(status: WeightStatus) -> str:
         lines.append("")
         lines.append("MiniMax H3 Community License:")
         lines.append(f"  {HF_H3_LICENSE}")
-    else:
+    elif (status.bundle or "").startswith("ltx25"):
         lines.append("  python -m master_agent download-models --ltx25 --yes")
         lines.append("or:")
         lines.append("  python -m master_agent doctor --fix-models")
         lines.append("")
         lines.append("Requires a Hugging Face token with access to the gated repos")
         lines.append(f"({HF_LICENSE}) via HF_TOKEN / huggingface-cli login.")
+    else:
+        flag = {
+            "wan22": "--wan",
+            "vace": "--vace",
+            "krea2": "--krea",
+            "flux": "--flux-pack",
+            "qwen_edit": "--qwen",
+        }.get(status.bundle or "", f"--bundle {status.bundle}")
+        lines.append(f"  python -m master_agent download-models {flag} --yes")
     return "\n".join(lines)
 
 
 def require_weights(variant: str, *, roots: Iterable[Path] | None = None) -> WeightStatus | None:
-    """Silent if present; raise MissingWeightsError if mandatory files are gone."""
+    """Silent if present; raise MissingWeightsError if mandatory files are gone.
+
+    Hard-stop stays LTX 2.5 / H3 (new catalog packs). Other families are
+    scanned by doctor / download-models but do not block the queue — their
+    weights often already live on the tower under folder-prefixed names.
+    """
+    bundle = bundle_for_variant(variant)
+    if not bundle or not (is_ltx25_bundle(bundle) or is_h3_bundle(bundle)):
+        return None
     status = scan_variant(variant, roots=roots)
     if status is None or status.ok:
         return status
