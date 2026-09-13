@@ -23,6 +23,25 @@ python -m master_agent download-models --ltx25 --yes  # after you agree
 
 Full accepted-name table: [`../REQUIRED-FILES.md`](../REQUIRED-FILES.md).
 
+## MiniMax H3 (default catalog — inventory first)
+
+fl2va (`h3_t2v` / `h3_i2v` / `h3_flf`) and ref2va (`h3_r2v`). CFG **1.0**.
+16GB sweet spot: 0.6–0.8 MP, ≤12 s, 4 steps. Prefer Unsloth GGUF Q4_K DiT +
+Comfy TE (NVFP4 AWQ or int8/int4). GGUF TE Q4_K_M is last-resort.
+
+```bash
+python -m master_agent download-models --h3
+python -m master_agent download-models --h3 --yes
+```
+
+| Path | Role |
+|---|---|
+| `diffusion_models/gguf/minimax_h3_fl2va_pruned-Q4_K.gguf` | fl2va DiT |
+| `diffusion_models/gguf/minimax_h3_ref2va_pruned-Q4_K.gguf` | ref2va DiT |
+| `text_encoders/qwen3vl_32b_minimax_h3_nvfp4_awq.safetensors` | TE |
+| `vae/minimax_h3_video_vae_fp16.safetensors` | video VAE |
+| `vae/minimax_h3_audio_vae_fp32.safetensors` | audio VAE |
+
 ## LTX 2.3 / Wan / Mickmumpitz (still used)
 
 ## Expected layout

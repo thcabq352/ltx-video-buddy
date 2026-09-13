@@ -36,8 +36,10 @@ you.** You bring the intent; it brings the craft.
 - **LTX 2.5 in the default catalog.** Seven distilled API graphs
   (`ltx25_t2v_i2v`, `ltx25_t2v_i2v_two_stage`, `ltx25_flf2v`, `ltx25_msr`,
   `ltx25_v2v_ic_lora`, `ltx25_a2v`, `ltx25_t2a`) are first-class variants —
-  no experimental flags. LTX 2.3 (`base` / `eros` / `directors` / `lipsync`),
-  Wan 2.2 T2V, music videos, and TeaCache soft-bypass still work.
+  no experimental flags. **MiniMax H3** (`h3_t2v` / `h3_i2v` / `h3_flf` /
+  `h3_r2v`, aliases `fl2va` / `ref2va`) is the same: GGUF-first omni
+  video+stereo audio, CFG 1.0. LTX 2.3 (`base` / `eros` / `directors` /
+  `lipsync`), Wan 2.2 T2V, music videos, and TeaCache soft-bypass still work.
 - **Scan-local-first weights.** Buddy inventories `MODELS_DIR`, Comfy
   `models/`, extra volumes, `extra_model_paths.yaml`, and the Hugging Face
   hub cache. It asks before downloading. Official bf16 Gemma is not required
@@ -70,8 +72,8 @@ you.** You bring the intent; it brings the craft.
 | Interface | Use |
 |---|---|
 | **CLI (first)** | Drive Comfy with `python -m master_agent comfy run`. Full director pipeline is `run "..."`. |
-| **Doctor** | `python -m master_agent doctor` — deps + LTX 2.5 inventory. **Does not fetch weights.** |
-| **Download** | `python -m master_agent download-models --ltx25` lists confirmed-missing slots; `--yes` only after you agree. |
+| **Doctor** | `python -m master_agent doctor` — deps + LTX 2.5 / H3 inventory. **Does not fetch weights.** |
+| **Download** | `python -m master_agent download-models --ltx25` or `--h3` lists confirmed-missing slots; `--yes` only after you agree. |
 | **Capabilities** | `python -m master_agent capabilities --offline` — Comfy pack vs Buddy wiring matrix. |
 | **Web studio** | `python -m master_agent ui` — optional human dashboard (Create / Comfy / Voice / Fractal / Music / Jobs) |
 | **MCP server** | Hermes tools (`create_video`, `plan_storyboard`, `judge_asset`, …) after the CLI path works |
@@ -90,7 +92,7 @@ you ──▶ persona intake ──▶ creative brief
               └──────────────┬─────────────────────────────┘
                              ▼
                      ComfyUI (:8188) — default catalog
-                     LTX 2.5 · LTX 2.3 · Flux 2 Klein · Wan 2.2 · Qwen · Z-Image
+                     LTX 2.5 · MiniMax H3 · LTX 2.3 · Flux 2 Klein · Wan 2.2 · Qwen · Z-Image
                              │
                      stitch → full-video judge → upscale → delivery
 ```
@@ -110,8 +112,8 @@ Need **Python 3.10+**. From `video_buddy/` run the installer — it creates `.ve
 ```bash
 cd video_buddy
 python install.py
-python -m master_agent doctor         # deps + LTX 2.5 scan; no download
-python -m master_agent workflows      # default catalog (includes ltx25_*)
+python -m master_agent doctor         # deps + LTX 2.5 / H3 scan; no download
+python -m master_agent workflows      # default catalog (includes ltx25_* and h3_*)
 python -m master_agent ui --port 8189
 ```
 
@@ -132,6 +134,8 @@ then:
 ```bash
 python -m master_agent download-models --ltx25        # list only
 python -m master_agent download-models --ltx25 --yes  # fetch that missing set
+python -m master_agent download-models --h3           # MiniMax H3 list only
+python -m master_agent download-models --h3 --yes
 ```
 
 Legacy Mickmumpitz / LTX 2.3 packs still use `python state/download_models.py`
@@ -147,7 +151,8 @@ video_buddy/
 ├── master_agent/      # the agent: orchestrator, director, judge, persona,
 │                      # KB, characters/LoRA, music, fractal, upscale, web, MCP
 ├── workflows/         # curated ComfyUI workflow library + manifests + guides
-│   └── ltx-2.5/       # seven default-catalog LTX 2.5 API graphs
+│   ├── ltx-2.5/       # seven default-catalog LTX 2.5 API graphs
+│   └── minimax-h3/    # four default-catalog MiniMax H3 API graphs (fl2va / ref2va)
 ├── training/          # LoRA training configs (16GB-tuned, LTX 2.3 / Wan 2.2)
 ├── tests/             # pytest (catalog, weights, capabilities, Rainey stop-lines)
 ├── state/             # tooling: legacy model downloader, UI→API converter

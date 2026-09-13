@@ -507,3 +507,51 @@ ltx25_t2a:
   format: api
   description: LTX 2.5 text-to-audio single-stage distilled
   requires: [ComfyUI-LTXVideo]
+
+# --- MiniMax H3 API pack (native Comfy ≥0.30 + ComfyUI-GGUF) ---
+# Default catalog. GGUF Q4_K DiT preferred; Comfy TE + official VAEs.
+# CFG must stay 1.0. See REQUIRED-FILES.md.
+
+h3_t2v:
+  file: minimax-h3/MiniMax-H3_T2V_FL2VA_api.json
+  format: api
+  description: MiniMax H3 fl2va text-to-AV (native stereo)
+  requires: [ComfyUI >=0.30 MiniMaxH3ImageToVideo, ComfyUI-GGUF]
+  fields:
+    prompt: { class_type: MiniMaxH3ImageToVideo, index: 0, input: prompt }
+    seed: { class_type: KSampler, index: 0, input: seed }
+    width: { class_type: MiniMaxH3ImageToVideo, index: 0, input: width }
+    height: { class_type: MiniMaxH3ImageToVideo, index: 0, input: height }
+    frames: { class_type: MiniMaxH3ImageToVideo, index: 0, input: length }
+    steps: { class_type: KSampler, index: 0, input: steps }
+    cfg: { class_type: KSampler, index: 0, input: cfg }
+
+h3_i2v:
+  file: minimax-h3/MiniMax-H3_I2V_FL2VA_api.json
+  format: api
+  description: MiniMax H3 fl2va image-to-AV
+  requires: [ComfyUI >=0.30 MiniMaxH3ImageToVideo, ComfyUI-GGUF]
+  fields:
+    prompt: { class_type: MiniMaxH3ImageToVideo, index: 0, input: prompt }
+    seed: { class_type: KSampler, index: 0, input: seed }
+    frames: { class_type: MiniMaxH3ImageToVideo, index: 0, input: length }
+
+h3_flf:
+  file: minimax-h3/MiniMax-H3_FLF_FL2VA_api.json
+  format: api
+  description: MiniMax H3 fl2va first + last frame to AV
+  requires: [ComfyUI >=0.30 MiniMaxH3ImageToVideo, ComfyUI-GGUF]
+  fields:
+    prompt: { class_type: MiniMaxH3ImageToVideo, index: 0, input: prompt }
+    seed: { class_type: KSampler, index: 0, input: seed }
+    frames: { class_type: MiniMaxH3ImageToVideo, index: 0, input: length }
+
+h3_r2v:
+  file: minimax-h3/MiniMax-H3_R2V_REF2VA_api.json
+  format: api
+  description: MiniMax H3 ref2va reference-to-AV
+  requires: [ComfyUI >=0.30 MiniMaxH3ReferenceToVideo, ComfyUI-GGUF]
+  fields:
+    prompt: { class_type: MiniMaxH3ReferenceToVideo, index: 0, input: prompt }
+    seed: { class_type: KSampler, index: 0, input: seed }
+    frames: { class_type: MiniMaxH3ReferenceToVideo, index: 0, input: length }

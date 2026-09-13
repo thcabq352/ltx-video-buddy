@@ -3,9 +3,9 @@
 Every first-class API graph is listed and selectable with no env flags.
 Sources (merged, first id wins for a given file):
 
-1. Explicit ``WORKFLOW_FILES`` seeds (existing I2V/T2V + LTX 2.5 ids)
+1. Explicit ``WORKFLOW_FILES`` seeds (existing I2V/T2V + LTX 2.5 + H3 ids)
 2. ``workflows/manifests.yaml`` entries that point at a file
-3. Auto-scan ``workflows/ltx-2.5/*.json``
+3. Auto-scan ``workflows/ltx-2.5/*.json`` and ``workflows/minimax-h3/*.json``
 4. Auto-scan any other ``*_api.json`` under ``workflows/``
 
 Missing tower nodes/weights never hide an id from the menu. Queue-time
@@ -31,6 +31,17 @@ RESEARCH_ALIASES: dict[str, str] = {
     "v2v_ic_lora": "ltx25_v2v_ic_lora",
     "msr": "ltx25_msr",
     "flf2v": "ltx25_flf2v",
+}
+
+# MiniMax H3 mode names → Buddy default ids (no experimental flag).
+H3_ALIASES: dict[str, str] = {
+    "fl2va": "h3_t2v",
+    "h3_fl2va": "h3_t2v",
+    "ref2va": "h3_r2v",
+    "h3_ref2va": "h3_r2v",
+    "h3": "h3_t2v",
+    "minimax_h3": "h3_t2v",
+    "minimax": "h3_t2v",
 }
 
 # Stable ids for the LTX 2.5 API pack (filename stem is not the product id).
@@ -79,6 +90,36 @@ LTX25_META: dict[str, dict[str, Any]] = {
         "description": "LTX 2.5 text-to-audio single-stage distilled",
         "modes": ["t2a"],
         "weight_bundle": "ltx25_core",
+    },
+}
+
+H3_FILES: dict[str, str] = {
+    "h3_t2v": "minimax-h3/MiniMax-H3_T2V_FL2VA_api.json",
+    "h3_i2v": "minimax-h3/MiniMax-H3_I2V_FL2VA_api.json",
+    "h3_flf": "minimax-h3/MiniMax-H3_FLF_FL2VA_api.json",
+    "h3_r2v": "minimax-h3/MiniMax-H3_R2V_REF2VA_api.json",
+}
+
+H3_META: dict[str, dict[str, Any]] = {
+    "h3_t2v": {
+        "description": "MiniMax H3 fl2va text-to-AV (native stereo, GGUF-first)",
+        "modes": ["t2v", "fl2va"],
+        "weight_bundle": "h3_fl2va",
+    },
+    "h3_i2v": {
+        "description": "MiniMax H3 fl2va image-to-AV (first-frame)",
+        "modes": ["i2v", "fl2va"],
+        "weight_bundle": "h3_fl2va",
+    },
+    "h3_flf": {
+        "description": "MiniMax H3 fl2va first-last-frame to AV",
+        "modes": ["flf", "fl2va"],
+        "weight_bundle": "h3_fl2va",
+    },
+    "h3_r2v": {
+        "description": "MiniMax H3 ref2va reference-to-AV (images / video / audio)",
+        "modes": ["r2v", "ref2va"],
+        "weight_bundle": "h3_ref2va",
     },
 }
 
@@ -157,6 +198,8 @@ def _family_for(variant_id: str, rel: str) -> str:
     key = f"{variant_id} {rel}".lower()
     if "ltx-2.5" in key or key.startswith("ltx25") or "ltx 2.5" in key:
         return "ltx25"
+    if "minimax" in key or "h3_" in key or key.startswith("h3") or "fl2va" in key or "ref2va" in key:
+        return "h3"
     if "wan" in key:
         return "wan"
     if "flux" in key or "krea" in key:
@@ -231,6 +274,27 @@ def load_catalog() -> tuple[CatalogEntry, ...]:
             ),
         )
 
+    # 1b) MiniMax H3 first-class pack (always default, no experimental flag)
+    for vid, rel in H3_FILES.items():
+        extra = H3_META.get(vid) or {}
+        aliases = tuple(src for src, dest in H3_ALIASES.items() if dest == vid)
+        _add(
+            by_id,
+            seen_files,
+            CatalogEntry(
+                id=vid,
+                path=rel,
+                name=f"{vid} — {Path(rel).name}",
+                description=str(extra.get("description") or "MiniMax H3 API workflow"),
+                family="h3",
+                default=True,
+                modes=tuple(extra.get("modes") or ()),
+                weight_bundle=str(extra.get("weight_bundle") or "h3_fl2va"),
+                aliases=aliases,
+                source="h3",
+            ),
+        )
+
     # 2) Seed WORKFLOW_FILES (existing Buddy I2V/T2V / WAN / lipsync)
     for vid, filename in _seed_workflow_files().items():
         rel = str(filename).replace("\\", "/")
@@ -274,12 +338,15 @@ def load_catalog() -> tuple[CatalogEntry, ...]:
             ),
         )
 
-    # 4) Auto-scan ltx-2.5/*.json and *_api.json
+    # 4) Auto-scan ltx-2.5/*.json, minimax-h3/*.json, and *_api.json
     if root.is_dir():
         candidates: list[Path] = []
         ltx_dir = root / "ltx-2.5"
         if ltx_dir.is_dir():
             candidates.extend(sorted(ltx_dir.glob("*.json")))
+        h3_dir = root / "minimax-h3"
+        if h3_dir.is_dir():
+            candidates.extend(sorted(h3_dir.glob("*.json")))
         candidates.extend(sorted(root.rglob("*_api.json")))
         for extra in extra_ltx25_workflow_dirs():
             candidates.extend(sorted(extra.glob("*.json")))
@@ -337,12 +404,12 @@ def is_known_variant(variant: str | None) -> bool:
     key = (variant or "").strip()
     if not key:
         return False
-    return key in catalog_by_id() or key in RESEARCH_ALIASES
+    return key in catalog_by_id() or key in RESEARCH_ALIASES or key in H3_ALIASES
 
 
 def resolve_variant(variant: str) -> CatalogEntry:
     key = (variant or "").strip()
-    mapped = RESEARCH_ALIASES.get(key, key)
+    mapped = H3_ALIASES.get(key, RESEARCH_ALIASES.get(key, key))
     by_id = catalog_by_id()
     if mapped in by_id:
         return by_id[mapped]

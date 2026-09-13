@@ -9,8 +9,8 @@ Inventory first. Do not assume a download is needed.
    proceed silently and wire the graph to those files.
 3. If something is confirmed missing → raise ``MissingWeightsError`` with a
    clear ask. Never auto-download.
-4. Only after consent: ``download-models --ltx25 --yes`` fetches the
-   confirmed-missing set.
+4. Only after consent: ``download-models --ltx25 --yes`` or
+   ``download-models --h3 --yes`` fetches the confirmed-missing set.
 """
 
 from __future__ import annotations
@@ -34,12 +34,20 @@ STUB_ALIASES: dict[str, str] = {
 }
 
 # Optional placeholders in the research templates — never mandatory.
-OPTIONAL_STUBS = frozenset({"style.safetensors", "camera-orbit.safetensors"})
+H3_OPTIONAL_LORAS = frozenset({
+    "minimax_h3_fl2v_turbo_4step_v1.0_768p_comfyui_bf16.safetensors",
+    "minimax_h3_fl2v_turbo_8step_v1.0_comfyui_bf16.safetensors",
+    "minimax_h3_ref2v_turbo_4step_v0.1_comfyui_bf16.safetensors",
+})
+OPTIONAL_STUBS = frozenset({"style.safetensors", "camera-orbit.safetensors"}) | H3_OPTIONAL_LORAS
 
 HF_LTX25 = "Lightricks/LTX-2.5"
 HF_ICLORA = "Lightricks/LTX-2.5-22b-IC-LoRA-Ingredients"
 HF_LICENSE = "https://huggingface.co/Lightricks/LTX-2.5"
 HF_ICLORA_LICENSE = "https://huggingface.co/Lightricks/LTX-2.5-22b-IC-LoRA-Ingredients"
+HF_H3_GGUF = "unsloth/MiniMax-H3-GGUF"
+HF_H3_COMFY = "Comfy-Org/MiniMax-H3"
+HF_H3_LICENSE = "https://huggingface.co/MiniMaxAI/MiniMax-H3/blob/main/LICENSE"
 
 
 @dataclass(frozen=True)
@@ -94,6 +102,38 @@ TE_PREFERENCE: tuple[str, ...] = (
     "gemma4-12b-with-proj-ltx-2.5-comfy-int8-convrot.safetensors",
     "gemma4-12b-with-proj-ltx-2.5-bf16.safetensors",
 )
+
+# MiniMax H3 16GB-class pick: GGUF Q4_K DiT, then NVFP4 / int8 official if present.
+# Prefer Comfy TE (NVFP4 AWQ on Blackwell, else int8/int4). GGUF TE Q4_K_M (~17GB) is last.
+H3_FL2VA_PREFERENCE: tuple[str, ...] = (
+    "minimax_h3_fl2va_pruned-Q4_K.gguf",
+    "minimax_h3_fl2va_pruned_nvfp4.safetensors",
+    "minimax_h3_fl2va_nvfp4.safetensors",
+    "minimax_h3_fl2va_pruned_int8_convrot.safetensors",
+    "minimax_h3_fl2va_int8_convrot.safetensors",
+    "minimax_h3_fl2va_pruned_fp8_scaled.safetensors",
+    "minimax_h3_fl2va_pruned_bf16.safetensors",
+    "minimax_h3_fl2va_bf16.safetensors",
+)
+H3_REF2VA_PREFERENCE: tuple[str, ...] = (
+    "minimax_h3_ref2va_pruned-Q4_K.gguf",
+    "minimax_h3_ref2va_pruned_nvfp4.safetensors",
+    "minimax_h3_ref2va_nvfp4.safetensors",
+    "minimax_h3_ref2va_pruned_int8_convrot.safetensors",
+    "minimax_h3_ref2va_int8_convrot.safetensors",
+    "minimax_h3_ref2va_pruned_fp8_scaled.safetensors",
+    "minimax_h3_ref2va_pruned_bf16.safetensors",
+    "minimax_h3_ref2va_bf16.safetensors",
+)
+H3_TE_PREFERENCE: tuple[str, ...] = (
+    "qwen3vl_32b_minimax_h3_nvfp4_awq.safetensors",
+    "qwen3vl_32b_minimax_h3_nvfp4.safetensors",
+    "qwen3vl_32b_minimax_h3_int4_convrot.safetensors",
+    "qwen3vl_32b_minimax_h3_int8_convrot.safetensors",
+    "qwen3vl_32b_minimax_h3_bf16.safetensors",
+    "qwen3vl_32b_minimax_h3-Q4_K_M.gguf",
+)
+H3_TRANSFORMER_KEYS = frozenset({"h3_fl2va", "h3_ref2va"})
 
 # Official distilled split pack on gated Lightricks/LTX-2.5 (Hub file listing).
 # Download / default-wire names are the bf16 pack. 16GB-class installs may
@@ -211,6 +251,99 @@ WEIGHT_FILES: dict[str, WeightFile] = {
     ),
 }
 
+# MiniMax H3 — GGUF DiT download target; official Comfy int8 / NVFP4 / bf16 still count.
+WEIGHT_FILES["h3_fl2va"] = WeightFile(
+    key="h3_fl2va",
+    filename="minimax_h3_fl2va_pruned-Q4_K.gguf",
+    dest_folder="diffusion_models",
+    repo_id=HF_H3_GGUF,
+    repo_filename="minimax_h3_fl2va_pruned-Q4_K.gguf",
+    size_bytes=11_423_744_163,
+    mandatory=True,
+    gated=False,
+    license_url=HF_H3_LICENSE,
+    note="Unsloth fl2va GGUF Q4_K (~10.6 GiB). Official NVFP4 / int8 / fp8 / bf16 also count.",
+    accepts=H3_FL2VA_PREFERENCE,
+)
+WEIGHT_FILES["h3_ref2va"] = WeightFile(
+    key="h3_ref2va",
+    filename="minimax_h3_ref2va_pruned-Q4_K.gguf",
+    dest_folder="diffusion_models",
+    repo_id=HF_H3_GGUF,
+    repo_filename="minimax_h3_ref2va_pruned-Q4_K.gguf",
+    size_bytes=11_380_755_661,
+    mandatory=True,
+    gated=False,
+    license_url=HF_H3_LICENSE,
+    note="Unsloth ref2va GGUF Q4_K (~10.6 GiB). Official NVFP4 / int8 / fp8 / bf16 also count.",
+    accepts=H3_REF2VA_PREFERENCE,
+)
+WEIGHT_FILES["h3_text_encoder"] = WeightFile(
+    key="h3_text_encoder",
+    filename="qwen3vl_32b_minimax_h3_nvfp4_awq.safetensors",
+    dest_folder="text_encoders",
+    repo_id=HF_H3_COMFY,
+    repo_filename="text_encoders/qwen3vl_32b_minimax_h3_nvfp4_awq.safetensors",
+    size_bytes=15_687_142_551,
+    mandatory=True,
+    gated=False,
+    license_url=HF_H3_LICENSE,
+    note="Comfy Qwen3-VL TE (NVFP4 AWQ, Blackwell). int8/int4 convrot also count. GGUF TE Q4_K_M (~17GB) is last-resort.",
+    accepts=H3_TE_PREFERENCE,
+)
+WEIGHT_FILES["h3_video_vae"] = WeightFile(
+    key="h3_video_vae",
+    filename="minimax_h3_video_vae_fp16.safetensors",
+    dest_folder="vae",
+    repo_id=HF_H3_COMFY,
+    repo_filename="vae/minimax_h3_video_vae_fp16.safetensors",
+    size_bytes=5_207_808_496,
+    mandatory=True,
+    gated=False,
+    license_url=HF_H3_LICENSE,
+    note="Official Comfy-Org video VAE (fp16).",
+)
+WEIGHT_FILES["h3_audio_vae"] = WeightFile(
+    key="h3_audio_vae",
+    filename="minimax_h3_audio_vae_fp32.safetensors",
+    dest_folder="vae",
+    repo_id=HF_H3_COMFY,
+    repo_filename="vae/minimax_h3_audio_vae_fp32.safetensors",
+    size_bytes=605_254_808,
+    mandatory=True,
+    gated=False,
+    license_url=HF_H3_LICENSE,
+    note="Official Comfy-Org audio VAE (fp32, 32 kHz stereo).",
+)
+WEIGHT_FILES["h3_fl2v_turbo"] = WeightFile(
+    key="h3_fl2v_turbo",
+    filename="minimax_h3_fl2v_turbo_4step_v1.0_768p_comfyui_bf16.safetensors",
+    dest_folder="loras",
+    repo_id=HF_H3_COMFY,
+    repo_filename="loras/minimax_h3_fl2v_turbo_4step_v1.0_768p_comfyui_bf16.safetensors",
+    size_bytes=1_956_192_992,
+    mandatory=False,
+    gated=False,
+    license_url=HF_H3_LICENSE,
+    note="Optional LightX2V / official 4-step turbo LoRA for fl2va. Bypassed when absent.",
+    accepts=(
+        "minimax_h3_fl2v_turbo_4step_v1.0_768p_comfyui_bf16.safetensors",
+        "minimax_h3_fl2v_turbo_8step_v1.0_comfyui_bf16.safetensors",
+    ),
+)
+WEIGHT_FILES["h3_ref2v_turbo"] = WeightFile(
+    key="h3_ref2v_turbo",
+    filename="minimax_h3_ref2v_turbo_4step_v0.1_comfyui_bf16.safetensors",
+    dest_folder="loras",
+    repo_id=HF_H3_COMFY,
+    repo_filename="loras/minimax_h3_ref2v_turbo_4step_v0.1_comfyui_bf16.safetensors",
+    size_bytes=1_956_193_000,
+    mandatory=False,
+    gated=False,
+    license_url=HF_H3_LICENSE,
+    note="Optional LightX2V / official 4-step turbo LoRA for ref2va. Bypassed when absent.",
+)
+
 # Official Hub pack keys (mandatory). IC-LoRA is a separate gated repo.
 _LTX25_OFFICIAL = (
     "transformer",
@@ -221,13 +354,34 @@ _LTX25_OFFICIAL = (
     "spatial_upscaler",
 )
 
+_LTX25_ALL = (
+    *_LTX25_OFFICIAL,
+    "ic_lora",
+    "distilled_lora",
+    "temporal_upscaler",
+)
+_H3_SHARED = ("h3_text_encoder", "h3_video_vae", "h3_audio_vae")
+_H3_FL2VA = ("h3_fl2va", *_H3_SHARED)
+_H3_REF2VA = ("h3_ref2va", *_H3_SHARED)
+_H3_ALL = (
+    "h3_fl2va",
+    "h3_ref2va",
+    *_H3_SHARED,
+    "h3_fl2v_turbo",
+    "h3_ref2v_turbo",
+)
+
 # Bundle → weight keys. Mandatory flags on WeightFile still apply per key.
+# ltx25_all stays LTX-only so adding H3 keys never pulls MiniMax into --ltx25.
 BUNDLES: dict[str, tuple[str, ...]] = {
     "ltx25_core": _LTX25_OFFICIAL,
     "ltx25_two_stage": _LTX25_OFFICIAL,
     "ltx25_iclora": (*_LTX25_OFFICIAL, "ic_lora"),
     "ltx25_msr": (*_LTX25_OFFICIAL, "ic_lora"),
-    "ltx25_all": tuple(WEIGHT_FILES.keys()),
+    "ltx25_all": _LTX25_ALL,
+    "h3_fl2va": _H3_FL2VA,
+    "h3_ref2va": _H3_REF2VA,
+    "h3_all": _H3_ALL,
 }
 
 # Variant id / alias → bundle
@@ -246,6 +400,17 @@ VARIANT_BUNDLES: dict[str, str] = {
     "t2a": "ltx25_core",
     "v2v_ic_lora": "ltx25_iclora",
     "msr": "ltx25_msr",
+    "h3_t2v": "h3_fl2va",
+    "h3_i2v": "h3_fl2va",
+    "h3_flf": "h3_fl2va",
+    "h3_r2v": "h3_ref2va",
+    "fl2va": "h3_fl2va",
+    "h3_fl2va": "h3_fl2va",
+    "ref2va": "h3_ref2va",
+    "h3_ref2va": "h3_ref2va",
+    "h3": "h3_fl2va",
+    "minimax_h3": "h3_fl2va",
+    "minimax": "h3_fl2va",
 }
 
 
@@ -324,6 +489,8 @@ def _hf_hub_snapshot_roots() -> list[Path]:
     repos = (
         "models--Lightricks--LTX-2.5",
         "models--Lightricks--LTX-2.5-22b-IC-LoRA-Ingredients",
+        "models--Comfy-Org--MiniMax-H3",
+        "models--unsloth--MiniMax-H3-GGUF",
     )
     out: list[Path] = []
     for hub in hubs:
@@ -490,6 +657,29 @@ def transformer_preference_order(*, vram_gb: float | None = None) -> tuple[str, 
     return tuple(names)
 
 
+def h3_transformer_preference_order(
+    key: str = "h3_fl2va",
+    *,
+    vram_gb: float | None = None,
+) -> tuple[str, ...]:
+    """H3 16GB-class pick: GGUF Q4_K → NVFP4 (if VRAM fits) → int8 → fp8 → bf16."""
+    from master_agent.config import VRAM_GB
+
+    prefs = H3_REF2VA_PREFERENCE if key == "h3_ref2va" else H3_FL2VA_PREFERENCE
+    gb = float(VRAM_GB if vram_gb is None else vram_gb)
+    names: list[str] = [prefs[0]]  # GGUF Q4_K
+    nvfp4 = [n for n in prefs[1:] if "nvfp4" in n.lower()]
+    rest = [n for n in prefs[1:] if "nvfp4" not in n.lower()]
+    if gb >= NVFP4_MIN_VRAM_GB:
+        names.extend(nvfp4)
+    names.extend(rest)
+    seen: list[str] = []
+    for name in names:
+        if name and name not in seen:
+            seen.append(name)
+    return tuple(seen)
+
+
 def describe_transformer_pick(path: Path | None) -> str:
     if path is None:
         return "no local transformer"
@@ -503,19 +693,35 @@ def describe_transformer_pick(path: Path | None) -> str:
     return f"{name} — fallback"
 
 
+def describe_h3_transformer_pick(path: Path | None) -> str:
+    if path is None:
+        return "no local H3 transformer"
+    name = path.name
+    if name.lower().endswith(".gguf"):
+        return f"H3 GGUF Q4_K ({name}) — 16GB-class preference #1"
+    if "nvfp4" in name.lower():
+        return f"H3 NVFP4 ({name}) — 16GB-class preference #2"
+    if "int8" in name.lower():
+        return f"H3 int8 ({name}) — 16GB-class preference #3"
+    return f"{name} — H3 fallback"
+
+
 def resolve_weight(weight: WeightFile, roots: Iterable[Path] | None = None) -> Path | None:
     """Best local file for a slot (preference order). None if all candidates missing/empty."""
     search = list(roots) if roots is not None else model_search_roots()
-    order = (
-        transformer_preference_order()
-        if weight.key == "transformer"
-        else weight.candidates
-    )
+    if weight.key == "transformer":
+        order = transformer_preference_order()
+    elif weight.key in H3_TRANSFORMER_KEYS:
+        order = h3_transformer_preference_order(weight.key)
+    elif weight.key == "h3_text_encoder":
+        order = H3_TE_PREFERENCE
+    else:
+        order = weight.candidates
     for name in order:
         found = _search_name(name, search)
         if found is not None:
             return found
-    if weight.key == "transformer":
+    if weight.key == "transformer" or weight.key in H3_TRANSFORMER_KEYS:
         for name in weight.candidates:
             found = _search_name(name, search)
             if found is not None:
@@ -532,6 +738,17 @@ def bundle_for_variant(variant: str | None) -> str | None:
     key = (variant or "").strip()
     if key in VARIANT_BUNDLES:
         return VARIANT_BUNDLES[key]
+    lowered = key.lower().replace("\\", "/")
+    if (
+        lowered.startswith("h3")
+        or "minimax" in lowered
+        or "/minimax-h3/" in lowered
+        or "fl2va" in lowered
+        or "ref2va" in lowered
+    ):
+        if "ref" in lowered or "r2v" in lowered:
+            return "h3_ref2va"
+        return "h3_fl2va"
     if key.startswith("ltx25") or key.startswith("ltx-2.5") or "/ltx-2.5/" in key:
         if "two_stage" in key or "two-stage" in key:
             return "ltx25_two_stage"
@@ -541,6 +758,14 @@ def bundle_for_variant(variant: str | None) -> str | None:
             return "ltx25_msr"
         return "ltx25_core"
     return None
+
+
+def is_h3_bundle(bundle: str | None) -> bool:
+    return bool(bundle) and str(bundle).startswith("h3")
+
+
+def is_ltx25_bundle(bundle: str | None) -> bool:
+    return bool(bundle) and str(bundle).startswith("ltx25")
 
 
 def scan_bundle(bundle: str, *, roots: Iterable[Path] | None = None) -> WeightStatus:
@@ -576,6 +801,7 @@ def format_ask(status: WeightStatus) -> str:
         "",
         "Already present (not re-downloaded):",
     ]
+    h3 = is_h3_bundle(status.bundle)
     if status.found_paths:
         for key, path in status.found_paths.items():
             lines.append(f"  - {key}: {path}")
@@ -586,7 +812,12 @@ def format_ask(status: WeightStatus) -> str:
         "Missing (mandatory):",
     ]
     for w in status.missing_mandatory:
-        gated = "  [gated Hugging Face — accept the LTX-2.x Community License first]" if w.gated else ""
+        if w.gated:
+            gated = "  [gated Hugging Face — accept the LTX-2.x Community License first]"
+        elif w.key.startswith("h3") or h3:
+            gated = "  [MiniMax H3 Community License — verify you are entitled to run the weights]"
+        else:
+            gated = ""
         lines.append(
             f"  - {w.filename}  →  models/{w.dest_folder}/  ({w.size_label}){gated}"
         )
@@ -604,12 +835,18 @@ def format_ask(status: WeightStatus) -> str:
             lines.append(f"  - {w.filename}  →  models/{w.dest_folder}/  ({w.size_label})")
     lines.append("")
     lines.append("After you agree, download only the missing set with:")
-    lines.append("  python -m master_agent download-models --ltx25 --yes")
-    lines.append("or:")
-    lines.append("  python -m master_agent doctor --fix-models")
-    lines.append("")
-    lines.append("Requires a Hugging Face token with access to the gated repos")
-    lines.append(f"({HF_LICENSE}) via HF_TOKEN / huggingface-cli login.")
+    if h3:
+        lines.append("  python -m master_agent download-models --h3 --yes")
+        lines.append("")
+        lines.append("MiniMax H3 Community License:")
+        lines.append(f"  {HF_H3_LICENSE}")
+    else:
+        lines.append("  python -m master_agent download-models --ltx25 --yes")
+        lines.append("or:")
+        lines.append("  python -m master_agent doctor --fix-models")
+        lines.append("")
+        lines.append("Requires a Hugging Face token with access to the gated repos")
+        lines.append(f"({HF_LICENSE}) via HF_TOKEN / huggingface-cli login.")
     return "\n".join(lines)
 
 

@@ -201,12 +201,37 @@ def check_ltx25_weights() -> dict[str, Any]:
     detail = f"missing {names}{more}"
     if status.found_paths.get("transformer"):
         detail = f"{pick}; {detail}"
-    return _row(
+        return _row(
         "ltx25-weights",
         False,
         detail,
         fix=hint,
     )
+
+
+def check_h3_weights() -> dict[str, Any]:
+    """Scan-only MiniMax H3 inventory. Never downloads."""
+    try:
+        from master_agent.models.weights import scan_bundle
+
+        status = scan_bundle("h3_fl2va")
+    except Exception as exc:
+        return _row("h3-weights", False, f"scan failed: {exc}", fix="python -m master_agent download-models --h3")
+    from master_agent.models.weights import describe_h3_transformer_pick
+
+    pick = describe_h3_transformer_pick(
+        Path(status.found_paths["h3_fl2va"]) if status.found_paths.get("h3_fl2va") else None
+    )
+    if status.ok:
+        found = ", ".join(Path(p).name for p in status.found_paths.values()) or "accepted local names"
+        return _row("h3-weights", True, f"{pick}; present ({found})")
+    names = ", ".join(w.filename for w in status.missing_mandatory[:4])
+    more = f" (+{len(status.missing_mandatory) - 4} more)" if len(status.missing_mandatory) > 4 else ""
+    hint = "python -m master_agent download-models --h3   # review confirmed-missing only, then --yes"
+    detail = f"missing {names}{more}"
+    if status.found_paths.get("h3_fl2va"):
+        detail = f"{pick}; {detail}"
+    return _row("h3-weights", False, detail, fix=hint)
 
 
 def snapshot() -> list[dict[str, Any]]:
@@ -220,6 +245,7 @@ def snapshot() -> list[dict[str, Any]]:
         check_ollama(),
         check_comfy(),
         check_ltx25_weights(),
+        check_h3_weights(),
     ]
 
 
