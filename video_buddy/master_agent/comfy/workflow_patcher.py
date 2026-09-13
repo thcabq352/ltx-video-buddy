@@ -304,18 +304,43 @@ def _bypass_missing_optional_loras(workflow: dict[str, Any]) -> list[str]:
     return dropped
 
 
+def _resolved_ltx25_names() -> tuple[str, str]:
+    """Local-best transformer / TE names; official Hub names if nothing is on disk."""
+    from master_agent.models.weights import WEIGHT_FILES, resolve_weight
+
+    transformer = WEIGHT_FILES["transformer"]
+    text_encoder = WEIGHT_FILES["text_encoder"]
+    local_tr = resolve_weight(transformer)
+    local_te = resolve_weight(text_encoder)
+    tr_name = local_tr.name if local_tr is not None else transformer.filename
+    te_name = local_te.name if local_te is not None else text_encoder.filename
+    return tr_name, te_name
+
+
+def _set_transformer_loader(node: dict[str, Any], filename: str) -> None:
+    """Wire UNETLoader vs UnetLoaderGGUF from the file that is actually present."""
+    if filename.lower().endswith(".gguf"):
+        node["class_type"] = "UnetLoaderGGUF"
+        node["inputs"] = {"unet_name": filename}
+    else:
+        node["class_type"] = "UNETLoader"
+        node["inputs"] = {"unet_name": filename, "weight_dtype": "default"}
+    node.setdefault("_meta", {})["title"] = "LTX 2.5 Distilled Transformer"
+
+
 def _rewrite_ltx25_checkpoint_loader(workflow: dict[str, Any]) -> None:
     """Turn CheckpointLoaderSimple + stub/all-in-one name into split-pack loaders.
 
     Official LTX 2.5 weights are a transformer + Gemma 4 TE + VAEs, not a
     single ``.safetensors`` checkpoint. Research templates still use
-    CheckpointLoaderSimple; rewrite so the official files resolve.
+    CheckpointLoaderSimple; rewrite so the official files (or a local
+    GGUF / NVFP4 / int8 / bf16 stand-in) resolve.
     """
     from master_agent.models.weights import STUB_ALIASES, WEIGHT_FILES
 
     official_transformer = WEIGHT_FILES["transformer"].filename
-    official_te = WEIGHT_FILES["text_encoder"].filename
-    aliases = {official_transformer, *STUB_ALIASES.keys()}
+    transformer_name, te_name = _resolved_ltx25_names()
+    aliases = {official_transformer, *WEIGHT_FILES["transformer"].candidates, *STUB_ALIASES.keys()}
 
     ckpt_nodes = [
         (nid, node)
@@ -328,12 +353,7 @@ def _rewrite_ltx25_checkpoint_loader(workflow: dict[str, Any]) -> None:
             continue
         if name not in aliases and "ltx-2.5" not in name.lower():
             continue
-        node["class_type"] = "UNETLoader"
-        node["inputs"] = {
-            "unet_name": official_transformer if name in aliases else name,
-            "weight_dtype": "default",
-        }
-        node.setdefault("_meta", {})["title"] = "LTX 2.5 Distilled Transformer"
+        _set_transformer_loader(node, transformer_name if name in aliases else name)
 
         if _find_nodes_by_class(workflow, "LTXAVTextEncoderLoader"):
             continue
@@ -341,7 +361,7 @@ def _rewrite_ltx25_checkpoint_loader(workflow: dict[str, Any]) -> None:
         te_id = str(max(numeric_ids) + 1) if numeric_ids else "90"
         workflow[te_id] = {
             "class_type": "LTXAVTextEncoderLoader",
-            "inputs": {"text_encoder": official_te},
+            "inputs": {"text_encoder": te_name},
             "_meta": {"title": "LTX 2.5 Gemma 4 TE"},
         }
         for other in workflow.values():
@@ -356,6 +376,23 @@ def _rewrite_ltx25_checkpoint_loader(workflow: dict[str, Any]) -> None:
                     and value[1] == 1
                 ):
                     inputs[key] = [te_id, 0]
+
+
+def _apply_local_ltx25_weights(workflow: dict[str, Any]) -> None:
+    """Prefer a local GGUF / NVFP4 / int8 / heretic TE when one is already present."""
+    transformer_name, te_name = _resolved_ltx25_names()
+    for class_type in ("UNETLoader", "UnetLoaderGGUF", "DiffusionModelLoader"):
+        for _nid, node in _find_nodes_by_class(workflow, class_type):
+            inputs = node.get("inputs") or {}
+            current = inputs.get("unet_name") or inputs.get("ckpt_name") or ""
+            if isinstance(current, str) and "ltx-2.5" in current.lower():
+                _set_transformer_loader(node, transformer_name)
+    for _nid, node in _find_nodes_by_class(workflow, "LTXAVTextEncoderLoader"):
+        _set_input(node, "text_encoder", te_name)
+        inputs = node.get("inputs") or {}
+        if "ckpt_name" in inputs and isinstance(inputs.get("ckpt_name"), str):
+            if "ltx-2.5" in str(inputs.get("ckpt_name")).lower():
+                _set_input(node, "ckpt_name", transformer_name)
 
 
 def _apply_multi_ref(workflow: dict[str, Any], refs: dict[str, Any]) -> list[str]:
@@ -852,6 +889,8 @@ def load_and_patch_workflow(
     if bundle_for_variant(variant):
         _rewrite_ltx25_checkpoint_loader(workflow)
     _heuristic_patch(workflow, values)
+    if bundle_for_variant(variant):
+        _apply_local_ltx25_weights(workflow)
     if loras:
         _apply_typed_loras(workflow, loras)
     if multi_ref:

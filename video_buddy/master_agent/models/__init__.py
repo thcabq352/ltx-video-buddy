@@ -10,6 +10,7 @@ from master_agent.models.inventory import (
 from master_agent.models.weights import (
     MissingWeightsError,
     require_weights,
+    resolve_weight,
     scan_bundle,
     scan_variant,
 )
@@ -21,6 +22,7 @@ __all__ = [
     "format_summary",
     "load_inventory",
     "require_weights",
+    "resolve_weight",
     "scan_bundle",
     "scan_inventory",
     "scan_variant",

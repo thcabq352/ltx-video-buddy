@@ -46,7 +46,7 @@ def download_hub_file(
     progress: Callable[[str], None] = print,
 ) -> Path:
     """Download one Hub file into dest. Skips if dest already exists."""
-    if dest.is_file():
+    if dest.is_file() and dest.stat().st_size > 0:
         progress(f"SKIP {dest} (already exists)")
         return dest
     dest.parent.mkdir(parents=True, exist_ok=True)

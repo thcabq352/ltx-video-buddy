@@ -18,6 +18,7 @@ from master_agent.models.weights import (
     find_weight_file,
     format_ask,
     require_weights,
+    resolve_weight,
     scan_bundle,
 )
 
@@ -48,6 +49,8 @@ def test_scan_missing_on_empty_roots(tmp_path: Path):
     assert "Lightricks/LTX-2.5" in ask
     assert "models/diffusion_models/" in ask
     assert "21.5 GB" in ask
+    assert "also accepted locally" in ask
+    assert "Q4_K_M.gguf" in ask
 
 
 def test_scan_present_is_silent_ok(tmp_path: Path):
@@ -91,3 +94,60 @@ def test_download_refuses_without_yes(tmp_path: Path):
         download_files(missing, dest_root=tmp_path, yes=False)
     assert "consent" in str(exc.value).lower()
     assert not list(tmp_path.rglob("*.safetensors"))
+
+
+def test_zero_byte_file_counts_as_missing(tmp_path: Path):
+    root = tmp_path / "models"
+    dest = root / "diffusion_models" / WEIGHT_FILES["transformer"].filename
+    dest.parent.mkdir(parents=True)
+    dest.write_bytes(b"")
+    assert dest.stat().st_size == 0
+    assert resolve_weight(WEIGHT_FILES["transformer"], [root]) is None
+    status = scan_bundle("ltx25_core", roots=[root])
+    assert WEIGHT_FILES["transformer"] in status.missing_mandatory
+
+
+def test_gguf_and_heretic_te_satisfy_core(tmp_path: Path):
+    root = tmp_path / "models"
+    files = {
+        "diffusion_models/gguf/ltx-2.5-22b-distilled-transformer-bf16-Q4_K_M.gguf": b"gguf",
+        "text_encoders/gemma4-12b-heretic-ltx25-int8convrot.safetensors": b"te",
+        "vae/ltx-2.5-video-vae-conv-bf16.safetensors": b"vae",
+        "vae/ltx-2.5-audio-vae-bf16.safetensors": b"avae",
+    }
+    for rel, blob in files.items():
+        path = root / rel
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.write_bytes(blob)
+    status = scan_bundle("ltx25_core", roots=[root])
+    assert status.ok is True
+    found = resolve_weight(WEIGHT_FILES["transformer"], [root])
+    assert found is not None
+    assert found.name.endswith(".gguf")
+
+
+def test_transformer_prefers_gguf_over_int8(tmp_path: Path):
+    root = tmp_path / "models"
+    gguf = root / "diffusion_models" / "ltx-2.5-22b-distilled-transformer-bf16-Q4_K_M.gguf"
+    official = root / "diffusion_models" / WEIGHT_FILES["transformer"].filename
+    gguf.parent.mkdir(parents=True)
+    gguf.write_bytes(b"gguf")
+    official.write_bytes(b"int8")
+    found = resolve_weight(WEIGHT_FILES["transformer"], [root])
+    assert found == gguf
+
+
+def test_hf_hub_snapshot_counts_as_present(tmp_path: Path):
+    snap = (
+        tmp_path
+        / "hub"
+        / "models--Lightricks--LTX-2.5"
+        / "snapshots"
+        / "abcd"
+        / "diffusion_models"
+    )
+    snap.mkdir(parents=True)
+    dest = snap / WEIGHT_FILES["transformer"].filename
+    dest.write_bytes(b"from-hub")
+    found = resolve_weight(WEIGHT_FILES["transformer"], [tmp_path / "hub" / "models--Lightricks--LTX-2.5" / "snapshots"])
+    assert found == dest

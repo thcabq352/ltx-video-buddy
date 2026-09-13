@@ -27,19 +27,29 @@ python -m master_agent download-models --ltx25 --yes
 python -m master_agent doctor --fix-models
 ```
 
-If every mandatory file is already in `MODELS_DIR`, `COMFYUI_ROOT/models`, or
-a common relative `ComfyUI/models` folder, Buddy proceeds silently.
+If any accepted local name for a slot is already in `MODELS_DIR`,
+`COMFYUI_ROOT/models`, a common relative `ComfyUI/models` folder, or a
+Hugging Face hub snapshot (`~/.cache/huggingface/hub/models--Lightricks--LTX-2.5/…`),
+Buddy proceeds silently. Zero-byte placeholders count as **missing**.
+
+Inventory first. Do not download “just in case.” `--yes` / `--fix-models` is
+only for files the scan confirmed are absent.
 
 ## Mandatory (default usability)
 
-| File | Dest folder | Size | Hugging Face | Workflows |
-|---|---|---|---|---|
-| `ltx-2.5-22b-distilled-transformer-comfy-int8-convrot.safetensors` | `models/diffusion_models/` | ~21.5 GB | `Lightricks/LTX-2.5` `diffusion_models/…` | all LTX 2.5 |
-| `gemma4-12b-with-proj-ltx-2.5-comfy-int8-convrot.safetensors` | `models/text_encoders/` | ~15.4 GB | `Lightricks/LTX-2.5` `text_encoders/…` | all LTX 2.5 |
-| `ltx-2.5-video-vae-bf16.safetensors` | `models/vae/` | ~1.5 GB | `Lightricks/LTX-2.5` `vae/…` | all LTX 2.5 |
-| `ltx-2.5-audio-vae-bf16.safetensors` | `models/vae/` | ~365 MB | `Lightricks/LTX-2.5` `vae/…` | all LTX 2.5 (T2A/A2V) |
-| `ltx-2.5-latent-spatial-upscaler-x2-bf16-1.0.safetensors` | `models/latent_upscale_models/` | ~1.0 GB | `Lightricks/LTX-2.5` `latent_upscale_models/…` | `ltx25_t2v_i2v_two_stage` |
-| `ltx-2.5-22b-ic-lora-ingredients-0.9.safetensors` | `models/loras/` | ~1.3 GB | `Lightricks/LTX-2.5-22b-IC-LoRA-Ingredients` | `ltx25_v2v_ic_lora`, `ltx25_msr` |
+Hub download targets (gated `Lightricks/LTX-2.5`) plus local alternatives that
+already satisfy the slot on a typical 16GB-class Comfy install:
+
+| Slot | Hub download target | Also accepted locally | Dest | Size | Workflows |
+|---|---|---|---|---|---|
+| Transformer | `ltx-2.5-22b-distilled-transformer-comfy-int8-convrot.safetensors` | **GGUF Q4_K_M** (preferred when present), NVFP4, official bf16, research stub `ltx-2.5-22b-distilled.safetensors` | `models/diffusion_models/` (GGUF often in `…/gguf/`) | ~21.5 GB int8 / ~17 GB NVFP4 / ~11 GB Q4 | all LTX 2.5 |
+| Text encoder | `gemma4-12b-with-proj-ltx-2.5-comfy-int8-convrot.safetensors` | `gemma4-12b-heretic-ltx25-int8convrot.safetensors`, official `…-bf16.safetensors` | `models/text_encoders/` | ~15.4 GB | all LTX 2.5 |
+| Video VAE | `ltx-2.5-video-vae-bf16.safetensors` | `ltx-2.5-video-vae-conv-bf16.safetensors` | `models/vae/` | ~1.5 GB | all LTX 2.5 |
+| Audio VAE | `ltx-2.5-audio-vae-bf16.safetensors` | — | `models/vae/` | ~365 MB | all LTX 2.5 (T2A/A2V) |
+| Spatial upscaler | `ltx-2.5-latent-spatial-upscaler-x2-bf16-1.0.safetensors` | — | `models/latent_upscale_models/` | ~1.0 GB | `ltx25_t2v_i2v_two_stage` |
+| IC-LoRA | `ltx-2.5-22b-ic-lora-ingredients-0.9.safetensors` | research stubs `ltx-2.5-ic-lora.safetensors` / `ltx-2.5-msr.safetensors` | `models/loras/` | ~1.3 GB | `ltx25_v2v_ic_lora`, `ltx25_msr` |
+
+Loader preference when several transformers exist: **GGUF Q4 → NVFP4 → int8-convrot → bf16**. GGUF files are wired to `UnetLoaderGGUF`. Official bf16 Gemma is **not** required if a working int8 / heretic TE is present.
 
 ## Optional
 

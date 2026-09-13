@@ -69,13 +69,15 @@ with video `length`.
 
 See [`video_buddy/REQUIRED-FILES.md`](video_buddy/REQUIRED-FILES.md).
 
-1. Scan configured + common Comfy `models/` trees.
-2. Present → queue silently.
-3. Missing → `MissingWeightsError` with filename, dest folder, size, gated-HF note.
+1. Scan configured + common Comfy `models/` trees and Hugging Face hub snapshots.
+2. Any accepted local name (GGUF Q4 / NVFP4 / int8 / bf16 transformer; heretic or official TE) → queue silently. Zero-byte files are missing.
+3. Truly missing → `MissingWeightsError` with filename, dest folder, size, gated-HF note, and accepted alternatives.
 4. User agrees: `python -m master_agent download-models --ltx25 --yes`
 
-`setup --fix` / `doctor --fix` does **not** download models.
-`setup --fix-models` / `doctor --fix-models` is explicit consent.
+Do not treat download as the default path. `setup --fix` / `doctor --fix` does **not** download models.
+`setup --fix-models` / `doctor --fix-models` is explicit consent for the **missing** set only.
+
+When several transformers are on disk, the patcher prefers GGUF Q4, then NVFP4, then int8-convrot, then bf16.
 
 ## Tower / node prerequisites (from research README + official pack)
 

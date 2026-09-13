@@ -74,7 +74,7 @@ It always prepares + lints first, then queues the short fire, prints wall time a
 - **Know `sec/step` before scale.** Ada field note: 285 s/step dropped to 66.5 s/step after a lowvram / hull-sized fire. Do not climb `DOWNSCALE_LADDER` or raise frames until diagnose recorded `sec/step`.
 - **Audio field is `frames_number`** on `LTXVEmptyLatentAudio`, paired with video `length`.
 - **Missing TeaCache → bypass**, not a hard-fail. Do not auto-install packs. Live Comfy may only expose `WanVideoTeaCache` / `WanVideoTeaCacheKJ`.
-- **LTX 2.5 default catalog.** `ltx25_*` variants are listed with no env flag. Scan weights first; ask before download (`python -m master_agent download-models --ltx25`). Do not auto-download gated `Lightricks/LTX-2.5` files. Stub ckpt `ltx-2.5-22b-distilled.safetensors` remaps to the official int8 transformer.
+- **LTX 2.5 default catalog.** `ltx25_*` variants are listed with no env flag. Scan weights first (GGUF Q4 / NVFP4 / int8 / heretic TE all count); ask before download (`python -m master_agent download-models --ltx25`). Do not auto-download gated `Lightricks/LTX-2.5` files. Zero-byte files are missing. Stub ckpt remaps to the official split pack; local GGUF wins when present.
 - **Tracker `DONE` can lie.** Confirm with history + `ffprobe` + size/frames. Junk `<100KB` or `<3` frames is FAIL even if the tracker says done.
 - **Port-in-use ≠ kill the cook.** If `:8188` / `:8189` is already bound, do not kill a running render. Attach or wait.
 - **Budget ~80 VRAM-min HOLD** with a shift-reset ledger. HOLD is `input-required`, not failed. `budget reset-shift` archives `previous_used` / `previous_shift_id` and never wipes history.

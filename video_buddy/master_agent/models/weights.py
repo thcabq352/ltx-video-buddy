@@ -12,6 +12,7 @@ Product flow for any user of Video Buddy (not a one-off tower inventory):
 
 from __future__ import annotations
 
+import os
 from dataclasses import asdict, dataclass, field
 from pathlib import Path
 from typing import Any, Callable, Iterable, Optional
@@ -49,6 +50,9 @@ class WeightFile:
     gated: bool
     note: str = ""
     license_url: str = HF_LICENSE
+    # Local alternatives that satisfy this slot. First is preferred when several exist.
+    # Official ``filename`` is the Hub download target (not the only accepted name).
+    accepts: tuple[str, ...] = ()
 
     @property
     def size_label(self) -> str:
@@ -58,6 +62,18 @@ class WeightFile:
         if n >= 1e6:
             return f"{n / 1e6:.0f} MB"
         return f"{int(n)} B"
+
+    @property
+    def candidates(self) -> tuple[str, ...]:
+        """Preference-ordered names that count as present (plus research stubs)."""
+        seen: list[str] = []
+        for name in (*self.accepts, self.filename):
+            if name and name not in seen:
+                seen.append(name)
+        for stub, official in STUB_ALIASES.items():
+            if official == self.filename and stub not in seen:
+                seen.append(stub)
+        return tuple(seen)
 
 
 # Official Comfy-ready distilled split pack (docs.comfy.org / Lightricks/LTX-2.5).
@@ -71,7 +87,14 @@ WEIGHT_FILES: dict[str, WeightFile] = {
         size_bytes=21_500_000_000,
         mandatory=True,
         gated=True,
-        note="Comfy-ready int8 distilled transformer. Accept the LTX-2.x Community License first.",
+        note="Comfy-ready int8 distilled transformer (Hub default). GGUF Q4 / NVFP4 / bf16 also count.",
+        accepts=(
+            # 16GB-class preference: GGUF Q4, then NVFP4, then int8, then bf16.
+            "ltx-2.5-22b-distilled-transformer-bf16-Q4_K_M.gguf",
+            "ltx-2.5-22b-distilled-transformer-nvfp4.safetensors",
+            "ltx-2.5-22b-distilled-transformer-comfy-int8-convrot.safetensors",
+            "ltx-2.5-22b-distilled-transformer-bf16.safetensors",
+        ),
     ),
     "text_encoder": WeightFile(
         key="text_encoder",
@@ -82,7 +105,12 @@ WEIGHT_FILES: dict[str, WeightFile] = {
         size_bytes=15_400_000_000,
         mandatory=True,
         gated=True,
-        note="Gemma 4 12B text encoder with the LTX 2.5 projection, Comfy int8.",
+        note="Official Gemma 4 12B + LTX 2.5 projection (Comfy int8). Heretic int8 or official bf16 also count.",
+        accepts=(
+            "gemma4-12b-heretic-ltx25-int8convrot.safetensors",
+            "gemma4-12b-with-proj-ltx-2.5-comfy-int8-convrot.safetensors",
+            "gemma4-12b-with-proj-ltx-2.5-bf16.safetensors",
+        ),
     ),
     "video_vae": WeightFile(
         key="video_vae",
@@ -93,7 +121,11 @@ WEIGHT_FILES: dict[str, WeightFile] = {
         size_bytes=1_500_000_000,
         mandatory=True,
         gated=True,
-        note="Video VAE (bf16).",
+        note="Video VAE (bf16). The conv-bf16 variant also counts.",
+        accepts=(
+            "ltx-2.5-video-vae-bf16.safetensors",
+            "ltx-2.5-video-vae-conv-bf16.safetensors",
+        ),
     ),
     "audio_vae": WeightFile(
         key="audio_vae",
@@ -257,8 +289,39 @@ def _file_row(w: WeightFile) -> dict[str, Any]:
     }
 
 
+def _is_usable_file(path: Path) -> bool:
+    """Present means a real file with bytes. Zero-byte placeholders are missing."""
+    try:
+        return path.is_file() and path.stat().st_size > 0
+    except OSError:
+        return False
+
+
+def _hf_hub_snapshot_roots() -> list[Path]:
+    """Common Hugging Face hub snapshot trees (not a one-off machine path)."""
+    hubs: list[Path] = []
+    env_cache = os.environ.get("HUGGINGFACE_HUB_CACHE") or os.environ.get("HF_HUB_CACHE")
+    if env_cache:
+        hubs.append(Path(env_cache))
+    hf_home = os.environ.get("HF_HOME")
+    if hf_home:
+        hubs.append(Path(hf_home) / "hub")
+    hubs.append(Path.home() / ".cache" / "huggingface" / "hub")
+    repos = (
+        "models--Lightricks--LTX-2.5",
+        "models--Lightricks--LTX-2.5-22b-IC-LoRA-Ingredients",
+    )
+    out: list[Path] = []
+    for hub in hubs:
+        for repo in repos:
+            snap = hub / repo / "snapshots"
+            if snap.is_dir():
+                out.append(snap)
+    return out
+
+
 def model_search_roots() -> list[Path]:
-    """Configured dirs plus common relative Comfy ``models/`` locations."""
+    """Configured dirs plus common relative Comfy ``models/`` and HF hub layouts."""
     from master_agent.config import COMFYUI_ROOT, MODELS_DIR, PROJECT_ROOT
 
     roots: list[Path] = []
@@ -284,23 +347,16 @@ def model_search_roots() -> list[Path]:
     _add(cwd / "video_buddy" / "models")
     _add(cwd / "ComfyUI" / "models")
     _add(cwd / "ComfyUI_windows_portable" / "ComfyUI" / "models")
+    for snap in _hf_hub_snapshot_roots():
+        _add(snap)
     return roots
 
 
-def find_weight_file(filename: str, roots: Iterable[Path] | None = None) -> Path | None:
-    """Return the first existing path for a bare filename (or stub alias)."""
-    names = [filename]
-    aliased = STUB_ALIASES.get(filename)
-    if aliased and aliased not in names:
-        names.append(aliased)
-    # Also accept the stub if the user actually dropped that name.
-    for alias, official in STUB_ALIASES.items():
-        if official == filename and alias not in names:
-            names.append(alias)
-    search = list(roots) if roots is not None else model_search_roots()
+def _search_name(name: str, roots: Iterable[Path]) -> Path | None:
     subdirs = (
         "checkpoints",
         "diffusion_models",
+        "diffusion_models/gguf",
         "unet",
         "loras",
         "vae",
@@ -309,25 +365,56 @@ def find_weight_file(filename: str, roots: Iterable[Path] | None = None) -> Path
         "model_patches",
         "",
     )
-    for root in search:
+    for root in roots:
         if not root.is_dir():
             continue
-        for name in names:
-            direct = root / name
-            if direct.is_file():
-                return direct
-            for sub in subdirs:
-                candidate = root / sub / name if sub else root / name
-                if candidate.is_file():
-                    return candidate
-            # Nested pack folders (loras/ltx/..., diffusion_models/ltx/...)
-            try:
-                hits = list(root.rglob(name))
-            except OSError:
-                hits = []
-            for hit in hits:
-                if hit.is_file():
-                    return hit
+        direct = root / name
+        if _is_usable_file(direct):
+            return direct
+        for sub in subdirs:
+            candidate = root.joinpath(*sub.split("/"), name) if sub else root / name
+            if _is_usable_file(candidate):
+                return candidate
+        try:
+            hits = root.rglob(name)
+        except OSError:
+            hits = []
+        for hit in hits:
+            if _is_usable_file(hit):
+                return hit
+    return None
+
+
+def find_weight_file(filename: str, roots: Iterable[Path] | None = None) -> Path | None:
+    """Return the first usable path for a bare filename (or stub / family alias)."""
+    names = [filename]
+    aliased = STUB_ALIASES.get(filename)
+    if aliased and aliased not in names:
+        names.append(aliased)
+    for alias, official in STUB_ALIASES.items():
+        if official == filename and alias not in names:
+            names.append(alias)
+    for weight in WEIGHT_FILES.values():
+        if filename in weight.candidates:
+            for extra in weight.candidates:
+                if extra not in names:
+                    names.append(extra)
+            break
+    search = list(roots) if roots is not None else model_search_roots()
+    for name in names:
+        found = _search_name(name, search)
+        if found is not None:
+            return found
+    return None
+
+
+def resolve_weight(weight: WeightFile, roots: Iterable[Path] | None = None) -> Path | None:
+    """Best local file for a slot (preference order). None if all candidates missing/empty."""
+    search = list(roots) if roots is not None else model_search_roots()
+    for name in weight.candidates:
+        found = _search_name(name, search)
+        if found is not None:
+            return found
     return None
 
 
@@ -355,7 +442,7 @@ def scan_bundle(bundle: str, *, roots: Iterable[Path] | None = None) -> WeightSt
     search = list(roots) if roots is not None else model_search_roots()
     status = WeightStatus(roots=[str(p) for p in search], bundle=bundle)
     for weight in files_for_bundle(bundle):
-        found = find_weight_file(weight.filename, search)
+        found = resolve_weight(weight, search)
         if found is not None:
             status.present.append(weight)
             continue
@@ -391,6 +478,9 @@ def format_ask(status: WeightStatus) -> str:
         lines.append(f"      {w.repo_id}  {w.repo_filename}")
         if w.note:
             lines.append(f"      {w.note}")
+        alts = [n for n in w.candidates if n != w.filename]
+        if alts:
+            lines.append("      also accepted locally: " + ", ".join(alts))
         lines.append(f"      license: {w.license_url}")
     if status.missing_optional:
         lines.append("")

@@ -97,6 +97,31 @@ def test_patcher_accepts_every_shipped_template():
         assert "slow push into a neon alley" in texts, vid
 
 
+def test_local_gguf_rewrites_unet_loader_gguf(tmp_path, monkeypatch):
+    root = tmp_path / "models"
+    gguf = root / "diffusion_models" / "gguf" / "ltx-2.5-22b-distilled-transformer-bf16-Q4_K_M.gguf"
+    te = root / "text_encoders" / "gemma4-12b-heretic-ltx25-int8convrot.safetensors"
+    gguf.parent.mkdir(parents=True)
+    te.parent.mkdir(parents=True)
+    gguf.write_bytes(b"gguf")
+    te.write_bytes(b"te")
+    monkeypatch.setattr(
+        "master_agent.models.weights.model_search_roots",
+        lambda: [root],
+    )
+    wf, _meta = load_and_patch_workflow(
+        "ltx25_t2v_i2v",
+        prompt="hero shot",
+        seed=1,
+        duration_s=2.0,
+    )
+    ggufs = _find_nodes_by_class(wf, "UnetLoaderGGUF")
+    assert ggufs
+    assert ggufs[0][1]["inputs"]["unet_name"].endswith(".gguf")
+    tes = _find_nodes_by_class(wf, "LTXAVTextEncoderLoader")
+    assert tes[0][1]["inputs"]["text_encoder"].startswith("gemma4-12b-heretic")
+
+
 def test_stub_ckpt_remapped_to_official_transformer():
     wf, _meta = load_and_patch_workflow(
         "ltx25_t2v_i2v",
