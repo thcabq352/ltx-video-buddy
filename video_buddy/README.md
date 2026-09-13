@@ -77,12 +77,16 @@ python -m master_agent about               # studio identity card
 python -m master_agent health              # ComfyUI reachable? GPU stats
 python -m master_agent fetch-object-info   # cache node registry to state/object_info.json
 python -m master_agent scan-models         # scan models/ → state/model_inventory.json
+python -m master_agent workflows           # default catalog (includes LTX 2.5)
+python -m master_agent doctor              # scan deps + LTX 2.5 weights (alias of setup)
+python -m master_agent download-models --ltx25   # inventory scan; --yes only if something is missing
 python -m master_agent validate file.json  # validate one workflow
 python -m master_agent validate --all      # validate everything in workflows/
 python -m master_agent validate --all --offline  # no server needed (uses cache)
 
 # Drive Comfy from the CLI first (lint + queue + copy into outputs/):
 python -m master_agent comfy run --mode generate --prompt "neon rain" --variant base
+python -m master_agent comfy run --mode generate --prompt "neon rain" --variant ltx25_t2v_i2v
 python -m master_agent comfy run --mode template --template base --set 12.steps=8
 python -m master_agent comfy run --mode raw --json workflow.json
 python -m master_agent comfy run --mode template --template lipsync --prepare --out prepared.json
@@ -90,6 +94,7 @@ python -m master_agent comfy run --mode template --template lipsync --prepare --
 # Orchestrated generation (the Director):
 python -m master_agent run "cinematic close-up of rain on a window" --quality draft --duration 3
 python -m master_agent run "talking head dub" --video input.mp4 --variant lipsync
+python -m master_agent run "LTX 2.5 alley" --variant ltx25_t2v_i2v --no-interview
 python -m master_agent run "..." --no-judge  # skip the judge loop
 
 # Multi-segment (duration beyond the per-clip VRAM cap auto-splits):
@@ -102,6 +107,16 @@ python -m master_agent run "..." --llm-panel grok+local        # Grok + local, j
 python -m master_agent run "..." --llm-panel grok+claude       # Grok + Claude, judge picks
 python -m master_agent run "..." --llm-panel ollama:gemma4:latest,grok   # custom panel
 ```
+
+**LTX 2.5** graphs (`ltx25_t2v_i2v`, `ltx25_t2v_i2v_two_stage`, `ltx25_flf2v`,
+`ltx25_msr`, `ltx25_v2v_ic_lora`, `ltx25_a2v`, `ltx25_t2a`) are in the default
+catalog — CLI `--variant`, Create-tab, Comfy-tab, `GET /api/variants`. No env
+flag. Inventory first: Buddy locates existing files under `MODELS_DIR`,
+Comfy `models/`, `EXTRA_MODELS_DIRS`, `extra_model_paths.yaml`, and the
+Hugging Face hub cache (GGUF / NVFP4 / int8 / official bf16 all count).
+Download only if the scan confirms a slot is empty
+(`download-models --ltx25` lists; add `--yes` only then). See
+[REQUIRED-FILES.md](REQUIRED-FILES.md) and [MERGE-LTX25.md](../MERGE-LTX25.md).
 
 The validator checks class types, required inputs, widget values, link type
 integrity (match-type passthroughs like `COMFY_MATCHTYPE_V3` count as

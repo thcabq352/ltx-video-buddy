@@ -275,8 +275,8 @@
         <div><label>Quality</label><select id="c-quality">
           <option>draft</option><option>balanced</option><option>quality</option></select></div>
         <div><label>Variant</label><select id="c-variant">
-          <option value="">auto (director)</option><option>base</option><option>directors</option>
-          <option>eros</option><option>lipsync</option><option>wan22</option></select></div>
+          <option value="">auto (director)</option>
+        </select></div>
         <div><label>LLM panel</label><select id="c-panel">
           <option value="">local (VL heretic)</option>
           <option value="grok">grok</option>
@@ -552,8 +552,7 @@
           <select id="wf-template"></select></div>
         <div id="wf-variant-wrap" style="display:none"><label>Variant</label>
           <select id="wf-variant">
-            <option>base</option><option>directors</option><option>eros</option>
-            <option>lipsync</option><option>wan22</option>
+            <option value="base">base</option>
           </select></div>
       </div>
       <div id="wf-prompt-wrap" style="display:none">
@@ -1771,6 +1770,26 @@ const controlFields = {
 $("c-budget-reset")?.addEventListener("click", () => postControl({ reset_budget: true }));
 api("/api/control").then(paintControl).catch(() => {});
 
+async function loadVariants() {
+  const data = await api("/api/variants").catch(() => ({ items: [] }));
+  const items = data.items || [];
+  const fill = (id, includeAuto) => {
+    const el = $(id);
+    if (!el) return;
+    const cur = el.value;
+    const opts = [];
+    if (includeAuto) opts.push('<option value="">auto (director)</option>');
+    for (const it of items) {
+      const label = it.id + (it.description ? " — " + it.description : "");
+      opts.push(`<option value="${esc(it.id)}">${esc(label)}</option>`);
+    }
+    el.innerHTML = opts.join("") || el.innerHTML;
+    if (cur && [...el.options].some((o) => o.value === cur)) el.value = cur;
+  };
+  fill("c-variant", true);
+  fill("wf-variant", false);
+}
+loadVariants();
 loadHealth();
 refreshJobs();
 setInterval(loadHealth, 15000);

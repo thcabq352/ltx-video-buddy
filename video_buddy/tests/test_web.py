@@ -34,6 +34,8 @@ class TestStudioHtml(unittest.TestCase):
         self.assertIn('data-tab="about"', html)
         self.assertIn("tab-about", html)
         self.assertIn("Drive Comfy from the CLI first", html)
+        self.assertIn("/api/variants", html)
+        self.assertIn("loadVariants", html)
 
 
 class TestHealth(unittest.TestCase):
@@ -60,6 +62,24 @@ class TestHealth(unittest.TestCase):
         self.assertEqual(data["drive"]["first"], "cli")
         self.assertIn("comfy run", data["drive"]["graph"])
 
+    def test_default_variants_include_ltx25(self):
+        client = TestClient(app)
+        r = client.get("/api/variants")
+        self.assertEqual(r.status_code, 200)
+        ids = {item["id"] for item in r.json()["items"]}
+        for vid in (
+            "base",
+            "wan22",
+            "ltx25_t2v_i2v",
+            "ltx25_t2v_i2v_two_stage",
+            "ltx25_flf2v",
+            "ltx25_msr",
+            "ltx25_v2v_ic_lora",
+            "ltx25_a2v",
+            "ltx25_t2a",
+        ):
+            self.assertIn(vid, ids)
+
 
 class TestJobs(unittest.TestCase):
     def setUp(self):
@@ -70,6 +90,8 @@ class TestJobs(unittest.TestCase):
         r = client.post("/api/jobs", json={"request": "  "})
         self.assertEqual(r.status_code, 400)
         r = client.post("/api/jobs", json={"request": "x", "quality": "nope"})
+        self.assertEqual(r.status_code, 400)
+        r = client.post("/api/jobs", json={"request": "x", "variant": "not-a-real-graph"})
         self.assertEqual(r.status_code, 400)
 
     def test_rejects_media_outside_uploads(self):

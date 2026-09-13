@@ -74,8 +74,9 @@ def _manifest_files() -> dict[str, str]:
 
 
 def list_templates() -> list[dict[str, str]]:
-    from master_agent.config import WORKFLOW_FILES, WORKFLOWS_DIR
+    from master_agent.comfy.catalog import list_catalog_items
 
+    return list_catalog_items()
     root = WORKFLOWS_DIR.resolve()
     items: list[dict[str, str]] = []
     seen: set[str] = set()
@@ -105,11 +106,14 @@ def list_templates() -> list[dict[str, str]]:
 
 
 def resolve_template(rel: str | Path) -> Path:
+    from master_agent.comfy.catalog import is_known_variant, resolve_workflow_path
     from master_agent.config import WORKFLOW_FILES, WORKFLOWS_DIR
 
     key = str(rel or "").strip().replace("\\", "/")
     if not key:
         raise ValueError("template path required")
+    if is_known_variant(key):
+        return resolve_workflow_path(key)
     if key in WORKFLOW_FILES:
         key = WORKFLOW_FILES[key]
     else:
@@ -200,14 +204,22 @@ def lint_or_raise(workflow: dict[str, Any], object_info: dict[str, Any], *, file
         )
 
 
-def execute_prepared(workflow: dict[str, Any], *, run_id: str | None = None) -> dict[str, Any]:
+def execute_prepared(
+    workflow: dict[str, Any],
+    *,
+    run_id: str | None = None,
+    variant: str | None = None,
+) -> dict[str, Any]:
     """Lint, queue, poll, and copy the first video/image into outputs/."""
     import shutil
 
     from master_agent.comfy.client import ComfyClient
     from master_agent.config import OUTPUTS_DIR
+    from master_agent.models.weights import require_weights
 
     wf = unwrap_workflow(workflow)
+    if variant:
+        require_weights(str(variant))
     client = ComfyClient()
     object_info, source = client.load_object_info(prefer_live=True)
     print(f"object_info: {source}")

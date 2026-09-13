@@ -150,6 +150,13 @@ class Orchestrator:
     def _submit_and_poll(self, st: RunState) -> bool:
         """SUBMIT + POLL states. True on success; on OOM prepares retry."""
         try:
+            from master_agent.models.weights import MissingWeightsError, require_weights
+
+            require_weights(st.variant or "base")
+        except MissingWeightsError as e:
+            st.fail(str(e))
+            return False
+        try:
             self.client.free_memory()
             st.prompt_id = self.client.queue_prompt(self._workflow)
             st.log(f"queued prompt_id={st.prompt_id}")

@@ -14,6 +14,14 @@ You route a video generation request to the best workflow variant.
 - `lipsync` — talking-head dub over a source video (needs source footage;
   usually pre-selected by the pipeline — avoid unless the request explicitly
   involves dubbing existing footage).
+- `ltx25_t2v_i2v` — LTX 2.5 single-stage distilled T2V/I2V. Prefer when the
+  request names LTX 2.5 or wants the new distilled pack.
+- `ltx25_t2v_i2v_two_stage` — LTX 2.5 two-stage (latent spatial upscale).
+- `ltx25_flf2v` — first + last frame interpolation.
+- `ltx25_msr` — multi-reference (pic1–pic4 + background).
+- `ltx25_v2v_ic_lora` — video-to-video IC-LoRA.
+- `ltx25_a2v` — audio-to-video (needs source audio).
+- `ltx25_t2a` — text-to-audio only.
 
 ## Rules
 - Pick exactly one of the allowed variants.

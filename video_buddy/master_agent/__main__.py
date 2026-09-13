@@ -14,6 +14,9 @@ Commands:
   character create|list   CCC stage: bible -> Flux sheet -> captioned dataset
   lora setup|train|validate  Flux LoRA training via ai-toolkit + vision validation
   download-flux       One-time Flux fp8 weights download (~17GB)
+  download-models     Scan LTX 2.5 weights; download missing only with --yes
+  setup | doctor      Scan local deps + LTX 2.5 weights (--fix-models after you agree)
+  workflows           List default catalog variants (no env flags)
   comfy run           Drive ComfyUI from the CLI (prepare + lint + queue)
   diagnose            9-frame hull fire (sec/step); does not spend shift budget
   budget              status | reset-shift  (VRAM-min shift ledger)
@@ -60,7 +63,7 @@ def cmd_about(args: argparse.Namespace) -> int:
 def cmd_setup(args: argparse.Namespace) -> int:
     from master_agent.setup import cmd_setup as run_setup
 
-    return run_setup(do_fix=bool(args.fix))
+    return run_setup(do_fix=bool(args.fix), fix_models=bool(getattr(args, "fix_models", False)))
 
 
 def cmd_health(args: argparse.Namespace) -> int:
@@ -229,6 +232,16 @@ def cmd_run(args: argparse.Namespace) -> int:
         MAX_JUDGE_ROUNDS,
     )
     from master_agent.orchestrator.pipeline import dry_run_pipeline, run_pipeline
+
+    if args.variant:
+        from master_agent.comfy.catalog import default_variant_ids, is_known_variant
+
+        if not is_known_variant(args.variant):
+            print(f"FAIL  unknown variant {args.variant!r}")
+            print("known default catalog:")
+            for vid in default_variant_ids():
+                print(f"  {vid}")
+            return 2
 
     client = ComfyClient()
     if not client.is_up():
@@ -599,6 +612,56 @@ def cmd_download_flux(args: argparse.Namespace) -> int:
     return 0
 
 
+def cmd_download_models(args: argparse.Namespace) -> int:
+    """Scan first; download missing LTX 2.5 weights only after --yes."""
+    from master_agent.models.weights import (
+        MissingWeightsError,
+        download_missing_bundle,
+        scan_bundle,
+    )
+
+    bundle = "ltx25_all" if args.ltx25 else "ltx25_core"
+    if args.bundle:
+        bundle = args.bundle
+    status = scan_bundle(bundle)
+    print(json.dumps(status.to_dict(), indent=1) if args.json else (
+        "OK    all required weights present" if status.ok else status.to_dict()["ask"]
+    ))
+    if status.ok:
+        return 0
+    if not args.yes:
+        print("\nNothing downloaded. Re-run with --yes after you agree.")
+        return 2
+    try:
+        _status, paths = download_missing_bundle(
+            bundle,
+            yes=True,
+            include_optional=bool(args.optional),
+        )
+    except MissingWeightsError as e:
+        print(f"FAIL  {e}")
+        return 1
+    except Exception as e:
+        print(f"FAIL  {e}")
+        return 1
+    print(f"OK    {len(paths)} file(s) downloaded")
+    return 0
+
+
+def cmd_workflows(args: argparse.Namespace) -> int:
+    from master_agent.comfy.catalog import list_catalog_items
+
+    items = list_catalog_items()
+    variants = [i for i in items if i.get("kind") == "variant"]
+    if args.json:
+        print(json.dumps(items, indent=1))
+        return 0
+    print(f"{len(variants)} default catalog variant(s):")
+    for item in variants:
+        print(f"  {item['id']:<28} {item.get('path', '')}")
+    return 0
+
+
 def cmd_character(args: argparse.Namespace) -> int:
     from master_agent.config import CHARACTERS_DIR
 
@@ -895,7 +958,7 @@ def cmd_comfy(args: argparse.Namespace) -> int:
             print(json.dumps({"ok": True, "nodes": len(prepared)}, indent=1))
         return 0
     try:
-        rec = execute_prepared(prepared)
+        rec = execute_prepared(prepared, variant=args.variant)
     except Exception as e:
         print(f"FAIL  {e}")
         return 1
@@ -925,9 +988,22 @@ def main(argv: list[str] | None = None) -> int:
     p.add_argument("--json", action="store_true", help="machine-readable output")
     p.set_defaults(func=cmd_about)
 
-    p = sub.add_parser("setup", help="check or install local dependencies")
+    p = sub.add_parser(
+        "setup",
+        aliases=["doctor"],
+        help="check local deps + LTX 2.5 weights (scan first; --fix-models after you agree)",
+    )
     p.add_argument("--fix", action="store_true", help="create venv, pip install, Playwright, .env, ffmpeg, Ollama models")
+    p.add_argument(
+        "--fix-models",
+        action="store_true",
+        help="after reviewing the missing list, download required LTX 2.5 weights (gated HF)",
+    )
     p.set_defaults(func=cmd_setup)
+
+    p = sub.add_parser("workflows", help="list default catalog variants (no env flags)")
+    p.add_argument("--json", action="store_true")
+    p.set_defaults(func=cmd_workflows)
 
     p = sub.add_parser("health", help="check ComfyUI reachability")
     p.set_defaults(func=cmd_health)
@@ -965,7 +1041,7 @@ def main(argv: list[str] | None = None) -> int:
 
     p = sub.add_parser("run", help="orchestrated generation: patch -> validate -> submit -> judge")
     p.add_argument("request", help="what to generate (natural language)")
-    p.add_argument("--variant", choices=["base", "eros", "directors", "lipsync", "wan22"], help="force variant")
+    p.add_argument("--variant", help="force catalog variant (see: python -m master_agent workflows)")
     p.add_argument("--duration", type=float, default=5.0, help="seconds (default 5)")
     p.add_argument("--quality", choices=["draft", "balanced", "quality"], help="quality profile")
     p.add_argument("--seed", type=int, help="fixed seed (default: random)")
@@ -1003,8 +1079,7 @@ def main(argv: list[str] | None = None) -> int:
     )
     p.add_argument("request", help="creative brief / intent for the graph edit")
     p.add_argument("--variant", default="base",
-                   choices=["base", "eros", "directors", "lipsync", "wan22", "flux"],
-                   help="workflow variant template (default base)")
+                   help="workflow variant template (default catalog; see `workflows`)")
     p.add_argument("--quality", choices=["draft", "balanced", "quality"], default="draft")
     p.add_argument("--duration", type=float, default=5.0)
     p.add_argument("--seed", type=int)
@@ -1070,8 +1145,7 @@ def main(argv: list[str] | None = None) -> int:
     p.add_argument("--audio", required=True, help="audio file (mp3/wav/...)")
     p.add_argument("--visual", choices=["shots", "fractal"], default="shots",
                    help="shots = ComfyUI generation per shot; fractal = CPU beat-reactive zoom")
-    p.add_argument("--variant", choices=["base", "eros", "directors", "lipsync", "wan22"],
-                   help="force generation variant (shots mode)")
+    p.add_argument("--variant", help="force catalog variant (shots mode)")
     p.add_argument("--quality", choices=["draft", "balanced", "quality"], help="quality profile")
     p.add_argument("--seed", type=int, help="fixed seed (default: random)")
     p.add_argument("--width", type=int, default=768)
@@ -1091,6 +1165,17 @@ def main(argv: list[str] | None = None) -> int:
 
     p = sub.add_parser("download-flux", help="download Flux fp8 weights (~17GB, one-time)")
     p.set_defaults(func=cmd_download_flux)
+
+    p = sub.add_parser(
+        "download-models",
+        help="scan LTX 2.5 weights; download missing only with --yes (never auto)",
+    )
+    p.add_argument("--ltx25", action="store_true", default=True, help="LTX 2.5 distilled split pack (default)")
+    p.add_argument("--bundle", help="weight bundle id (ltx25_core|ltx25_two_stage|ltx25_iclora|ltx25_msr|ltx25_all)")
+    p.add_argument("--yes", action="store_true", help="consent: download the missing mandatory set")
+    p.add_argument("--optional", action="store_true", help="also fetch optional Hub files (distilled LoRA 450, temporal upscaler)")
+    p.add_argument("--json", action="store_true")
+    p.set_defaults(func=cmd_download_models)
 
     p = sub.add_parser("character", help="CCC stage: create | list")
     p.add_argument("character_command", choices=["create", "list"])

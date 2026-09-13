@@ -73,6 +73,8 @@ It always prepares + lints first, then queues the short fire, prints wall time a
 - **`length=8` is junk.** LTX wants `8n+1` (min 9). Length 8 collapses to a 1-frame file. Never queue 8; snap to 9.
 - **Know `sec/step` before scale.** Ada field note: 285 s/step dropped to 66.5 s/step after a lowvram / hull-sized fire. Do not climb `DOWNSCALE_LADDER` or raise frames until diagnose recorded `sec/step`.
 - **Audio field is `frames_number`** on `LTXVEmptyLatentAudio`, paired with video `length`.
+- **Missing TeaCache → bypass**, not a hard-fail. Do not auto-install packs. Live Comfy may only expose `WanVideoTeaCache` / `WanVideoTeaCacheKJ`.
+- **LTX 2.5 default catalog.** `ltx25_*` variants are listed with no env flag. Inventory first. 16GB-class loader pick: GGUF Q4 → NVFP4 (if `VRAM_GB` ≥ 14) → int8 / bf16. Heretic/int8 TE counts; official bf16 Gemma is not required. Ask only for confirmed-missing slots. Never auto-download.
 - **Missing TeaCache / LanPaint_KSampler / GetWarpedNoiseFromVideo / MMAudio* → bypass**, not a hard-fail. Do not auto-install packs. Live tower (2026-09-13, 4114 classes) registers exact `TeaCache` + `WanVideoTeaCache`. There is no `VideoNoiseWarp` class — use `GetWarpedNoiseFromVideo`. Do not bypass structural nodes (`WanFunInpaintToVideo`, `Wan22FunControlToVideo`, `IPAdapterFaceID`).
 - **Tracker `DONE` can lie.** Confirm with history + `ffprobe` + size/frames. Junk `<100KB` or `<3` frames is FAIL even if the tracker says done.
 - **Port-in-use ≠ kill the cook.** If `:8188` / `:8189` is already bound, do not kill a running render. Attach or wait.

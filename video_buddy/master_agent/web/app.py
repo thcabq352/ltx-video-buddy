@@ -215,8 +215,11 @@ def api_submit_job(req: JobRequest):
         raise HTTPException(400, "request must not be empty")
     if req.quality not in ("draft", "balanced", "quality"):
         raise HTTPException(400, "quality must be draft|balanced|quality")
-    if req.variant not in (None, "base", "directors", "eros", "lipsync", "wan22"):
-        raise HTTPException(400, "unknown variant")
+    if req.variant not in (None, "", "auto"):
+        from master_agent.comfy.catalog import is_known_variant
+
+        if not is_known_variant(req.variant):
+            raise HTTPException(400, f"unknown variant: {req.variant}")
     if req.upscale not in _UPSCALE_METHODS:
         raise HTTPException(400, "upscale must be rtx|seedvr2")
     if req.storyboard not in _STORYBOARD_MODES:
@@ -442,8 +445,10 @@ def api_power_tune(req: PowerTuneRequest):
 
     if not req.request.strip():
         raise HTTPException(400, "request must not be empty")
-    if req.variant not in ("base", "eros", "directors", "lipsync", "wan22", "flux"):
-        raise HTTPException(400, "unknown variant")
+    from master_agent.comfy.catalog import is_known_variant
+
+    if not is_known_variant(req.variant):
+        raise HTTPException(400, f"unknown variant: {req.variant}")
     if req.quality not in ("draft", "balanced", "quality"):
         raise HTTPException(400, "quality must be draft|balanced|quality")
     profile = get_quality_profile(req.quality)
@@ -483,6 +488,27 @@ def api_comfy_templates():
     from master_agent.comfy.cli_run import list_templates
 
     return {"items": list_templates()}
+
+
+@app.get("/api/variants")
+def api_variants():
+    """Default catalog — same list as CLI ``workflows`` / Create-tab picker."""
+    from master_agent.comfy.catalog import default_entries
+
+    return {
+        "items": [
+            {
+                "id": e.id,
+                "path": e.path,
+                "name": e.name,
+                "description": e.description,
+                "family": e.family,
+                "modes": list(e.modes),
+                "aliases": list(e.aliases),
+            }
+            for e in default_entries()
+        ]
+    }
 
 
 @app.post("/api/comfy/prepare")
