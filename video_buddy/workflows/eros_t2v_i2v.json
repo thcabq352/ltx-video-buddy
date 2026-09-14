@@ -61,7 +61,7 @@
     "inputs": {
       "width": 768,
       "height": 512,
-      "length": 121,
+      "length": 25,
       "batch_size": 1
     },
     "_meta": { "title": "Empty Video Latent" }
@@ -70,7 +70,7 @@
     "class_type": "LTXVEmptyLatentAudio",
     "inputs": {
       "audio_vae": ["3", 0],
-      "frames_number": 121,
+      "frames_number": 25,
       "frame_rate": 24,
       "batch_size": 1
     },

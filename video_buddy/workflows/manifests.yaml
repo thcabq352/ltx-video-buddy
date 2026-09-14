@@ -1,4 +1,8 @@
 # Maps logical fields → simplified single-pass LTX workflows
+#
+# vram / vram_note: 16GB (RTX 5060 Ti) policy hints. Canonical table lives in
+# master_agent/models/vram_policy.py (doctor + catalog + --prepare inherit it).
+#   vram: 16gb | offload | needs_more_vram
 
 base:
   file: base_t2v_i2v.json
@@ -181,6 +185,8 @@ lipsync:
 wan22:
   file: 260713_VIDEO-BUDDY_WAN-2-2-VID_1-0_api.json
   description: Wan 2.2 two-stage T2V (high/low noise UNETs, NAG, film grain, 16fps)
+  vram: offload
+  vram_note: "16GB: 640×384 / ≤33f @16fps / 8 steps + LightX2V. Dual 14B fp8 at 1280×720 needs offload. No T2V GGUF in catalog."
   fields:
     prompt:
       node_id: "3"
@@ -231,6 +237,8 @@ wan22:
 krea2_img:
   file: 260713_VIDEO-BUDDY_KREA-2-IMG_1-0_api.json
   description: Krea-2 image generation (image variant — not video-pipeline routed; negative is ConditioningZeroOut)
+  vram: 16gb
+  vram_note: "Default NVFP4 turbo at 1024×576. 1920×1080 and bf16 UNET need more VRAM."
   fields:
     prompt:
       node_id: "4"
@@ -268,6 +276,8 @@ vb_ccc_adv:
   format: api
   ui_source: 260720_VIDEO-BUDDY_CCC_4-01_ADV.json
   description: Consistent Character Creator v4 ADV (516 nodes — face split, detailer, upscale)
+  vram: needs_more_vram
+  vram_note: "777-node CCC is not a 16GB default. Disable SeedVR2 + Face Detailer; or use flux / krea2_img for single sheets."
   requires: [ComfyUI-Mickmumpitz-Nodes (CCC_*), KJNodes (GetNode/SetNode/JoinStringMulti/ImageResizeKJv2),
              rgthree-comfy, ComfyUI-Easy-Use, ComfyUI-Impact-Pack, SeedVR2, ComfyUI-AutoCropFaces]
   # director: baked_defaults — 777-node graph, no single safe prompt widget.
@@ -337,6 +347,8 @@ vb_wan22_vid:
   format: api
   ui_source: 260713_VIDEO-BUDDY_WAN-2-2-VID_1-0.json
   description: Wan 2.2 video generation with NAG + film grain finish (see wan22 variant)
+  vram: offload
+  vram_note: "Same 16GB hull as wan22: 640×384 / LightX2V / 8 steps. Dual 14B fp8 is sequential."
   requires: [VideoHelperSuite (VHS_VideoCombine), rgthree-comfy, RES4LYF (Film Grain), KJNodes (WanVideoNAG)]
   fields:
     prompt:
@@ -373,6 +385,8 @@ vb_qwen_edit_360:
   format: api
   ui_source: 251018_VIDEO-BUDDY_QWEN-IMAGE-EDIT-360_1-1.json
   description: Qwen-Image-Edit 360 turnaround (GGUF Q5_0 + Lightning LoRAs + his 360 LoRA)
+  vram: offload
+  vram_note: "Keep GGUF Q5_0 + Lightning 4-step. Baked 2048×1024 360 plate is tight on 16GB — prefer 1024×512."
   requires: [ComfyUI-GGUF/gguf (GGUF loaders), VideoHelperSuite]
   fields:
     prompt:
@@ -420,7 +434,9 @@ vb_aivfx_adv:
   file: 260330_VIDEO-BUDDY_AI-VFX_1-0_ADV_api.json
   format: api
   ui_source: 260330_VIDEO-BUDDY_AI-VFX_1-0_ADV.json
-  description: AI-VFX compositor v1.0 (Wan VACE e4m3fn; fp32 build does not exist publicly)
+  description: AI-VFX compositor v1.0 (Wan VACE GGUF Q4_K_M default; e4m3fn quality pack)
+  vram: 16gb
+  vram_note: "Default UnetLoaderGGUF Q4_K_M. e4m3fn 14B is the high-VRAM pack."
   requires: [ComfyUI-WanVaceAdvanced (WanVacePhantomSimpleV2), KJNodes, VideoHelperSuite]
   fields:
     prompt:
@@ -435,7 +451,9 @@ vb_aivfx_adv_13:
   file: 260608_VIDEO-BUDDY_AI-VFX_1-3_ADV_api.json
   format: api
   ui_source: 260608_VIDEO-BUDDY_AI-VFX_1-3_ADV.json
-  description: AI-VFX compositor v1.3 (Wan VACE e4m3fn or Q4_K_M GGUF option)
+  description: AI-VFX compositor v1.3 (Wan VACE Q4_K_M GGUF default; e4m3fn quality pack)
+  vram: 16gb
+  vram_note: "Default UnetLoaderGGUF Q4_K_M. Doctor reports the local pick."
   requires: [ComfyUI-WanVaceAdvanced, ComfyUI-GGUF/gguf, KJNodes, VideoHelperSuite]
   fields:
     prompt:
@@ -472,6 +490,8 @@ vb_ccc41_krea2:
   format: api
   ui_source: 260729_VIDEO-BUDDY_CCC_4-1_KREA2-EDIT_BETA_PUBLISH.json
   description: CCC 4.1 BETA — Krea2-Edit grounded character editing (supersedes CCC 4.01 ADV)
+  vram: needs_more_vram
+  vram_note: "Loader default is krea2_turbo_nvfp4 (16GB). The 321-node graph still needs offload / fewer grounded encodes."
   requires: [ComfyUI-Krea2-Ostris-Edit (Krea2EditGroundedEncode), comfyui-krea2edit (Krea2EditModelPatch),
              ComfyUI-Mickmumpitz-Nodes, KJNodes, Impact-Pack]
   # director: baked_defaults — 48 grounded encodes; first POSITIVE is a link.
@@ -564,6 +584,8 @@ vb_movie_builder:
   format: api
   ui_source: 260507_VIDEO-BUDDY_MOVIE-BUILDER_1-1_ADV.json
   description: LTX 2.3 Movie Builder ADV — shot-by-shot movie pipeline (Flux 2 Klein start-frames, LTX 2.3 video+audio, voice cloning, 360 environments, ShotAssembler)
+  vram: needs_more_vram
+  vram_note: "189 nodes + Flux Klein 9B + LTX 22B is not a silent 16GB default. Swap LTX UNET to LTX-2.3-dev-Q4_K_S.gguf and keep start-frames ≤1024, or route shots through base / ltx25."
   requires: [ComfyUI-Mickmumpitz-Nodes (ShotAssembler/ShotVideoOutput/ResolutionPicker), movie_builder_shims (ShotOrder/ShotDuplicator), ComfyUI-LTXVideo, KJNodes, RES4LYF, VideoHelperSuite, ComfyUI-Easy-Use, rgthree-comfy, ComfyUI-Olm-DragCrop, ComfyUI_preview360panorama]
   fields:
     prompt:
@@ -583,6 +605,8 @@ ltx25_t2v_i2v:
   file: ltx-2.5/LTX-2.5_T2V_I2V_Single_Stage_Distilled_api.json
   format: api
   description: LTX 2.5 single-stage distilled T2V / I2V
+  vram: 16gb
+  vram_note: "Baked 768×512 / 25f. Doctor pick GGUF Q4 → NVFP4. Do not queue the old 1280×720 / 145f plate on 16GB."
   requires: [ComfyUI-LTXVideo, VideoHelperSuite]
   fields:
     prompt: { class_type: CLIPTextEncode, index: 0, input: text }
@@ -596,6 +620,8 @@ ltx25_t2v_i2v_two_stage:
   file: ltx-2.5/LTX-2.5_T2V_I2V_Two_Stage_Distilled_api.json
   format: api
   description: LTX 2.5 two-stage distilled T2V / I2V (latent spatial upscale)
+  vram: offload
+  vram_note: "Spatial upscale is the 16GB offload LTX 2.5 path (≤2s). Prefer single-stage on 16GB."
   requires: [ComfyUI-LTXVideo, VideoHelperSuite, LTXVLatentUpsampler]
   fields:
     prompt: { class_type: CLIPTextEncode, index: 0, input: text }
@@ -665,6 +691,8 @@ h3_t2v:
   file: minimax-h3/MiniMax-H3_T2V_FL2VA_api.json
   format: api
   description: MiniMax H3 fl2va text-to-AV (native stereo)
+  vram: 16gb
+  vram_note: "GGUF Q4_K DiT + NVFP4 TE. 1152×640 / 124f / 4 steps / CFG 1.0."
   requires: [ComfyUI >=0.30 MiniMaxH3ImageToVideo, ComfyUI-GGUF]
   fields:
     prompt: { class_type: MiniMaxH3ImageToVideo, index: 0, input: prompt }

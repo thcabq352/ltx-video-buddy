@@ -10,7 +10,7 @@
   },
   "3": {
     "class_type": "LTXVEmptyLatentAudio",
-    "inputs": { "batch_size": 1, "frames_number": 145, "frame_rate": 24 }
+    "inputs": { "batch_size": 1, "frames_number": 25, "frame_rate": 24 }
   },
   "4": {
     "class_type": "SaveAudio",

@@ -14,7 +14,8 @@ machine, and a heuristic + LLM judge loop.
   MiniMax H3 (GGUF Q4_K DiT + Comfy TE / VAEs) and existing LTX 2.3 / Wan /
   Flux weights under `models/` — see [`REQUIRED-FILES.md`](REQUIRED-FILES.md)
   and [`models/README.md`](models/README.md). 16GB RTX 5060 Ti profile
-  (`VRAM_GB` default 16).
+  (`VRAM_GB` default 16): **GGUF first, then NVFP4**. Policy lives in
+  `master_agent/models/vram_policy.py` (doctor / catalog / `--prepare`).
 - **Workflows:** default catalog under `workflows/` including
   `workflows/ltx-2.5/` (seven LTX 2.5 API graphs) and `workflows/minimax-h3/`
   (fl2va T2V/I2V/FLF + ref2va R2V). No experimental flags.
@@ -445,6 +446,20 @@ threads stall ~30s per DLL on Windows.
 Latency note for MCP clients: `health`/`search_*`/`validate_workflow`/
 `kb_ingest` answer in ~2s. `judge_asset` and `create_video` cold-load large
 Ollama models (19-27GB) and can take several minutes — allow long timeouts.
+
+## Status (2026-09-13, 16GB defaults)
+
+- **One 16GB policy.** `master_agent/models/vram_policy.py` — GGUF first,
+  then NVFP4. Doctor prints the family table. Catalog items expose
+  `vram_class` / `default_pack` / `expected_vram`. `--prepare` warns on
+  `offload` / `needs_more_vram` graphs. `--quality 16gb` is a first-class
+  profile.
+- **Baked hulls.** LTX 2.5 API graphs 768×512 / 25f (two-stage 17f). Wan
+  2.2 640×384 / 33f + LightX2V (dual 14B fp8 — no invented T2V GGUF).
+  Krea turbo NVFP4 @ 1024×576. VACE / AI-VFX default `UnetLoaderGGUF`
+  Q4_K_M. CCC 4.1 loader NVFP4. Movie Builder / CCC ADV labeled
+  `needs_more_vram` with a documented GGUF / sheet alternate.
+- MiniMax H3 (PR #8) and LTX 2.5 GGUF pick (PR #6) unchanged.
 
 ## Status (2026-09-13)
 
