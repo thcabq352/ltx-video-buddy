@@ -34,8 +34,11 @@ _VARIANT_KEYWORDS = [
         "vfx start", "aivfx start", "ai-vfx start", "start-image",
         "start image", "qwen start",
     )),
-    ("vb_aivfx_adv_13", ("aivfx 1.3", "vfx 1.3", "aivfx_13", "aivfx 13", "ai-vfx 1.3")),
     ("vb_aivfx_adv", (
+        "aivfx 1.0", "vfx 1.0", "ai-vfx 1.0", "aivfx v1", "e4m3fn vace",
+    )),
+    ("vb_aivfx_adv_13", (
+        "aivfx 1.3", "vfx 1.3", "aivfx_13", "aivfx 13", "ai-vfx 1.3",
         "aivfx", "ai-vfx", "ai vfx", "possession", "vace", "phantom",
         "composite", "vfx",
     )),
@@ -98,6 +101,22 @@ def _allowed_variants() -> set[str]:
     return allowed
 
 
+def _vram_routing_hint() -> dict[str, Any]:
+    """Compact 16GB policy for the LLM router (no invented packs)."""
+    from master_agent.models.vram_policy import (
+        HEAVY_SLUGS,
+        TARGET_GPU,
+        TARGET_VRAM_GB,
+        safer_alternate,
+    )
+
+    return {
+        "gpu": f"{TARGET_GPU} {TARGET_VRAM_GB:.0f}GB",
+        "prefer": "safe/tight slugs unless the user names a heavy graph",
+        "heavy": {slug: safer_alternate(slug) for slug in sorted(HEAVY_SLUGS)},
+    }
+
+
 def rule_based_variant(request: str) -> str:
     text = (request or "").lower()
     allowed = set(WORKFLOW_FILES)
@@ -145,6 +164,7 @@ def _llm_variant(request: str, *, fallback: str) -> Optional[str]:
         "request": request,
         "allowed_variants": sorted(_allowed_variants()),
         "rule_based_suggestion": fallback,
+        "vram_policy": _vram_routing_hint(),
     }
     try:
         llm = get_llm(temperature=0.1)

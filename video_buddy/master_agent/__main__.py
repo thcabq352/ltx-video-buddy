@@ -14,7 +14,7 @@ Commands:
   character create|list   CCC stage: bible -> Flux sheet -> captioned dataset
   lora setup|train|validate  Flux LoRA training via ai-toolkit + vision validation
   download-flux       One-time Flux fp8 weights download (~17GB)
-  download-models     Scan LTX 2.5 / MiniMax H3 weights; download missing only with --yes
+  download-models     Scan 16GB packs (LTX 2.5 / H3 / Wan / VACE / Krea / Flux / Qwen); --yes to fetch
   setup | doctor      Scan local deps + LTX 2.5 / H3 weights (--fix-models after you agree)
   workflows           List default catalog variants (no env flags)
   comfy run           Drive ComfyUI from the CLI (prepare + lint + queue)
@@ -622,6 +622,16 @@ def cmd_download_models(args: argparse.Namespace) -> int:
 
     if args.bundle:
         bundle = args.bundle
+    elif getattr(args, "wan", False):
+        bundle = "wan22"
+    elif getattr(args, "vace", False):
+        bundle = "vace"
+    elif getattr(args, "krea", False):
+        bundle = "krea2"
+    elif getattr(args, "qwen", False):
+        bundle = "qwen_edit"
+    elif getattr(args, "flux_pack", False):
+        bundle = "flux"
     elif args.h3:
         bundle = "h3_all"
     elif args.ltx25:
@@ -660,6 +670,19 @@ def cmd_workflows(args: argparse.Namespace) -> int:
     variants = [i for i in items if i.get("kind") == "variant"]
     if args.json:
         print(json.dumps(items, indent=1))
+        return 0
+    if getattr(args, "vram", False):
+        from master_agent.models.vram_policy import format_vram_table, workflow_row
+
+        print(format_vram_table())
+        print(f"{len(variants)} default catalog variant(s) — 16GB class:")
+        for item in variants:
+            row = workflow_row(item["id"])
+            alt = f" → {row.safer_alternate}" if row.safer_alternate else ""
+            print(
+                f"  {item['id']:<28} {row.vram_class:<8} ~{row.expected_vram_gb:4.1f}G  "
+                f"{row.default_pack}{alt}"
+            )
         return 0
     print(f"{len(variants)} default catalog variant(s):")
     for item in variants:
@@ -996,7 +1019,7 @@ def main(argv: list[str] | None = None) -> int:
     p = sub.add_parser(
         "setup",
         aliases=["doctor"],
-        help="check local deps + LTX 2.5 weights (scan first; --fix-models after you agree)",
+        help="check local deps + 16GB pack policy + LTX 2.5 / H3 weights (scan first; --fix-models after you agree)",
     )
     p.add_argument("--fix", action="store_true", help="create venv, pip install, Playwright, .env, ffmpeg, Ollama models")
     p.add_argument(
@@ -1008,6 +1031,7 @@ def main(argv: list[str] | None = None) -> int:
 
     p = sub.add_parser("workflows", help="list default catalog variants (no env flags)")
     p.add_argument("--json", action="store_true")
+    p.add_argument("--vram", action="store_true", help="16GB-class pack table (RTX 5060 Ti)")
     p.set_defaults(func=cmd_workflows)
 
     p = sub.add_parser("health", help="check ComfyUI reachability")
@@ -1173,13 +1197,18 @@ def main(argv: list[str] | None = None) -> int:
 
     p = sub.add_parser(
         "download-models",
-        help="scan LTX 2.5 or MiniMax H3 weights; download missing only with --yes (never auto)",
+        help="scan 16GB-class packs (LTX 2.5 / H3 / Wan / VACE / Krea / Flux / Qwen); download missing only with --yes",
     )
     p.add_argument("--ltx25", action="store_true", default=True, help="LTX 2.5 distilled split pack (default)")
     p.add_argument("--h3", action="store_true", help="MiniMax H3 GGUF + Comfy TE/VAE pack")
+    p.add_argument("--wan", action="store_true", help="Wan 2.2 GGUF/fp8 + Lightx2v 16GB pack")
+    p.add_argument("--vace", action="store_true", help="VACE Skyreels Q4_K_M GGUF")
+    p.add_argument("--krea", action="store_true", help="Krea-2 turbo NVFP4")
+    p.add_argument("--qwen", action="store_true", help="Qwen-Image-Edit GGUF Q5_0")
+    p.add_argument("--flux-pack", dest="flux_pack", action="store_true", help="Flux.1-dev GGUF/fp8")
     p.add_argument(
         "--bundle",
-        help="weight bundle id (ltx25_core|ltx25_two_stage|ltx25_iclora|ltx25_msr|ltx25_all|h3_fl2va|h3_ref2va|h3_all)",
+        help="weight bundle id (ltx25_*|h3_*|wan22|vace|krea2|flux|qwen_edit)",
     )
     p.add_argument("--yes", action="store_true", help="consent: download the missing mandatory set")
     p.add_argument("--optional", action="store_true", help="also fetch optional Hub files (distilled LoRA 450, temporal upscaler)")

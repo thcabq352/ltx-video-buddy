@@ -13,6 +13,7 @@ import yaml
 from master_agent.config import WORKFLOW_FILES, WORKFLOWS_DIR, load_workflow_files
 from master_agent.orchestrator.director import (
     _allowed_variants,
+    _vram_routing_hint,
     choose_variant,
     rule_based_variant,
 )
@@ -54,7 +55,8 @@ def test_allowed_variants_include_every_manifest_slug():
 
 def test_keyword_routing_hits_new_families():
     cases = {
-        "possession vfx composite with vace": "vb_aivfx_adv",
+        "possession vfx composite with vace": "vb_aivfx_adv_13",
+        "run the aivfx 1.0 compositor": "vb_aivfx_adv",
         "run the aivfx 1.3 compositor": "vb_aivfx_adv_13",
         "aivfx preprocess sam3 depthcrafter": "vb_aivfx_preprocess",
         "generate an aivfx start-image": "vb_aivfx_startimage",
@@ -89,6 +91,14 @@ def test_hard_constraints_win_over_soft_keywords():
         assert choose_variant("a dub of my clip") == ("lipsync", "rules")
         assert choose_variant("rain on a window") == ("base", "rules")
         assert choose_variant("10eros teaser") == ("eros", "rules")
+
+
+def test_director_vram_hint_lists_heavy_safer_alternates():
+    hint = _vram_routing_hint()
+    assert "5060" in hint["gpu"]
+    assert hint["heavy"]["vb_movie_builder"] == "ltx25_t2v_i2v"
+    assert hint["heavy"]["vb_aivfx_adv"] == "vb_aivfx_adv_13"
+    assert hint["heavy"]["vb_ccc_adv"] == "flux"
 
 
 def test_existing_keyword_routes_still_work():

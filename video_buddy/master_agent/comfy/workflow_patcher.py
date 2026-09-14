@@ -451,6 +451,85 @@ def _apply_local_h3_weights(workflow: dict[str, Any], bundle: str) -> None:
             _set_input(node, "vae_name", video_vae)
 
 
+def _set_family_unet_loader(node: dict[str, Any], filename: str, title: str) -> None:
+    if filename.lower().endswith(".gguf"):
+        node["class_type"] = "UnetLoaderGGUF"
+        node["inputs"] = {"unet_name": filename}
+    else:
+        node["class_type"] = "UNETLoader"
+        node["inputs"] = {"unet_name": filename, "weight_dtype": "default"}
+    node.setdefault("_meta", {})["title"] = title
+
+
+def _resolved_family_name(weight_key: str) -> str | None:
+    from master_agent.models.weights import WEIGHT_FILES, resolve_weight
+
+    weight = WEIGHT_FILES.get(weight_key)
+    if weight is None:
+        return None
+    found = resolve_weight(weight)
+    return found.name if found is not None else None
+
+
+def _apply_local_family_weights(workflow: dict[str, Any], variant: str) -> None:
+    """16GB-class remaps for Wan / VACE / Krea / Flux / Qwen (GGUF vs UNET)."""
+    from master_agent.models.vram_policy import family_for_slug
+
+    family = family_for_slug(variant)
+    loaders = ("UNETLoader", "UnetLoaderGGUF", "UnetLoader", "DiffusionModelLoader")
+    gguf_loaders = ("UnetLoaderGGUF", "UnetLoaderGGUFAdvanced")
+
+    def _rewrite(needles: tuple[str, ...], filename: str, title: str) -> None:
+        for class_type in (*loaders, *gguf_loaders):
+            for _nid, node in _find_nodes_by_class(workflow, class_type):
+                inputs = node.get("inputs") or {}
+                current = str(
+                    inputs.get("unet_name")
+                    or inputs.get("ckpt_name")
+                    or inputs.get("gguf_name")
+                    or ""
+                ).lower()
+                if any(token in current for token in needles):
+                    _set_family_unet_loader(node, filename, title)
+                    if "gguf_name" in inputs:
+                        inputs = node.get("inputs") or {}
+                        if "gguf_name" in inputs:
+                            inputs["gguf_name"] = filename
+
+    if family == "wan22":
+        high = _resolved_family_name("wan22_high")
+        low = _resolved_family_name("wan22_low")
+        if high:
+            _rewrite(("high_noise", "highnoise"), high, "Wan 2.2 High (16GB pick)")
+        if low:
+            _rewrite(("low_noise", "lownoise"), low, "Wan 2.2 Low (16GB pick)")
+    elif family == "vace":
+        name = _resolved_family_name("vace")
+        if name:
+            _rewrite(("vace", "skyreels"), name, "VACE Skyreels (16GB pick)")
+    elif family == "krea2":
+        name = _resolved_family_name("krea2")
+        if name:
+            _rewrite(("krea2", "krea-2"), name, "Krea-2 turbo (16GB pick)")
+    elif family == "flux":
+        name = _resolved_family_name("flux")
+        if name:
+            _rewrite(("flux1-dev", "flux.1-dev", "flux1_dev"), name, "Flux.1-dev (16GB pick)")
+    elif family == "qwen_edit":
+        name = _resolved_family_name("qwen_edit")
+        if not name:
+            return
+        _rewrite(("qwen-image-edit", "qwen_image_edit"), name, "Qwen-Image-Edit (16GB pick)")
+        for _nid, node in _find_nodes_by_class(workflow, "UnetLoaderGGUF"):
+            inputs = node.get("inputs") or {}
+            current = str(inputs.get("gguf_name") or inputs.get("unet_name") or "")
+            if "qwen" in current.lower():
+                if "gguf_name" in inputs:
+                    inputs["gguf_name"] = name
+                else:
+                    _set_family_unet_loader(node, name, "Qwen-Image-Edit (16GB pick)")
+
+
 def _apply_local_ltx25_weights(workflow: dict[str, Any]) -> None:
     """Prefer a local GGUF / NVFP4 / int8 / heretic TE when one is already present."""
     transformer_name, te_name = _resolved_ltx25_names()
@@ -1004,6 +1083,7 @@ def load_and_patch_workflow(
         _apply_local_ltx25_weights(workflow)
     if is_h3_bundle(bundle):
         _apply_local_h3_weights(workflow, bundle or "h3_fl2va")
+    _apply_local_family_weights(workflow, resolved_id or variant)
     if loras:
         _apply_typed_loras(workflow, loras)
     if multi_ref:
@@ -1041,4 +1121,17 @@ def load_and_patch_workflow(
         "lora": lora,
         "filename_prefix": filename_prefix,
     }
+    try:
+        from master_agent.models.vram_policy import prepare_warning, workflow_row
+
+        row = workflow_row(resolved_id or variant)
+        meta["vram_class"] = row.vram_class
+        meta["vram_peak_gb"] = row.expected_vram_gb
+        meta["default_pack"] = row.default_pack
+        meta["safer_alternate"] = row.safer_alternate
+        warn = prepare_warning(resolved_id or variant)
+        if warn:
+            meta["prepare_warning"] = warn
+    except Exception:
+        pass
     return workflow, meta

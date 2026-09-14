@@ -103,6 +103,7 @@ weights.
 | `ffmpeg` | on PATH |
 | `ollama` | on PATH + `qwen3-vl-heretic` and `nomic-embed-text` pulled |
 | `comfyui` | `COMFYUI_URL` (`http://127.0.0.1:8188`) answers `/system_stats` |
+| `vram-policy` | Shared 16GB pack policy (RTX 5060 Ti) |
 | `ltx25-weights` | scan of the `ltx25_core` bundle + **loader pick** |
 | `h3-weights` | scan of the `h3_fl2va` bundle + **loader pick** |
 
@@ -186,6 +187,35 @@ class does not become a queued graph. Expected post-merge shape:
 | SeedVR2 | **yes (post)** | `--upscale seedvr2` |
 
 Full matrix and wiring plan: [`../AUDIT.md`](../AUDIT.md).
+
+## 16GB pack table (RTX 5060 Ti)
+
+`python -m master_agent workflows --vram` prints the live table. Shared
+policy: **GGUF Q4/Q5 → NVFP4 (`VRAM_GB` ≥ 14) → int8/fp8**. Official
+bf16/fp16 dual-UNET is never the default. Expected VRAM is a hypothesis.
+
+| Family | Default slug | Default pack | VRAM | Notes |
+|---|---|---|---|---|
+| LTX 2.3 | `base` / `eros` | EROS baked all-in-one | ~9.5–11G | QuantStack GGUF Q4_K_S optional; bf16 not default |
+| LTX 2.5 | `ltx25_t2v_i2v` | GGUF Q4_K_M | ~12.5G | Two-stage is the quality path |
+| MiniMax H3 | `h3_t2v` | GGUF Q4_K | ~13G | ≤12s / 0.8MP / 4 steps / CFG 1.0 |
+| Wan 2.2 | `wan22` | GGUF Q4_K_S or fp8 + Lightx2v | ~13.2G | Sequential high/low; no dual bf16 |
+| AI-VFX / VACE | `vb_aivfx_adv_13` | VACE Q4_K_M GGUF | ~13.6G | v1.0 e4m3fn is **heavy** |
+| Movie Builder | `vb_movie_builder` | Flux Klein fp8 | ~15.8G | **HEAVY** — safer: `ltx25_t2v_i2v` |
+| CCC | `vb_ccc_adv` / `vb_ccc41_krea2` | Flux Klein / Krea NVFP4 | ~15.5G | **HEAVY** — safer: `flux` / `krea2_img` |
+| Flux / Krea | `flux` / `krea2_img` | Flux GGUF Q4 or Krea NVFP4 | ~11G | bf16 not default |
+| Qwen Edit | `vb_qwen_edit_360` | GGUF Q5_0 + Lightning | ~12G | |
+| K3NK AIO I2V | — | — | — | No attested pack; do not invent |
+
+16GB accelerators: Lightx2v / turbo LoRAs when present; TeaCache soft-bypass
+(never inject); `DOWNSCALE_LADDER` after diagnose `sec/step`.
+
+```bash
+python -m master_agent workflows --vram
+python -m master_agent download-models --wan    # scan only
+python -m master_agent download-models --vace
+python -m master_agent download-models --krea
+```
 
 ## 7. What was **not** ported from ltx2.5-research-agent
 
