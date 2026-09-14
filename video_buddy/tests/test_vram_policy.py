@@ -214,3 +214,25 @@ def test_manifest_yaml_carries_vram_metadata():
 def test_preference_order_matches_ltx25_and_h3_helpers():
     assert preference_order(TRANSFORMER_PREFERENCE, vram_gb=16)[0].endswith(".gguf")
     assert preference_order(H3_FL2VA_PREFERENCE, vram_gb=16)[0].endswith("Q4_K.gguf")
+
+
+def test_wan_and_flux_download_targets_are_attested_gguf():
+    from master_agent.models.weights import WEIGHT_FILES
+
+    wan_high = WEIGHT_FILES["wan22_high"]
+    wan_low = WEIGHT_FILES["wan22_low"]
+    flux = WEIGHT_FILES["flux"]
+    assert wan_high.filename.endswith("Q4_K_S.gguf")
+    assert wan_high.repo_id == "QuantStack/Wan2.2-T2V-A14B-GGUF"
+    assert wan_high.repo_filename == "HighNoise/Wan2.2-T2V-A14B-HighNoise-Q4_K_S.gguf"
+    assert wan_low.repo_filename == "LowNoise/Wan2.2-T2V-A14B-LowNoise-Q4_K_S.gguf"
+    assert flux.filename == "flux1-dev-Q4_K_S.gguf"
+    assert flux.repo_id == "city96/FLUX.1-dev-gguf"
+    assert pack_kind(wan_high.filename) == "gguf_q4"
+    assert pack_kind(flux.filename) == "gguf_q4"
+    # fp8 remains an accepted local fallback, not the download default
+    assert any("fp8" in n for n in wan_high.candidates)
+    assert any("fp8" in n for n in flux.candidates)
+    light = WEIGHT_FILES["wan22_lightx2v"]
+    assert "lightx2v" in light.filename.lower()
+    assert light.mandatory is False

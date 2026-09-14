@@ -363,29 +363,41 @@ HF_QWEN_EDIT = "QuantStack/Qwen-Image-Edit-2509-GGUF"
 
 WEIGHT_FILES["wan22_high"] = WeightFile(
     key="wan22_high",
-    filename="wan2.2_t2v_high_noise_14B_fp8_scaled.safetensors",
+    filename="Wan2.2-T2V-A14B-HighNoise-Q4_K_S.gguf",
     dest_folder="diffusion_models",
-    repo_id=HF_WAN22,
-    repo_filename="split_files/diffusion_models/wan2.2_t2v_high_noise_14B_fp8_scaled.safetensors",
-    size_bytes=14_300_000_000,
+    repo_id=HF_WAN22_GGUF,
+    repo_filename="HighNoise/Wan2.2-T2V-A14B-HighNoise-Q4_K_S.gguf",
+    size_bytes=8_700_000_000,
     mandatory=True,
     gated=False,
-    license_url="https://huggingface.co/Comfy-Org/Wan_2.2_ComfyUI_Repackaged",
-    note="Wan 2.2 high-noise UNET. 16GB pick: QuantStack GGUF Q4_K_S when present, else Comfy-Org fp8.",
+    license_url="https://huggingface.co/QuantStack/Wan2.2-T2V-A14B-GGUF",
+    note="Wan 2.2 high-noise UNET. 16GB download: QuantStack GGUF Q4_K_S. Comfy-Org fp8 also counts.",
     accepts=WAN22_HIGH_PREFERENCE,
 )
 WEIGHT_FILES["wan22_low"] = WeightFile(
     key="wan22_low",
-    filename="wan2.2_t2v_low_noise_14B_fp8_scaled.safetensors",
+    filename="Wan2.2-T2V-A14B-LowNoise-Q4_K_S.gguf",
     dest_folder="diffusion_models",
-    repo_id=HF_WAN22,
-    repo_filename="split_files/diffusion_models/wan2.2_t2v_low_noise_14B_fp8_scaled.safetensors",
-    size_bytes=14_300_000_000,
+    repo_id=HF_WAN22_GGUF,
+    repo_filename="LowNoise/Wan2.2-T2V-A14B-LowNoise-Q4_K_S.gguf",
+    size_bytes=8_700_000_000,
     mandatory=True,
     gated=False,
-    license_url="https://huggingface.co/Comfy-Org/Wan_2.2_ComfyUI_Repackaged",
+    license_url="https://huggingface.co/QuantStack/Wan2.2-T2V-A14B-GGUF",
     note="Wan 2.2 low-noise UNET. Sequential with high-noise + Lightx2v on 16GB.",
     accepts=WAN22_LOW_PREFERENCE,
+)
+WEIGHT_FILES["wan22_lightx2v"] = WeightFile(
+    key="wan22_lightx2v",
+    filename="Wan21_T2V_14B_lightx2v_cfg_step_distill_lora_rank32.safetensors",
+    dest_folder="loras",
+    repo_id="Kijai/WanVideo_comfy",
+    repo_filename="Wan21_T2V_14B_lightx2v_cfg_step_distill_lora_rank32.safetensors",
+    size_bytes=307_000_000,
+    mandatory=False,
+    gated=False,
+    license_url="https://huggingface.co/Kijai/WanVideo_comfy",
+    note="Lightx2v distill LoRA — 16GB Wan path (already in the native graph Power Lora).",
 )
 WEIGHT_FILES["vace"] = WeightFile(
     key="vace",
@@ -415,15 +427,15 @@ WEIGHT_FILES["krea2"] = WeightFile(
 )
 WEIGHT_FILES["flux"] = WeightFile(
     key="flux",
-    filename="flux1-dev-fp8.safetensors",
+    filename="flux1-dev-Q4_K_S.gguf",
     dest_folder="diffusion_models",
-    repo_id="Comfy-Org/flux1-dev",
-    repo_filename="flux1-dev-fp8.safetensors",
-    size_bytes=17_200_000_000,
+    repo_id=HF_FLUX_GGUF,
+    repo_filename="flux1-dev-Q4_K_S.gguf",
+    size_bytes=6_800_000_000,
     mandatory=True,
     gated=False,
-    license_url="https://huggingface.co/Comfy-Org/flux1-dev",
-    note="Flux.1-dev. 16GB pick: city96 Q4_K_S GGUF when present, else Comfy-Org fp8.",
+    license_url="https://huggingface.co/city96/FLUX.1-dev-gguf",
+    note="Flux.1-dev. 16GB download: city96 Q4_K_S GGUF. Comfy-Org fp8 also counts.",
     accepts=FLUX_PREFERENCE,
 )
 WEIGHT_FILES["qwen_edit"] = WeightFile(
@@ -466,7 +478,7 @@ _H3_ALL = (
     "h3_fl2v_turbo",
     "h3_ref2v_turbo",
 )
-_WAN22 = ("wan22_high", "wan22_low")
+_WAN22 = ("wan22_high", "wan22_low", "wan22_lightx2v")
 _VACE = ("vace",)
 _KREA2 = ("krea2",)
 _FLUX = ("flux",)

@@ -2,9 +2,9 @@
 
 **Scope:** whether `master_agent` discovers and drives the major ComfyUI packs Scott reports on the tower, or only a subset (LTX / old paths).
 
-**Date:** 2026-09-13 (reconciled after merge)  
+**Date:** 2026-09-13 (reconciled after merge; 16GB policy in [PR #11](https://github.com/thcabq352/ltx-video-buddy/pull/11))  
 **Repo:** `thcabq352/ltx-video-buddy` @ `main`  
-**Merged:** [PR #5](https://github.com/thcabq352/ltx-video-buddy/pull/5) (this audit + `capabilities` CLI + wan22 slug fix) then [PR #6](https://github.com/thcabq352/ltx-video-buddy/pull/6) (LTX 2.5 default catalog + scan-first download).  
+**Merged:** [PR #5](https://github.com/thcabq352/ltx-video-buddy/pull/5) (this audit + `capabilities` CLI + wan22 slug fix) then [PR #6](https://github.com/thcabq352/ltx-video-buddy/pull/6) (LTX 2.5 default catalog + scan-first download). [PR #11](https://github.com/thcabq352/ltx-video-buddy/pull/11) adds a shared `vram_policy` so every `manifests.yaml` slug inherits GGUF Q4/Q5 → NVFP4 → int8/fp8; generic VFX routes to `vb_aivfx_adv_13`.  
 **Comfy in this checkout:** not present (`video_buddy/ComfyUI_windows_portable/` is gitignored). Live tower was **not** queried from the audit VM.
 
 Post-merge: LTX 2.5 ids are in `WORKFLOW_FILES` and the default catalog. WAN / K3NK / TeaCache wiring from this audit is **unchanged**. Re-run `python -m master_agent capabilities --offline` for the live matrix.
@@ -190,7 +190,7 @@ Desired (hypothesis): identity lock (FaceID / Stand-In) + VACE / Mick VFX compos
 
 What exists:
 
-1. Mick AI-VFX ADV API graphs (`WanVacePhantomSimpleV2`) — director-routed (`vfx` / `possession` / `vace`).
+1. Mick AI-VFX ADV API graphs (`WanVacePhantomSimpleV2`) — director-routed (`vfx` / `possession` / `vace` → **`vb_aivfx_adv_13`** GGUF; explicit “1.0” still picks the heavy e4m3fn graph).
 2. `WanVideoAddStandInLatent` unused.
 3. Live `IPAdapterFaceID` exists; Buddy only has it in non-API SDXL UI graphs.
 4. Director keywords now pick `vb_aivfx_adv` for “possession”; identity lock is still missing.

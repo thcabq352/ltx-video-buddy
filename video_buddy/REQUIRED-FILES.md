@@ -208,7 +208,7 @@ python -m master_agent download-models --flux-pack
 
 | Family | 16GB default (when present) | Hub (attested) |
 |---|---|---|
-| Wan 2.2 | `Wan2.2-T2V-A14B-HighNoise-Q4_K_S.gguf` + Lightx2v | QuantStack/Wan2.2-T2V-A14B-GGUF; fp8 fallback Comfy-Org |
+| Wan 2.2 | `Wan2.2-T2V-A14B-HighNoise-Q4_K_S.gguf` + Lightx2v | QuantStack `HighNoise/` + `LowNoise/` Q4_K_S; fp8 fallback Comfy-Org |
 | VACE | `wan-14B_vace_skyreels_v3_R2V_e4m3fn_v1-Q4_K_M.gguf` | mickmumpitz/VACE_Skyreels_V3_R2V_Merge-GGUF |
 | Krea-2 | `krea2_turbo_nvfp4.safetensors` | Comfy-Org/Krea-2 |
 | Flux | `flux1-dev-Q4_K_S.gguf` (else `flux1-dev-fp8`) | city96/FLUX.1-dev-gguf; Comfy-Org/flux1-dev |

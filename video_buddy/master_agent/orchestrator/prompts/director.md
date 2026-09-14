@@ -21,8 +21,8 @@ Every slug in `allowed_variants` is a real `workflows/manifests.yaml` entry.
 - `vb_zimage_turbo_cn` — Z-Image Turbo + Fun-Controlnet lineart start frames.
 
 ## Variants — AI-VFX / renderer / movie
-- `vb_aivfx_adv` — AI-VFX compositor v1.0 (Wan VACE / possession / composite).
-- `vb_aivfx_adv_13` — AI-VFX compositor v1.3 (VACE or GGUF).
+- `vb_aivfx_adv_13` — AI-VFX compositor v1.3 (VACE Q4_K_M GGUF). 16GB default for VFX / possession / composite.
+- `vb_aivfx_adv` — AI-VFX compositor v1.0 (e4m3fn, heavy). Only when the user names v1.0.
 - `vb_aivfx_preprocess` — SAM3 / depth / cotracker / RMBG control videos.
 - `vb_aivfx_startimage` — AI-VFX start-image (Qwen-Image-Edit GGUF).
 - `vb_movie_builder` — LTX 2.3 Movie Builder (shot-by-shot, ShotAssembler).
