@@ -142,7 +142,7 @@ SEGMENT_MAX_S = float(os.getenv("SEGMENT_MAX_S", "6"))
 DEFAULT_STEPS = int(os.getenv("DEFAULT_STEPS", "12"))
 DEFAULT_CFG = float(os.getenv("DEFAULT_CFG", "1.0"))
 DEFAULT_FPS = 24
-DEFAULT_QUALITY = os.getenv("DEFAULT_QUALITY", "balanced")  # draft | balanced | quality | 16gb
+DEFAULT_QUALITY = os.getenv("DEFAULT_QUALITY", "balanced")  # draft | balanced | quality
 # LTX frame law: valid counts are 8n+1 with a hard minimum of 9 (never 8, never 121-by-default).
 DEFAULT_FRAMES = 9
 # Diagnose / draft hull: short fire to measure sec/step before any scale.
@@ -180,14 +180,6 @@ H3_DEFAULT_HEIGHT = 640
 H3_DEFAULT_STEPS = 4
 H3_DEFAULT_CFG = 1.0
 H3_MAX_DURATION_S = 12.0
-# Wan 2.2 16GB offload hull (dual 14B fp8 + LightX2V). Not a GGUF pack.
-WAN_DEFAULT_WIDTH = 640
-WAN_DEFAULT_HEIGHT = 384
-WAN_DEFAULT_STEPS = 8
-WAN_MAX_DURATION_S = 3.0
-# LTX 2.5 generate hull on 16GB (GGUF Q4). Two-stage is shorter.
-LTX25_MAX_DURATION_S = 3.0
-LTX25_TWO_STAGE_MAX_DURATION_S = 2.0
 H3_MAX_MP = 0.8
 H3_FRAME_STEP = 17
 H3_FRAME_OFFSET = 5
@@ -222,15 +214,6 @@ QUALITY_PROFILES: dict[str, dict] = {
         "max_width": 768,
         "max_height": 512,
         "max_total_s": 30.0,
-    },
-    # RTX 5060 Ti 16GB — same hull as draft, slightly longer stitch cap
-    "16gb": {
-        "steps": 8,
-        "frames": 9,
-        "segment_max_s": 3.0,
-        "max_width": 768,
-        "max_height": 512,
-        "max_total_s": 15.0,
     },
     # Flux stills (CCC sheets + LoRA validation): full 1024x1024, no video split
     "flux": {
@@ -306,30 +289,19 @@ MODEL_FILES: dict[str, dict[str, str]] = {
     "wan22": {
         # Wan 2.2 two-stage T2V (Mickmumpitz graph): separate high/low-noise
         # UNETs, so no "checkpoint" key — the patcher must not spray an LTX
-        # ckpt onto these UNETLoaders. No public T2V GGUF is catalogued; 16GB
-        # path is fp8 + LightX2V at 640×384 / ≤33f (see vram_policy).
+        # ckpt onto these UNETLoaders.
         "checkpoint_high": "wan\\wan2.2_t2v_high_noise_14B_fp8_scaled.safetensors",
         "checkpoint_low": "wan\\wan2.2_t2v_low_noise_14B_fp8_scaled.safetensors",
         "text_encoder": "umt5_xxl_fp8_e4m3fn_scaled.safetensors",
         "vae": "wan_2.1_vae.safetensors",
-        "lora": "wan\\Wan21_T2V_14B_lightx2v_cfg_step_distill_lora_rank32.safetensors",
     },
     "krea2_img": {
-        # Krea-2 turbo image graph: no "checkpoint"/"diffusion" key (single UNET
-        # keeps the template NVFP4 name; must not get an LTX ckpt sprayed onto it).
+        # Krea-2 turbo image graph: no "checkpoint" key (single UNET keeps the
+        # template's unet_name; must not get an LTX ckpt sprayed onto it).
         "text_encoder": "qwen3vl_4b_fp8_scaled.safetensors",
         "vae": "wan_2.1_vae.safetensors",
     },
-    "vb_aivfx_adv": {
-        # No single checkpoint key — _apply_local_vace_weights remaps GGUF/e4m3fn.
-        "text_encoder": "umt5_xxl_fp8_e4m3fn_scaled.safetensors",
-        "vae": "wan_2.1_vae.safetensors",
-        "lora": "wan\\Wan2.1_T2V_14B_FusionX_LoRA.safetensors",
-    },
 }
-MODEL_FILES["vb_aivfx_adv_13"] = dict(MODEL_FILES["vb_aivfx_adv"])
-MODEL_FILES["vb_krea2_img"] = dict(MODEL_FILES["krea2_img"])
-MODEL_FILES["vb_wan22_vid"] = dict(MODEL_FILES["wan22"])
 
 # Official LTX 2.5 Comfy split pack (no all-in-one checkpoint key — do not
 # spray the LTX 2.3 baked EROS ckpt onto these graphs).

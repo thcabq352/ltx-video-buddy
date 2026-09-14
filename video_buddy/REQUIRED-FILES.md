@@ -54,8 +54,6 @@ Playwright / `.env` / ffmpeg / Ollama models only.
 | `comfyui` | `COMFYUI_URL` `/system_stats` reachable |
 | `ltx25-weights` | `ltx25_core` scan + loader pick (GGUF / NVFP4 / int8 / bf16) |
 | `h3-weights` | `h3_fl2va` scan + loader pick (GGUF Q4_K / NVFP4 / int8) |
-| `vace-weights` | optional AI-VFX Skyreels pick (GGUF Q4_K_M preferred; never fails doctor) |
-| `vram-policy` | always-OK pointer at the 16GB family table (GGUF first, then NVFP4) |
 
 A typical ready line looks like:
 
@@ -193,18 +191,3 @@ Hubs: [`unsloth/MiniMax-H3-GGUF`](https://huggingface.co/unsloth/MiniMax-H3-GGUF
 
 Nodes: `MiniMaxH3ImageToVideo`, `MiniMaxH3ReferenceToVideo`, `UnetLoaderGGUF`,
 `CLIPLoader` (`type=minimax`), `VAEDecode` + `VAEDecodeAudio`, `CreateVideo`.
-
-## Other 16GB-class packs (already in `state/download_models.py`)
-
-Do **not** invent filenames. These are the names already shipped in graphs
-or the legacy downloader. Doctor's `vram-policy` table is the index.
-
-| Family | 16GB default | Quality / offload pack |
-|---|---|---|
-| Wan 2.2 T2V | Dual `wan2.2_t2v_*_14B_fp8_scaled` + LightX2V LoRA at 640×384 | 1280×720 / 81f (needs offload). No T2V GGUF catalogued. |
-| VACE / AI-VFX | `wan-14B_vace_skyreels_v3_R2V_e4m3fn_v1-Q4_K_M.gguf` | same stem `.safetensors` e4m3fn |
-| Krea-2 | `krea2_turbo_nvfp4.safetensors` @ 1024×576 | `krea2_turbo_fp8_scaled` / bf16 / 1920×1080 |
-| Flux t2i | `flux1-dev-fp8.safetensors` | full bf16 Flux |
-| Qwen edit | `Qwen-Image-Edit-*-Q5_0.gguf` + Lightning 4-step | 2048×1024 360 plate |
-| Movie Builder | `LTX-2.3-dev-Q4_K_S.gguf` (manual swap) | fp8 22B + Flux Klein 9B — **needs more VRAM** |
-| SeedVR2 | `seedvr2_ema_7b_sharp-Q4_K_M.gguf` | disable on CCC 16GB runs |

@@ -127,9 +127,7 @@ python -m master_agent music "dreamy synthwave MV" --audio track.mp3
 ```
 
 **Do not assume a weight download is needed.** `doctor` reports the 16GB-class
-loader pick (GGUF Q4 → NVFP4 if `VRAM_GB` ≥ 14 → int8-convrot → bf16) and
-prints the family VRAM table (Wan LightX2V offload, VACE GGUF, Movie Builder
-/ CCC labeled `needs_more_vram`). If a
+loader pick (GGUF Q4 → NVFP4 if `VRAM_GB` ≥ 14 → int8-convrot → bf16). If a
 slot is confirmed missing (zero-byte files count as missing), review the ask
 then:
 
