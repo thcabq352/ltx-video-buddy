@@ -12,11 +12,6 @@ int8-convrot → official bf16** — and rewrites `CheckpointLoaderSimple` to
 `UNETLoader` / `UnetLoaderGGUF` + `LTXAVTextEncoderLoader`. Official bf16
 Gemma is not required when a heretic / int8 TE is present.
 
-Baked API defaults are the 16GB hull: **768×512**, **25 frames** (17 on
-two-stage), 8 steps, CFG 1.0. The old research plate (1280×720 / 145f) is
-the high-VRAM option — pass `--width` / a longer `--duration` only after
-`diagnose` has recorded `sec/step`. Two-stage is labeled **offload**.
-
 See [`../../REQUIRED-FILES.md`](../../REQUIRED-FILES.md) and
 [`../../docs/QUICKSTART.md`](../../docs/QUICKSTART.md).
 

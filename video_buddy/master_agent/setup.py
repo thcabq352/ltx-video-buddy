@@ -201,7 +201,7 @@ def check_ltx25_weights() -> dict[str, Any]:
     detail = f"missing {names}{more}"
     if status.found_paths.get("transformer"):
         detail = f"{pick}; {detail}"
-    return _row(
+        return _row(
         "ltx25-weights",
         False,
         detail,
@@ -234,40 +234,6 @@ def check_h3_weights() -> dict[str, Any]:
     return _row("h3-weights", False, detail, fix=hint)
 
 
-def check_vace_weights() -> dict[str, Any]:
-    """Scan-only VACE Skyreels pick. Missing files are optional (not a doctor fail)."""
-    try:
-        from master_agent.models.weights import find_weight_file
-
-        gguf = find_weight_file("wan-14B_vace_skyreels_v3_R2V_e4m3fn_v1-Q4_K_M.gguf")
-        fp8 = find_weight_file("wan-14B_vace_skyreels_v3_R2V_e4m3fn_v1.safetensors")
-    except Exception as exc:
-        return _row("vace-weights", True, f"scan skipped: {exc}")
-    if gguf is not None:
-        return _row("vace-weights", True, f"GGUF Q4_K_M ({gguf.name}) — 16GB-class VACE pick")
-    if fp8 is not None:
-        return _row(
-            "vace-weights",
-            True,
-            f"e4m3fn ({fp8.name}) — quality pack; prefer GGUF Q4_K_M on 16GB",
-        )
-    return _row(
-        "vace-weights",
-        True,
-        "optional — no VACE Skyreels UNET found (AI-VFX GGUF Q4 or e4m3fn)",
-        fix="python state/download_models.py  # VACE GGUF Q4_K_M is in that list",
-    )
-
-
-def check_vram_policy() -> dict[str, Any]:
-    """Always-OK row: print the 16GB family table pointer."""
-    from master_agent.models.vram_policy import format_policy_table
-
-    table = format_policy_table()
-    first = next((ln for ln in table.splitlines() if ln and not ln.startswith("16GB") and not ln.startswith("-") and "Family" not in ln), "")
-    return _row("vram-policy", True, "GGUF first, then NVFP4. " + first[:120])
-
-
 def snapshot() -> list[dict[str, Any]]:
     return [
         check_python(),
@@ -280,8 +246,6 @@ def snapshot() -> list[dict[str, Any]]:
         check_comfy(),
         check_ltx25_weights(),
         check_h3_weights(),
-        check_vace_weights(),
-        check_vram_policy(),
     ]
 
 
@@ -300,13 +264,6 @@ def print_report(rows: list[dict[str, Any]]) -> int:
         print(f"{failed} check(s) need work. Re-run: python -m master_agent setup --fix")
     else:
         print("All checked dependencies are ready.")
-    try:
-        from master_agent.models.vram_policy import format_policy_table
-
-        print()
-        print(format_policy_table())
-    except Exception:
-        pass
     return 0 if failed == 0 else 1
 
 

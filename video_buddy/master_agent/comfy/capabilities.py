@@ -113,10 +113,7 @@ CAPABILITY_CATALOG: tuple[Capability, ...] = (
         class_types=("WanVideoNAG", "EmptyHunyuanLatentVideo"),
         surfaces=("director", "patcher", "template"),
         templates=("wan22", "vb_wan22_vid"),
-        notes=(
-            "Mickmumpitz native graph, not WanVideoWrapper Sampler. T2V UNETs only. "
-            "16GB offload: 640×384 / ≤33f / 8 steps + LightX2V. No catalogued T2V GGUF."
-        ),
+        notes="Mickmumpitz native graph, not WanVideoWrapper Sampler. T2V UNETs only.",
     ),
     Capability(
         "k3nk_wan_aio",
@@ -124,11 +121,7 @@ CAPABILITY_CATALOG: tuple[Capability, ...] = (
         class_types=(),
         name_contains=("k3nk",),
         surfaces=(),
-        notes=(
-            "HYPOTHESIS: tower weights. Not in MODEL_FILES or inventory snapshot. "
-            "Do not invent an AIO filename or spray onto wan22 T2V loaders. "
-            "16GB alternate: wan22 LightX2V path."
-        ),
+        notes="HYPOTHESIS: tower weights. Not in MODEL_FILES or inventory snapshot.",
     ),
     Capability(
         "wan_wrapper",
@@ -173,10 +166,7 @@ CAPABILITY_CATALOG: tuple[Capability, ...] = (
         name_contains=("lightx2v",),
         surfaces=("template",),
         templates=("wan22",),
-        notes=(
-            "Baked into wan22 Power Lora Loader widgets; this is the 16GB Wan path "
-            "(low-step / CFG 1.0). Patcher does not toggle the widget."
-        ),
+        notes="Baked into wan22 Power Lora Loader widgets; patcher does not select them.",
     ),
     Capability(
         "vace",
@@ -186,8 +176,7 @@ CAPABILITY_CATALOG: tuple[Capability, ...] = (
         templates=("vb_aivfx_adv", "vb_aivfx_adv_13", "vb_ai_renderer_smpl"),
         notes=(
             "Director-routed (vfx / aivfx / possession / vace). "
-            "16GB default: VACE Skyreels GGUF Q4_K_M (UnetLoaderGGUF). "
-            "e4m3fn is the quality pack. Example renderer files gitignored."
+            "Field map writes IterPromptBuilder.string_1. Example renderer files gitignored."
         ),
     ),
     Capability(
@@ -323,8 +312,8 @@ CAPABILITY_CATALOG: tuple[Capability, ...] = (
         ),
         notes=(
             "Director-routed (movie builder / ccc / aivfx). "
-            "CCC ADV / Movie Builder are needs_more_vram — --prepare warns; "
-            "16GB alt: GGUF LTX Q4_K_S + flux/krea2_img sheets. Some example files gitignored."
+            "CCC ADV has no safe prompt widget — baked defaults; prefer --template. "
+            "Some example files gitignored."
         ),
     ),
     Capability(

@@ -203,14 +203,6 @@ def _family_for(variant_id: str, rel: str) -> str:
         return "h3"
     if "wan" in key:
         return "wan"
-    if "vfx" in key or "vace" in key or "aivfx" in key or "ai-renderer" in key:
-        return "vace"
-    if "movie" in key:
-        return "movie"
-    if "ccc" in key:
-        return "ccc"
-    if "qwen" in key:
-        return "qwen"
     if "flux" in key or "krea" in key:
         return "image"
     if "lipsync" in key or "lip" in key:
@@ -468,12 +460,6 @@ def list_catalog_items() -> list[dict[str, str]]:
                 "description": entry.description,
             }
         )
-        try:
-            from master_agent.models.vram_policy import catalog_vram_fields
-
-            items[-1].update(catalog_vram_fields(entry.id))
-        except Exception:
-            pass
         seen.add(entry.path.replace("\\", "/"))
         for alias in entry.aliases:
             seen.add(alias)

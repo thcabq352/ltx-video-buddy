@@ -89,8 +89,8 @@ class TestWan22Variant(unittest.TestCase):
         )
 
     def test_frames_snap_4n_plus_1(self):
-        # 3s @ 16fps on the 16GB Wan hull (WAN_MAX_DURATION_S=3) → 45 (4n+1)
-        self.assertEqual(self.meta["frames"], 45)
+        # 3s @ 16fps -> 48 -> 4n+1 = 49
+        self.assertEqual(self.meta["frames"], 49)
         self.assertEqual((self.meta["frames"] - 1) % 4, 0)
 
     def test_dual_unets_get_wan_weights_not_ltx(self):
