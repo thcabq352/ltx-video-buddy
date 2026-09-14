@@ -21,8 +21,8 @@ Every slug in `allowed_variants` is a real `workflows/manifests.yaml` entry.
 - `vb_zimage_turbo_cn` — Z-Image Turbo + Fun-Controlnet lineart start frames.
 
 ## Variants — AI-VFX / renderer / movie
-- `vb_aivfx_adv` — AI-VFX compositor v1.0 (Wan VACE / possession / composite).
-- `vb_aivfx_adv_13` — AI-VFX compositor v1.3 (VACE or GGUF).
+- `vb_aivfx_adv_13` — AI-VFX compositor v1.3 (VACE Q4_K_M GGUF). 16GB default for VFX / possession / composite.
+- `vb_aivfx_adv` — AI-VFX compositor v1.0 (e4m3fn, heavy). Only when the user names v1.0.
 - `vb_aivfx_preprocess` — SAM3 / depth / cotracker / RMBG control videos.
 - `vb_aivfx_startimage` — AI-VFX start-image (Qwen-Image-Edit GGUF).
 - `vb_movie_builder` — LTX 2.3 Movie Builder (shot-by-shot, ShotAssembler).
@@ -51,6 +51,13 @@ Every slug in `allowed_variants` is a real `workflows/manifests.yaml` entry.
 - `h3_i2v` — fl2va image-to-AV (first frame).
 - `h3_flf` — fl2va first + last frame.
 - `h3_r2v` — ref2va reference-to-AV (identity / motion / voice).
+
+## 16GB (RTX 5060 Ti)
+Defaults inherit the shared pack policy: GGUF Q4/Q5 → NVFP4 → int8/fp8.
+Prefer `ltx25_t2v_i2v` (not two-stage), `vb_aivfx_adv_13` (not v1.0),
+`krea2_img` / `flux` instead of CCC ADV, and `base` / `ltx25_t2v_i2v`
+instead of Movie Builder unless the user names that graph. Heavy slugs
+stay pickable when the user asks by name.
 
 ## Rules
 - Pick exactly one of the allowed variants (the payload lists them).

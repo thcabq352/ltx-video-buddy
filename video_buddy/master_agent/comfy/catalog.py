@@ -450,6 +450,18 @@ def list_catalog_items() -> list[dict[str, str]]:
     seen: set[str] = set()
     root = _workflows_dir()
     for entry in default_entries():
+        try:
+            from master_agent.models.vram_policy import workflow_row
+
+            vram = workflow_row(entry.id)
+            vram_fields = {
+                "vram_class": vram.vram_class,
+                "vram_peak_gb": vram.expected_vram_gb,
+                "default_pack": vram.default_pack,
+                "safer_alternate": vram.safer_alternate,
+            }
+        except Exception:
+            vram_fields = {}
         items.append(
             {
                 "id": entry.id,
@@ -458,6 +470,7 @@ def list_catalog_items() -> list[dict[str, str]]:
                 "kind": "variant",
                 "family": entry.family,
                 "description": entry.description,
+                **vram_fields,
             }
         )
         seen.add(entry.path.replace("\\", "/"))

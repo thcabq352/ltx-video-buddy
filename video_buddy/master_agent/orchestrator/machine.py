@@ -177,12 +177,18 @@ class Orchestrator:
     def _handle_job_error(self, st: RunState, exc: Exception, *, phase: str) -> bool:
         if _looks_oom(exc):
             st.retries += 1
-            if st.retries > MAX_RETRIES or st.downscale_level + 1 >= len(DOWNSCALE_LADDER):
+            try:
+                from master_agent.models.vram_policy import downscale_ladder_for
+
+                ladder = downscale_ladder_for(st.variant or "")
+            except Exception:
+                ladder = DOWNSCALE_LADDER
+            if st.retries > MAX_RETRIES or st.downscale_level + 1 >= len(ladder):
                 st.fail(f"{phase} OOM after {st.retries} retries: {exc}")
                 return False
             st.transition("PLAN_OOM_RETRY")
             st.downscale_level += 1
-            w, h, frames = DOWNSCALE_LADDER[st.downscale_level]
+            w, h, frames = ladder[st.downscale_level]
             st.width, st.height = w, h
             st.log(f"OOM at {phase}: downscaling to {w}x{h} ({frames}f), retry {st.retries}")
             return self._patch(st) and self._validate(st) and self._submit_and_poll(st)

@@ -168,10 +168,12 @@ python -m master_agent doctor --fix-models     # same consent path
 python -m master_agent setup --fix             # deps only; still no weights
 ```
 
-WAN 2.2 (`wan22`), lipsync, TeaCache soft-bypass, and Movie Builder
-(`comfy run --template vb_movie_builder`) are unchanged. K3NK AIO I2V is
-**not** wired. The research-agent LangGraph / Gradio / A2A harness was
-**not** copied.
+WAN 2.2 (`wan22`) defaults to GGUF Q4_K_S when present, else Comfy-Org fp8
++ Lightx2v. TeaCache stays soft-bypass (never inject). Movie Builder and
+CCC ADV are **16GB-heavy** — safer alternates are `ltx25_t2v_i2v` / `flux`.
+K3NK AIO I2V is **not** wired (no attested pack). See
+`python -m master_agent workflows --vram`. The research-agent LangGraph /
+Gradio / A2A harness was **not** copied.
 
 ## Capabilities
 

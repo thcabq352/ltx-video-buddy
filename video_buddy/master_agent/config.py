@@ -287,20 +287,33 @@ MODEL_FILES: dict[str, dict[str, str]] = {
         "vae": "ae.safetensors",
     },
     "wan22": {
-        # Wan 2.2 two-stage T2V (Mickmumpitz graph): separate high/low-noise
-        # UNETs, so no "checkpoint" key — the patcher must not spray an LTX
-        # ckpt onto these UNETLoaders.
+        # Wan 2.2 two-stage T2V: sequential high/low UNETs. 16GB pick is
+        # QuantStack GGUF Q4_K_S when present; fp8 is the Comfy-Org fallback.
+        # No "checkpoint" key — do not spray an LTX ckpt onto these loaders.
         "checkpoint_high": "wan\\wan2.2_t2v_high_noise_14B_fp8_scaled.safetensors",
         "checkpoint_low": "wan\\wan2.2_t2v_low_noise_14B_fp8_scaled.safetensors",
         "text_encoder": "umt5_xxl_fp8_e4m3fn_scaled.safetensors",
         "vae": "wan_2.1_vae.safetensors",
+        "lora": "Wan21_T2V_14B_lightx2v_cfg_step_distill_lora_rank32.safetensors",
     },
     "krea2_img": {
-        # Krea-2 turbo image graph: no "checkpoint" key (single UNET keeps the
-        # template's unet_name; must not get an LTX ckpt sprayed onto it).
+        # Krea-2 turbo: NVFP4 is the 16GB/Blackwell default. No "checkpoint"
+        # key (must not get an LTX ckpt sprayed onto the UNET).
+        "diffusion": "krea2_turbo_nvfp4.safetensors",
         "text_encoder": "qwen3vl_4b_fp8_scaled.safetensors",
         "vae": "wan_2.1_vae.safetensors",
     },
+}
+MODEL_FILES["vb_wan22_vid"] = dict(MODEL_FILES["wan22"])
+MODEL_FILES["vb_krea2_img"] = dict(MODEL_FILES["krea2_img"])
+MODEL_FILES["vb_aivfx_adv_13"] = {
+    "diffusion": "wan-14B_vace_skyreels_v3_R2V_e4m3fn_v1-Q4_K_M.gguf",
+}
+MODEL_FILES["vb_qwen_edit_360"] = {
+    "diffusion": "Qwen-Image-Edit-2509-Q5_0.gguf",
+}
+MODEL_FILES["vb_aivfx_startimage"] = {
+    "diffusion": "qwen-image-edit-2511-Q5_0.gguf",
 }
 
 # Official LTX 2.5 Comfy split pack (no all-in-one checkpoint key — do not

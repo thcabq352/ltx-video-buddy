@@ -201,7 +201,7 @@ def check_ltx25_weights() -> dict[str, Any]:
     detail = f"missing {names}{more}"
     if status.found_paths.get("transformer"):
         detail = f"{pick}; {detail}"
-        return _row(
+    return _row(
         "ltx25-weights",
         False,
         detail,
@@ -234,6 +234,16 @@ def check_h3_weights() -> dict[str, Any]:
     return _row("h3-weights", False, detail, fix=hint)
 
 
+def check_vram_policy() -> dict[str, Any]:
+    """Shared 16GB-class pack policy (does not fetch)."""
+    try:
+        from master_agent.models.vram_policy import format_doctor_line
+
+        return _row("vram-policy", True, format_doctor_line())
+    except Exception as exc:
+        return _row("vram-policy", False, f"policy failed: {exc}")
+
+
 def snapshot() -> list[dict[str, Any]]:
     return [
         check_python(),
@@ -244,6 +254,7 @@ def snapshot() -> list[dict[str, Any]]:
         check_ffmpeg(),
         check_ollama(),
         check_comfy(),
+        check_vram_policy(),
         check_ltx25_weights(),
         check_h3_weights(),
     ]
