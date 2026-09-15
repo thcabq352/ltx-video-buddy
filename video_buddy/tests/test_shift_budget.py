@@ -112,6 +112,8 @@ def test_hold_is_input_required_not_failed():
     assert a2a_task_state("hold") == "input-required"
     assert a2a_task_state("held") == "input-required"
     assert a2a_task_state("paused") == "input-required"
+    assert a2a_task_state("done_with_warnings") == "completed"
+    assert a2a_task_state("started") == "working"
     assert a2a_task_state("error") == "failed"
 
 

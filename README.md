@@ -175,15 +175,19 @@ video_buddy/
 ## Hermes install
 
 Hermes agents forget Video Buddy if they only see MCP tools. **MCP ≠ skills.**
-Copy the in-repo skill, then confirm the `master-agent` server.
+The installer copies the skill **and** seats Hermes profile `ltx` (primary
+discovery). A2A on studio `:8189` stays as the fallback. Buddy never binds 8642.
 
 ```bash
 cd video_buddy
 python install_hermes_skill.py
 # copies video_buddy/skills/video-buddy/ → ~/.hermes/skills/video-buddy/
+# seats ~/.hermes/profiles/ltx/  (SOUL + MCP, no .env)
+python -m master_agent hermes status
 ```
 
 Or copy that folder by hand. Confirm `SKILL.md` is at `~/.hermes/skills/video-buddy/SKILL.md`.
+Confirm `~/.hermes/profiles/ltx/SOUL.md`. Custom SOUL is not overwritten unless `--force`.
 
 `~/.hermes/config.yaml` fragment (**no secrets** — local stdio only):
 

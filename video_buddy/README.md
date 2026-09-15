@@ -64,7 +64,7 @@ python -m master_agent comfy run --mode generate --prompt "a test shot" --varian
 # python -m master_agent ui --port 8189
 ```
 
-Hybrid page scrape lives in `master_agent/scrape`: httpx first, Playwright+stealth on login walls, robots.txt, 5 MiB cap. Judge strictness and learning-rate knobs: `JUDGE_STRICTNESS`, `LEARNING_RATE` (also on the Create tab). Cost gate: `COST_VRAM_THRESHOLD_GB`. Render budget: `RENDER_BUDGET_CAP_VRAM_MIN` / running total in `state/control/` — scenes that would exceed the cap are paused for review. Knob moves append to versioned config history; startup prints `config_hash=…`. A2A card at `/.well-known/agent.json` alongside the existing MCP server.
+Hybrid page scrape lives in `master_agent/scrape`: httpx first, Playwright+stealth on login walls, robots.txt, 5 MiB cap. Judge strictness and learning-rate knobs: `JUDGE_STRICTNESS`, `LEARNING_RATE` (also on the Create tab). Cost gate: `COST_VRAM_THRESHOLD_GB`. Render budget: `RENDER_BUDGET_CAP_VRAM_MIN` / running total in `state/control/` — scenes that would exceed the cap are paused for review. Knob moves append to versioned config history; startup prints `config_hash=…`. Hermes profile `ltx` is the primary seat; A2A card at `/.well-known/agent.json` (also `agent-card.json`) + `POST /a2a` is the fallback.
 
 ## External dependencies (installer covers most of these)
 
@@ -425,9 +425,11 @@ mic permission.
 ## Hermes MCP server
 
 **MCP ≠ skills.** Hermes only reliably uses Buddy when the skill folder is
-installed. Copy [`skills/video-buddy/`](skills/video-buddy/SKILL.md) to
-`~/.hermes/skills/video-buddy/` (or run `python install_hermes_skill.py`).
+installed. `python install_hermes_skill.py` copies
+[`skills/video-buddy/`](skills/video-buddy/SKILL.md) to
+`~/.hermes/skills/video-buddy/` **and** seats profile `ltx`.
 See the repo-root [Hermes install](../README.md#hermes-install) section.
+Primary path: `hermes -p ltx` or the `:8189` facade. A2A (`POST /a2a`) is fallback.
 
 `master_agent/mcp_server.py` exposes the agent to Hermes over stdio MCP
 (registered as `master-agent` in `~/.hermes/config.yaml`). Tools:

@@ -8,6 +8,8 @@ def test_studio_about_shape():
     assert card["name"] == "VIDEO BUDDY"
     assert card["package"] == "master_agent"
     assert card["mcp_id"] == "master-agent"
+    assert card["hermes"]["profile"] == "ltx"
+    assert card["hermes"]["a2a_fallback"].endswith("/a2a")
     assert card["drive"]["first"] == "cli"
     assert "comfy run" in card["drive"]["graph"]
     assert "zod" in card["personas"]

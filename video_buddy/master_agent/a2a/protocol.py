@@ -39,11 +39,13 @@ class TaskStore:
 
 
 STUDIO_PORT = 8189
+DEFAULT_QUALITY = "draft"
 
 # Pipeline status → A2A task state. Budget hold is not a failure.
-_COMPLETED = frozenset({"completed", "done", "workflow_ready"})
+# done_with_warnings is a soft success (CLI treats it as OK). started is in-flight.
+_COMPLETED = frozenset({"completed", "done", "workflow_ready", "done_with_warnings"})
 _HELD = frozenset({"paused", "held", "hold", "input-required"})
-_WORKING = frozenset({"running", "queued", "working"})
+_WORKING = frozenset({"running", "queued", "working", "started"})
 
 
 def a2a_task_state(status: str | None) -> str:
@@ -58,11 +60,11 @@ def a2a_task_state(status: str | None) -> str:
 
 
 def agent_card(*, host: str = "127.0.0.1", port: int = STUDIO_PORT) -> dict[str, Any]:
-    base = f"http://{host}:{port}/"
+    base = f"http://{host}:{port}"
     return {
         "name": "video-buddy",
         "description": "Local Video Buddy director via ComfyUI (storyboard, judge, multi-seg).",
-        "url": base,
+        "url": f"{base}/a2a",
         "version": __version__,
         "protocolVersion": "0.2.9",
         "capabilities": {"streaming": False, "pushNotifications": False},
@@ -79,8 +81,27 @@ def agent_card(*, host: str = "127.0.0.1", port: int = STUDIO_PORT) -> dict[str,
         "endpoints": {
             "health": "/health",
             "card": "/.well-known/agent.json",
+            "card_v1": "/.well-known/agent-card.json",
             "tasks": "/tasks/{id}",
         },
+    }
+
+
+def task_view(task: dict[str, Any], tid: str | None = None) -> dict[str, Any]:
+    """Public A2A task shape used by tasks/get and GET /tasks/{id}."""
+    state = task.get("state") or "working"
+    result = task.get("result") or {}
+    artifacts = []
+    if result.get("video_path"):
+        artifacts.append({"name": "video", "parts": [{"type": "text", "text": result["video_path"]}]})
+    return {
+        "id": tid or task.get("id"),
+        "status": {
+            "state": state,
+            "message": {"parts": [{"type": "text", "text": result.get("error") or task.get("error") or state}]},
+        },
+        "artifacts": artifacts,
+        "metadata": {"result": result},
     }
 
 
@@ -124,9 +145,10 @@ def handle_rpc(
         meta = params.get("metadata") or {}
         body = {
             "request": text,
-            "quality": meta.get("quality") or params.get("quality") or "balanced",
+            "quality": meta.get("quality") or params.get("quality") or DEFAULT_QUALITY,
             "dry_run": bool(meta.get("dry_run") or params.get("dry_run")),
             "variant": meta.get("variant") or params.get("variant"),
+            "duration_s": meta.get("duration_s") or params.get("duration_s") or 5.0,
         }
         task_id = store.create(text)
         submit(task_id, body)
@@ -137,22 +159,7 @@ def handle_rpc(
         t = store.get(str(tid) if tid else "")
         if not t:
             return err(-32001, f"task not found: {tid}")
-        state = t.get("state") or "working"
-        result = t.get("result") or {}
-        artifacts = []
-        if result.get("video_path"):
-            artifacts.append({"name": "video", "parts": [{"type": "text", "text": result["video_path"]}]})
-        return ok(
-            {
-                "id": tid,
-                "status": {
-                    "state": state,
-                    "message": {"parts": [{"type": "text", "text": result.get("error") or state}]},
-                },
-                "artifacts": artifacts,
-                "metadata": {"result": result},
-            }
-        )
+        return ok(task_view(t, str(tid)))
 
     if method in ("agent/authenticatedExtendedCard", "agent/getAuthenticatedExtendedCard"):
         return ok(agent_card(host=host, port=port))
@@ -161,25 +168,35 @@ def handle_rpc(
 
 
 def submit_orchestrator(task_id: str, body: dict[str, Any], store: TaskStore) -> None:
-    """Wire A2A tasks to the existing orchestrator pipeline (async thread)."""
+    """Wire A2A / Hermes facade tasks through the studio one-GPU-at-a-time gate."""
 
     def _run() -> None:
         try:
             from master_agent.orchestrator.pipeline import dry_run_pipeline, run_pipeline
+            from master_agent.web.jobs import MANAGER
 
+            quality = body.get("quality") or DEFAULT_QUALITY
+            duration_s = float(body.get("duration_s") or 5.0)
             if body.get("dry_run"):
                 code = dry_run_pipeline(
                     body["request"],
                     variant=body.get("variant"),
-                    quality=body.get("quality"),
+                    quality=quality,
+                    duration_s=duration_s,
                 )
-                store.set(task_id, state="completed" if code == 0 else "failed", result={"status": "dry-run", "code": code})
+                store.set(
+                    task_id,
+                    state="completed" if code == 0 else "failed",
+                    result={"status": "dry-run", "code": code},
+                )
                 return
-            result = run_pipeline(
-                body["request"],
-                quality=body.get("quality") or "balanced",
-                variant=body.get("variant"),
-            )
+            with MANAGER.gpu_lock():
+                result = run_pipeline(
+                    body["request"],
+                    quality=quality,
+                    variant=body.get("variant"),
+                    duration_s=duration_s,
+                )
             status = result.status if hasattr(result, "status") else (result or {}).get("status")
             payload = result.to_dict() if hasattr(result, "to_dict") else dict(result or {})
             store.set(task_id, state=a2a_task_state(status), result=payload)

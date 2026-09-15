@@ -62,6 +62,13 @@ def studio_about() -> dict[str, Any]:
         },
         "personas": ["ara", "exec", "zod"],
         "souls": ["studio", "play"],
+        "hermes": {
+            "profile": "ltx",
+            "skill": "video-buddy",
+            "mcp_id": "master-agent",
+            "facade": f"http://127.0.0.1:{STUDIO_PORT}/p/ltx/v1/chat/completions",
+            "a2a_fallback": f"http://127.0.0.1:{STUDIO_PORT}/a2a",
+        },
     }
 
 
@@ -74,6 +81,7 @@ def format_about(card: dict[str, Any] | None = None) -> str:
     drive = data.get("drive") or {}
     comfy = data.get("comfy") or {}
     studio = data.get("studio") or {}
+    hermes = data.get("hermes") or {}
     lines = [
         f"{data.get('name', 'VIDEO BUDDY')}  v{data.get('version', '')}",
         data.get("tagline") or "",
@@ -83,6 +91,7 @@ def format_about(card: dict[str, Any] | None = None) -> str:
         f"Persona  {persona.get('slug')} ({persona.get('name')})   soul {soul.get('slug')} ({soul.get('name')})",
         f"Local    {models.get('ollama')}   provider {models.get('llm_provider')}",
         f"Package  {data.get('package')}   MCP {data.get('mcp_id')}",
+        f"Hermes   profile ltx (primary)   A2A fallback {hermes.get('a2a_fallback')}",
         "",
         "Drive a graph:",
         f"  {drive.get('health')}",
