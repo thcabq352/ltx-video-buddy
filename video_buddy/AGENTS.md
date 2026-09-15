@@ -14,6 +14,30 @@ python install.py
 
 Windows: `install.bat`. macOS / Linux: `./install.sh`. Re-check with `python -m master_agent doctor` (alias of `setup`; **does not fetch weights**). Install missing *deps* with `--fix`. Confirmed-missing LTX 2.5 weights: `python -m master_agent download-models --ltx25` then `--yes` after you agree. MiniMax H3: `python -m master_agent download-models --h3` then `--yes`.
 
+## Hermes install
+
+MCP tools alone are not enough — Hermes loads capabilities from a real skill
+folder. Source of truth: [`skills/video-buddy/`](skills/video-buddy/SKILL.md).
+
+```powershell
+python install_hermes_skill.py
+```
+
+That copies `skills/video-buddy/` to `~/.hermes/skills/video-buddy/` (Windows /
+macOS / Linux; `HERMES_HOME` overrides `~/.hermes`). Confirm server id
+`master-agent` in `~/.hermes/config.yaml` (no secrets):
+
+```yaml
+mcp_servers:
+  master-agent:
+    command: "<VIDEO_BUDDY>/.venv/bin/python"   # Windows: .venv\Scripts\python.exe
+    args:
+      - "<VIDEO_BUDDY>/master_agent/mcp_server.py"
+```
+
+Start MCP (cwd = this folder): `<venv python> master_agent/mcp_server.py`.
+Prefer `hermes mcp add` / `hermes mcp test master-agent`.
+
 ## About
 
 `python -m master_agent about` prints the studio card (also `GET /api/about` and the studio About tab). VIDEO BUDDY is the local ComfyUI studio; package `master_agent`; MCP `master-agent`.

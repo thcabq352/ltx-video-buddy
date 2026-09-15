@@ -1,9 +1,12 @@
 # Skills (Hermes / agentskills)
 
-Canonical agent skills shipped with Video Buddy.
+Canonical agent skill is shipped under **`video_buddy/skills/video-buddy/`**
+(install source of truth). Copy that folder to `~/.hermes/skills/video-buddy/`
+or run `python video_buddy/install_hermes_skill.py`.
 
 | Skill | Purpose |
 |---|---|
-| `video-buddy` | How Hermes/Ringmaster/forge call this studio (CLI + MCP `master-agent`). LTX 2.5 + MiniMax H3 default catalog, `doctor`, `download-models --ltx25` / `--h3`. |
+| `video-buddy` | How Hermes calls this studio (CLI + MCP `master-agent`). Curriculum stop-lines, ports, tool↔CLI map. LTX 2.5 + MiniMax H3 + WAN. |
 
-Hub: `hermes skills tap add thcabq352/ltx-video-buddy`
+Repo-root `skills/video-buddy/` is a tap pointer only — do not treat it as the
+full skill. Hub: `hermes skills tap add thcabq352/ltx-video-buddy`
