@@ -230,6 +230,7 @@
   <div class="dots" id="health">
     <span class="dot" id="d-comfy">ComfyUI</span>
     <span class="dot" id="d-ollama">Ollama</span>
+    <span class="dot" id="d-llamacpp">llama.cpp</span>
     <span class="dot" id="d-grok">Grok</span>
     <span class="dot" id="d-kb">KB</span>
     <span class="dot" id="d-gpu">GPU</span>
@@ -284,7 +285,7 @@
           <option value="grok+claude">grok + claude</option>
           <option value="duo">duo (2 local)</option>
           <option value="custom">custom…</option></select>
-          <input type="text" id="c-panel-custom" placeholder="grok,claude,ollama:gemma4:latest" style="display:none;margin-top:6px"></div>
+          <input type="text" id="c-panel-custom" placeholder="grok,claude,llamacpp:hermes,ollama:gemma4:latest" style="display:none;margin-top:6px"></div>
       </div>
       <div class="row">
         <div><label>Persona</label>
@@ -730,7 +731,8 @@ async function loadAbout() {
       ["Studio", (studio.url || ":8189") + " (optional)"],
       ["Persona", (persona.slug || "") + (persona.name ? " (" + persona.name + ")" : "")],
       ["Soul", (soul.slug || "") + (soul.name ? " (" + soul.name + ")" : "")],
-      ["Local model", models.ollama || ""],
+      ["Ollama", (models.ollama || "") + (models.ollama_url ? " @ " + models.ollama_url : "")],
+      ["llama.cpp", (models.llamacpp || "") + (models.llamacpp_url ? " @ " + models.llamacpp_url : "")],
       ["LLM chain", models.llm_provider || "auto"],
       ["Package", (a.package || "master_agent") + " · MCP " + (a.mcp_id || "master-agent")],
       ["Personas", (a.personas || []).join(", ")],
@@ -753,6 +755,7 @@ async function loadHealth() {
     const h = await api("/api/health");
     $("d-comfy").className = "dot" + (h.comfyui?.up ? " on" : "");
     $("d-ollama").className = "dot" + (h.ollama ? " on" : "");
+    if ($("d-llamacpp")) $("d-llamacpp").className = "dot" + (h.llamacpp ? " on" : "");
     $("d-grok").className = "dot" + (h.grok ? " on" : "");
     $("d-kb").className = "dot" + ((h.kb?.runs ?? 0) + (h.kb?.workflows ?? 0) > 0 ? " on" : "");
     $("d-kb").textContent = `KB ${h.kb?.runs ?? 0}r/${h.kb?.workflows ?? 0}w`;

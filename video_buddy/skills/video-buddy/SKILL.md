@@ -74,6 +74,25 @@ Hard rules:
 |---|---|---|
 | **:8188** | ComfyUI API | `health` / MCP `health` shows Comfy up |
 | **:8189** | Optional studio dashboard (`python -m master_agent ui`) | Human UI only. A live tab is **not** Comfy. |
+| **:8080** | llama.cpp `llama-server` (optional local LLM) | MCP `health.llamacpp` / `local_llm.llamacpp` |
+| **:11434** | Ollama (optional local LLM) | MCP `health.ollama` — not implied by llama.cpp |
+
+Do not bind **8642** (Hermes API) or treat llama.cpp as Ollama.
+
+## Ollama vs llama.cpp
+
+Buddy does not force Ollama. Jason / Scott can run Hermes + llama.cpp only.
+
+| | Ollama | llama.cpp |
+|---|---|---|
+| Env | `OLLAMA_URL`, `OLLAMA_MODEL` | `LLAMACPP_URL`, `LLAMACPP_MODEL` |
+| Provider | `LLM_PROVIDER=ollama` or `auto` | `LLM_PROVIDER=llamacpp` (aliases `llama.cpp`, `llama-cpp`) |
+| Chat / storyboard | `{url}/v1/chat/completions` | `{url}/v1/chat/completions` |
+| Embeddings | `/api/embed` | `/v1/embeddings` (KB no-ops if missing) |
+| Vision judge | `/api/chat` + images | multimodal `/v1/chat/completions`; heuristic-only if the GGUF is text-only |
+
+`auto` order: ollama → llamacpp → grok. Panels accept `llamacpp[:model]`.
+`health` reports each backend separately.
 
 ## MCP tools ↔ CLI
 

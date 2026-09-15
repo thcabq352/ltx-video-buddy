@@ -14,7 +14,7 @@ redirected to stderr so the protocol channel stays clean.
 
 | Tool | Arguments | What it does |
 |---|---|---|
-| `health` | *(none)* | ComfyUI reachability + GPU VRAM, Ollama up, KB counts, config hash. |
+| `health` | *(none)* | ComfyUI reachability + GPU VRAM, Ollama up, llama.cpp up (`local_llm`), KB counts, config hash. |
 | `create_video` | `request: str`, `duration_s: float=5.0`, `quality: str="draft"`, `variant: str\|None=None`, `llm_panel: str\|None=None`, `dry_run: bool=False` | Full director pipeline (route, storyboard, per-segment judge, stitch, full judge). `dry_run=True` plans + validates, no GPU. |
 | `plan_storyboard` | `request: str`, `duration_s: float=8.0`, `quality: str="draft"`, `llm_panel: str\|None=None` | Segment split + LLM-panel storyboard with KB recall. **No GPU, no validation.** |
 | `judge_asset` | `video_path: str`, `request: str=""`, `full_video: bool=False` | Grade an existing file (heuristics + text LLM + vision). `full_video=True` uses the full-video judge. |
@@ -27,7 +27,7 @@ redirected to stderr so the protocol channel stays clean.
 | `train_lora` | `character_name: str`, `steps: int=0`, `lr: float=0.0`, `rank: int=0`, `validate: bool=True` | Train Flux LoRA for an existing character (ai-toolkit, resumable). |
 
 Latency: `health` / `search_*` / `validate_workflow` / `kb_ingest` ~seconds.
-`judge_asset` and `create_video` can take minutes (cold Ollama). `train_lora`
+`judge_asset` and `create_video` can take minutes (cold local LLM). `train_lora`
 is hours. Prefer ~900s MCP timeout.
 
 ## CLI (`python -m master_agent <cmd>`)

@@ -73,11 +73,19 @@ XAI_BASE_URL = "https://api.x.ai/v1"
 OLLAMA_URL = os.getenv("OLLAMA_URL", "http://127.0.0.1:11434").rstrip("/")
 OLLAMA_MODEL = os.getenv("OLLAMA_MODEL", "qwen3-vl-heretic")
 
-# LLM provider selection: auto (ollama -> grok) | ollama[:model] | grok
+# llama.cpp OpenAI-compat server (llama-server --api). Default :8080 — do not
+# collide with Hermes 8642 or the studio facade 8189.
+LLAMACPP_URL = os.getenv("LLAMACPP_URL", "http://127.0.0.1:8080").rstrip("/")
+LLAMACPP_MODEL = (os.getenv("LLAMACPP_MODEL") or OLLAMA_MODEL).strip()
+
+# LLM provider selection:
+#   auto (ollama -> llamacpp -> grok)
+#   ollama[:model] | llamacpp[:model] (aliases: llama.cpp, llama-cpp)
+#   grok
 LLM_PROVIDER = (os.getenv("LLM_PROVIDER", "auto") or "auto").strip().lower()
 
 # Storyboard LLM panel: preset (default|local | grok | grok+local|both |
-# grok+claude | duo) or comma list (ollama[:model], grok, claude, …)
+# grok+claude | duo) or comma list (ollama[:model], llamacpp[:model], grok, claude, …)
 # default/local = local VL heretic; grok = solo; grok+local / grok+claude = panels
 LLM_PANEL = (os.getenv("LLM_PANEL", "default") or "default").strip()
 PANEL_JUDGE = (os.getenv("PANEL_JUDGE", "ollama") or "ollama").strip()
