@@ -169,7 +169,35 @@ video_buddy/
 - [Merge notes (historical)](MERGE-LTX25.md) — PR #6, already merged
 - [Movie Builder guide](video_buddy/workflows/260507_VIDEO-BUDDY_MOVIE-BUILDER_GUIDE.md) — LTX 2.3 shot-by-shot film
 - [Agent notes](video_buddy/AGENTS.md) — Rainey fleet stop-lines
+- [Hermes skill](video_buddy/skills/video-buddy/SKILL.md) — install into `~/.hermes/skills/video-buddy/`
 - White paper & investor materials — not published in this repo; available on request
+
+## Hermes install
+
+Hermes agents forget Video Buddy if they only see MCP tools. **MCP ≠ skills.**
+Copy the in-repo skill, then confirm the `master-agent` server.
+
+```bash
+cd video_buddy
+python install_hermes_skill.py
+# copies video_buddy/skills/video-buddy/ → ~/.hermes/skills/video-buddy/
+```
+
+Or copy that folder by hand. Confirm `SKILL.md` is at `~/.hermes/skills/video-buddy/SKILL.md`.
+
+`~/.hermes/config.yaml` fragment (**no secrets** — local stdio only):
+
+```yaml
+mcp_servers:
+  master-agent:
+    command: "<VIDEO_BUDDY>/.venv/bin/python"   # Windows: .venv\Scripts\python.exe
+    args:
+      - "<VIDEO_BUDDY>/master_agent/mcp_server.py"
+```
+
+Prefer `hermes mcp add master-agent -- <venv-python> <VIDEO_BUDDY>/master_agent/mcp_server.py`
+then `hermes mcp test master-agent`. Hermes usually spawns the server; to start
+by hand from `video_buddy/`: `<venv python> master_agent/mcp_server.py`.
 
 ## Status
 

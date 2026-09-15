@@ -424,6 +424,11 @@ mic permission.
 
 ## Hermes MCP server
 
+**MCP ≠ skills.** Hermes only reliably uses Buddy when the skill folder is
+installed. Copy [`skills/video-buddy/`](skills/video-buddy/SKILL.md) to
+`~/.hermes/skills/video-buddy/` (or run `python install_hermes_skill.py`).
+See the repo-root [Hermes install](../README.md#hermes-install) section.
+
 `master_agent/mcp_server.py` exposes the agent to Hermes over stdio MCP
 (registered as `master-agent` in `~/.hermes/config.yaml`). Tools:
 
