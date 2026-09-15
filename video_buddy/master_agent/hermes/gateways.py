@@ -5,7 +5,13 @@ from __future__ import annotations
 import os
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Any
+from typing import Any, Callable, Optional
+
+ProbeFn = Callable[..., dict[str, Any]]
+
+STUDIO_PORT = 8189
+BUDDY_ADAPTER_SOURCE = "buddy-adapter"
+PROBE_TIMEOUT_S = 0.4
 
 KNOWN_PORTS = {
     "default": 8642,
@@ -93,11 +99,55 @@ def list_profiles(home: Path | None = None) -> list[str]:
     return names
 
 
+def models_url(chat_url: str) -> str:
+    trimmed = chat_url.rstrip("/")
+    if trimmed.endswith("/chat/completions"):
+        return trimmed[: -len("/chat/completions")] + "/models"
+    return trimmed + "/models"
+
+
+def probe_gateway(
+    gateway: Gateway,
+    *,
+    request: Optional[ProbeFn] = None,
+    timeout: float = PROBE_TIMEOUT_S,
+) -> Gateway:
+    url = models_url(gateway.chat_url)
+    try:
+        if request:
+            reply = request("GET", url)
+            ok = bool(reply.get("ok"))
+        else:
+            import httpx
+
+            response = httpx.get(url, timeout=timeout)
+            ok = response.status_code < 400
+        gateway.healthy = ok
+        gateway.can_speak = ok
+    except Exception:
+        gateway.healthy = False
+        gateway.can_speak = False
+    return gateway
+
+
+def buddy_adapter_gateway(*, host: str, office: str = "") -> Gateway:
+    return Gateway(
+        profile="ltx",
+        name=HERMES_PROFILE_LABELS.get("ltx", "Ltx"),
+        port=STUDIO_PORT,
+        chat_url=f"http://{host}:{STUDIO_PORT}/p/ltx/v1/chat/completions",
+        office=office,
+        source=BUDDY_ADAPTER_SOURCE,
+    )
+
+
 def discover_gateways(
     *,
     home: Path | None = None,
     office: str = "",
     host: str | None = None,
+    probe: bool = True,
+    request: Optional[ProbeFn] = None,
 ) -> list[Gateway]:
     root = home or hermes_home()
     host = host or os.environ.get("SOS_HERMES_HOST", "127.0.0.1")
@@ -136,7 +186,32 @@ def discover_gateways(
                 source="sos-mux",
             )
         )
+    if probe:
+        for item in found:
+            probe_gateway(item, request=request)
+    if not any(item.profile == "ltx" and item.healthy for item in found):
+        adapter = buddy_adapter_gateway(host=host, office=office)
+        if probe:
+            probe_gateway(adapter, request=request)
+        found.append(adapter)
     return found
+
+
+def discover_primary_seat(
+    *,
+    home: Path | None = None,
+    office: str = "",
+    host: str | None = None,
+    probe: bool = True,
+    request: Optional[ProbeFn] = None,
+) -> Optional[Gateway]:
+    rows = discover_gateways(home=home, office=office, host=host, probe=probe, request=request)
+    healthy_ltx = [g for g in rows if g.profile == "ltx" and g.healthy]
+    if healthy_ltx:
+        hermes = [g for g in healthy_ltx if g.source != BUDDY_ADAPTER_SOURCE]
+        return (hermes or healthy_ltx)[0]
+    adapters = [g for g in rows if g.source == BUDDY_ADAPTER_SOURCE]
+    return adapters[0] if adapters else None
 
 
 def seat_system_prompt(gateway: Gateway) -> str:

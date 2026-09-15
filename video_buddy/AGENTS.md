@@ -23,9 +23,10 @@ folder. Source of truth: [`skills/video-buddy/`](skills/video-buddy/SKILL.md).
 python install_hermes_skill.py
 ```
 
-That copies `skills/video-buddy/` to `~/.hermes/skills/video-buddy/` (Windows /
-macOS / Linux; `HERMES_HOME` overrides `~/.hermes`). Confirm server id
-`master-agent` in `~/.hermes/config.yaml` (no secrets):
+That copies `skills/video-buddy/` to `~/.hermes/skills/video-buddy/` and seats
+Hermes profile `ltx` at `~/.hermes/profiles/ltx/` (Windows / macOS / Linux;
+`HERMES_HOME` overrides `~/.hermes`). No `.env` is written. Confirm server id
+`master-agent` in the profile (or default) `config.yaml` (no secrets):
 
 ```yaml
 mcp_servers:
@@ -36,7 +37,9 @@ mcp_servers:
 ```
 
 Start MCP (cwd = this folder): `<venv python> master_agent/mcp_server.py`.
-Prefer `hermes mcp add` / `hermes mcp test master-agent`.
+Prefer `hermes -p ltx` / `hermes mcp add` / `hermes mcp test master-agent`.
+Primary discovery is the `ltx` seat (or the studio facade on `:8189`).
+A2A (`GET /.well-known/agent.json`, `POST /a2a`) is the fallback. Never bind 8642.
 
 ## About
 
@@ -144,7 +147,7 @@ Default Ollama / vision model is `qwen3-vl-heretic`. Auto LLM chain is `ollama â
 
 ## Control layer
 
-Render budget (VRAM-minutes, cap ~80) can pause the queue over cap. Each shift has `shift_id`; `budget reset-shift` archives the previous used total and zeros the counter without wiping history. `/api/control` exposes knobs, budget, and last-10 config history. A2A lives at `GET /.well-known/agent.json` and `POST /a2a` (studio port **8189**). Budget-held pipeline jobs map to A2A `input-required`, not `failed`.
+Render budget (VRAM-minutes, cap ~80) can pause the queue over cap. Each shift has `shift_id`; `budget reset-shift` archives the previous used total and zeros the counter without wiping history. `/api/control` exposes knobs, budget, and last-10 config history. Hermes profile `ltx` is the primary seat (`python -m master_agent hermes status`). The studio facade is `POST /p/ltx/v1/chat/completions` on **8189** (never 8642). A2A fallback lives at `GET /.well-known/agent.json` (also `agent-card.json`) and `POST /a2a`. Budget-held pipeline jobs map to A2A `input-required`, not `failed`. `done_with_warnings` maps to `completed`.
 
 ## Tests
 

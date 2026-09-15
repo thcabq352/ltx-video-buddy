@@ -14,6 +14,7 @@ that skill folder = agents forget Buddy.
 cd video_buddy
 python install_hermes_skill.py
 # → ~/.hermes/skills/video-buddy/
+# → ~/.hermes/profiles/ltx/
 ```
 
 Confirm `master-agent` in `~/.hermes/config.yaml`, then start

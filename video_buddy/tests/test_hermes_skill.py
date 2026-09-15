@@ -70,6 +70,7 @@ def registered_cli_commands() -> set[str]:
 def test_skill_renders_frontmatter_and_sections():
     assert SKILL_MD.is_file()
     assert TOOLS_MD.is_file()
+    assert (SKILL_DIR / "PROFILE.md").is_file()
     text = SKILL_MD.read_text(encoding="utf-8")
     meta = _frontmatter(text)
     assert meta.get("name") == "video-buddy"
@@ -89,8 +90,11 @@ def test_skill_renders_frontmatter_and_sections():
         "L0",
         "L5",
         "Imagine",
+        "ltx",
+        "A2A",
     ):
         assert needle in body, f"missing {needle!r}"
+    assert "Not a Hermes profile" not in body
 
 
 def test_stop_lines_match_curriculum():
@@ -154,6 +158,7 @@ def test_cli_commands_documented():
         "comfy",
         "diagnose",
         "budget",
+        "hermes",
         "capabilities",
     }
     assert expected <= commands
@@ -179,3 +184,15 @@ def test_install_hermes_skill_uses_hermes_home(tmp_path: Path, monkeypatch: pyte
     out = install_skill(home=home)
     assert out == home / "skills" / "video-buddy"
     assert (out / "SKILL.md").is_file()
+
+
+def test_install_hermes_skill_seats_ltx_profile(tmp_path: Path):
+    from install_hermes_skill import main
+
+    home = tmp_path / "hermes-home"
+    rc = main(["--hermes-home", str(home)])
+    assert rc == 0
+    assert (home / "skills" / "video-buddy" / "SKILL.md").is_file()
+    assert (home / "skills" / "video-buddy" / "PROFILE.md").is_file()
+    assert (home / "profiles" / "ltx" / "SOUL.md").is_file()
+    assert not (home / "profiles" / "ltx" / ".env").exists()

@@ -5,7 +5,7 @@ description: "Use when generating or judging local ComfyUI video on this machine
 
 # Video Buddy
 
-Local ComfyUI video studio in this repo (`video_buddy/`). Package is `master_agent`. MCP server id is **`master-agent`**. Not cloud Imagine. Not a Hermes profile.
+Local ComfyUI video studio in this repo (`video_buddy/`). Package is `master_agent`. MCP server id is **`master-agent`**. Not cloud Imagine. Primary seat is Hermes profile **`ltx`** (`hermes -p ltx`). A2A on studio `:8189` is the fallback.
 
 **MCP ≠ skills.** Connecting `master-agent` exposes tools. Hermes only reliably uses Buddy when this folder is installed at `~/.hermes/skills/video-buddy/` (this `SKILL.md`). Tools without the skill = agents forget Buddy.
 
@@ -26,17 +26,27 @@ Local ComfyUI video studio in this repo (`video_buddy/`). Package is `master_age
 | Generic node poke on a **different** Comfy install | that install's MCP, not `master-agent` |
 | Sibling trees (`ltx_director/`, `SOS/`, `lot/`) | those packages — L0 is this tree only |
 
+## Hermes profile (primary)
+
+1. Skill installed at `~/.hermes/skills/video-buddy/` (this file).
+2. Profile `ltx` seated at `~/.hermes/profiles/ltx/` (`python install_hermes_skill.py` or `python -m master_agent hermes register`).
+3. Server id `master-agent` present in the profile (and/or default) `config.yaml`.
+4. Prefer `hermes -p ltx` or the studio facade `http://127.0.0.1:8189/p/ltx/v1/chat/completions`.
+5. A2A-only peers: `GET /.well-known/agent.json` + `POST /a2a` on `:8189`.
+
+Check: `python -m master_agent hermes status`. Buddy never binds **8642**.
+
 ## MCP must be running
 
 1. Skill installed at `~/.hermes/skills/video-buddy/` (this file).
-2. Server id `master-agent` present in `~/.hermes/config.yaml`.
+2. Server id `master-agent` present in `~/.hermes/config.yaml` (or `profiles/ltx/config.yaml`).
 3. Hermes connected to that server (or start it: `<venv python> master_agent/mcp_server.py` from `video_buddy/`).
 
 Skill without MCP → no tools. MCP without skill → tools exist, agents still forget Buddy. Need both.
 
 Prefer ~900s tool timeout. `create_video` / `judge_asset` / `train_lora` are long.
 
-**Do not invent tools.** The only MCP tools are the 11 below (from `master_agent/mcp_server.py`). Diagnose, curriculum, `comfy run`, doctor, budget, ui, about are **CLI-only**.
+**Do not invent tools.** The only MCP tools are the 11 below (from `master_agent/mcp_server.py`). Diagnose, curriculum, `comfy run`, doctor, budget, hermes, ui, about are **CLI-only**.
 
 ## Curriculum stop-lines (before overnight)
 
@@ -83,7 +93,7 @@ Full signatures: [TOOLS.md](TOOLS.md). Invoke MCP as `master-agent.<tool>`. CLI 
 | `create_character(description, name="", shots=0, train=False)` | `python -m master_agent character create "DESC" [--name N --shots N --train]` |
 | `train_lora(character_name, steps=0, lr=0, rank=0, validate=True)` | `python -m master_agent lora train NAME [--steps N --lr X --rank N --validate]` |
 
-CLI-only (no MCP tool): `about`, `curriculum`, `doctor`/`setup`, `workflows`, `capabilities`, `download-models`, `download-flux`, `comfy run`, `diagnose`, `budget`, `ui`, `fetch-object-info`, `power-tune`, `persona`, `soul`, `brief`, `fractal`, `music`, `lora setup`/`validate`, `character list`.
+CLI-only (no MCP tool): `about`, `curriculum`, `doctor`/`setup`, `workflows`, `capabilities`, `download-models`, `download-flux`, `comfy run`, `diagnose`, `budget`, `hermes`, `ui`, `fetch-object-info`, `power-tune`, `persona`, `soul`, `brief`, `fractal`, `music`, `lora setup`/`validate`, `character list`.
 
 Drive graphs with CLI first: `comfy run`. Director pipeline: `run`. Unattended: `--no-interview`.
 
@@ -102,11 +112,12 @@ Source of truth in this repo: `video_buddy/skills/video-buddy/`.
 ```bash
 # from video_buddy/
 python install_hermes_skill.py
-# or copy the folder:
-#   video_buddy/skills/video-buddy/  →  ~/.hermes/skills/video-buddy/
+# copies skill → ~/.hermes/skills/video-buddy/
+# seats profile ltx → ~/.hermes/profiles/ltx/  (no .env, no secrets)
+# or: python -m master_agent hermes register
 ```
 
-Windows / macOS / Linux all use `~/.hermes/skills/video-buddy/` (`HERMES_HOME` overrides `~/.hermes`). Confirm `SKILL.md` is in that folder.
+Windows / macOS / Linux all use `~/.hermes/skills/video-buddy/` (`HERMES_HOME` overrides `~/.hermes`). Confirm `SKILL.md` is in that folder. Confirm `profiles/ltx/SOUL.md` exists. A custom SOUL is not overwritten unless `--force`.
 
 Confirm MCP in `~/.hermes/config.yaml` (fragment, **no secrets**):
 
