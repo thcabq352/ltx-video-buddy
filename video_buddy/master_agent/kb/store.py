@@ -1,19 +1,30 @@
-"""Knowledge base — ChromaDB store with local Ollama embeddings.
+"""Knowledge base — ChromaDB store with local embeddings.
 
 Two collections:
 - ``workflows`` — digests of the workflow JSON templates (what each is for)
 - ``runs``      — every orchestrator/pipeline run record (self-learning seed)
 
-Embeddings come from Ollama (nomic-embed-text) — no cloud, no extra model
-downloads beyond the ollama pull. All functions degrade to no-ops when
-KB_ENABLED=0 or chromadb/ollama is unavailable.
+Embeddings come from the active local LLM backend:
+- Ollama: native ``POST {OLLAMA_URL}/api/embed``
+- llama.cpp: OpenAI-compat ``POST {LLAMACPP_URL}/v1/embeddings``
+
+No cloud, no extra model downloads beyond the local server. All functions
+degrade to no-ops when KB_ENABLED=0 or chromadb / embeddings are unavailable.
 """
 
 from __future__ import annotations
 
+import logging
 from typing import Any, Optional
 
 from master_agent.config import CHROMA_DIR, KB_ENABLED, KB_EMBED_MODEL, OLLAMA_URL
+from master_agent.llm import (
+    active_local_backend,
+    embeddings_endpoint,
+    normalize_provider_name,
+)
+
+log = logging.getLogger(__name__)
 
 COLLECTION_WORKFLOWS = "workflows"
 COLLECTION_RUNS = "runs"
@@ -32,34 +43,85 @@ def kb_available() -> bool:
         return False
 
 
-class OllamaEmbedding:
-    """ChromaDB embedding function backed by Ollama /api/embed."""
+def embed_texts(
+    texts: list[str],
+    *,
+    backend: str | None = None,
+    model: str | None = None,
+) -> list[list[float]]:
+    """Embed via Ollama ``/api/embed`` or llama.cpp ``/v1/embeddings``.
 
-    def __init__(self, model: str | None = None):
-        self.model = model or KB_EMBED_MODEL
+    Raises on missing backend or HTTP failure so callers can degrade.
+    """
+    chosen = normalize_provider_name(backend or "") if backend else active_local_backend()
+    if chosen not in ("ollama", "llamacpp"):
+        raise RuntimeError(
+            "no local embedding backend (start Ollama or llama.cpp, or set LLM_PROVIDER)"
+        )
+    name = model or KB_EMBED_MODEL
+    import httpx
 
-    def __call__(self, input: list[str]) -> list[list[float]]:  # chroma protocol
-        import httpx
-
+    url = embeddings_endpoint(chosen)
+    if chosen == "llamacpp":
         resp = httpx.post(
-            f"{OLLAMA_URL}/api/embed",
-            json={"model": self.model, "input": input},
+            url,
+            json={"model": name, "input": texts},
             timeout=120,
         )
         resp.raise_for_status()
-        return resp.json()["embeddings"]
+        payload = resp.json()
+        rows = payload.get("data")
+        if not isinstance(rows, list):
+            raise RuntimeError(
+                f"llama.cpp embeddings missing data[] at {url} "
+                "(server needs OpenAI-compat /v1/embeddings)"
+            )
+        ordered = sorted(rows, key=lambda r: int((r or {}).get("index") or 0))
+        out = [list((r or {}).get("embedding") or []) for r in ordered]
+        if not out or not out[0]:
+            raise RuntimeError(f"llama.cpp embeddings empty at {url}")
+        return out
 
-    # chromadb >=1.x embedding-function protocol
+    resp = httpx.post(
+        url or f"{OLLAMA_URL}/api/embed",
+        json={"model": name, "input": texts},
+        timeout=120,
+    )
+    resp.raise_for_status()
+    embeds = resp.json().get("embeddings")
+    if not embeds:
+        raise RuntimeError(f"Ollama /api/embed returned no embeddings at {url}")
+    return embeds
+
+
+class LocalEmbedding:
+    """ChromaDB embedding function: Ollama or llama.cpp, picked at call time."""
+
+    def __init__(self, model: str | None = None, backend: str | None = None):
+        self.model = model or KB_EMBED_MODEL
+        self.backend = backend
+
+    def __call__(self, input: list[str]) -> list[list[float]]:  # chroma protocol
+        try:
+            return embed_texts(input, backend=self.backend, model=self.model)
+        except Exception as exc:
+            log.warning(
+                "KB embeddings unavailable via %s (%s); this write/search is a no-op",
+                self.backend or active_local_backend() or "none",
+                exc,
+            )
+            raise
+
     @staticmethod
     def name() -> str:
-        return "ollama"
+        return "local-llm"
 
     def get_config(self) -> dict:
-        return {"model": self.model}
+        return {"model": self.model, "backend": self.backend or ""}
 
     @classmethod
-    def build_from_config(cls, config: dict) -> "OllamaEmbedding":
-        return cls(model=config.get("model"))
+    def build_from_config(cls, config: dict) -> "LocalEmbedding":
+        return cls(model=config.get("model"), backend=config.get("backend") or None)
 
     def embed_documents(self, input: list[str]) -> list[list[float]]:
         return self(input)
@@ -67,6 +129,21 @@ class OllamaEmbedding:
     def embed_query(self, input: str | list[str]) -> list[list[float]]:
         texts = [input] if isinstance(input, str) else input
         return self(texts)
+
+
+class OllamaEmbedding(LocalEmbedding):
+    """ChromaDB embedding function backed by Ollama /api/embed (legacy name)."""
+
+    def __init__(self, model: str | None = None):
+        super().__init__(model=model, backend="ollama")
+
+    @staticmethod
+    def name() -> str:
+        return "ollama"
+
+    @classmethod
+    def build_from_config(cls, config: dict) -> "OllamaEmbedding":
+        return cls(model=config.get("model"))
 
 
 _client = None
@@ -85,7 +162,7 @@ def get_client():
 def get_collection(name: str):
     return get_client().get_or_create_collection(
         name=name,
-        embedding_function=OllamaEmbedding(),
+        embedding_function=LocalEmbedding(),
         metadata={"hnsw:space": "cosine"},
     )
 

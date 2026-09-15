@@ -5,11 +5,11 @@ rendering engine. Current components: ComfyUI bridge (API client, workflow
 patcher, workflow validator), model inventory scanner, orchestrator state
 machine, and a heuristic + LLM judge loop.
 
-- **LLM:** local-first — `qwen3-vl-heretic` via Ollama (Qwen3-VL 9B-class)
-  drives the director, storyboard, text judge, and vision judge. Fallback
-  chain for `LLM_PROVIDER=auto`: ollama → grok (Hermes `xai-oauth` or
-  `XAI_API_KEY`). Claude is an optional storyboard panel member
-  (`ANTHROPIC_API_KEY`).
+- **LLM:** local-first — `qwen3-vl-heretic` via **Ollama** or **llama.cpp**
+  (Qwen3-VL 9B-class) drives the director, storyboard, text judge, and
+  vision judge. Fallback chain for `LLM_PROVIDER=auto`: ollama → llamacpp →
+  grok (Hermes `xai-oauth` or `XAI_API_KEY`). Claude is an optional
+  storyboard panel member (`ANTHROPIC_API_KEY`).
 - **Models:** LTX 2.5 distilled split pack (GGUF / NVFP4 / int8 / bf16) plus
   MiniMax H3 (GGUF Q4_K DiT + Comfy TE / VAEs) and existing LTX 2.3 / Wan /
   Flux weights under `models/` — see [`REQUIRED-FILES.md`](REQUIRED-FILES.md)
@@ -70,6 +70,7 @@ Hybrid page scrape lives in `master_agent/scrape`: httpx first, Playwright+steal
 
 - **ffmpeg** on PATH — frame extraction, concat, audio muxing. `setup --fix` installs it when a package manager is available.
 - **Ollama** — local LLMs + embeddings. After the app is installed: `ollama pull nomic-embed-text` and `ollama pull qwen3-vl-heretic` (also done by `setup --fix`).
+- **llama.cpp** (optional alternative) — OpenAI-compat `llama-server` on `:8080`. See [Ollama vs llama.cpp](#ollama-vs-llamacpp) below. Not required if Ollama is already running.
 - **ComfyUI** on `:8188` — Windows portable lives in `ComfyUI_windows_portable/`. On macOS/Linux point `COMFYUI_URL` at your own Comfy. Custom node pip deps stay in Comfy's python, not this venv.
 - **ai-toolkit** (LoRA training only) — separate clone + own venv, set up with
   `python -m master_agent lora setup`. The project venv is untouched.
@@ -120,6 +121,7 @@ python -m master_agent run "..." --llm-panel grok              # Grok solo
 python -m master_agent run "..." --llm-panel grok+local        # Grok + local, judge picks
 python -m master_agent run "..." --llm-panel grok+claude       # Grok + Claude, judge picks
 python -m master_agent run "..." --llm-panel ollama:gemma4:latest,grok   # custom panel
+python -m master_agent run "..." --llm-panel llamacpp:hermes            # llama.cpp only
 ```
 
 **LTX 2.5** graphs are in the **default** catalog (PR #6, merged). No env
@@ -257,7 +259,9 @@ profile) go through `orchestrator/pipeline.py`:
    Grok + Claude. Multi-member panels use a judge LLM (`--panel-judge`,
    env `PANEL_JUDGE`, default `ollama`) to pick or blend. Legacy `duo` =
    VL heretic + `gemma4:latest`. Custom CSV works (`ollama:<model>`,
-   `grok`, `claude`); unavailable members are skipped, never fatal.
+   `llamacpp:<model>`, `grok`, `claude`); unavailable members are skipped,
+   never fatal. `default` / `local` use Ollama when it is up, otherwise
+   llama.cpp.
    Panel details land in the run record as `panel_meta`.
 2. **Per-segment generation** — each shot runs the full orchestrator loop
    (patch → validate → submit → judge) with a per-shot seed offset
@@ -353,10 +357,50 @@ values; it stays put when you change the interview voice. Default persona is
 - No LLM available? The intake degrades to a canned opener and folds your
   answers into the request — never fatal.
 
+## Ollama vs llama.cpp
+
+Buddy talks to **one local OpenAI-compat chat server** at a time. You do
+not need both. Jason / Scott running Hermes + llama.cpp can skip Ollama.
+
+| | Ollama | llama.cpp (`llama-server --api`) |
+|---|---|---|
+| Default URL | `http://127.0.0.1:11434` (`OLLAMA_URL`) | `http://127.0.0.1:8080` (`LLAMACPP_URL`) |
+| Model env | `OLLAMA_MODEL` (default `qwen3-vl-heretic`) | `LLAMACPP_MODEL` (same default if unset) |
+| Provider spec | `ollama` / `ollama:<model>` | `llamacpp` / `llama.cpp` / `llama-cpp` / `llamacpp:<model>` |
+| Chat / storyboard / panels | `{url}/v1/chat/completions` | `{url}/v1/chat/completions` |
+| Embeddings (KB) | native `POST /api/embed` | OpenAI-compat `POST /v1/embeddings` |
+| Vision judge | native `POST /api/chat` + `images` | OpenAI-compat multimodal chat (`image_url` parts) |
+
+`LLM_PROVIDER=auto` tries **ollama → llamacpp → grok**. Pin a backend:
+
+```bash
+# Jason — llama.cpp only (no Ollama)
+export LLM_PROVIDER=llamacpp
+export LLAMACPP_URL=http://127.0.0.1:8080
+export LLAMACPP_MODEL=hermes          # whatever llama-server --alias / GGUF name
+export PANEL_JUDGE=llamacpp
+# optional: VISION_MODEL must be a VL GGUF if you want the vision judge
+```
+
+Ports: llama.cpp **8080** is the only new default. Do not bind 8642 (Hermes
+API) or 8189 (studio / A2A facade).
+
+**What works without Ollama:** director, storyboard, text judge, panels,
+`get_llm`. Health reports `ollama: false` and `llamacpp: true` separately
+— it will not claim Ollama is up.
+
+**Limitations:** KB embeddings need `/v1/embeddings` on the llama.cpp
+server (load an embedding GGUF or keep `nomic-embed-text` on Ollama).
+Vision needs a **VL** model via multimodal `/v1/chat/completions`. If
+those endpoints are missing, Buddy degrades: KB writes/searches no-op
+with a warning; the judge continues heuristic-only. Neither path
+hard-requires Ollama.
+
 ## Knowledge base (local RAG)
 
-ChromaDB (`state/chroma/`) with Ollama `nomic-embed-text` embeddings — fully
-local. Two collections: `workflows` (digests of the templates) and `runs`
+ChromaDB (`state/chroma/`) with local embeddings (Ollama `nomic-embed-text`
+via `/api/embed`, or llama.cpp `POST /v1/embeddings`) — fully local. Two
+collections: `workflows` (digests of the templates) and `runs`
 (every orchestrator/pipeline run record, auto-ingested after each run).
 
 - Before storyboarding, the pipeline recalls similar past runs (request,
@@ -418,7 +462,7 @@ API — speak to the agent, spoken replies; hands-free loop optional),
 MV), **Jobs** (live logs + playback), **Runs**, **Knowledge**, **Models**,
 **About** (studio card — same as `python -m master_agent about`).
 Create and Music intake chat bars also get mic + speak-replies toggles.
-Health strip: ComfyUI/GPU/Ollama/Grok/KB. Jobs run in-process; one GPU job
+Health strip: ComfyUI/GPU/Ollama/llama.cpp/Grok/KB. Jobs run in-process; one GPU job
 at a time. Localhost single-user — no auth. Voice needs Chrome or Edge +
 mic permission.
 
@@ -434,7 +478,7 @@ Primary path: `hermes -p ltx` or the `:8189` facade. A2A (`POST /a2a`) is fallba
 `master_agent/mcp_server.py` exposes the agent to Hermes over stdio MCP
 (registered as `master-agent` in `~/.hermes/config.yaml`). Tools:
 
-- `health` — ComfyUI/GPU + Ollama + KB counts
+- `health` — ComfyUI/GPU + Ollama + llama.cpp + KB counts
 - `create_video` — full pipeline (or `dry_run=True` to plan/validate only)
 - `plan_storyboard` — segment split + panel storyboard with KB recall, no GPU
 - `judge_asset` — grade a video file (heuristics + LLM + vision)
@@ -453,7 +497,7 @@ threads stall ~30s per DLL on Windows.
 
 Latency note for MCP clients: `health`/`search_*`/`validate_workflow`/
 `kb_ingest` answer in ~2s. `judge_asset` and `create_video` cold-load large
-Ollama models (19-27GB) and can take several minutes — allow long timeouts.
+local models (19-27GB) and can take several minutes — allow long timeouts.
 
 ## Status (2026-09-13)
 

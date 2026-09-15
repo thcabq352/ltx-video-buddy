@@ -101,7 +101,7 @@ weights.
 | `playwright` | Python package present (Chromium install is `--fix`) |
 | `env` | `.env` exists (copied from `.env.example`) |
 | `ffmpeg` | on PATH |
-| `ollama` | on PATH + `qwen3-vl-heretic` and `nomic-embed-text` pulled |
+| `ollama` | on PATH + `qwen3-vl-heretic` and `nomic-embed-text` pulled (optional if llama.cpp is the local LLM) |
 | `comfyui` | `COMFYUI_URL` (`http://127.0.0.1:8188`) answers `/system_stats` |
 | `vram-policy` | Shared 16GB pack policy (RTX 5060 Ti) |
 | `ltx25-weights` | scan of the `ltx25_core` bundle + **loader pick** |

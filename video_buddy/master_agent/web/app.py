@@ -156,16 +156,16 @@ def health_alias() -> dict[str, Any]:
 def api_health() -> dict[str, Any]:
     from master_agent.comfy.client import ComfyClient
     from master_agent.kb.store import COLLECTION_RUNS, COLLECTION_WORKFLOWS, collection_count
-    from master_agent.llm import provider_available
+    from master_agent.llm import attach_llm_health, provider_available
 
     out: dict[str, Any] = {
-        "ollama": provider_available("ollama"),
         "grok": provider_available("grok"),
         "kb": {
             "workflows": collection_count(COLLECTION_WORKFLOWS),
             "runs": collection_count(COLLECTION_RUNS),
         },
     }
+    attach_llm_health(out)
     try:
         from master_agent.control.versioned_config import get_versioned_config
 

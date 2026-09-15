@@ -143,7 +143,23 @@ Persona is the interview voice. Soul is standing studio values.
 
 ## Local model
 
-Default Ollama / vision model is `qwen3-vl-heretic`. Auto LLM chain is `ollama → grok`. Do not add a Kimi provider. That Heretic VL is **not** the LTX text encoder — do not swap it onto LoRA A/B graphs.
+Default local / vision model is `qwen3-vl-heretic`. Auto LLM chain is
+`ollama → llamacpp → grok`. Do not add a Kimi provider. That Heretic VL is
+**not** the LTX text encoder — do not swap it onto LoRA A/B graphs.
+
+### Ollama vs llama.cpp
+
+| | Ollama | llama.cpp |
+|---|---|---|
+| Env | `OLLAMA_URL` (default `http://127.0.0.1:11434`), `OLLAMA_MODEL` | `LLAMACPP_URL` (default `http://127.0.0.1:8080`), `LLAMACPP_MODEL` |
+| Spec | `ollama[:model]` | `llamacpp` / `llama.cpp` / `llama-cpp` / `llamacpp[:model]` |
+| Chat | `{url}/v1` OpenAI-compat | `{url}/v1` OpenAI-compat (`llama-server --api`) |
+| Embeddings | `POST /api/embed` | `POST /v1/embeddings` (disable KB with a warning if missing) |
+| Vision | `POST /api/chat` + images | multimodal `/v1/chat/completions`; skip vision if the server is text-only |
+
+Pin with `LLM_PROVIDER=llamacpp` when Ollama is not installed. Health /
+MCP `health` / studio dots report each backend separately — never treat
+llama.cpp as Ollama. Do not bind 8642 (Hermes) or 8189 (studio).
 
 ## Control layer
 

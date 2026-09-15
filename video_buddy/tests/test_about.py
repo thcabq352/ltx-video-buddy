@@ -11,6 +11,9 @@ def test_studio_about_shape():
     assert card["hermes"]["profile"] == "ltx"
     assert card["hermes"]["a2a_fallback"].endswith("/a2a")
     assert card["drive"]["first"] == "cli"
+    assert "llamacpp" in card["models"]
+    assert "ollama" in card["models"]
+    assert "llamacpp_url" in card["models"]
     assert "comfy run" in card["drive"]["graph"]
     assert "zod" in card["personas"]
     text = format_about(card)

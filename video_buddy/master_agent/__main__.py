@@ -68,12 +68,17 @@ def cmd_setup(args: argparse.Namespace) -> int:
 
 
 def cmd_health(args: argparse.Namespace) -> int:
+    from master_agent.llm import format_local_llm_health
+
     client = ComfyClient()
+    rc = 0
     try:
         stats = client.health()
     except ComfyClientError as e:
         print(f"FAIL  {e}")
-        return 1
+        rc = 1
+        print(format_local_llm_health(), end="")
+        return rc
     system = stats.get("system") or {}
     devices = stats.get("devices") or []
     print(f"OK    ComfyUI at {client.base_url}")
@@ -83,7 +88,8 @@ def cmd_health(args: argparse.Namespace) -> int:
         vram_total = (dev.get("vram_total") or 0) / 1e9
         vram_free = (dev.get("vram_free") or 0) / 1e9
         print(f"      gpu={name} vram={vram_free:.1f}G free / {vram_total:.1f}G")
-    return 0
+    print(format_local_llm_health(), end="")
+    return rc
 
 
 def cmd_fetch_object_info(args: argparse.Namespace) -> int:
@@ -1156,7 +1162,7 @@ def main(argv: list[str] | None = None) -> int:
                    help="storyboard LLM panel: preset (default|local | grok | "
                         "grok+local|both | grok+claude | duo) or comma list")
     p.add_argument("--panel-judge",
-                   help="provider that picks the winning storyboard (default: env PANEL_JUDGE or ollama)")
+                   help="provider that picks the winning storyboard (default: env PANEL_JUDGE or ollama; llamacpp[:model] ok)")
     p.add_argument("--max-full-judge-rounds", type=int, default=None,
                    help="full-video judge re-gen budget (multi-segment)")
     p.add_argument("--dry-run", action="store_true",
@@ -1181,7 +1187,7 @@ def main(argv: list[str] | None = None) -> int:
     p.add_argument("--quality", choices=["draft", "balanced", "quality"], default="draft")
     p.add_argument("--duration", type=float, default=5.0)
     p.add_argument("--seed", type=int)
-    p.add_argument("--provider", help="LLM provider (ollama|grok|auto)")
+    p.add_argument("--provider", help="LLM provider (ollama|llamacpp|grok|auto)")
     p.add_argument("--json", action="store_true", help="print machine-readable result")
     p.add_argument("--out", help="write patched workflow JSON to this path")
     p.set_defaults(func=cmd_power_tune)
