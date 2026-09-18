@@ -130,6 +130,8 @@ def run_music_video(
 
     # Full-video judge
     record["video_path"] = str(Path(final).resolve())
+    record["music_bed_attached"] = True
+    record["kind"] = "music_video"
     if j_enabled and visual != "fractal":
         from master_agent.judge.judge import judge_full_video
 
@@ -237,6 +239,9 @@ def _shots_visual(
             height=height,
             judge_enabled=j_enabled,
             max_judge_rounds=max_judge_rounds,
+            kind="music_video",
+            music_bed_attached=True,
+            audio_path=str(audio_path),
         )
         if st.state != "DONE" or not st.video_path:
             record["status"] = "error"

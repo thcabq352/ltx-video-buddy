@@ -19,12 +19,30 @@ from master_agent.judge.probe import (
     frame_notes,
     probe_video,
 )
+from master_agent.judge.quality_bar import (
+    RULE_A,
+    RULE_B,
+    RULE_C,
+    RULE_D,
+    RevisePlan,
+    apply_revise_plan,
+    build_revise_plan,
+    evaluate_quality_bar,
+)
 
 __all__ = [
     "HUMAN_VETO",
     "JudgeResult",
     "MIN_FRAMES",
+    "RULE_A",
+    "RULE_B",
+    "RULE_C",
+    "RULE_D",
+    "RevisePlan",
+    "apply_revise_plan",
+    "build_revise_plan",
     "decide_action",
+    "evaluate_quality_bar",
     "health_score_from_issues",
     "is_critical_fail",
     "judge_full_video",

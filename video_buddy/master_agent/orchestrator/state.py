@@ -19,6 +19,14 @@ STATES = (
     "ERROR",
 )
 
+# Closed judge→revise→rerun loop. DONE is the machine state; loop_status
+# says why we stopped (accept used to hide budget exhaustion).
+LOOP_STARTED = "started"
+LOOP_PASSED = "passed"
+LOOP_EXHAUSTED = "exhausted"
+LOOP_HUMAN_VETO = "human_veto"
+LOOP_ERROR = "error"
+
 
 @dataclass
 class RunState:
@@ -46,6 +54,10 @@ class RunState:
     video_name: Optional[str] = None
     image_name: Optional[str] = None
     audio_name: Optional[str] = None
+    audio_path: Optional[str] = None
+    kind: str = ""
+    music_bed_attached: bool = False
+    has_audio: bool = False
 
     # Storyboard shot card this run belongs to (multi-segment pipeline)
     shot: Optional[dict] = None
@@ -67,11 +79,18 @@ class RunState:
     judge_enabled: bool = True
     max_judge_rounds: int = 3
     judge_round: int = 0
+    attempt: int = 1
     judge_score: float = 0.0
     judge_decision: str = ""
     judge_issues: list[str] = field(default_factory=list)
     judge_reason: str = ""
     judge_history: list[dict[str, Any]] = field(default_factory=list)
+    quality_bar: dict[str, Any] = field(default_factory=dict)
+    revise_history: list[dict[str, Any]] = field(default_factory=list)
+    loop_status: str = LOOP_STARTED
+
+    # Closed loop without Comfy / GPU (tests + --self-improve-dry)
+    dry_run: bool = False
 
     # Control flow
     state: str = "SELECT_VARIANT"

@@ -37,7 +37,20 @@ from master_agent.config import (
 )
 from master_agent.judge.judge import judge_segment
 from master_agent.judge.probe import analyze
-from master_agent.orchestrator.state import RunState
+from master_agent.judge.quality_bar import (
+    RevisePlan,
+    apply_revise_plan,
+    build_revise_plan,
+    context_from_state,
+)
+from master_agent.orchestrator.state import (
+    LOOP_ERROR,
+    LOOP_EXHAUSTED,
+    LOOP_HUMAN_VETO,
+    LOOP_PASSED,
+    LOOP_STARTED,
+    RunState,
+)
 
 # Param hints the judge may tune (whitelist; anything else is ignored)
 RETUNE_ALLOWED = {"steps", "cfg", "stg_scale", "stg_blocks", "sampler_name", "seed"}
@@ -240,11 +253,23 @@ class Orchestrator:
         return False
 
     def _judge(self, st: RunState) -> None:
-        """JUDGE state. On rewrite/retune, loops back through PATCH."""
+        """JUDGE state. Fail → revise plan → re-run (or dry re-judge) → stop."""
+        from pathlib import Path
+
         while True:
-            heuristic, issues = analyze(
-                st.video_path, expected_duration_s=st.duration_s
-            )
+            if st.dry_run and not (st.video_path and Path(st.video_path).is_file()):
+                heuristic, issues = 1.0, []
+            else:
+                heuristic, issues = analyze(
+                    st.video_path, expected_duration_s=st.duration_s
+                )
+                try:
+                    from master_agent.judge.probe import probe_video
+
+                    st.has_audio = bool(probe_video(st.video_path).get("has_audio"))
+                except Exception:
+                    pass
+            ctx = context_from_state(st)
             result = judge_segment(
                 user_request=st.request,
                 ltx_prompt=st.prompt,
@@ -252,45 +277,119 @@ class Orchestrator:
                 video_path=st.video_path,
                 heuristic_score=heuristic,
                 heuristic_issues=issues,
-                judge_retries=st.judge_round,
+                judge_retries=st.attempt - 1,
                 max_rounds=st.max_judge_rounds,
                 judge_enabled=st.judge_enabled,
+                context=ctx,
             )
             st.judge_score = result.combined_score
             st.judge_decision = result.decision
             st.judge_issues = result.issues
             st.judge_reason = result.reason
+            st.quality_bar = result.quality_bar or {}
+            st.judge_round = st.attempt - 1
             st.judge_history.append(result.to_dict())
             st.log(
-                f"judge round {st.judge_round}: combined={result.combined_score:.2f} "
-                f"decision={result.decision} reason={result.reason}"
+                f"judge attempt {st.attempt}/{st.max_judge_rounds}: "
+                f"combined={result.combined_score:.2f} decision={result.decision} "
+                f"reason={result.reason}"
             )
 
-            if result.decision == "accept" or st.judge_round >= st.max_judge_rounds:
+            if result.decision == "human_veto":
+                st.loop_status = LOOP_HUMAN_VETO
+                st.transition("DONE")
+                return
+            if result.decision == "accept" and result.pass_:
+                st.loop_status = LOOP_PASSED
+                st.transition("DONE")
+                return
+            if result.decision == "exhausted" or st.attempt >= st.max_judge_rounds:
+                st.loop_status = LOOP_EXHAUSTED
+                st.judge_decision = "exhausted"
+                st.log(
+                    f"loop stop: exhausted after {st.attempt}/{st.max_judge_rounds} attempts"
+                )
                 st.transition("DONE")
                 return
 
-            st.judge_round += 1
-            if result.decision == "rewrite" and result.prompt_rewrite.strip():
-                st.prompt = result.prompt_rewrite.strip()
-                st.log("judge requested prompt rewrite")
-            elif result.decision == "retune" and result.param_hints:
-                self._apply_retune(st, result.param_hints)
-                st.log(f"judge retune: {result.param_hints}")
-            else:
-                # No actionable feedback — accept what we have
+            plan = self._revise_plan(st, result)
+            if not plan.actionable:
+                st.loop_status = LOOP_EXHAUSTED
+                st.judge_decision = "exhausted"
+                st.log("loop stop: no actionable revise plan")
                 st.transition("DONE")
                 return
+
+            self._apply_full_revise(st, plan, result)
+            st.revise_history.append(
+                {"attempt": st.attempt, **plan.to_dict()}
+            )
+            st.attempt += 1
+            st.judge_round = st.attempt - 1
+
+            if st.dry_run:
+                st.transition("JUDGE")
+                continue
 
             st.transition("PATCH")
             if not (self._patch(st) and self._validate(st)):
+                st.loop_status = LOOP_ERROR
                 return
             if not self._submit_and_poll(st):
+                st.loop_status = LOOP_ERROR
                 return
             st.transition("RESOLVE")
             if not self._resolve(st):
+                st.loop_status = LOOP_ERROR
                 return
             st.transition("JUDGE")
+
+    @staticmethod
+    def _revise_plan(st: RunState, result) -> RevisePlan:
+        fails = list((result.quality_bar or {}).get("fails") or [])
+        plan = build_revise_plan(
+            fails,
+            context_from_state(st),
+            base_prompt=st.prompt,
+            steps=st.steps,
+        )
+        if result.prompt_rewrite and result.prompt_rewrite.strip():
+            rewrite = result.prompt_rewrite.strip()
+            if rewrite not in plan.prompt_deltas and rewrite != (st.prompt or "").strip():
+                plan.prompt_deltas.insert(0, rewrite)
+                # Full rewrite wins over additive deltas when the judge supplied one.
+                if rewrite:
+                    plan.prompt_deltas = [rewrite]
+        if result.param_hints:
+            for key, value in result.param_hints.items():
+                plan.param_deltas.setdefault(key, value)
+        if result.revise_plan and not plan.actionable:
+            raw = result.revise_plan
+            plan = RevisePlan(
+                fail_ids=list(raw.get("fail_ids") or []),
+                prompt_deltas=list(raw.get("prompt_deltas") or []),
+                param_deltas=dict(raw.get("param_deltas") or {}),
+                shot_patch=dict(raw.get("shot_patch") or {}),
+                control_pack_used=dict(raw.get("control_pack_used") or {}),
+                music_bed_attached=bool(raw.get("music_bed_attached")),
+                reason=str(raw.get("reason") or ""),
+            )
+        return plan
+
+    def _apply_full_revise(self, st: RunState, plan: RevisePlan, result) -> None:
+        applied = apply_revise_plan(st, plan)
+        if result.decision == "rewrite" and result.prompt_rewrite.strip():
+            st.prompt = result.prompt_rewrite.strip()
+            if "prompt" not in applied:
+                applied.append("prompt")
+            st.log("judge requested prompt rewrite")
+        if plan.param_deltas or result.param_hints:
+            hints = dict(result.param_hints or {})
+            hints.update(plan.param_deltas)
+            self._apply_retune(st, hints)
+            st.log(f"revise params: {hints}")
+        if applied:
+            st.log(f"revise applied: {applied} ({plan.reason})")
 
     @staticmethod
     def _apply_retune(st: RunState, hints: dict[str, Any]) -> None:
@@ -332,6 +431,13 @@ class Orchestrator:
         max_judge_rounds: int = MAX_JUDGE_ROUNDS,
         power_mode: Optional[bool] = None,
         attach_recipe: Optional[dict[str, Any]] = None,
+        dry_run: bool = False,
+        kind: str = "",
+        music_bed_attached: bool = False,
+        audio_path: Optional[str] = None,
+        control_pack_present: bool = False,
+        control_pack_used: Optional[dict[str, bool]] = None,
+        previs_source: str = "",
     ) -> RunState:
         run_id = uuid.uuid4().hex[:12]
         st = RunState(
@@ -347,14 +453,29 @@ class Orchestrator:
             video_name=video_name,
             image_name=image_name,
             audio_name=audio_name,
+            audio_path=audio_path,
+            kind=kind,
+            music_bed_attached=music_bed_attached,
             judge_enabled=JUDGE_ENABLED if judge_enabled is None else judge_enabled,
             max_judge_rounds=max_judge_rounds,
             power_mode=POWER_MODE if power_mode is None else bool(power_mode),
             attach_recipe=attach_recipe,
+            dry_run=bool(dry_run),
+            attempt=1,
+            loop_status=LOOP_STARTED,
+            control_pack_present=control_pack_present,
+            control_pack_used=dict(control_pack_used or {}),
+            previs_source=previs_source,
         )
         try:
             st.variant = self._select_variant(st, variant)
             st.log(f"variant={st.variant} duration={duration_s}s quality={quality or 'default'}")
+
+            if st.dry_run:
+                st.log("self-improve dry-run: skip Comfy queue, close judge→revise→rejudge")
+                st.transition("JUDGE")
+                self._judge(st)
+                return self._finish(st)
 
             st.transition("PATCH")
             if not self._patch(st):
@@ -375,6 +496,10 @@ class Orchestrator:
         return self._finish(st)
 
     def _finish(self, st: RunState) -> RunState:
+        if st.state == "ERROR" and st.loop_status in ("", LOOP_STARTED):
+            st.loop_status = LOOP_ERROR
+        elif st.state == "DONE" and st.loop_status in ("", LOOP_STARTED):
+            st.loop_status = LOOP_PASSED if st.judge_decision == "accept" else LOOP_EXHAUSTED
         RUNS_DIR.mkdir(parents=True, exist_ok=True)
         ts = datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%SZ")
         record = RUNS_DIR / f"{ts}_{st.run_id}.json"
