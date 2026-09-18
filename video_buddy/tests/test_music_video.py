@@ -97,6 +97,7 @@ def test_provenance_write_read_includes_window_id(tmp_path: Path):
     assert payload["window_id"] == 0
     assert payload["lineage"]["window_id"] == 0
     assert payload["lineage"]["shot_id"] == "window-0"
+    assert payload["lineage"]["attempt_id"] == "window-0.a1"
     assert payload["engine"]["backend"] == "comfy"
     assert payload["hash"]
     assert payload["prompts"]["positive"]

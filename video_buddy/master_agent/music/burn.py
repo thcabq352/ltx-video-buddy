@@ -140,6 +140,7 @@ def _write_window_provenance(
     lineage = dict(payload.get("lineage") or {})
     lineage["window_id"] = idx
     lineage["shot_id"] = f"window-{idx}"
+    lineage["attempt_id"] = f"window-{idx}.a{int(getattr(st, 'attempt', 1) or 1)}"
     payload["lineage"] = lineage
     write_clip_provenance(clip, payload)
     return payload
