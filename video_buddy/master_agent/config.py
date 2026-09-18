@@ -489,7 +489,20 @@ def ensure_dirs() -> None:
 
 
 def resolve_model_path(filename: str) -> Path | None:
-    """Search common model subfolders for a weight file."""
+    """Search configured + common model trees for a usable weight file.
+
+    Accepts Windows folder-prefixed names (``wan\\file.safetensors``), then
+    falls through to the same roots as ``find_weight_file`` (extra volumes,
+    ``extra_model_paths.yaml``, Hugging Face hub cache, accepted aliases).
+    """
+    if not filename:
+        return None
+    slash = str(filename).replace("\\", "/")
+    base = slash.rsplit("/", 1)[-1]
+    names = []
+    for item in (filename, slash, base):
+        if item and item not in names:
+            names.append(item)
     subdirs = (
         "checkpoints",
         "diffusion_models",
@@ -497,19 +510,31 @@ def resolve_model_path(filename: str) -> Path | None:
         "loras",
         "vae",
         "text_encoders",
+        "clip",
         "unet",
         "latent_upscale_models",
         "model_patches",
     )
-    for sub in subdirs:
-        p = MODELS_DIR / sub / filename
-        if p.is_file():
-            return p
-        # Also check ComfyUI default models tree
-        p2 = COMFYUI_ROOT / "models" / sub / filename
-        if p2.is_file():
-            return p2
-    return None
+    roots = [MODELS_DIR, COMFYUI_ROOT / "models", *extra_models_dirs()]
+    for root in roots:
+        for name in names:
+            rel = str(name).replace("\\", "/")
+            parts = [p for p in rel.split("/") if p]
+            if parts:
+                candidate = root.joinpath(*parts)
+                if candidate.is_file() and candidate.stat().st_size > 0:
+                    return candidate
+            needle = parts[-1] if parts else name
+            for sub in subdirs:
+                p = root.joinpath(*sub.split("/"), needle)
+                if p.is_file() and p.stat().st_size > 0:
+                    return p
+    try:
+        from master_agent.models.weights import find_weight_file
+
+        return find_weight_file(filename)
+    except Exception:
+        return None
 
 
 def get_quality_profile(name: str | None = None) -> dict:

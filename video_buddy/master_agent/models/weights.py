@@ -600,8 +600,22 @@ def _is_usable_file(path: Path) -> bool:
         return False
 
 
-def _hf_hub_snapshot_roots() -> list[Path]:
-    """Common Hugging Face hub trees (cache env + default ~/.cache layout)."""
+def filename_search_names(name: str) -> tuple[str, ...]:
+    """Exact name, slash-normalized path, and basename (Windows ``folder\\file``)."""
+    raw = (name or "").strip()
+    if not raw:
+        return ()
+    slash = raw.replace("\\", "/")
+    base = slash.rsplit("/", 1)[-1]
+    seen: list[str] = []
+    for item in (raw, slash, base):
+        if item and item not in seen:
+            seen.append(item)
+    return tuple(seen)
+
+
+def _hf_hub_cache_dirs() -> list[Path]:
+    """HF hub cache locations (env, XDG, default home, huggingface_hub constant)."""
     hubs: list[Path] = []
     env_cache = os.environ.get("HUGGINGFACE_HUB_CACHE") or os.environ.get("HF_HUB_CACHE")
     if env_cache:
@@ -613,21 +627,58 @@ def _hf_hub_snapshot_roots() -> list[Path]:
     if xdg:
         hubs.append(Path(xdg) / "huggingface" / "hub")
     hubs.append(Path.home() / ".cache" / "huggingface" / "hub")
-    repos = (
+    # Do not import huggingface_hub.constants.HF_HUB_CACHE — it freezes the
+    # cache path at first import and ignores later HF_HOME / HF_HUB_CACHE.
+    return hubs
+
+
+def _hf_repo_dir_name(repo_id: str) -> str:
+    return "models--" + repo_id.replace("/", "--")
+
+
+def _hf_hub_snapshot_roots() -> list[Path]:
+    """Every cached Hub snapshot tree, not just LTX / H3."""
+    known = {
         "models--Lightricks--LTX-2.5",
         "models--Lightricks--LTX-2.5-22b-IC-LoRA-Ingredients",
         "models--Comfy-Org--MiniMax-H3",
         "models--unsloth--MiniMax-H3-GGUF",
-    )
+        "models--Comfy-Org--flux1-dev",
+        "models--comfyanonymous--flux_text_encoders",
+    }
+    for weight in WEIGHT_FILES.values():
+        if weight.repo_id:
+            known.add(_hf_repo_dir_name(weight.repo_id))
     out: list[Path] = []
-    for hub in hubs:
-        for repo in repos:
+    seen: set[Path] = set()
+
+    def _keep(path: Path) -> None:
+        try:
+            resolved = path.resolve()
+        except OSError:
+            return
+        if resolved in seen:
+            return
+        seen.add(resolved)
+        out.append(resolved)
+
+    for hub in _hf_hub_cache_dirs():
+        if not hub.is_dir():
+            continue
+        for repo in known:
             repo_dir = hub / repo
             if repo_dir.is_dir():
-                out.append(repo_dir)
+                _keep(repo_dir)
             snap = repo_dir / "snapshots"
             if snap.is_dir():
-                out.append(snap)
+                _keep(snap)
+        try:
+            for repo_dir in hub.glob("models--*"):
+                snap = repo_dir / "snapshots"
+                if snap.is_dir():
+                    _keep(snap)
+        except OSError:
+            continue
     return out
 
 
@@ -698,6 +749,10 @@ def model_search_roots() -> list[Path]:
     _add(Path(PROJECT_ROOT) / "models")
     _add(Path(PROJECT_ROOT) / "ComfyUI" / "models")
     _add(Path(PROJECT_ROOT) / "ComfyUI_windows_portable" / "ComfyUI" / "models")
+    parent = Path(PROJECT_ROOT).parent
+    _add(parent / "models")
+    _add(parent / "ComfyUI" / "models")
+    _add(parent / "ComfyUI_windows_portable" / "ComfyUI" / "models")
     cwd = Path.cwd()
     _add(cwd / "models")
     _add(cwd / "video_buddy" / "models")
@@ -714,6 +769,9 @@ def model_search_roots() -> list[Path]:
 
 
 def _search_name(name: str, roots: Iterable[Path]) -> Path | None:
+    variants = filename_search_names(name)
+    if not variants:
+        return None
     subdirs = (
         "checkpoints",
         "diffusion_models",
@@ -722,41 +780,59 @@ def _search_name(name: str, roots: Iterable[Path]) -> Path | None:
         "loras",
         "vae",
         "text_encoders",
+        "clip",
         "latent_upscale_models",
         "model_patches",
         "",
     )
+    needles = tuple(
+        dict.fromkeys(v.replace("\\", "/").rsplit("/", 1)[-1] for v in variants if v)
+    )
     for root in roots:
         if not root.is_dir():
             continue
-        direct = root / name
-        if _is_usable_file(direct):
-            return direct
-        for sub in subdirs:
-            candidate = root.joinpath(*sub.split("/"), name) if sub else root / name
-            if _is_usable_file(candidate):
-                return candidate
-        try:
-            hits = root.rglob(name)
-        except OSError:
-            hits = []
-        for hit in hits:
-            if _is_usable_file(hit):
-                return hit
+        for variant in variants:
+            rel = variant.replace("\\", "/")
+            parts = [p for p in rel.split("/") if p]
+            if not parts:
+                continue
+            direct = root.joinpath(*parts)
+            if _is_usable_file(direct):
+                return direct
+            base = parts[-1]
+            for sub in subdirs:
+                candidate = root.joinpath(*sub.split("/"), base) if sub else root / base
+                if _is_usable_file(candidate):
+                    return candidate
+        for needle in needles:
+            try:
+                hits = root.rglob(needle)
+            except OSError:
+                hits = []
+            for hit in hits:
+                if _is_usable_file(hit):
+                    return hit
     return None
 
 
 def find_weight_file(filename: str, roots: Iterable[Path] | None = None) -> Path | None:
     """Return the first usable path for a bare filename (or stub / family alias)."""
-    names = [filename]
-    aliased = STUB_ALIASES.get(filename)
-    if aliased and aliased not in names:
-        names.append(aliased)
-    for alias, official in STUB_ALIASES.items():
-        if official == filename and alias not in names:
-            names.append(alias)
+    names: list[str] = []
+    for raw in filename_search_names(filename):
+        if raw not in names:
+            names.append(raw)
+    for candidate in list(names):
+        aliased = STUB_ALIASES.get(candidate)
+        if aliased and aliased not in names:
+            names.append(aliased)
+        for alias, official in STUB_ALIASES.items():
+            if official == candidate and alias not in names:
+                names.append(alias)
+    base_names = {n.replace("\\", "/").rsplit("/", 1)[-1] for n in names}
     for weight in WEIGHT_FILES.values():
-        if filename in weight.candidates:
+        cand = set(weight.candidates)
+        cand_bases = {c.replace("\\", "/").rsplit("/", 1)[-1] for c in cand}
+        if set(names) & cand or base_names & cand_bases:
             for extra in weight.candidates:
                 if extra not in names:
                     names.append(extra)
@@ -930,6 +1006,14 @@ def format_ask(status: WeightStatus) -> str:
         "Video Buddy scanned configured model dirs and common Comfy models/ paths.",
         "Nothing was downloaded (consent required).",
         "",
+        "Paths checked:",
+    ]
+    if status.roots:
+        lines.extend(f"  - {root}" for root in status.roots)
+    else:
+        lines.append("  (none)")
+    lines += [
+        "",
         f"Bundle: {status.bundle or 'ltx25'}",
         "",
         "Already present (not re-downloaded):",
@@ -1021,20 +1105,34 @@ def download_files(
     wanted = list(files)
     if not wanted:
         return []
+
+    root = Path(dest_root or MODELS_DIR)
+    paths: list[Path] = []
+    still_missing: list[WeightFile] = []
+    for weight in wanted:
+        found = resolve_weight(weight)
+        if found is not None:
+            progress(
+                f"SKIP download of {weight.filename} — local file found at {found} "
+                "(not re-downloading)"
+            )
+            paths.append(found)
+            continue
+        still_missing.append(weight)
+    if not still_missing:
+        return paths
     if not yes:
         raise MissingWeightsError(
             "Refusing to download without consent. Re-run with --yes after reviewing:\n"
             + "\n".join(
                 f"  {w.filename} → models/{w.dest_folder}/ ({w.size_label})"
-                for w in wanted
+                for w in still_missing
             ),
-            list(wanted),
+            list(still_missing),
         )
     from master_agent.models.download import download_hub_file
 
-    root = Path(dest_root or MODELS_DIR)
-    paths: list[Path] = []
-    for weight in wanted:
+    for weight in still_missing:
         dest = root / weight.dest_folder / weight.filename
         paths.append(
             download_hub_file(
