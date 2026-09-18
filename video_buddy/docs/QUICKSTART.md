@@ -55,7 +55,7 @@ python -m master_agent run "interpolate these frames" --variant flf2v --image st
 python -m master_agent comfy run --mode generate --variant t2v_i2v --prompt "x" --prepare
 
 # MiniMax H3 (CFG 1.0, 4 steps, 0.6–0.8 MP / ≤12s on 16GB)
-# Public photoreal still: ../../docs/demo/
+# Public photoreal still: ../../docs/demo/ and ../../docs/showcase/h3-bmx/
 python -m master_agent comfy run --mode generate --variant h3_t2v --prompt "neon rain, stereo city bed"
 python -m master_agent comfy run --mode generate --variant fl2va --prompt "x" --prepare
 python -m master_agent run "lock this face" --variant h3_r2v --image ref.png --no-interview
