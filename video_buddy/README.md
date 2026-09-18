@@ -330,6 +330,19 @@ beat-reactive fractal for the whole track instead — no GPU. Auto-routing:
 "beat", "track", "mv") or audio longer than one segment goes to the music
 pipeline unless `--variant` is given.
 
+**MTV / Remotion product path** (Comfy/LTX only — not Grok Imagine):
+
+```bash
+python -m master_agent mv plan --audio track.mp3 --out out/beat_plan.json
+python -m master_agent mv render "I'm in love with a bot" --audio track.mp3 --out out/MV-FIXED.mp4
+python -m master_agent mv render --audio track.mp3 --image still.png --dry-run
+```
+
+`mv render` burns one unique motion clip per beat window via `prepare_run`
+(TeaCache inject-when-registered), refuses still-holds and duplicate hashes,
+then stitches with Remotion at 1080p (`out/MV-FIXED.mp4`). See
+[`docs/MUSIC_VIDEO.md`](docs/MUSIC_VIDEO.md).
+
 ## Upscale post-stage
 
 `--upscale rtx|seedvr2` on `run`/`fractal`/`music` (or
@@ -515,6 +528,11 @@ local models (19-27GB) and can take several minutes — allow long timeouts.
 
 ## Status (2026-09-18)
 
+- **Music-video Remotion mode.** `python -m master_agent mv render --audio …`
+  plans 30 fps beat windows, burns one unique Comfy/LTX motion clip per
+  window (`prepare_run` / TeaCache), refuses still-holds and duplicate
+  hashes, then stitches with in-repo Remotion at 1080p (`out/MV-FIXED.mp4`).
+  `--dry-run` is GPU-free. Docs: [MUSIC_VIDEO.md](docs/MUSIC_VIDEO.md).
 - **Self-improvement loop closed** on the live Python orchestrator. Judge
   fail → quality-bar revise plan (prompt + param deltas) → re-run → re-judge
   → hard stop (`passed` / `exhausted`). Cheap rules a/c/d; vision rule b

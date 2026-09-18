@@ -57,7 +57,9 @@ is hours. Prefer ~900s MCP timeout.
 | `soul list\|show\|set` | Standing values (`studio`, `play`). |
 | `brief "idea"` | Interview only. `--go` chains into generation. |
 | `fractal` | CPU Mandelbrot/Julia. No Comfy. |
-| `music "BRIEF" --audio FILE` | Beat-synced MV. `--visual fractal` is CPU-only. |
+| `music "BRIEF" --audio FILE` | Beat-synced MV (ffmpeg mux). `--visual fractal` is CPU-only. |
+| `mv plan --audio FILE` | Write `buddy.mv.beat_plan/v1` (30 fps windows). |
+| `mv render --audio FILE --out out/MV-FIXED.mp4` | Comfy/LTX unique burns → Remotion stitch. `--dry-run` = no GPU. `--image` = I2V. |
 | `character create\|list` | CCC stage. `--train` chains LoRA. |
 | `lora setup\|train\|validate` | ai-toolkit Flux LoRA. |
 | `power-tune` | Dry-run power mode: patch + LLM graph ops + validate, no GPU. |
@@ -88,6 +90,8 @@ python -m master_agent run "music video for a synthwave track" --self-improve-dr
 python -m master_agent run "LTX 2.5 alley" --variant ltx25_t2v_i2v --no-interview
 python -m master_agent run "talking head" --video input.mp4 --variant lipsync --no-interview
 python -m master_agent music "synthwave MV" --audio track.mp3 --no-interview
+python -m master_agent mv render "I'm in love with a bot" --audio track.mp3 --out out/MV-FIXED.mp4
+python -m master_agent mv render --audio track.mp3 --dry-run
 python -m master_agent fractal "title" --duration 20 --target seahorse
 ```
 

@@ -126,6 +126,8 @@ python -m master_agent comfy run --mode generate --variant ltx25_t2v_i2v --promp
 python -m master_agent comfy attach --recipe previs.json --json workflow.json   # dry-run attach
 python -m master_agent run "cinematic close-up of rain on a window"
 python -m master_agent music "dreamy synthwave MV" --audio track.mp3
+python -m master_agent mv render "I'm in love with a bot" --audio track.mp3 --out out/MV-FIXED.mp4
+python -m master_agent mv render --audio track.mp3 --dry-run   # plan + unique + Remotion wiring, no GPU
 ```
 
 **Do not assume a weight download is needed.** `doctor` reports the 16GB-class
@@ -169,6 +171,7 @@ video_buddy/
 - [LTX 2.5 workflows](video_buddy/workflows/ltx-2.5/README.md) — ids and invoke examples
 - [Self-improvement loop](video_buddy/docs/SELF_IMPROVEMENT_LOOP.md) — live judge → revise → re-run map
 - [ClipProvenance](video_buddy/docs/CLIP_PROVENANCE.md) — sidecar + run-row prompt/seed/judge contract
+- [Music-video mode](video_buddy/docs/MUSIC_VIDEO.md) — Comfy/LTX burns → Remotion MTV stitch (not Grok)
 - [Capability audit](video_buddy/AUDIT.md) — what Buddy drives vs the live tower
 - [Merge notes (historical)](MERGE-LTX25.md) — PR #6, already merged
 - [Movie Builder guide](video_buddy/workflows/260507_VIDEO-BUDDY_MOVIE-BUILDER_GUIDE.md) — LTX 2.3 shot-by-shot film

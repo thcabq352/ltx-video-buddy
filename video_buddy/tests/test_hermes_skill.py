@@ -151,6 +151,7 @@ def test_cli_commands_documented():
         "brief",
         "fractal",
         "music",
+        "mv",
         "download-flux",
         "download-models",
         "character",
