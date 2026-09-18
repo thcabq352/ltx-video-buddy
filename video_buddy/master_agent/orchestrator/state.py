@@ -88,6 +88,9 @@ class RunState:
     quality_bar: dict[str, Any] = field(default_factory=dict)
     revise_history: list[dict[str, Any]] = field(default_factory=list)
     loop_status: str = LOOP_STARTED
+    provenance: dict[str, Any] = field(default_factory=dict)
+    provenance_history: list[dict[str, Any]] = field(default_factory=list)
+    provenance_sidecar: str = ""
 
     # Closed loop without Comfy / GPU (tests + --self-improve-dry)
     dry_run: bool = False

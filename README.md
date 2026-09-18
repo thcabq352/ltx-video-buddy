@@ -167,6 +167,7 @@ video_buddy/
 - [Required files](video_buddy/REQUIRED-FILES.md) — accepted local names + Hub catalog
 - [LTX 2.5 workflows](video_buddy/workflows/ltx-2.5/README.md) — ids and invoke examples
 - [Self-improvement loop](video_buddy/docs/SELF_IMPROVEMENT_LOOP.md) — live judge → revise → re-run map
+- [ClipProvenance](video_buddy/docs/CLIP_PROVENANCE.md) — sidecar + run-row prompt/seed/judge contract
 - [Capability audit](video_buddy/AUDIT.md) — what Buddy drives vs the live tower
 - [Merge notes (historical)](MERGE-LTX25.md) — PR #6, already merged
 - [Movie Builder guide](video_buddy/workflows/260507_VIDEO-BUDDY_MOVIE-BUILDER_GUIDE.md) — LTX 2.3 shot-by-shot film

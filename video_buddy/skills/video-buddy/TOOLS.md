@@ -43,7 +43,7 @@ is hours. Prefer ~900s MCP timeout.
 | `diagnose` | 9-frame hull fire; prints `sec/step`; no shift-budget spend. `--prepare` lints only. |
 | `comfy run` | Prepare, lint, queue, copy into `outputs/`. `--prepare` stops before GPU. Modes: `generate` / `template` / `raw`. |
 | `comfy attach` | Apply previs `buddy.comfy.attach/v1` / WorkflowPatchPlan JSON. Default dry-run (patch + `/object_info`). `--submit` POSTs `/prompt`. |
-| `run "BRIEF"` | Director pipeline. `--dry-run` plan+lint only. `--self-improve-dry` closes judge→revise→rejudge (quality_bar a/c/d, no Comfy). `--attach RECIPE.json` patches a previs pack. `--no-interview` for unattended. `--variant` forces a catalog slug. |
+| `run "BRIEF"` | Director pipeline. `--dry-run` plan+lint only. `--self-improve-dry` closes judge→revise→rejudge (quality_bar a/c/d, no Comfy). `--attach RECIPE.json` patches a previs pack. `--no-interview` for unattended. `--variant` forces a catalog slug. Every clip writes `<stem>.provenance.json` + run-row ClipProvenance. |
 | `download-models` | List confirmed-missing slots. `--ltx25` / `--h3` / `--wan` / … Add `--yes` only after the ask. |
 | `download-flux` | One-time Flux fp8 weights (~17GB). |
 | `validate` | One file or `--all`. `--offline` / `--strict` (illegal LTX frames = ERROR). |

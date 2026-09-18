@@ -296,6 +296,14 @@ def cmd_run(args: argparse.Namespace) -> int:
             print("quality_bar: " + ", ".join(f"{f.get('id')}:{f.get('code')}" for f in fails))
         if st.revise_history:
             print(f"revises:     {len(st.revise_history)}")
+        if st.provenance:
+            print(
+                f"provenance:  schema={st.provenance.get('schema')} "
+                f"attempt={st.provenance.get('attempt')} "
+                f"score={st.provenance.get('judge_score')}"
+            )
+        if st.provenance_sidecar:
+            print(f"sidecar:     {st.provenance_sidecar}")
         print(f"dry-run     no Comfy queue, no GPU")
         if st.loop_status == "passed":
             return 0
@@ -398,6 +406,14 @@ def cmd_run(args: argparse.Namespace) -> int:
         print(f"       full judge: score={result.full_judge_score:.2f} pass={result.full_judge_pass}")
         if result.full_judge_notes:
             print(f"       notes: {result.full_judge_notes}")
+        if result.provenance:
+            print(
+                f"       provenance: schema={result.provenance.get('schema')} "
+                f"attempt={result.provenance.get('attempt')} "
+                f"hash={(result.provenance.get('hash') or '')[:12]}"
+            )
+        if result.provenance_sidecar:
+            print(f"       sidecar: {result.provenance_sidecar}")
         return 0 if result.status == "done" else 2
     print(f"ERROR  {result.error}")
     return 1

@@ -124,6 +124,9 @@ class PipelineResult:
         self.quality_bar: dict[str, Any] = {}
         self.revise_history: list[dict[str, Any]] = []
         self.attempt: int = 0
+        self.provenance: dict[str, Any] = {}
+        self.provenance_history: list[dict[str, Any]] = []
+        self.provenance_sidecar: str = ""
 
     def log(self, msg: str) -> None:
         self.messages.append(msg)
@@ -157,6 +160,9 @@ class PipelineResult:
             "quality_bar": self.quality_bar,
             "revise_history": self.revise_history,
             "attempt": self.attempt,
+            "provenance": self.provenance,
+            "provenance_history": self.provenance_history,
+            "provenance_sidecar": self.provenance_sidecar,
         }
 
 
@@ -289,6 +295,9 @@ def run_pipeline(
         result.quality_bar = st.quality_bar
         result.revise_history = st.revise_history
         result.attempt = st.attempt
+        result.provenance = st.provenance
+        result.provenance_history = st.provenance_history
+        result.provenance_sidecar = st.provenance_sidecar
         if st.video_path:
             result.segment_paths = [st.video_path]
             result.segment_scores = [st.judge_score]
@@ -476,6 +485,21 @@ def _stitch(result: PipelineResult, segment_paths: list[str], *, suffix: str) ->
     try:
         final = concat_videos(paths, dest)
         result.log(f"stitched {len(paths)} segments -> {final}")
+        try:
+            from master_agent.provenance import inherit_clip_provenance
+
+            payload = inherit_clip_provenance(
+                paths[0],
+                final,
+                revise_notes="pipeline stitch",
+                extra={"prompt": result.request, "workflow_id": ""},
+            )
+            result.provenance = payload
+            result.provenance_sidecar = str(
+                Path(final).with_name(Path(final).stem + ".provenance.json")
+            )
+        except Exception as e:
+            result.log(f"provenance stitch skipped: {e}")
         return final
     except Exception as e:
         result.log(f"stitch failed ({e}); keeping first segment")
