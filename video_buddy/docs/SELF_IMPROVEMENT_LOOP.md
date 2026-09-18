@@ -47,6 +47,7 @@ recorded as `accept`.
 | Rule **b** face similarity | **Skipped** — not ported, no invented scores |
 | Max-retry looked like `accept` | `loop_status=exhausted`, `judge_decision=exhausted` |
 | No dry-run closed loop for CI | `Orchestrator.run(dry_run=True)` and `--self-improve-dry` |
+| Prompts / provenance not stored with clips | `master_agent/provenance.py` — sidecar + run-row ClipProvenance |
 
 ## Quality Bar rule ids (buddy-core strings)
 
@@ -77,7 +78,7 @@ Tests (no GPU, no live Comfy):
 
 ```bash
 cd video_buddy
-python -m pytest tests/test_self_improvement_loop.py tests/test_judge_split.py tests/test_comfy_attach.py -q
+python -m pytest tests/test_self_improvement_loop.py tests/test_clip_provenance.py tests/test_judge_split.py tests/test_comfy_attach.py -q
 ```
 
 Live (Comfy on `:8188`) — same `run` path; after a quality-bar / judge fail the
@@ -94,6 +95,10 @@ until pass or `max_judge_rounds` (`--max-judge-rounds` / `MAX_JUDGE_ROUNDS`).
 - `attempt` / `max_judge_rounds`
 - `quality_bar` — `{evaluated, skipped, fails, pass}`
 - `revise_history` — per-attempt prompt/param deltas
+- `provenance` / `provenance_history` / `provenance_sidecar` — ClipProvenance
+  (`buddy.clip.provenance/v1`) keyed by `path` / `hash`. Same object is
+  written next to the clip as `<clip_stem>.provenance.json` whenever a file
+  exists. See [CLIP_PROVENANCE.md](CLIP_PROVENANCE.md).
 
 ## Remaining holes
 

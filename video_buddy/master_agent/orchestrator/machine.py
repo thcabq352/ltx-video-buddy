@@ -51,6 +51,7 @@ from master_agent.orchestrator.state import (
     LOOP_STARTED,
     RunState,
 )
+from master_agent.provenance import latest_revise_notes, persist_clip_provenance, read_clip_provenance
 
 # Param hints the judge may tune (whitelist; anything else is ignored)
 RETUNE_ALLOWED = {"steps", "cfg", "stg_scale", "stg_blocks", "sampler_name", "seed"}
@@ -244,7 +245,12 @@ class Orchestrator:
             try:
                 shutil.copy2(src, dst)
                 st.video_path = str(dst)
+                persist_clip_provenance(
+                    st, revise_notes=latest_revise_notes(st), path=dst
+                )
                 st.log(f"output: {dst}")
+                if st.provenance_sidecar:
+                    st.log(f"provenance: {st.provenance_sidecar}")
                 return True
             except OSError as e:
                 st.fail(f"could not copy output {src}: {e}")
@@ -257,6 +263,12 @@ class Orchestrator:
         from pathlib import Path
 
         while True:
+            prior = read_clip_provenance(st.video_path)
+            if prior:
+                st.log(
+                    f"provenance read attempt={prior.get('attempt')} "
+                    f"hash={(prior.get('hash') or '')[:12]}"
+                )
             if st.dry_run and not (st.video_path and Path(st.video_path).is_file()):
                 heuristic, issues = 1.0, []
             else:
@@ -294,6 +306,7 @@ class Orchestrator:
                 f"combined={result.combined_score:.2f} decision={result.decision} "
                 f"reason={result.reason}"
             )
+            persist_clip_provenance(st, revise_notes=latest_revise_notes(st))
 
             if result.decision == "human_veto":
                 st.loop_status = LOOP_HUMAN_VETO
@@ -500,6 +513,8 @@ class Orchestrator:
             st.loop_status = LOOP_ERROR
         elif st.state == "DONE" and st.loop_status in ("", LOOP_STARTED):
             st.loop_status = LOOP_PASSED if st.judge_decision == "accept" else LOOP_EXHAUSTED
+        if not st.provenance:
+            persist_clip_provenance(st, revise_notes=latest_revise_notes(st))
         RUNS_DIR.mkdir(parents=True, exist_ok=True)
         ts = datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%SZ")
         record = RUNS_DIR / f"{ts}_{st.run_id}.json"

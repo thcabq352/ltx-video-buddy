@@ -268,6 +268,17 @@ def _shots_visual(
         final = out_dir / f"music_video_{run_id}.mp4"
         mux_audio(silent, audio_path, final)
         log(f"assembled + muxed: {final}")
+        try:
+            from master_agent.provenance import inherit_clip_provenance
+
+            inherit_clip_provenance(
+                clip_paths[0],
+                final,
+                revise_notes="music mux: source track as music bed",
+                extra={"prompt": request},
+            )
+        except Exception as e:
+            log(f"provenance mux skipped: {e}")
         return final
     except Exception as e:
         record["status"] = "done_with_warnings"

@@ -242,8 +242,10 @@ POLL → RESOLVE → JUDGE → DONE/ERROR`.
   Stop is `loop_status=passed|exhausted|human_veto|error` in the run JSON —
   budget exhaustion is no longer recorded as `accept`. Closed loop without
   Comfy: `--self-improve-dry`. Map: [docs/SELF_IMPROVEMENT_LOOP.md](docs/SELF_IMPROVEMENT_LOOP.md).
+  Every clip writes ClipProvenance (`<stem>.provenance.json` + run JSON,
+  keyed by path/hash): [docs/CLIP_PROVENANCE.md](docs/CLIP_PROVENANCE.md).
 - Every run writes a JSON record to `state/runs/` (params, judge history,
-  transitions) — the seed of the later self-learning knowledge base.
+  ClipProvenance, transitions) — the seed of the later self-learning knowledge base.
 - Variant routing is LLM-driven (`orchestrator/director.py`): the local VL heretic
   picks among **every** `workflows/manifests.yaml` slug (`base`, `eros`,
   `directors`, `lipsync`, `wan22`, `flux`, `vb_aivfx_*`, `vb_movie_builder`,
@@ -517,6 +519,13 @@ local models (19-27GB) and can take several minutes — allow long timeouts.
   skipped. Invoke: `python -m master_agent run "BRIEF" --self-improve-dry`
   (no Comfy). Tests: `tests/test_self_improvement_loop.py`.
   See [docs/SELF_IMPROVEMENT_LOOP.md](docs/SELF_IMPROVEMENT_LOOP.md).
+- **ClipProvenance** (`buddy.clip.provenance/v1`) is written with every clip:
+  sidecar `<clip_stem>.provenance.json` plus the same object on the run JSON
+  (keyed by `path` / `hash`). Prompt, model/workflow id, seed/params,
+  attempt/iteration, judge score + reasons, revise notes. Live orchestrator
+  reads/writes on generate, revise, and re-run. Tests:
+  `tests/test_clip_provenance.py`. See
+  [docs/CLIP_PROVENANCE.md](docs/CLIP_PROVENANCE.md).
 
 ## Status (2026-09-13)
 
