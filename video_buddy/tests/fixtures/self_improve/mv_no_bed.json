@@ -1,0 +1,9 @@
+{
+  "request": "music video for a synthwave track",
+  "kind": "music_video",
+  "audio_name": null,
+  "image_name": null,
+  "shot": null,
+  "control_pack_present": false,
+  "control_pack_used": {}
+}

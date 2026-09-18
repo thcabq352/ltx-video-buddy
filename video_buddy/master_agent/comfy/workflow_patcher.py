@@ -13,13 +13,21 @@ import yaml
 from master_agent.config import (
     DEFAULT_CFG,
     DEFAULT_STEPS,
+    H3_DEFAULT_CFG,
+    H3_DEFAULT_HEIGHT,
+    H3_DEFAULT_STEPS,
+    H3_DEFAULT_WIDTH,
+    H3_MAX_DURATION_S,
     MODELS_DIR,
     MODEL_FILES,
     WORKFLOWS_DIR,
+    clamp_h3_resolution,
     clamp_resolution,
     frames_for_duration,
     get_variant_gen,
+    is_h3_variant,
     resolve_model_path,
+    snap_h3_frames,
     snap_ltx_frames,
 )
 
@@ -75,22 +83,30 @@ def _load_manifests() -> dict[str, Any]:
 
 
 def load_workflow_template(variant: str) -> dict[str, Any]:
-    manifests = _load_manifests()
-    meta = manifests.get(variant) or {}
-    filename = meta.get("file") or f"{variant}.json"
-    path = WORKFLOWS_DIR / filename
-    if not path.is_file():
-        for cand in (
-            WORKFLOWS_DIR / f"{variant}.json",
-            WORKFLOWS_DIR / "base_t2v_i2v.json",
-        ):
-            if cand.is_file():
-                path = cand
-                break
-        else:
-            raise FileNotFoundError(
-                f"Workflow template not found for variant={variant}: {path}"
-            )
+    path: Path | None = None
+    try:
+        from master_agent.comfy.catalog import resolve_workflow_path
+
+        path = resolve_workflow_path(variant)
+    except (KeyError, FileNotFoundError):
+        path = None
+    if path is None or not path.is_file():
+        manifests = _load_manifests()
+        meta = manifests.get(variant) or {}
+        filename = meta.get("file") or f"{variant}.json"
+        path = WORKFLOWS_DIR / filename
+        if not path.is_file():
+            for cand in (
+                WORKFLOWS_DIR / f"{variant}.json",
+                WORKFLOWS_DIR / "base_t2v_i2v.json",
+            ):
+                if cand.is_file():
+                    path = cand
+                    break
+            else:
+                raise FileNotFoundError(
+                    f"Workflow template not found for variant={variant}: {path}"
+                )
     with path.open(encoding="utf-8") as f:
         data = json.load(f)
     if isinstance(data, dict) and "prompt" in data and isinstance(data["prompt"], dict):
@@ -239,6 +255,382 @@ def _sanitize_ltx_nodes(workflow: dict[str, Any]) -> None:
                 node["inputs"] = {"noise_seed": 0}
 
 
+def _remap_stub_filenames(workflow: dict[str, Any]) -> list[str]:
+    """Replace research-graph stub weight names with official HF filenames."""
+    from master_agent.models.weights import OPTIONAL_STUBS, STUB_ALIASES
+
+    notes: list[str] = []
+    for node in workflow.values():
+        if not isinstance(node, dict):
+            continue
+        inputs = node.get("inputs") or {}
+        for key, value in list(inputs.items()):
+            if not isinstance(value, str):
+                continue
+            official = STUB_ALIASES.get(value)
+            if official:
+                inputs[key] = official
+                notes.append(f"{value} → {official}")
+            elif value in OPTIONAL_STUBS:
+                notes.append(f"optional stub left: {value}")
+    return notes
+
+
+def _bypass_missing_optional_loras(workflow: dict[str, Any]) -> list[str]:
+    """Drop style/camera placeholder LoRA nodes when the file is not on disk."""
+    from master_agent.models.weights import OPTIONAL_STUBS, find_weight_file
+
+    dropped: list[str] = []
+    for nid, node in list(workflow.items()):
+        if not isinstance(node, dict):
+            continue
+        ctype = node.get("class_type") or ""
+        if ctype not in ("LoraLoader", "LoraLoaderModelOnly", "LTXVLoraLoader"):
+            continue
+        inputs = node.get("inputs") or {}
+        name = inputs.get("lora_name") or inputs.get("lora")
+        if not isinstance(name, str) or name not in OPTIONAL_STUBS:
+            continue
+        if find_weight_file(name) is not None:
+            continue
+        source = inputs.get("model")
+        sid = str(nid)
+        for other in workflow.values():
+            if not isinstance(other, dict) or other is node:
+                continue
+            oin = other.get("inputs") or {}
+            for key, value in list(oin.items()):
+                if (
+                    isinstance(value, list)
+                    and len(value) == 2
+                    and str(value[0]) == sid
+                    and source is not None
+                ):
+                    oin[key] = source
+        workflow.pop(sid, None)
+        dropped.append(sid)
+    return dropped
+
+
+def _resolved_ltx25_names() -> tuple[str, str]:
+    """16GB-class pick: GGUF Q4 → NVFP4 → int8/bf16. TE: heretic/int8 before official bf16."""
+    from master_agent.models.weights import WEIGHT_FILES, resolve_weight
+
+    transformer = WEIGHT_FILES["transformer"]
+    text_encoder = WEIGHT_FILES["text_encoder"]
+    local_tr = resolve_weight(transformer)
+    local_te = resolve_weight(text_encoder)
+    tr_name = local_tr.name if local_tr is not None else transformer.filename
+    te_name = local_te.name if local_te is not None else text_encoder.filename
+    return tr_name, te_name
+
+
+def _set_transformer_loader(node: dict[str, Any], filename: str) -> None:
+    """Wire UNETLoader vs UnetLoaderGGUF from the file that is actually present."""
+    if filename.lower().endswith(".gguf"):
+        node["class_type"] = "UnetLoaderGGUF"
+        node["inputs"] = {"unet_name": filename}
+    else:
+        node["class_type"] = "UNETLoader"
+        node["inputs"] = {"unet_name": filename, "weight_dtype": "default"}
+    node.setdefault("_meta", {})["title"] = "LTX 2.5 Distilled Transformer"
+
+
+def _rewrite_ltx25_checkpoint_loader(workflow: dict[str, Any]) -> None:
+    """Turn CheckpointLoaderSimple + stub/all-in-one name into split-pack loaders.
+
+    Official LTX 2.5 weights are a transformer + Gemma 4 TE + VAEs, not a
+    single ``.safetensors`` checkpoint. Research templates still use
+    CheckpointLoaderSimple; rewrite so the official files (or a local
+    GGUF / NVFP4 / int8 / bf16 stand-in) resolve.
+    """
+    from master_agent.models.weights import STUB_ALIASES, WEIGHT_FILES
+
+    official_transformer = WEIGHT_FILES["transformer"].filename
+    transformer_name, te_name = _resolved_ltx25_names()
+    aliases = {official_transformer, *WEIGHT_FILES["transformer"].candidates, *STUB_ALIASES.keys()}
+
+    ckpt_nodes = [
+        (nid, node)
+        for nid, node in workflow.items()
+        if isinstance(node, dict) and node.get("class_type") == "CheckpointLoaderSimple"
+    ]
+    for src_id, node in ckpt_nodes:
+        name = (node.get("inputs") or {}).get("ckpt_name")
+        if not isinstance(name, str):
+            continue
+        if name not in aliases and "ltx-2.5" not in name.lower():
+            continue
+        _set_transformer_loader(node, transformer_name if name in aliases else name)
+
+        if _find_nodes_by_class(workflow, "LTXAVTextEncoderLoader"):
+            continue
+        numeric_ids = [int(k) for k in workflow if str(k).isdigit()]
+        te_id = str(max(numeric_ids) + 1) if numeric_ids else "90"
+        workflow[te_id] = {
+            "class_type": "LTXAVTextEncoderLoader",
+            "inputs": {"text_encoder": te_name},
+            "_meta": {"title": "LTX 2.5 Gemma 4 TE"},
+        }
+        for other in workflow.values():
+            if not isinstance(other, dict):
+                continue
+            inputs = other.get("inputs") or {}
+            for key, value in list(inputs.items()):
+                if (
+                    isinstance(value, list)
+                    and len(value) == 2
+                    and str(value[0]) == str(src_id)
+                    and value[1] == 1
+                ):
+                    inputs[key] = [te_id, 0]
+
+
+def _resolved_h3_names(bundle: str) -> tuple[str, str, str, str]:
+    """H3 16GB-class pick: GGUF Q4_K DiT + Comfy TE + official VAEs."""
+    from master_agent.models.weights import WEIGHT_FILES, resolve_weight
+
+    dit_key = "h3_ref2va" if bundle == "h3_ref2va" else "h3_fl2va"
+    dit = WEIGHT_FILES[dit_key]
+    te = WEIGHT_FILES["h3_text_encoder"]
+    vvae = WEIGHT_FILES["h3_video_vae"]
+    avae = WEIGHT_FILES["h3_audio_vae"]
+    local_dit = resolve_weight(dit)
+    local_te = resolve_weight(te)
+    local_vvae = resolve_weight(vvae)
+    local_avae = resolve_weight(avae)
+    return (
+        local_dit.name if local_dit is not None else dit.filename,
+        local_te.name if local_te is not None else te.filename,
+        local_vvae.name if local_vvae is not None else vvae.filename,
+        local_avae.name if local_avae is not None else avae.filename,
+    )
+
+
+def _set_h3_dit_loader(node: dict[str, Any], filename: str) -> None:
+    if filename.lower().endswith(".gguf"):
+        node["class_type"] = "UnetLoaderGGUF"
+        node["inputs"] = {"unet_name": filename}
+    else:
+        node["class_type"] = "UNETLoader"
+        node["inputs"] = {"unet_name": filename, "weight_dtype": "default"}
+    node.setdefault("_meta", {})["title"] = "MiniMax H3 Transformer"
+
+
+def _set_h3_clip_loader(node: dict[str, Any], filename: str) -> None:
+    if filename.lower().endswith(".gguf"):
+        node["class_type"] = "CLIPLoaderGGUF"
+        node["inputs"] = {"clip_name": filename, "type": "minimax"}
+    else:
+        node["class_type"] = "CLIPLoader"
+        node["inputs"] = {"clip_name": filename, "type": "minimax"}
+    node.setdefault("_meta", {})["title"] = "H3 Qwen3-VL TE"
+
+
+def _apply_local_h3_weights(workflow: dict[str, Any], bundle: str) -> None:
+    dit_name, te_name, video_vae, audio_vae = _resolved_h3_names(bundle)
+    for class_type in ("UNETLoader", "UnetLoaderGGUF", "DiffusionModelLoader"):
+        for _nid, node in _find_nodes_by_class(workflow, class_type):
+            inputs = node.get("inputs") or {}
+            current = inputs.get("unet_name") or inputs.get("ckpt_name") or ""
+            if isinstance(current, str) and "minimax_h3" in current.lower():
+                _set_h3_dit_loader(node, dit_name)
+    for class_type in ("CLIPLoader", "CLIPLoaderGGUF"):
+        for _nid, node in _find_nodes_by_class(workflow, class_type):
+            inputs = node.get("inputs") or {}
+            current = inputs.get("clip_name") or ""
+            if isinstance(current, str) and "minimax_h3" in current.lower():
+                _set_h3_clip_loader(node, te_name)
+    for _nid, node in _find_nodes_by_class(workflow, "VAELoader"):
+        title = str((node.get("_meta") or {}).get("title") or "").lower()
+        inputs = node.get("inputs") or {}
+        current = str(inputs.get("vae_name") or "")
+        if "audio" in title or "audio_vae" in current.lower():
+            _set_input(node, "vae_name", audio_vae)
+        elif "video" in title or "minimax_h3_video" in current.lower() or "video_vae" in current.lower():
+            _set_input(node, "vae_name", video_vae)
+
+
+def _set_family_unet_loader(node: dict[str, Any], filename: str, title: str) -> None:
+    if filename.lower().endswith(".gguf"):
+        node["class_type"] = "UnetLoaderGGUF"
+        node["inputs"] = {"unet_name": filename}
+    else:
+        node["class_type"] = "UNETLoader"
+        node["inputs"] = {"unet_name": filename, "weight_dtype": "default"}
+    node.setdefault("_meta", {})["title"] = title
+
+
+def _resolved_family_name(weight_key: str) -> str | None:
+    from master_agent.models.weights import WEIGHT_FILES, resolve_weight
+
+    weight = WEIGHT_FILES.get(weight_key)
+    if weight is None:
+        return None
+    found = resolve_weight(weight)
+    return found.name if found is not None else None
+
+
+def _apply_local_family_weights(workflow: dict[str, Any], variant: str) -> None:
+    """16GB-class remaps for Wan / VACE / Krea / Flux / Qwen (GGUF vs UNET)."""
+    from master_agent.models.vram_policy import family_for_slug
+
+    family = family_for_slug(variant)
+    loaders = ("UNETLoader", "UnetLoaderGGUF", "UnetLoader", "DiffusionModelLoader")
+    gguf_loaders = ("UnetLoaderGGUF", "UnetLoaderGGUFAdvanced")
+
+    def _rewrite(needles: tuple[str, ...], filename: str, title: str) -> None:
+        for class_type in (*loaders, *gguf_loaders):
+            for _nid, node in _find_nodes_by_class(workflow, class_type):
+                inputs = node.get("inputs") or {}
+                current = str(
+                    inputs.get("unet_name")
+                    or inputs.get("ckpt_name")
+                    or inputs.get("gguf_name")
+                    or ""
+                ).lower()
+                if any(token in current for token in needles):
+                    _set_family_unet_loader(node, filename, title)
+                    if "gguf_name" in inputs:
+                        inputs = node.get("inputs") or {}
+                        if "gguf_name" in inputs:
+                            inputs["gguf_name"] = filename
+
+    if family == "wan22":
+        high = _resolved_family_name("wan22_high")
+        low = _resolved_family_name("wan22_low")
+        if high:
+            _rewrite(("high_noise", "highnoise"), high, "Wan 2.2 High (16GB pick)")
+        if low:
+            _rewrite(("low_noise", "lownoise"), low, "Wan 2.2 Low (16GB pick)")
+    elif family == "vace":
+        name = _resolved_family_name("vace")
+        if name:
+            _rewrite(("vace", "skyreels"), name, "VACE Skyreels (16GB pick)")
+    elif family == "krea2":
+        name = _resolved_family_name("krea2")
+        if name:
+            _rewrite(("krea2", "krea-2"), name, "Krea-2 turbo (16GB pick)")
+    elif family == "flux":
+        name = _resolved_family_name("flux")
+        if name:
+            _rewrite(("flux1-dev", "flux.1-dev", "flux1_dev"), name, "Flux.1-dev (16GB pick)")
+    elif family == "qwen_edit":
+        name = _resolved_family_name("qwen_edit")
+        if not name:
+            return
+        _rewrite(("qwen-image-edit", "qwen_image_edit"), name, "Qwen-Image-Edit (16GB pick)")
+        for _nid, node in _find_nodes_by_class(workflow, "UnetLoaderGGUF"):
+            inputs = node.get("inputs") or {}
+            current = str(inputs.get("gguf_name") or inputs.get("unet_name") or "")
+            if "qwen" in current.lower():
+                if "gguf_name" in inputs:
+                    inputs["gguf_name"] = name
+                else:
+                    _set_family_unet_loader(node, name, "Qwen-Image-Edit (16GB pick)")
+
+
+def _apply_local_ltx25_weights(workflow: dict[str, Any]) -> None:
+    """Prefer a local GGUF / NVFP4 / int8 / heretic TE when one is already present."""
+    transformer_name, te_name = _resolved_ltx25_names()
+    for class_type in ("UNETLoader", "UnetLoaderGGUF", "DiffusionModelLoader"):
+        for _nid, node in _find_nodes_by_class(workflow, class_type):
+            inputs = node.get("inputs") or {}
+            current = inputs.get("unet_name") or inputs.get("ckpt_name") or ""
+            if isinstance(current, str) and "ltx-2.5" in current.lower():
+                _set_transformer_loader(node, transformer_name)
+    for _nid, node in _find_nodes_by_class(workflow, "LTXAVTextEncoderLoader"):
+        _set_input(node, "text_encoder", te_name)
+        inputs = node.get("inputs") or {}
+        if "ckpt_name" in inputs and isinstance(inputs.get("ckpt_name"), str):
+            if "ltx-2.5" in str(inputs.get("ckpt_name")).lower():
+                _set_input(node, "ckpt_name", transformer_name)
+
+
+def _apply_multi_ref(workflow: dict[str, Any], refs: dict[str, Any]) -> list[str]:
+    notes: list[str] = []
+    mapping = {
+        "pic1": refs.get("pic1"),
+        "pic2": refs.get("pic2"),
+        "pic3": refs.get("pic3"),
+        "pic4": refs.get("pic4"),
+        "background": refs.get("background"),
+    }
+    strength = refs.get("strength")
+    for node in workflow.values():
+        if not isinstance(node, dict):
+            continue
+        ctype = node.get("class_type") or ""
+        title = str((node.get("_meta") or {}).get("title") or "").lower()
+        inputs = node.get("inputs") or {}
+        if ctype in ("ComfyUILTX25MSRMultiReferenceGuide", "LoadImage"):
+            for key, path in mapping.items():
+                if not path:
+                    continue
+                if key in inputs and not isinstance(inputs[key], list):
+                    inputs[key] = path
+                    notes.append(f"msr {key}")
+                elif "image" in inputs and key in title and not isinstance(inputs["image"], list):
+                    inputs["image"] = path
+                    notes.append(f"load {key}")
+            if strength is not None and "strength" in inputs and not isinstance(inputs["strength"], list):
+                inputs["strength"] = strength
+    return notes
+
+
+def _apply_typed_loras(workflow: dict[str, Any], slots: list[dict[str, Any]]) -> list[str]:
+    """Apply research-agent LoRA slots (standard / ic_lora / msr / camera)."""
+    standard = {"LoraLoader", "LoraLoaderModelOnly", "LTXVLoraLoader"}
+    ic_classes = {"LTXVICLoRALoader", "ICLoRALoader", "V2VICLoRALoader"}
+    msr_classes = {"ComfyUILTX25MSRICLoRALoader", "LTX MSR IC-LoRA Loader"}
+    notes: list[str] = []
+    for slot in slots:
+        kind = str(slot.get("type") or "standard")
+        name = slot.get("name")
+        strength = slot.get("strength")
+        if not name:
+            continue
+        applied = False
+        for node in workflow.values():
+            if not isinstance(node, dict):
+                continue
+            ctype = node.get("class_type") or ""
+            title = str((node.get("_meta") or {}).get("title") or "").lower()
+            inputs = node.setdefault("inputs", {})
+            if kind == "msr" and ctype in msr_classes:
+                if "lora_name" in inputs and not isinstance(inputs["lora_name"], list):
+                    inputs["lora_name"] = name
+                if strength is not None and "strength_model" in inputs:
+                    inputs["strength_model"] = strength
+                applied = True
+            elif kind == "ic_lora" and ctype in ic_classes:
+                if "lora_name" in inputs and not isinstance(inputs["lora_name"], list):
+                    inputs["lora_name"] = name
+                elif "lora" in inputs and not isinstance(inputs["lora"], list):
+                    inputs["lora"] = name
+                if strength is not None:
+                    if "strength_model" in inputs and not isinstance(inputs["strength_model"], list):
+                        inputs["strength_model"] = strength
+                    elif "strength" in inputs and not isinstance(inputs["strength"], list):
+                        inputs["strength"] = strength
+                applied = True
+            elif kind in ("standard", "camera") and ctype in standard:
+                if kind == "camera" and "camera" not in title and "motion" not in title:
+                    continue
+                if kind == "standard" and ("camera" in title or "ic-lora" in title or "msr" in title):
+                    continue
+                if "lora_name" in inputs and not isinstance(inputs["lora_name"], list):
+                    inputs["lora_name"] = name
+                if strength is not None:
+                    if "strength_model" in inputs and not isinstance(inputs["strength_model"], list):
+                        inputs["strength_model"] = strength
+                    if "strength" in inputs and not isinstance(inputs["strength"], list):
+                        inputs["strength"] = strength
+                applied = True
+        notes.append(f"lora {kind}:{name} applied={applied}")
+    return notes
+
+
 def _ensure_lora_node(workflow: dict[str, Any], lora_name: str) -> Optional[str]:
     """
     Insert a LoraLoaderModelOnly between the model loader and its consumers.
@@ -309,13 +701,26 @@ def _heuristic_patch(workflow: dict[str, Any], values: dict[str, Any]) -> None:
     text_encoder = values.get("text_encoder")
     # quality-correction fields also live on values
 
-    # CLIP / text encode
+    # CLIP / text encode (research graphs also title nodes "Positive Prompt")
     for _nid, node in _find_nodes_by_class(workflow, "CLIPTextEncode"):
         title = (node.get("_meta") or {}).get("title", "").lower()
         if negative is not None and "neg" in title:
             _set_input(node, "text", negative)
         elif prompt is not None and "neg" not in title:
             _set_input(node, "text", prompt)
+    if prompt is not None:
+        for node in workflow.values():
+            if not isinstance(node, dict):
+                continue
+            ctype = (node.get("class_type") or "").lower()
+            title = str((node.get("_meta") or {}).get("title") or "").lower()
+            if "neg" in title:
+                continue
+            if any(tok in ctype for tok in ("clip", "gemma", "textencode", "prompt")) or "prompt" in title:
+                inputs = node.get("inputs") or {}
+                for key in ("text", "prompt", "string", "positive"):
+                    if key in inputs and not isinstance(inputs[key], list):
+                        inputs[key] = prompt
 
     # Empty latent / size nodes — keep video length and audio frames_number in sync
     ltx_frames = snap_ltx_frames(int(frames)) if frames is not None else None
@@ -345,9 +750,31 @@ def _heuristic_patch(workflow: dict[str, Any], values: dict[str, Any]) -> None:
                 _set_input(node, "frames_number", int(paired))
                 if values.get("fps"):
                     _set_input(node, "frame_rate", int(values.get("fps") or 24))
-        for _nid, node in _find_nodes_by_class(workflow, "LTXVConditioning"):
-            if values.get("fps"):
-                _set_input(node, "frame_rate", int(values.get("fps") or 24))
+        for class_type in ("MiniMaxH3ImageToVideo", "MiniMaxH3ReferenceToVideo"):
+            for _nid, node in _find_nodes_by_class(workflow, class_type):
+                if prompt is not None:
+                    _set_input(node, "prompt", prompt)
+                if width is not None:
+                    _set_input(node, "width", width)
+                if height is not None:
+                    _set_input(node, "height", height)
+                if frames is not None:
+                    _set_input(node, "length", int(frames))
+        for class_type in ("LTXVImgToVideo", "LTXVConditioning"):
+            for _nid, node in _find_nodes_by_class(workflow, class_type):
+                if values.get("fps") and class_type == "LTXVConditioning":
+                    _set_input(node, "frame_rate", int(values.get("fps") or 24))
+                if class_type == "LTXVImgToVideo":
+                    if width is not None:
+                        _set_input(node, "width", width)
+                    if height is not None:
+                        _set_input(node, "height", height)
+                    write = ltx_frames if ltx_frames is not None else int(frames)
+                    _set_input(node, "length", write)
+                    if values.get("image_name") or values.get("first_image"):
+                        _set_input(node, "image", values.get("first_image") or values.get("image_name"))
+                    if values.get("last_image"):
+                        _set_input(node, "last_frame", values["last_image"])
         for _nid, node in _find_nodes_by_class(workflow, "CreateVideo"):
             if values.get("fps"):
                 _set_input(node, "fps", float(values.get("fps") or 24))
@@ -367,7 +794,7 @@ def _heuristic_patch(workflow: dict[str, Any], values: dict[str, Any]) -> None:
             if seed is not None:
                 _set_input(node, "noise_seed", seed)
 
-    for class_type in ("KSampler", "KSamplerAdvanced"):
+    for class_type in ("KSampler", "KSamplerAdvanced", "LanPaint_KSampler"):
         for _nid, node in _find_nodes_by_class(workflow, class_type):
             if seed is not None:
                 inputs = node.get("inputs") or {}
@@ -447,6 +874,10 @@ def _heuristic_patch(workflow: dict[str, Any], values: dict[str, Any]) -> None:
 
     if vae_name:
         for _nid, node in _find_nodes_by_class(workflow, "VAELoader"):
+            title = str((node.get("_meta") or {}).get("title") or "").lower()
+            current = str((node.get("inputs") or {}).get("vae_name") or "")
+            if "audio" in title or "audio_vae" in current.lower():
+                continue
             _set_input(node, "vae_name", vae_name)
 
     if lora:
@@ -454,6 +885,9 @@ def _heuristic_patch(workflow: dict[str, Any], values: dict[str, Any]) -> None:
             "LoraLoader",
             "LoraLoaderModelOnly",
             "LTXICLoRALoaderModelOnly",
+            "LTXVICLoRALoader",
+            "ComfyUILTX25MSRICLoRALoader",
+            "LTXVLoraLoader",
         ):
             for _nid, node in _find_nodes_by_class(workflow, class_type):
                 for k in ("lora_name", "lora"):
@@ -461,9 +895,28 @@ def _heuristic_patch(workflow: dict[str, Any], values: dict[str, Any]) -> None:
                         _set_input(node, k, lora)
                         break
 
-    if image_name:
+    first_image = values.get("first_image") or image_name
+    last_image = values.get("last_image")
+    if first_image:
+        assigned = False
         for _nid, node in _find_nodes_by_class(workflow, "LoadImage"):
-            _set_input(node, "image", image_name)
+            title = str((node.get("_meta") or {}).get("title") or "").lower()
+            if "last" in title:
+                continue
+            _set_input(node, "image", first_image)
+            assigned = True
+            break
+        if not assigned:
+            for _nid, node in _find_nodes_by_class(workflow, "LoadImage"):
+                _set_input(node, "image", first_image)
+                break
+    if last_image:
+        for _nid, node in _find_nodes_by_class(workflow, "LoadImage"):
+            title = str((node.get("_meta") or {}).get("title") or "").lower()
+            if "last" in title:
+                _set_input(node, "image", last_image)
+        for _nid, node in _find_nodes_by_class(workflow, "LTXVImgToVideo"):
+            _set_input(node, "last_frame", last_image)
 
     video_name = values.get("video_name")
     if video_name:
@@ -483,6 +936,7 @@ def _heuristic_patch(workflow: dict[str, Any], values: dict[str, Any]) -> None:
             "CreateVideo",
             "SaveAnimatedWEBP",
             "SaveImage",
+            "SaveAudio",
         ):
             for _nid, node in _find_nodes_by_class(workflow, class_type):
                 for k in ("filename_prefix", "filename", "save_prefix"):
@@ -513,24 +967,51 @@ def load_and_patch_workflow(
     sampler_name: Optional[str] = None,
     frames: Optional[int] = None,
     object_info: Optional[dict[str, Any]] = None,
+    first_image: Optional[str] = None,
+    last_image: Optional[str] = None,
+    loras: Optional[list[dict[str, Any]]] = None,
+    multi_ref: Optional[dict[str, Any]] = None,
 ) -> tuple[dict[str, Any], dict[str, Any]]:
     """
     Returns (workflow_api_dict, meta) where meta has resolved generation params.
     """
-    width, height = clamp_resolution(width, height, quality="flux" if variant == "flux" else None)
+    h3 = is_h3_variant(variant)
+    if h3:
+        if width == 768 and height == 512:
+            width, height = H3_DEFAULT_WIDTH, H3_DEFAULT_HEIGHT
+        width, height = clamp_h3_resolution(width, height)
+    else:
+        width, height = clamp_resolution(width, height, quality="flux" if variant == "flux" else None)
     gen = get_variant_gen(variant)
     if frames is None:
-        frames = frames_for_duration(duration_s, fps=gen["fps"], snap=gen["frame_snap"])
+        frames = frames_for_duration(
+            duration_s,
+            fps=gen["fps"],
+            snap=gen["frame_snap"],
+            max_s=H3_MAX_DURATION_S if h3 else None,
+        )
     else:
         frames = int(frames)
-    if int(gen["frame_snap"]) == 8:
+    if h3 or int(gen["frame_snap"]) == 17:
+        frames = snap_h3_frames(frames)
+    elif int(gen["frame_snap"]) == 8:
         frames = snap_ltx_frames(frames)
     if seed is None:
         seed = random.randint(0, 2**32 - 1)
-    steps = steps if steps is not None else DEFAULT_STEPS
-    cfg = cfg if cfg is not None else DEFAULT_CFG
+    if h3:
+        steps = steps if steps is not None else H3_DEFAULT_STEPS
+        cfg = H3_DEFAULT_CFG
+    else:
+        steps = steps if steps is not None else DEFAULT_STEPS
+        cfg = cfg if cfg is not None else DEFAULT_CFG
 
-    models = MODEL_FILES.get(variant) or MODEL_FILES["base"]
+    try:
+        from master_agent.comfy.catalog import H3_ALIASES, RESEARCH_ALIASES
+
+        resolved_id = H3_ALIASES.get(variant, RESEARCH_ALIASES.get(variant, variant))
+    except Exception:
+        resolved_id = variant
+    models = MODEL_FILES.get(resolved_id) or MODEL_FILES.get(variant) or MODEL_FILES["base"]
     preferred = models.get("checkpoint") or models.get("diffusion")
     # Variants with no single all-in-one checkpoint (e.g. wan22's dual UNETs)
     # must not get a fallback LTX ckpt sprayed onto their loaders.
@@ -573,7 +1054,9 @@ def load_and_patch_workflow(
         "t5xxl": t5xxl,
         "vae_name": vae_name,
         "text_encoder": text_encoder,
-        "image_name": image_name,
+        "image_name": image_name or first_image,
+        "first_image": first_image or image_name,
+        "last_image": last_image,
         "audio_name": audio_name,
         "video_name": video_name,
         "filename_prefix": filename_prefix,
@@ -590,9 +1073,25 @@ def load_and_patch_workflow(
             values[f"segment_{i}"] = seg
 
     _apply_named_fields(workflow, field_map, values)
+    _remap_stub_filenames(workflow)
+    from master_agent.models.weights import bundle_for_variant, is_h3_bundle, is_ltx25_bundle
+
+    bundle = bundle_for_variant(variant)
+    if is_ltx25_bundle(bundle):
+        _rewrite_ltx25_checkpoint_loader(workflow)
     _heuristic_patch(workflow, values)
+    if is_ltx25_bundle(bundle):
+        _apply_local_ltx25_weights(workflow)
+    if is_h3_bundle(bundle):
+        _apply_local_h3_weights(workflow, bundle or "h3_fl2va")
+    _apply_local_family_weights(workflow, resolved_id or variant)
+    if loras:
+        _apply_typed_loras(workflow, loras)
+    if multi_ref:
+        _apply_multi_ref(workflow, multi_ref)
     if lora:
         _ensure_lora_node(workflow, lora)
+    _bypass_missing_optional_loras(workflow)
     _sanitize_ltx_nodes(workflow)
 
     extras = (manifests.get(variant) or {}).get("extras") or {}
@@ -632,4 +1131,17 @@ def load_and_patch_workflow(
         "lora": lora,
         "filename_prefix": filename_prefix,
     }
+    try:
+        from master_agent.models.vram_policy import prepare_warning, workflow_row
+
+        row = workflow_row(resolved_id or variant)
+        meta["vram_class"] = row.vram_class
+        meta["vram_peak_gb"] = row.expected_vram_gb
+        meta["default_pack"] = row.default_pack
+        meta["safer_alternate"] = row.safer_alternate
+        warn = prepare_warning(resolved_id or variant)
+        if warn:
+            meta["prepare_warning"] = warn
+    except Exception:
+        pass
     return workflow, meta

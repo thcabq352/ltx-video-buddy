@@ -96,6 +96,10 @@ class JobManager:
     def list(self, limit: int = 50) -> list[Job]:
         return sorted(self._jobs.values(), key=lambda j: -j.created_at)[:limit]
 
+    def gpu_lock(self) -> threading.Lock:
+        """One-GPU-at-a-time lock shared with A2A / Hermes facade submits."""
+        return self._run_gate
+
     # ── workers ───────────────────────────────────────────
 
     def _work(self, job: Job) -> None:

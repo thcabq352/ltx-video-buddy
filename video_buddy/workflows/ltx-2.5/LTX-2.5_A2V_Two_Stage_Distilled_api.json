@@ -1,0 +1,39 @@
+{
+  "1": {
+    "class_type": "CheckpointLoaderSimple",
+    "inputs": { "ckpt_name": "ltx-2.5-22b-distilled.safetensors" }
+  },
+  "2": {
+    "class_type": "LoadAudio",
+    "inputs": { "audio": "guide.wav" },
+    "_meta": { "title": "LoadAudio" }
+  },
+  "3": {
+    "class_type": "CLIPTextEncode",
+    "inputs": { "text": "lips in sync with the guide audio", "clip": ["1", 1] },
+    "_meta": { "title": "Positive Prompt" }
+  },
+  "4": {
+    "class_type": "EmptyLTXVLatentVideo",
+    "inputs": { "width": 1280, "height": 720, "length": 145, "batch_size": 1 }
+  },
+  "5": {
+    "class_type": "KSampler",
+    "inputs": {
+      "seed": 0,
+      "steps": 8,
+      "cfg": 1.0,
+      "sampler_name": "euler",
+      "scheduler": "simple",
+      "denoise": 1.0,
+      "model": ["1", 0],
+      "positive": ["3", 0],
+      "negative": ["3", 0],
+      "latent_image": ["4", 0]
+    }
+  },
+  "6": {
+    "class_type": "VHS_VideoCombine",
+    "inputs": { "frame_rate": 24, "filename_prefix": "ltx25_a2v", "format": "video/h264-mp4", "images": ["5", 0] }
+  }
+}

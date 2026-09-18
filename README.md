@@ -6,8 +6,8 @@ Video Buddy turns a plain-language request — *"a premium cold-brew commercial,
 *"a music video for this track,"* *"a five-shot short film with my lead
 actor's face and voice"* — into a finished, judged, upscaled video. It
 interviews you before it generates anything, plans the production like a
-director, renders on a curated library of state-of-the-art open video models,
-grades its own work shot by shot, and learns from every run.
+director, renders on a curated library of open video models, grades its own
+work shot by shot, and learns from every run.
 
 No cloud render farm. No per-minute pricing. No footage leaving your machine.
 
@@ -33,6 +33,17 @@ you.** You bring the intent; it brings the craft.
   the right pipeline, a storyboard panel plans shot-by-shot cards (camera,
   action, continuity), and a state machine executes: patch → validate →
   submit → judge → retry.
+- **LTX 2.5 in the default catalog.** Seven distilled API graphs
+  (`ltx25_t2v_i2v`, `ltx25_t2v_i2v_two_stage`, `ltx25_flf2v`, `ltx25_msr`,
+  `ltx25_v2v_ic_lora`, `ltx25_a2v`, `ltx25_t2a`) are first-class variants —
+  no experimental flags. **MiniMax H3** (`h3_t2v` / `h3_i2v` / `h3_flf` /
+  `h3_r2v`, aliases `fl2va` / `ref2va`) is the same: GGUF-first omni
+  video+stereo audio, CFG 1.0. LTX 2.3 (`base` / `eros` / `directors` /
+  `lipsync`), Wan 2.2 T2V, music videos, and TeaCache soft-bypass still work.
+- **Scan-local-first weights.** Buddy inventories `MODELS_DIR`, Comfy
+  `models/`, extra volumes, `extra_model_paths.yaml`, and the Hugging Face
+  hub cache. It asks before downloading. Official bf16 Gemma is not required
+  if a heretic / int8 text encoder is already on disk.
 - **Fail fast, zero wasted GPU.** Every workflow is validated against the live
   node registry and local model inventory *before* anything is queued. CUDA
   OOM triggers an automatic downscale-and-retry ladder instead of a crash.
@@ -40,7 +51,7 @@ you.** You bring the intent; it brings the craft.
   and a vision model reviewing actual frames — scores every clip for temporal
   consistency, subject lock, and artifacts. Weak shots get rewritten and
   re-rendered, automatically.
-- **Movie Builder.** Shot-by-shot film production on LTX 2.3: Flux 2 Klein
+- **Movie Builder.** Shot-by-shot film production on **LTX 2.3**: Flux 2 Klein
   start-frames, per-shot video + audio, **voice cloning from a 5-second
   sample**, 360° environment generation for matched shot-reverse-shot, color
   matching across cuts, and a final assembler that stitches the movie.
@@ -61,6 +72,9 @@ you.** You bring the intent; it brings the craft.
 | Interface | Use |
 |---|---|
 | **CLI (first)** | Drive Comfy with `python -m master_agent comfy run`. Full director pipeline is `run "..."`. |
+| **Doctor** | `python -m master_agent doctor` — deps + LTX 2.5 / H3 inventory. **Does not fetch weights.** |
+| **Download** | `python -m master_agent download-models --ltx25` or `--h3` lists confirmed-missing slots; `--yes` only after you agree. |
+| **Capabilities** | `python -m master_agent capabilities --offline` — Comfy pack vs Buddy wiring matrix. |
 | **Web studio** | `python -m master_agent ui` — optional human dashboard (Create / Comfy / Voice / Fractal / Music / Jobs) |
 | **MCP server** | Hermes tools (`create_video`, `plan_storyboard`, `judge_asset`, …) after the CLI path works |
 
@@ -77,8 +91,8 @@ you ──▶ persona intake ──▶ creative brief
               │ patch → validate → submit → poll → judge   │  ◀── KB recall
               └──────────────┬─────────────────────────────┘
                              ▼
-                     ComfyUI (:8188) — 29 curated workflows
-                     LTX 2.3 · Flux 2 Klein · Wan 2.2 · Qwen · Z-Image
+                     ComfyUI (:8188) — default catalog
+                     LTX 2.5 · MiniMax H3 · LTX 2.3 · Flux 2 Klein · Wan 2.2 · Qwen · Z-Image
                              │
                      stitch → full-video judge → upscale → delivery
 ```
@@ -98,20 +112,38 @@ Need **Python 3.10+**. From `video_buddy/` run the installer — it creates `.ve
 ```bash
 cd video_buddy
 python install.py
-python -m master_agent setup          # re-check anytime
+python -m master_agent doctor         # deps + LTX 2.5 / H3 scan; no download
+python -m master_agent workflows      # default catalog (includes ltx25_* and h3_*)
 python -m master_agent ui --port 8189
 ```
 
 Start ComfyUI on `:8188` (Windows portable: `ComfyUI_windows_portable\run_api_8188.bat`). Then:
 
 ```bash
+python -m master_agent health
+python -m master_agent comfy run --mode generate --variant ltx25_t2v_i2v --prompt "neon rain"
+python -m master_agent comfy attach --recipe previs.json --json workflow.json   # dry-run attach
 python -m master_agent run "cinematic close-up of rain on a window"
 python -m master_agent music "dreamy synthwave MV" --audio track.mp3
 ```
 
-Model weights (~450GB curated) are reproduced on any machine with
-`python state/download_models.py`. Full operator docs live in
-[`video_buddy/README.md`](video_buddy/README.md).
+**Do not assume a weight download is needed.** `doctor` reports the 16GB-class
+loader pick (GGUF Q4 → NVFP4 if `VRAM_GB` ≥ 14 → int8-convrot → bf16). If a
+slot is confirmed missing (zero-byte files count as missing), review the ask
+then:
+
+```bash
+python -m master_agent download-models --ltx25        # list only
+python -m master_agent download-models --ltx25 --yes  # fetch that missing set
+python -m master_agent download-models --h3           # MiniMax H3 list only
+python -m master_agent download-models --h3 --yes
+```
+
+Legacy Mickmumpitz / LTX 2.3 packs still use `python state/download_models.py`
+when you need those older filenames. Full operator docs:
+[`video_buddy/README.md`](video_buddy/README.md) ·
+[`video_buddy/docs/QUICKSTART.md`](video_buddy/docs/QUICKSTART.md) ·
+[`video_buddy/REQUIRED-FILES.md`](video_buddy/REQUIRED-FILES.md).
 
 ## Repository layout
 
@@ -120,33 +152,82 @@ video_buddy/
 ├── master_agent/      # the agent: orchestrator, director, judge, persona,
 │                      # KB, characters/LoRA, music, fractal, upscale, web, MCP
 ├── workflows/         # curated ComfyUI workflow library + manifests + guides
-├── training/          # LoRA training configs (16GB-tuned)
-├── tests/             # 104 pytest cases
-├── state/             # tooling: model downloader, UI→API converter, repairs
-└── docs/              # white paper & investor materials
+│   ├── ltx-2.5/       # seven default-catalog LTX 2.5 API graphs
+│   └── minimax-h3/    # four default-catalog MiniMax H3 API graphs (fl2va / ref2va)
+├── training/          # LoRA training configs (16GB-tuned, LTX 2.3 / Wan 2.2)
+├── tests/             # pytest (catalog, weights, capabilities, Rainey stop-lines)
+├── state/             # tooling: legacy model downloader, UI→API converter
+└── docs/              # operator quickstart (CLI / doctor / download-models)
 ```
 
 ## Documentation
 
 - [Operator manual](video_buddy/README.md) — full CLI/web/MCP reference and changelog
-- [Movie Builder guide](video_buddy/workflows/260507_VIDEO-BUDDY_MOVIE-BUILDER_GUIDE.md) — shot-by-shot film production
-- White paper & investor materials — `docs/` (not published in this repo; available on request)
+- [Doctor / download-models / catalog](video_buddy/docs/QUICKSTART.md) — inventory-first LTX 2.5 flow
+- [Required files](video_buddy/REQUIRED-FILES.md) — accepted local names + Hub catalog
+- [LTX 2.5 workflows](video_buddy/workflows/ltx-2.5/README.md) — ids and invoke examples
+- [Self-improvement loop](video_buddy/docs/SELF_IMPROVEMENT_LOOP.md) — live judge → revise → re-run map
+- [ClipProvenance](video_buddy/docs/CLIP_PROVENANCE.md) — sidecar + run-row prompt/seed/judge contract
+- [Capability audit](video_buddy/AUDIT.md) — what Buddy drives vs the live tower
+- [Merge notes (historical)](MERGE-LTX25.md) — PR #6, already merged
+- [Movie Builder guide](video_buddy/workflows/260507_VIDEO-BUDDY_MOVIE-BUILDER_GUIDE.md) — LTX 2.3 shot-by-shot film
+- [Agent notes](video_buddy/AGENTS.md) — Rainey fleet stop-lines
+- [Hermes skill](video_buddy/skills/video-buddy/SKILL.md) — install into `~/.hermes/skills/video-buddy/`
+- White paper & investor materials — not published in this repo; available on request
+
+## Hermes install
+
+Hermes agents forget Video Buddy if they only see MCP tools. **MCP ≠ skills.**
+The installer copies the skill **and** seats Hermes profile `ltx` (primary
+discovery). A2A on studio `:8189` stays as the fallback. Buddy never binds 8642.
+
+```bash
+cd video_buddy
+python install_hermes_skill.py
+# copies video_buddy/skills/video-buddy/ → ~/.hermes/skills/video-buddy/
+# seats ~/.hermes/profiles/ltx/  (SOUL + MCP, no .env)
+python -m master_agent hermes status
+```
+
+Or copy that folder by hand. Confirm `SKILL.md` is at `~/.hermes/skills/video-buddy/SKILL.md`.
+Confirm `~/.hermes/profiles/ltx/SOUL.md`. Custom SOUL is not overwritten unless `--force`.
+
+`~/.hermes/config.yaml` fragment (**no secrets** — local stdio only):
+
+```yaml
+mcp_servers:
+  master-agent:
+    command: "<VIDEO_BUDDY>/.venv/bin/python"   # Windows: .venv\Scripts\python.exe
+    args:
+      - "<VIDEO_BUDDY>/master_agent/mcp_server.py"
+```
+
+Prefer `hermes mcp add master-agent -- <venv-python> <VIDEO_BUDDY>/master_agent/mcp_server.py`
+then `hermes mcp test master-agent`. Hermes usually spawns the server; to start
+by hand from `video_buddy/`: `<venv python> master_agent/mcp_server.py`.
 
 ## Status
 
-Actively developed. 16 API workflows validate clean against a live server;
-104 tests green. Latest milestone: **LTX 2.3 Movie Builder** — shot-by-shot
-film production with voice cloning and 360° environments — integrated,
-live-validated, and documented. See the
-[technical README](video_buddy/README.md#status-2026-08-05) for the full
-changelog.
+Actively developed. **LTX 2.5 is on `main`** (merge [PR #6](https://github.com/thcabq352/ltx-video-buddy/pull/6), 2026-09-13) with the Comfy capability audit ([PR #5](https://github.com/thcabq352/ltx-video-buddy/pull/5)).
+
+What landed:
+
+- Seven LTX 2.5 graphs in the **default** catalog — usable with `--variant`, Create-tab, Comfy-tab, `GET /api/variants`. No env flags.
+- Inventory-first weight scan. `doctor` never fetches. `download-models --ltx25` lists confirmed-missing files and fetches only after `--yes`.
+- 16GB-class loader preference: **GGUF Q4 → NVFP4 (VRAM ≥ 14) → int8-convrot → bf16**.
+- WAN / K3NK / TeaCache paths unchanged. TeaCache is still soft-bypass (not inject).
+- **Not** ported from [ltx2.5-research-agent](https://github.com/thcabq352/ltx2.5-research-agent): LangGraph research/scrape/A2A/Gradio harness, secrets, and the `ltx_research_agent` package.
+
+See the [operator changelog](video_buddy/README.md#status-2026-09-13) for the full history.
 
 ## Legal & licensing
 
-Video Buddy is an orchestration layer. The models it drives — LTX 2.3
-(Lightricks), Flux (Black Forest Labs), Wan, Qwen, and others — are
+Video Buddy is an orchestration layer. The models it drives — LTX 2.5 and
+LTX 2.3 (Lightricks), Flux (Black Forest Labs), Wan, Qwen, and others — are
 third-party works under their own licenses, several of which restrict
-commercial use. Selected workflow designs credit
+commercial use. LTX 2.5 Hub packs are gated
+([`Lightricks/LTX-2.5`](https://huggingface.co/Lightricks/LTX-2.5), LTX-2.x
+Community License). Selected workflow designs credit
 [Mickmumpitz](https://mickmumpitz.ai). **Review each model's license before
 commercial deployment.** This repository contains no model weights.
 

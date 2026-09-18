@@ -177,6 +177,73 @@ def check_comfy() -> dict[str, Any]:
     return _row("comfyui", False, f"not reachable at {url}", fix=hint)
 
 
+def check_ltx25_weights() -> dict[str, Any]:
+    """Scan-only. Never downloads. Missing files become NEED + ask-to-download."""
+    try:
+        from master_agent.models.weights import scan_bundle
+
+        status = scan_bundle("ltx25_core")
+    except Exception as exc:
+        return _row("ltx25-weights", False, f"scan failed: {exc}", fix="python -m master_agent download-models --ltx25")
+    from master_agent.models.weights import describe_transformer_pick
+
+    pick = describe_transformer_pick(
+        Path(status.found_paths["transformer"]) if status.found_paths.get("transformer") else None
+    )
+    if status.ok:
+        found = ", ".join(Path(p).name for p in status.found_paths.values()) or "accepted local names"
+        return _row("ltx25-weights", True, f"{pick}; present ({found})")
+    names = ", ".join(w.filename for w in status.missing_mandatory[:4])
+    more = f" (+{len(status.missing_mandatory) - 4} more)" if len(status.missing_mandatory) > 4 else ""
+    hint = "python -m master_agent download-models --ltx25   # review confirmed-missing only, then --yes"
+    if len(status.missing_mandatory) == 1 and status.missing_mandatory[0].key == "duration_head":
+        hint = "duration-head is missing or zero-byte — " + hint
+    detail = f"missing {names}{more}"
+    if status.found_paths.get("transformer"):
+        detail = f"{pick}; {detail}"
+    return _row(
+        "ltx25-weights",
+        False,
+        detail,
+        fix=hint,
+    )
+
+
+def check_h3_weights() -> dict[str, Any]:
+    """Scan-only MiniMax H3 inventory. Never downloads."""
+    try:
+        from master_agent.models.weights import scan_bundle
+
+        status = scan_bundle("h3_fl2va")
+    except Exception as exc:
+        return _row("h3-weights", False, f"scan failed: {exc}", fix="python -m master_agent download-models --h3")
+    from master_agent.models.weights import describe_h3_transformer_pick
+
+    pick = describe_h3_transformer_pick(
+        Path(status.found_paths["h3_fl2va"]) if status.found_paths.get("h3_fl2va") else None
+    )
+    if status.ok:
+        found = ", ".join(Path(p).name for p in status.found_paths.values()) or "accepted local names"
+        return _row("h3-weights", True, f"{pick}; present ({found})")
+    names = ", ".join(w.filename for w in status.missing_mandatory[:4])
+    more = f" (+{len(status.missing_mandatory) - 4} more)" if len(status.missing_mandatory) > 4 else ""
+    hint = "python -m master_agent download-models --h3   # review confirmed-missing only, then --yes"
+    detail = f"missing {names}{more}"
+    if status.found_paths.get("h3_fl2va"):
+        detail = f"{pick}; {detail}"
+    return _row("h3-weights", False, detail, fix=hint)
+
+
+def check_vram_policy() -> dict[str, Any]:
+    """Shared 16GB-class pack policy (does not fetch)."""
+    try:
+        from master_agent.models.vram_policy import format_doctor_line
+
+        return _row("vram-policy", True, format_doctor_line())
+    except Exception as exc:
+        return _row("vram-policy", False, f"policy failed: {exc}")
+
+
 def snapshot() -> list[dict[str, Any]]:
     return [
         check_python(),
@@ -187,6 +254,9 @@ def snapshot() -> list[dict[str, Any]]:
         check_ffmpeg(),
         check_ollama(),
         check_comfy(),
+        check_vram_policy(),
+        check_ltx25_weights(),
+        check_h3_weights(),
     ]
 
 
@@ -301,7 +371,30 @@ def fix() -> int:
     return print_report(snapshot())
 
 
-def cmd_setup(*, do_fix: bool) -> int:
+def cmd_setup(*, do_fix: bool, fix_models: bool = False) -> int:
+    rc = 0
     if do_fix:
-        return fix()
+        rc = fix()
+        if not fix_models:
+            return rc
+    if fix_models:
+        from master_agent.models.weights import MissingWeightsError, download_missing_bundle, format_ask, scan_bundle
+
+        status = scan_bundle("ltx25_all")
+        if status.ok:
+            print("OK    LTX 2.5 weights already present")
+            return rc
+        print(format_ask(status))
+        print()
+        print("doctor --fix-models is explicit consent to fetch the missing mandatory set.")
+        try:
+            download_missing_bundle("ltx25_all", yes=True)
+        except MissingWeightsError as exc:
+            print(f"FAIL  {exc}")
+            return 1
+        except Exception as exc:
+            print(f"FAIL  {exc}")
+            return 1
+        model_rc = print_report(snapshot())
+        return rc or model_rc
     return print_report(snapshot())

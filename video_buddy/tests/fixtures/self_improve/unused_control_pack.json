@@ -1,0 +1,7 @@
+{
+  "request": "rain on a window",
+  "previs_source": "previs/shots/alley_01.export-patch.json",
+  "attach_recipe": {"schema": "buddy.comfy.attach/v1"},
+  "control_pack_present": true,
+  "control_pack_used": {}
+}

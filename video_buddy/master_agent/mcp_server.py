@@ -33,21 +33,21 @@ def _quiet(fn, *args, **kwargs):
 
 @mcp.tool()
 def health() -> dict:
-    """ComfyUI reachability + GPU VRAM, Ollama status, KB doc counts."""
+    """ComfyUI reachability + GPU VRAM, local LLM (Ollama / llama.cpp), KB counts."""
     from master_agent.comfy.client import ComfyClient
     from master_agent.kb.store import COLLECTION_RUNS, COLLECTION_WORKFLOWS, collection_count
-    from master_agent.llm import provider_available
+    from master_agent.llm import attach_llm_health
 
     from master_agent.control.versioned_config import get_versioned_config
 
     snap = get_versioned_config().snapshot()
     out: dict = {
         "comfyui": None,
-        "ollama": provider_available("ollama"),
         "kb": {},
         "config_hash": snap["hash"],
         "config": snap["values"],
     }
+    attach_llm_health(out)
     try:
         stats = ComfyClient().health()
         devices = stats.get("devices") or []

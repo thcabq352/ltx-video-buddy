@@ -117,6 +117,16 @@ class PipelineResult:
         self.budget_held: list[dict[str, Any]] = []
         self.budget_decisions: list[dict[str, Any]] = []
         self.messages: list[str] = []
+        self.previs_source: Optional[str] = None
+        self.control_pack_present: bool = False
+        self.control_pack_used: dict[str, bool] = {}
+        self.loop_status: str = ""
+        self.quality_bar: dict[str, Any] = {}
+        self.revise_history: list[dict[str, Any]] = []
+        self.attempt: int = 0
+        self.provenance: dict[str, Any] = {}
+        self.provenance_history: list[dict[str, Any]] = []
+        self.provenance_sidecar: str = ""
 
     def log(self, msg: str) -> None:
         self.messages.append(msg)
@@ -143,6 +153,16 @@ class PipelineResult:
             "budget_held": self.budget_held,
             "budget_decisions": self.budget_decisions,
             "messages": self.messages,
+            "previs_source": self.previs_source,
+            "control_pack_present": self.control_pack_present,
+            "control_pack_used": self.control_pack_used,
+            "loop_status": self.loop_status,
+            "quality_bar": self.quality_bar,
+            "revise_history": self.revise_history,
+            "attempt": self.attempt,
+            "provenance": self.provenance,
+            "provenance_history": self.provenance_history,
+            "provenance_sidecar": self.provenance_sidecar,
         }
 
 
@@ -216,7 +236,11 @@ def run_pipeline(
     llm_panel: Optional[str] = None,
     panel_judge: Optional[str] = None,
     power_mode: Optional[bool] = None,
+    attach_recipe: Optional[dict[str, Any]] = None,
     client: Optional[ComfyClient] = None,
+    dry_run: bool = False,
+    kind: str = "",
+    music_bed_attached: bool = False,
 ) -> PipelineResult:
     run_id = uuid.uuid4().hex[:12]
     result = PipelineResult(run_id, request=request)
@@ -255,16 +279,31 @@ def run_pipeline(
             judge_enabled=j_enabled,
             max_judge_rounds=max_judge_rounds,
             power_mode=power_mode,
+            attach_recipe=attach_recipe,
+            dry_run=dry_run,
+            kind=kind,
+            music_bed_attached=music_bed_attached,
+            shot_index=1,
         )
         result.messages.extend(st.messages)
         result.status = "done" if st.state == "DONE" else "error"
         result.error = st.error
         result.video_path = st.video_path
+        result.previs_source = st.previs_source
+        result.control_pack_present = st.control_pack_present
+        result.control_pack_used = st.control_pack_used
+        result.loop_status = st.loop_status
+        result.quality_bar = st.quality_bar
+        result.revise_history = st.revise_history
+        result.attempt = st.attempt
+        result.provenance = st.provenance
+        result.provenance_history = st.provenance_history
+        result.provenance_sidecar = st.provenance_sidecar
         if st.video_path:
             result.segment_paths = [st.video_path]
             result.segment_scores = [st.judge_score]
         result.full_judge_score = st.judge_score
-        result.full_judge_pass = st.judge_decision == "accept"
+        result.full_judge_pass = st.loop_status == "passed" or st.judge_decision == "accept"
         _write_record(result)
         return result
 
@@ -308,6 +347,11 @@ def run_pipeline(
             judge_enabled=j_enabled,
             max_judge_rounds=max_judge_rounds,
             power_mode=power_mode,
+            attach_recipe=attach_recipe,
+            dry_run=dry_run,
+            kind=kind,
+            music_bed_attached=music_bed_attached,
+            shot_index=i + 1,
         )
 
     # Per-segment generation (budget can pause the remaining queue)
@@ -443,6 +487,21 @@ def _stitch(result: PipelineResult, segment_paths: list[str], *, suffix: str) ->
     try:
         final = concat_videos(paths, dest)
         result.log(f"stitched {len(paths)} segments -> {final}")
+        try:
+            from master_agent.provenance import inherit_clip_provenance
+
+            payload = inherit_clip_provenance(
+                paths[0],
+                final,
+                revise_notes="pipeline stitch",
+                extra={"brief": result.request, "prompt": result.request},
+            )
+            result.provenance = payload
+            result.provenance_sidecar = str(
+                Path(final).with_name(Path(final).stem + ".buddy.json")
+            )
+        except Exception as e:
+            result.log(f"provenance stitch skipped: {e}")
         return final
     except Exception as e:
         result.log(f"stitch failed ({e}); keeping first segment")
@@ -463,6 +522,7 @@ def dry_run_pipeline(
     storyboard_mode: Optional[str] = None,
     llm_panel: Optional[str] = None,
     panel_judge: Optional[str] = None,
+    attach_recipe: Optional[dict[str, Any]] = None,
     client: Optional[ComfyClient] = None,
 ) -> int:
     """Storyboard + patch + validate every segment without queueing. CLI exit code."""
@@ -475,7 +535,7 @@ def dry_run_pipeline(
 
     client = client or ComfyClient()
     orch = Orchestrator(client=client)
-    probe_state = RunState(request=request)
+    probe_state = RunState(request=request, attach_recipe=attach_recipe)
     variant_sel = orch._select_variant(probe_state, variant)
     print(f"variant: {variant_sel}")
 
@@ -518,6 +578,20 @@ def dry_run_pipeline(
             print(f"FAIL  segment {i + 1} patch: {e}")
             failures += 1
             continue
+        if attach_recipe:
+            try:
+                from master_agent.comfy.attach import apply_attach_recipe
+
+                attached = apply_attach_recipe(wf, attach_recipe, object_info=object_info)
+                wf = attached.workflow
+                print(
+                    f"attach: previs_source={attached.previs_source!r} "
+                    f"used={attached.control_pack_used}"
+                )
+            except Exception as e:
+                print(f"FAIL  segment {i + 1} attach: {e}")
+                failures += 1
+                continue
         report = validate_workflow(
             wf, object_info, file_label=f"segment:{i + 1}", object_info_source=source
         )

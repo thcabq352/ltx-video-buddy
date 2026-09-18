@@ -1,0 +1,39 @@
+{
+  "10": {
+    "class_type": "CLIPTextEncode",
+    "inputs": {"text": "a rainy neon alley at night"},
+    "_meta": {"title": "Positive Prompt"}
+  },
+  "11": {
+    "class_type": "CLIPTextEncode",
+    "inputs": {"text": "blurry, watermark"},
+    "_meta": {"title": "Negative Prompt"}
+  },
+  "20": {
+    "class_type": "LoadImage",
+    "inputs": {"image": "placeholder_pose.png"},
+    "_meta": {"title": "OpenPose"}
+  },
+  "21": {
+    "class_type": "LoadImage",
+    "inputs": {"image": "placeholder_depth.png"},
+    "_meta": {"title": "Depth"}
+  },
+  "22": {
+    "class_type": "LoadImage",
+    "inputs": {"image": "placeholder_edges.png"},
+    "_meta": {"title": "Edges"}
+  },
+  "30": {
+    "class_type": "EmptyLTXVLatentVideo",
+    "inputs": {"width": 768, "height": 512, "length": 25}
+  },
+  "40": {
+    "class_type": "Wan22FunControlToVideo",
+    "inputs": {
+      "prompt": "a rainy neon alley at night",
+      "control_image": ["20", 0]
+    },
+    "_meta": {"title": "Wan Fun Control"}
+  }
+}

@@ -1,8 +1,15 @@
 # Maps logical fields → simplified single-pass LTX workflows
+#
+# 16GB policy (RTX 5060 Ti): GGUF Q4/Q5 → NVFP4 → int8/fp8. Doctor +
+# download-models + the cost gate inherit master_agent.models.vram_policy.
+# vram_class: safe | tight | heavy | external | cpu. Heavy graphs stay
+# available but are not 16GB defaults — see safer_alternate.
 
 base:
   file: base_t2v_i2v.json
   description: Simplified LTX-2.3 single-pass T2V (AV joint)
+  vram_class: safe
+  vram_peak_gb: 9.5
   fields:
     prompt:
       node_id: "10"
@@ -38,6 +45,8 @@ base:
 eros:
   file: eros_t2v_i2v.json
   description: Same simplified graph with EROS baked checkpoint
+  vram_class: safe
+  vram_peak_gb: 11.0
   fields:
     prompt:
       node_id: "10"
@@ -70,6 +79,8 @@ eros:
 directors:
   file: directors.json
   description: Simplified graph used for multi-segment director style
+  vram_class: tight
+  vram_peak_gb: 13.5
   fields:
     prompt:
       node_id: "10"
@@ -104,7 +115,9 @@ directors:
 
 flux:
   file: flux_t2i.json
-  description: Flux.1-dev fp8 text-to-image (UNETLoader + DualCLIP + FluxGuidance)
+  description: Flux.1-dev GGUF Q4 / fp8 text-to-image (UNETLoader + DualCLIP + FluxGuidance)
+  vram_class: safe
+  vram_peak_gb: 11.0
   fields:
     prompt:
       node_id: "10"
@@ -128,6 +141,8 @@ flux:
 lipsync:
   file: lipsync_ia2v.json
   description: LipDub graph (takes a source video with speech audio)
+  vram_class: safe
+  vram_peak_gb: 10.5
   fields:
     prompt:
       class_type: CLIPTextEncode
@@ -180,7 +195,9 @@ lipsync:
 
 wan22:
   file: 260713_VIDEO-BUDDY_WAN-2-2-VID_1-0_api.json
-  description: Wan 2.2 two-stage T2V (high/low noise UNETs, NAG, film grain, 16fps)
+  description: Wan 2.2 two-stage T2V (GGUF Q4_K_S or fp8 + Lightx2v, NAG, film grain, 16fps)
+  vram_class: tight
+  vram_peak_gb: 13.2
   fields:
     prompt:
       node_id: "3"
@@ -230,7 +247,9 @@ wan22:
 
 krea2_img:
   file: 260713_VIDEO-BUDDY_KREA-2-IMG_1-0_api.json
-  description: Krea-2 image generation (image variant — not video-pipeline routed; negative is ConditioningZeroOut)
+  description: Krea-2 NVFP4 image generation (image variant — not video-pipeline routed; negative is ConditioningZeroOut)
+  vram_class: safe
+  vram_peak_gb: 10.5
   fields:
     prompt:
       node_id: "4"
@@ -268,44 +287,111 @@ vb_ccc_adv:
   format: api
   ui_source: 260720_VIDEO-BUDDY_CCC_4-01_ADV.json
   description: Consistent Character Creator v4 ADV (516 nodes — face split, detailer, upscale)
+  vram_class: heavy
+  vram_peak_gb: 15.5
+  safer_alternate: flux
   requires: [ComfyUI-Mickmumpitz-Nodes (CCC_*), KJNodes (GetNode/SetNode/JoinStringMulti/ImageResizeKJv2),
              rgthree-comfy, ComfyUI-Easy-Use, ComfyUI-Impact-Pack, SeedVR2, ComfyUI-AutoCropFaces]
+  # director: baked_defaults — 777-node graph, no single safe prompt widget.
+  # Prefer `comfy run --template vb_ccc_adv` for precision.
 
 vb_dataset_tagger:
   file: 260713_VIDEO-BUDDY_DATASET-TAGGER_1-5_api.json
   format: api
   ui_source: 260713_VIDEO-BUDDY_DATASET-TAGGER_1-5.json
   description: Dataset auto-tagger (batch images -> caption pairs) for LoRA training data
+  vram_class: tight
+  vram_peak_gb: 10.0
   requires: [ComfyUI-Mickmumpitz-Nodes (CCC_ImageBatchLoader/CCC_PromptStudio/CCC_ShowImageTextPairs), KJNodes,
              ComfyUI-QwenVL (AILab_QwenVL — first run downloads Qwen3-VL weights)]
+  # director: baked_defaults — CCC_PromptStudio holds engine prompts, not a gen brief.
 
 vb_tag_review:
   file: 260713_VIDEO-BUDDY_TAG-REVIEW-EDIT_1-0_api.json
   format: api
   ui_source: 260713_VIDEO-BUDDY_TAG-REVIEW-EDIT_1-0.json
   description: Review/edit auto-generated dataset captions before LoRA training
+  vram_class: cpu
+  vram_peak_gb: 4.0
   requires: [ComfyUI-Mickmumpitz-Nodes (CCC_DatasetReviewer/CCC_TextBatchLoader), comfyui-custom-scripts (pysssss), Comfyroll (CR Text Replace), WAS (Save Text File)]
+  # director: baked_defaults — review UI, no generation prompt.
 
 vb_ideogram:
   file: 260713_VIDEO-BUDDY_IDEOGRAM_1-0_api.json
   format: api
   ui_source: 260713_VIDEO-BUDDY_IDEOGRAM_1-0.json
   description: Ideogram API image generation with prompt builder (external API key needed)
+  vram_class: external
+  vram_peak_gb: 0.0
   requires: [KJNodes (Ideogram4PromptBuilderKJ), comfyui-custom-scripts, rgthree-comfy, ComfyMathExpression]
+  fields:
+    prompt:
+      class_type: Ideogram4PromptBuilderKJ
+      index: 0
+      input: high_level_description
+    seed:
+      class_type: RandomNoise
+      index: 0
+      input: noise_seed
 
 vb_krea2_img:
   file: 260713_VIDEO-BUDDY_KREA-2-IMG_1-0_api.json
   format: api
   ui_source: 260713_VIDEO-BUDDY_KREA-2-IMG_1-0.json
   description: Krea-2 two-pass image generation (private lora node bypassed — see krea2_img variant)
+  vram_class: safe
+  vram_peak_gb: 10.5
   requires: [MarkdownNote + MickmumpitzLabel only (cosmetic)]
+  fields:
+    prompt:
+      node_id: "4"
+      input: text
+    seed:
+      node_id: "7"
+      input: seed
+    width:
+      node_id: "6"
+      input: width
+    height:
+      node_id: "6"
+      input: height
+    steps:
+      node_id: "7"
+      input: steps
+    filename_prefix:
+      node_id: "20"
+      input: filename_prefix
 
 vb_wan22_vid:
   file: 260713_VIDEO-BUDDY_WAN-2-2-VID_1-0_api.json
   format: api
   ui_source: 260713_VIDEO-BUDDY_WAN-2-2-VID_1-0.json
   description: Wan 2.2 video generation with NAG + film grain finish (see wan22 variant)
+  vram_class: tight
+  vram_peak_gb: 13.2
   requires: [VideoHelperSuite (VHS_VideoCombine), rgthree-comfy, RES4LYF (Film Grain), KJNodes (WanVideoNAG)]
+  fields:
+    prompt:
+      node_id: "3"
+      input: text
+    negative_prompt:
+      node_id: "4"
+      input: text
+    seed:
+      node_id: "197"
+      input: value
+    width:
+      node_id: "5"
+      input: width
+    height:
+      node_id: "5"
+      input: height
+    frames:
+      node_id: "5"
+      input: length
+    filename_prefix:
+      node_id: "194"
+      input: filename_prefix
 
 # --- batch 2 (converted 2026-08-03) ---
 # Extra packs: gguf + ComfyUI-GGUF, ComfyUI_essentials, comfyui_controlnet_aux,
@@ -319,52 +405,127 @@ vb_qwen_edit_360:
   format: api
   ui_source: 251018_VIDEO-BUDDY_QWEN-IMAGE-EDIT-360_1-1.json
   description: Qwen-Image-Edit 360 turnaround (GGUF Q5_0 + Lightning LoRAs + his 360 LoRA)
+  vram_class: safe
+  vram_peak_gb: 12.0
   requires: [ComfyUI-GGUF/gguf (GGUF loaders), VideoHelperSuite]
+  fields:
+    prompt:
+      node_id: "1497"
+      input: prompt
+    seed:
+      class_type: KSampler
+      index: 0
+      input: seed
+    width:
+      class_type: EmptySD3LatentImage
+      index: 0
+      input: width
+    height:
+      class_type: EmptySD3LatentImage
+      index: 0
+      input: height
 
 vb_aivfx_startimage:
   file: 260330_AI-VFX-STARTIMAGE_1-0_api.json
   format: api
   ui_source: 260330_AI-VFX-STARTIMAGE_1-0.json
   description: AI-VFX start-image generator (Qwen-Image-Edit-2511 GGUF)
+  vram_class: safe
+  vram_peak_gb: 11.5
   requires: [ComfyUI-GGUF/gguf]
+  fields:
+    prompt:
+      class_type: PrimitiveStringMultiline
+      index: 0
+      input: value
+    seed:
+      class_type: KSampler
+      index: 0
+      input: seed
 
 vb_aivfx_preprocess:
   file: 260330_VIDEO-BUDDY_AI-VFX_PREPROCESS_1-0_api.json
   format: api
   ui_source: 260330_VIDEO-BUDDY_AI-VFX_PREPROCESS_1-0.json
   description: AI-VFX preprocess (SAM3 segment, depth, cotracker, RMBG -> control videos)
+  vram_class: heavy
+  vram_peak_gb: 15.0
+  safer_alternate: vb_aivfx_startimage
   requires: [ComfyUI-RMBG (SAM3Segment — first run downloads sam3.pt), ComfyUI-DepthCrafter-Nodes,
              comfyui_cotracker_node, comfyui_controlnet_aux, triton-windows]
+  # director: baked_defaults — control-video preprocess, no generation prompt.
 
 vb_aivfx_adv:
   file: 260330_VIDEO-BUDDY_AI-VFX_1-0_ADV_api.json
   format: api
   ui_source: 260330_VIDEO-BUDDY_AI-VFX_1-0_ADV.json
   description: AI-VFX compositor v1.0 (Wan VACE e4m3fn; fp32 build does not exist publicly)
+  vram_class: heavy
+  vram_peak_gb: 15.2
+  safer_alternate: vb_aivfx_adv_13
   requires: [ComfyUI-WanVaceAdvanced (WanVacePhantomSimpleV2), KJNodes, VideoHelperSuite]
+  fields:
+    prompt:
+      class_type: IterPromptBuilder
+      index: 0
+      input: string_1
+    negative_prompt:
+      node_id: "3228:3262"
+      input: text
 
 vb_aivfx_adv_13:
   file: 260608_VIDEO-BUDDY_AI-VFX_1-3_ADV_api.json
   format: api
   ui_source: 260608_VIDEO-BUDDY_AI-VFX_1-3_ADV.json
-  description: AI-VFX compositor v1.3 (Wan VACE e4m3fn or Q4_K_M GGUF option)
+  description: AI-VFX compositor v1.3 (Wan VACE Q4_K_M GGUF default; e4m3fn quality fallback)
+  vram_class: tight
+  vram_peak_gb: 13.6
   requires: [ComfyUI-WanVaceAdvanced, ComfyUI-GGUF/gguf, KJNodes, VideoHelperSuite]
+  fields:
+    prompt:
+      class_type: IterPromptBuilder
+      index: 0
+      input: string_1
+    negative_prompt:
+      node_id: "3228:3262"
+      input: text
+    seed:
+      class_type: KSampler
+      index: 0
+      input: seed
 
 ltx23_lipsync_v08:
   file: 260603_LTX2-3_3D-RENDERING_LIP-SNYC_v08_api.json
   format: api
   ui_source: 260603_LTX2-3_3D-RENDERING_LIP-SNYC_v08.json
   description: LTX-2.3 3D-rendering lip-sync (clay/depth/mouth guides + OmniNFT/ic-loras)
+  vram_class: heavy
+  vram_peak_gb: 15.4
+  safer_alternate: lipsync
   requires: [ComfyUI-LTXVideo, ComfyUI-Mickmumpitz-Nodes, KJNodes, VideoHelperSuite,
              comfyui_controlnet_aux, ComfyUI_essentials, ComfyUI-Easy-Use, rgthree-comfy]
+  fields:
+    # Positive CLIP text is a graph link — do not overwrite it.
+    negative_prompt:
+      node_id: "6202:5835"
+      input: text
+    seed:
+      class_type: RandomNoise
+      index: 0
+      input: noise_seed
 
 vb_ccc41_krea2:
   file: 260729_VIDEO-BUDDY_CCC_4-1_KREA2-EDIT_BETA_PUBLISH_api.json
   format: api
   ui_source: 260729_VIDEO-BUDDY_CCC_4-1_KREA2-EDIT_BETA_PUBLISH.json
   description: CCC 4.1 BETA — Krea2-Edit grounded character editing (supersedes CCC 4.01 ADV)
+  vram_class: heavy
+  vram_peak_gb: 15.3
+  safer_alternate: krea2_img
   requires: [ComfyUI-Krea2-Ostris-Edit (Krea2EditGroundedEncode), comfyui-krea2edit (Krea2EditModelPatch),
              ComfyUI-Mickmumpitz-Nodes, KJNodes, Impact-Pack]
+  # director: baked_defaults — 48 grounded encodes; first POSITIVE is a link.
+  # Prefer `comfy run --template vb_ccc41_krea2`.
 
 # --- AI-RENDERING example projects (batch 2/3, converted 2026-08-03/04) ---
 # Bundled per-project assets were copied into ComfyUI/input/.
@@ -374,21 +535,33 @@ air_render_030:
   format: api
   ui_source: AI-RENDERING-EXAMPLE FILES/030_BearMinimum_RightThisWay/030_BearMinimum_RightThisWay.json
   description: LTX-2.3 AI-rendering example (BearMinimum clay scene, right-this-way shot)
+  vram_class: heavy
+  vram_peak_gb: 15.2
+  safer_alternate: base
   requires: [same as ltx23_lipsync_v08]
+  # director: baked_defaults — example project; JSON often gitignored. Prefer --template.
 
 air_render_050:
   file: AI-RENDERING-EXAMPLE FILES/050_BearMinimum_Bar/050_BearMinimum_Bar_workflow_api.json
   format: api
   ui_source: AI-RENDERING-EXAMPLE FILES/050_BearMinimum_Bar/050_BearMinimum_Bar_workflow.json
   description: LTX-2.3 AI-rendering example (BearMinimum bar scene)
+  vram_class: heavy
+  vram_peak_gb: 15.2
+  safer_alternate: base
   requires: [same as ltx23_lipsync_v08]
+  # director: baked_defaults — example project; JSON often gitignored. Prefer --template.
 
 air_render_businesswoman:
   file: AI-RENDERING-EXAMPLE FILES/BusinessWoman/BusinessWoman_Workflow_api.json
   format: api
   ui_source: AI-RENDERING-EXAMPLE FILES/BusinessWoman/BusinessWoman_Workflow.json
   description: LTX-2.3 AI-rendering example (BusinessWoman scene)
+  vram_class: heavy
+  vram_peak_gb: 15.2
+  safer_alternate: base
   requires: [same as ltx23_lipsync_v08]
+  # director: baked_defaults — example project; JSON often gitignored. Prefer --template.
 
 # --- batch 3 (converted 2026-08-04) ---
 # Extra packs: ComfyUI-GIMM-VFI, mickmumpitz/ComfyUI-WanVideoWrapper (his fork),
@@ -400,36 +573,54 @@ vb_zimage_turbo_cn:
   format: api
   ui_source: AI-RENDERING-EXAMPLE FILES/260303_VIDEO-BUDDY_Z-IMAGE_TURBO_CN_1-1.json
   description: Z-Image Turbo with Fun-Controlnet-Union 2.1 (lineart-guided start frames)
+  vram_class: heavy
+  vram_peak_gb: 15.1
+  safer_alternate: krea2_img
   requires: [ComfyUI core ModelPatchLoader (models/model_patches mapped in extra_model_paths.yaml)]
+  # director: baked_defaults — file often gitignored. Prefer --template when on disk.
 
 vb_ai_renderer_smpl:
   file: AI-RENDERING-EXAMPLE FILES/260402_VIDEO-BUDDY_AI-RENDERER_SMPL_2-1_api.json
   format: api
   ui_source: AI-RENDERING-EXAMPLE FILES/260402_VIDEO-BUDDY_AI-RENDERER_SMPL_2-1.json
   description: AI-Renderer simple v2.1 (Wan VACE start/end frame + DepthAnythingV3 preprocess)
+  vram_class: tight
+  vram_peak_gb: 13.8
   requires: [mickmumpitz/ComfyUI-WanVideoWrapper (WanVideoVACEStartToEndFrame), ComfyUI-DepthAnythingV3,
              ComfyUI-WanVaceAdvanced]
+  # director: baked_defaults — file often gitignored. Prefer --template when on disk.
 
 vb_ai_renderer_adv:
   file: AI-RENDERING-EXAMPLE FILES/260402_VIDEO-BUDDY_AI-RENDERER_ADV_2-1_api.json
   format: api
   ui_source: AI-RENDERING-EXAMPLE FILES/260402_VIDEO-BUDDY_AI-RENDERER_ADV_2-1.json
   description: AI-Renderer advanced v2.1 (+ GIMM-VFI interpolation)
+  vram_class: heavy
+  vram_peak_gb: 15.6
+  safer_alternate: vb_ai_renderer_smpl
   requires: [same as vb_ai_renderer_smpl, ComfyUI-GIMM-VFI]
+  # director: baked_defaults — file often gitignored. Prefer --template when on disk.
 
 vb_ai_renderer_adv_20:
   file: AI-RENDERING-EXAMPLE FILES/260225_VIDEO-BUDDY_AI-RENDERER_ADV_2-0_api.json
   format: api
   ui_source: AI-RENDERING-EXAMPLE FILES/260225_VIDEO-BUDDY_AI-RENDERER_ADV_2-0.json
   description: AI-Renderer advanced v2.0 (previous revision of the ADV pipeline)
+  vram_class: heavy
+  vram_peak_gb: 15.6
+  safer_alternate: vb_ai_renderer_smpl
   requires: [same as vb_ai_renderer_adv]
+  # director: baked_defaults — file often gitignored. Prefer --template when on disk.
 
 vb_rtx_superres:
   file: AI-RENDERING-EXAMPLE FILES/260330_VIDEO-BUDDY_NVIDIA-RTX-SUPER-RESOLUTION_1-0_api.json
   format: api
   ui_source: AI-RENDERING-EXAMPLE FILES/260330_VIDEO-BUDDY_NVIDIA-RTX-SUPER-RESOLUTION_1-0.json
   description: NVIDIA RTX Video Super Resolution upscale pass
+  vram_class: tight
+  vram_peak_gb: 8.0
   requires: [Comfy-Org/Nvidia_RTX_Nodes_ComfyUI + nvidia-vfx (pip, pypi.nvidia.com)]
+  # director: baked_defaults — file often gitignored. Prefer --template when on disk.
 
 # --- batch 4 (converted 2026-08-05, via state/convert_ui_to_api.py) ---
 # Extra packs: ComfyUI-Olm-DragCrop, ComfyUI_preview360panorama (ProGamerGov),
@@ -445,4 +636,169 @@ vb_movie_builder:
   format: api
   ui_source: 260507_VIDEO-BUDDY_MOVIE-BUILDER_1-1_ADV.json
   description: LTX 2.3 Movie Builder ADV — shot-by-shot movie pipeline (Flux 2 Klein start-frames, LTX 2.3 video+audio, voice cloning, 360 environments, ShotAssembler)
+  vram_class: heavy
+  vram_peak_gb: 15.8
+  safer_alternate: ltx25_t2v_i2v
   requires: [ComfyUI-Mickmumpitz-Nodes (ShotAssembler/ShotVideoOutput/ResolutionPicker), movie_builder_shims (ShotOrder/ShotDuplicator), ComfyUI-LTXVideo, KJNodes, RES4LYF, VideoHelperSuite, ComfyUI-Easy-Use, rgthree-comfy, ComfyUI-Olm-DragCrop, ComfyUI_preview360panorama]
+  fields:
+    prompt:
+      node_id: "13383"
+      input: value
+    seed:
+      class_type: RandomNoise
+      index: 0
+      input: noise_seed
+  # Remaining shot cards stay baked. Prefer --template for multi-shot precision.
+
+# --- LTX 2.5 API pack (ported from thcabq352/ltx2.5-research-agent) ---
+# Default catalog entries. Stub ckpt names in the JSON are remapped at patch
+# time to the official Lightricks/LTX-2.5 Comfy split pack. See REQUIRED-FILES.md.
+
+ltx25_t2v_i2v:
+  file: ltx-2.5/LTX-2.5_T2V_I2V_Single_Stage_Distilled_api.json
+  format: api
+  description: LTX 2.5 single-stage distilled T2V / I2V
+  vram_class: safe
+  vram_peak_gb: 12.5
+  requires: [ComfyUI-LTXVideo, VideoHelperSuite]
+  fields:
+    prompt: { class_type: CLIPTextEncode, index: 0, input: text }
+    negative_prompt: { class_type: CLIPTextEncode, index: 1, input: text }
+    seed: { class_type: KSampler, index: 0, input: seed }
+    width: { class_type: EmptyLTXVLatentVideo, index: 0, input: width }
+    height: { class_type: EmptyLTXVLatentVideo, index: 0, input: height }
+    frames: { class_type: EmptyLTXVLatentVideo, index: 0, input: length }
+
+ltx25_t2v_i2v_two_stage:
+  file: ltx-2.5/LTX-2.5_T2V_I2V_Two_Stage_Distilled_api.json
+  format: api
+  description: LTX 2.5 two-stage distilled T2V / I2V (latent spatial upscale)
+  vram_class: tight
+  vram_peak_gb: 14.0
+  safer_alternate: ltx25_t2v_i2v
+  requires: [ComfyUI-LTXVideo, VideoHelperSuite, LTXVLatentUpsampler]
+  fields:
+    prompt: { class_type: CLIPTextEncode, index: 0, input: text }
+    seed: { class_type: KSampler, index: 0, input: seed }
+    frames: { class_type: EmptyLTXVLatentVideo, index: 0, input: length }
+
+ltx25_flf2v:
+  file: ltx-2.5/LTX-2.5_FLF2V_api.json
+  format: api
+  description: LTX 2.5 first + last frame to video
+  vram_class: safe
+  vram_peak_gb: 12.8
+  requires: [ComfyUI-LTXVideo, VideoHelperSuite]
+  fields:
+    prompt: { class_type: CLIPTextEncode, index: 0, input: text }
+    seed: { class_type: KSampler, index: 0, input: seed }
+    frames: { class_type: EmptyLTXVLatentVideo, index: 0, input: length }
+
+ltx25_msr:
+  file: ltx-2.5/LTX-2.5_MSR_Multi_Reference_api.json
+  format: api
+  description: LTX 2.5 multi-reference (pic1–pic4 + background)
+  vram_class: tight
+  vram_peak_gb: 13.2
+  requires: [ComfyUI-LTXVideo (ComfyUILTX25MSR*), VideoHelperSuite]
+  fields:
+    prompt: { class_type: CLIPTextEncode, index: 0, input: text }
+    seed: { class_type: KSampler, index: 0, input: seed }
+    width: { class_type: EmptyLTXVLatentVideo, index: 0, input: width }
+    height: { class_type: EmptyLTXVLatentVideo, index: 0, input: height }
+    frames: { class_type: EmptyLTXVLatentVideo, index: 0, input: length }
+
+ltx25_v2v_ic_lora:
+  file: ltx-2.5/LTX-2.5_V2V_ICLoRA_Single_Stage_Distilled_api.json
+  format: api
+  description: LTX 2.5 video-to-video IC-LoRA
+  vram_class: tight
+  vram_peak_gb: 13.0
+  requires: [ComfyUI-LTXVideo (LTXVICLoRALoader), VideoHelperSuite]
+  fields:
+    prompt: { class_type: CLIPTextEncode, index: 0, input: text }
+    seed: { class_type: KSampler, index: 0, input: seed }
+    width: { class_type: EmptyLTXVLatentVideo, index: 0, input: width }
+    height: { class_type: EmptyLTXVLatentVideo, index: 0, input: height }
+    frames: { class_type: EmptyLTXVLatentVideo, index: 0, input: length }
+
+ltx25_a2v:
+  file: ltx-2.5/LTX-2.5_A2V_Two_Stage_Distilled_api.json
+  format: api
+  description: LTX 2.5 audio-to-video two-stage distilled
+  vram_class: safe
+  vram_peak_gb: 12.8
+  requires: [ComfyUI-LTXVideo, VideoHelperSuite]
+  fields:
+    prompt: { class_type: CLIPTextEncode, index: 0, input: text }
+    seed: { class_type: KSampler, index: 0, input: seed }
+    width: { class_type: EmptyLTXVLatentVideo, index: 0, input: width }
+    height: { class_type: EmptyLTXVLatentVideo, index: 0, input: height }
+    frames: { class_type: EmptyLTXVLatentVideo, index: 0, input: length }
+
+ltx25_t2a:
+  file: ltx-2.5/LTX-2.5_T2A_Single_Stage_Distilled_api.json
+  format: api
+  description: LTX 2.5 text-to-audio single-stage distilled
+  vram_class: safe
+  vram_peak_gb: 8.5
+  requires: [ComfyUI-LTXVideo]
+  fields:
+    prompt: { class_type: CLIPTextEncode, index: 0, input: text }
+    frames: { class_type: LTXVEmptyLatentAudio, index: 0, input: frames_number }
+
+# --- MiniMax H3 API pack (native Comfy ≥0.30 + ComfyUI-GGUF) ---
+# Default catalog. GGUF Q4_K DiT preferred; Comfy TE + official VAEs.
+# CFG must stay 1.0. See REQUIRED-FILES.md.
+
+h3_t2v:
+  file: minimax-h3/MiniMax-H3_T2V_FL2VA_api.json
+  format: api
+  description: MiniMax H3 fl2va text-to-AV (native stereo)
+  vram_class: tight
+  vram_peak_gb: 13.0
+  requires: [ComfyUI >=0.30 MiniMaxH3ImageToVideo, ComfyUI-GGUF]
+  fields:
+    prompt: { class_type: MiniMaxH3ImageToVideo, index: 0, input: prompt }
+    seed: { class_type: KSampler, index: 0, input: seed }
+    width: { class_type: MiniMaxH3ImageToVideo, index: 0, input: width }
+    height: { class_type: MiniMaxH3ImageToVideo, index: 0, input: height }
+    frames: { class_type: MiniMaxH3ImageToVideo, index: 0, input: length }
+    steps: { class_type: KSampler, index: 0, input: steps }
+    cfg: { class_type: KSampler, index: 0, input: cfg }
+
+h3_i2v:
+  file: minimax-h3/MiniMax-H3_I2V_FL2VA_api.json
+  format: api
+  description: MiniMax H3 fl2va image-to-AV
+  vram_class: tight
+  vram_peak_gb: 13.0
+  requires: [ComfyUI >=0.30 MiniMaxH3ImageToVideo, ComfyUI-GGUF]
+  fields:
+    prompt: { class_type: MiniMaxH3ImageToVideo, index: 0, input: prompt }
+    seed: { class_type: KSampler, index: 0, input: seed }
+    frames: { class_type: MiniMaxH3ImageToVideo, index: 0, input: length }
+
+h3_flf:
+  file: minimax-h3/MiniMax-H3_FLF_FL2VA_api.json
+  format: api
+  description: MiniMax H3 fl2va first + last frame to AV
+  vram_class: tight
+  vram_peak_gb: 13.2
+  requires: [ComfyUI >=0.30 MiniMaxH3ImageToVideo, ComfyUI-GGUF]
+  fields:
+    prompt: { class_type: MiniMaxH3ImageToVideo, index: 0, input: prompt }
+    seed: { class_type: KSampler, index: 0, input: seed }
+    frames: { class_type: MiniMaxH3ImageToVideo, index: 0, input: length }
+
+h3_r2v:
+  file: minimax-h3/MiniMax-H3_R2V_REF2VA_api.json
+  format: api
+  description: MiniMax H3 ref2va reference-to-AV
+  vram_class: tight
+  vram_peak_gb: 13.4
+  requires: [ComfyUI >=0.30 MiniMaxH3ReferenceToVideo, ComfyUI-GGUF]
+  fields:
+    prompt: { class_type: MiniMaxH3ReferenceToVideo, index: 0, input: prompt }
+    seed: { class_type: KSampler, index: 0, input: seed }
+    frames: { class_type: MiniMaxH3ReferenceToVideo, index: 0, input: length }

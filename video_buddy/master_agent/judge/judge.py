@@ -19,6 +19,10 @@ from master_agent.config import (
     MAX_JUDGE_ROUNDS,
 )
 from master_agent.judge.probe import HEALTH_ISSUE_CODES, frame_notes
+from master_agent.judge.quality_bar import (
+    build_revise_plan,
+    evaluate_quality_bar,
+)
 
 HUMAN_VETO = "human_veto"
 BRIEF_ADHERENCE_LOW = 0.45
@@ -55,9 +59,15 @@ def _vision_review_safe(
 
 
 def _vnotes(review: dict[str, Any]) -> str:
-    from master_agent.judge.vision import vision_notes
+    try:
+        from master_agent.judge.vision import vision_notes
 
-    return vision_notes(review)
+        return vision_notes(review)
+    except Exception:
+        issues = review.get("issues") or []
+        extra = (", ".join(str(x) for x in issues[:4])) if issues else ""
+        reason = str(review.get("reason") or "")
+        return (reason + (f"; {extra}" if extra else "")).strip() or "vision review"
 
 
 @dataclass
@@ -74,10 +84,12 @@ class JudgeResult:
     prompt_rewrite: str = ""
     param_hints: dict[str, Any] = field(default_factory=dict)
     reason: str = ""
-    decision: str = "accept"  # accept | rewrite | retune | skip | human_veto
+    decision: str = "accept"  # accept | rewrite | retune | skip | human_veto | exhausted
     heuristic_score: float = 0.0
     llm_score: float = 0.0
     vision_score: float | None = None
+    quality_bar: dict[str, Any] = field(default_factory=dict)
+    revise_plan: dict[str, Any] = field(default_factory=dict)
 
     def to_dict(self) -> dict[str, Any]:
         d = asdict(self)
@@ -171,7 +183,7 @@ def decide_action(
     ):
         return HUMAN_VETO
     if judge_retries >= max_rounds:
-        return "accept"  # budget exhausted — keep best
+        return "exhausted"
     if critical and look < thr and not prompt_rewrite and not param_hints:
         return "retune"
     acceptable = look >= thr and (llm_pass is not False or look >= thr + 0.05)
@@ -188,6 +200,43 @@ def decide_action(
     return "accept" if look >= thr * 0.9 else "rewrite"
 
 
+def _merge_quality_bar(
+    *,
+    decision: str,
+    rewrite: str,
+    hints: dict[str, Any],
+    issues: list[str],
+    reason: str,
+    qb: dict[str, Any],
+    context: dict[str, Any] | None,
+    ltx_prompt: str,
+    steps: Any = None,
+) -> tuple[str, str, dict[str, Any], list[str], str, dict[str, Any]]:
+    """Quality-bar fails force rewrite + a structured revise plan (no GPU)."""
+    fails = list(qb.get("fails") or [])
+    plan: dict[str, Any] = {}
+    if not fails:
+        return decision, rewrite, hints, issues, reason, plan
+    for item in fails:
+        label = f"quality_bar.{item.get('id')}: {item.get('detail') or item.get('code')}"
+        if label not in issues:
+            issues.append(label)
+    built = build_revise_plan(
+        fails, context, base_prompt=ltx_prompt, steps=steps
+    )
+    plan = built.to_dict()
+    if decision not in (HUMAN_VETO, "exhausted"):
+        decision = "rewrite"
+    if not (rewrite or "").strip() and built.as_prompt_rewrite(ltx_prompt):
+        rewrite = built.as_prompt_rewrite(ltx_prompt)
+    for key, value in built.param_deltas.items():
+        hints.setdefault(key, value)
+    extra = built.reason or "quality_bar fail"
+    if extra not in (reason or ""):
+        reason = f"{reason} | {extra}" if reason else extra
+    return decision, rewrite, hints, issues, reason, plan
+
+
 def judge_segment(
     *,
     user_request: str,
@@ -200,12 +249,15 @@ def judge_segment(
     max_rounds: int | None = None,
     threshold: float | None = None,
     judge_enabled: bool = True,
+    context: dict[str, Any] | None = None,
 ) -> JudgeResult:
     """Heuristic + optional LLM judge for one generated clip."""
     thr = _effective_threshold(threshold)
     max_r = max_rounds if max_rounds is not None else MAX_JUDGE_ROUNDS
     issues = [str(i.get("detail") or i.get("code") or i) for i in (heuristic_issues or [])]
     critical = is_critical_fail(heuristic_issues)
+    qb = evaluate_quality_bar(context)
+    qb_fails = list(qb.get("fails") or [])
 
     health = health_score_from_issues(heuristic_issues)
     look = look_score_from_heuristic(float(heuristic_score or 0.0), heuristic_issues)
@@ -223,9 +275,22 @@ def judge_segment(
             threshold=thr,
             look_score=look,
         )
+        hints: dict[str, Any] = {}
+        rewrite = ""
+        reason = "Judge disabled; heuristic only"
+        decision, rewrite, hints, issues, reason, plan = _merge_quality_bar(
+            decision=decision,
+            rewrite=rewrite,
+            hints=hints,
+            issues=issues,
+            reason=reason,
+            qb=qb,
+            context=context,
+            ltx_prompt=ltx_prompt,
+        )
         veto = decision == HUMAN_VETO
         return JudgeResult(
-            pass_=decision == "accept" and not critical,
+            pass_=decision == "accept" and not critical and not qb_fails,
             score=combined,
             combined_score=combined,
             look_score=look,
@@ -233,10 +298,14 @@ def judge_segment(
             human_veto=veto,
             album_lock=False,
             issues=issues,
-            reason="Judge disabled; heuristic only",
+            prompt_rewrite=rewrite,
+            param_hints=hints,
+            reason=reason,
             decision=decision,
             heuristic_score=combined,
             llm_score=combined,
+            quality_bar=qb,
+            revise_plan=plan,
         )
 
     notes = frame_notes(video_path)
@@ -280,9 +349,15 @@ def judge_segment(
         except (TypeError, ValueError):
             brief_adherence = None
 
-    # Fallback: strong heuristics alone (unless vision explicitly failed it)
+    # Fallback: strong heuristics alone (unless vision / quality-bar failed it)
     vision_failed = review is not None and not review.get("pass", True)
-    if not llm and float(heuristic_score or 0) >= 0.85 and not critical and not vision_failed:
+    if (
+        not llm
+        and float(heuristic_score or 0) >= 0.85
+        and not critical
+        and not vision_failed
+        and not qb_fails
+    ):
         decision = decide_action(
             combined=combined,
             llm_pass=True,
@@ -311,7 +386,17 @@ def judge_segment(
             brief_adherence=brief_adherence,
         )
 
-    passed = decision == "accept"
+    decision, rewrite, hints, issues, reason, plan = _merge_quality_bar(
+        decision=decision,
+        rewrite=rewrite,
+        hints=hints,
+        issues=issues,
+        reason=reason,
+        qb=qb,
+        context=context,
+        ltx_prompt=ltx_prompt,
+    )
+    passed = decision == "accept" and not qb_fails
     veto = decision == HUMAN_VETO
     return JudgeResult(
         pass_=passed,
@@ -330,6 +415,8 @@ def judge_segment(
         heuristic_score=float(heuristic_score or 0.0),
         llm_score=llm_score,
         vision_score=vision_score,
+        quality_bar=qb,
+        revise_plan=plan,
     )
 
 
@@ -340,6 +427,7 @@ def judge_full_video(
     video_path: str | None,
     segment_scores: list[float] | None = None,
     threshold: float | None = None,
+    context: dict[str, Any] | None = None,
 ) -> JudgeResult:
     """Outer judge for a stitched multi-segment video.
 
@@ -419,6 +507,20 @@ def judge_full_video(
     ):
         decision = HUMAN_VETO
         passed = False
+    hints = dict(llm.get("param_hints") or {}) if llm else {}
+    qb = evaluate_quality_bar(context)
+    decision, rewrite, hints, issues, reason, plan = _merge_quality_bar(
+        decision=decision,
+        rewrite=rewrite,
+        hints=hints,
+        issues=issues,
+        reason=reason,
+        qb=qb,
+        context=context,
+        ltx_prompt=f"FULL VIDEO {user_request}",
+    )
+    if qb.get("fails"):
+        passed = False
     veto = decision == HUMAN_VETO
     return JudgeResult(
         pass_=passed,
@@ -431,12 +533,14 @@ def judge_full_video(
         album_lock=False,
         issues=issues,
         prompt_rewrite=rewrite,
-        param_hints=dict(llm.get("param_hints") or {}) if llm else {},
+        param_hints=hints,
         reason=reason,
         decision=decision,
         heuristic_score=h,
         llm_score=llm_score,
         vision_score=vision_score,
+        quality_bar=qb,
+        revise_plan=plan,
     )
 
 

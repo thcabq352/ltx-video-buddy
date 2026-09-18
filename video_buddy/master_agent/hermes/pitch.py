@@ -78,21 +78,26 @@ def hermes_pitch(
     token: str,
     request: Optional[RequestFn] = None,
     make_video: bool | None = None,
+    store: Any = None,
+    submit: Optional[Callable[..., Any]] = None,
 ) -> dict[str, Any]:
     brief = str(payload.get("brief") or payload.get("prompt") or "").strip()
     if not brief:
         return {"ok": False, "error": "brief is required"}
     if make_video is None:
         make_video = bool(payload.get("make_video", True))
-    chat = hermes_chat(
-        {
-            "model": str(payload.get("model") or "grok-4"),
-            "prompt": f"Client brief:\n{brief}\nReturn the JSON storyboard now.",
-            "system": PITCH_SYSTEM,
-        },
-        token=token,
-        request=request,
-    )
+    if not token and request is None:
+        chat = {"ok": False, "text": ""}
+    else:
+        chat = hermes_chat(
+            {
+                "model": str(payload.get("model") or "grok-4"),
+                "prompt": f"Client brief:\n{brief}\nReturn the JSON storyboard now.",
+                "system": PITCH_SYSTEM,
+            },
+            token=token,
+            request=request,
+        )
     shots: list[dict[str, Any]] = []
     title = "Pitch"
     logline = ""
@@ -120,6 +125,31 @@ def hermes_pitch(
             {"title": "Turn", "prompt": f"{brief}, tighter detail", "motion": "drift left"},
             {"title": "Close", "prompt": f"{brief}, wide hold", "motion": "hold"},
         ]
+    video: Any = None
+    if make_video:
+        from master_agent.a2a.protocol import submit_orchestrator
+
+        if store is None:
+            from master_agent.web.app import _a2a_store
+
+            store = _a2a_store()
+        if submit is None:
+            submit = lambda tid, body, _store=store: submit_orchestrator(tid, body, _store)
+        brief_text = brief
+        if shots:
+            brief_text = brief + "\n" + "\n".join(str(s.get("prompt") or "") for s in shots[:3])
+        task_id = store.create(brief_text)
+        submit(
+            task_id,
+            {
+                "request": brief_text,
+                "quality": payload.get("quality") or "draft",
+                "dry_run": bool(payload.get("dry_run")),
+                "variant": payload.get("variant"),
+                "duration_s": payload.get("duration_s") or 5.0,
+            },
+        )
+        video = {"task_id": task_id, "state": "working"}
     return {
         "ok": True,
         "title": title,
@@ -127,6 +157,6 @@ def hermes_pitch(
         "brief": brief,
         "shots": shots[:3],
         "stills": [],
-        "video": None if not make_video else None,
+        "video": video,
         "story": chat.get("text") or "",
     }

@@ -14,6 +14,7 @@ from master_agent.comfy.graph_ops import (
     ensure_teacache,
     is_optional_accelerator,
     teacache_defaults,
+    is_optional_node,
 )
 from master_agent.comfy.validator import validate_workflow
 from master_agent.comfy.cli_run import prepare_run
@@ -328,3 +329,24 @@ def test_ensure_teacache_rewires_lipsync_guiders():
     assert wf[nid]["inputs"]["model"] == ["5012", 0]
     assert wf["4828"]["inputs"]["model"] == [nid, 0]
     assert wf["4964"]["inputs"]["model"] == [nid, 0]
+def test_live_tower_optional_names():
+    assert is_optional_node("LanPaint_KSampler")
+    assert is_optional_node("GetWarpedNoiseFromVideo")
+    assert is_optional_node("MMAudioSampler")
+    assert is_optional_accelerator("LanPaint_KSampler")
+    assert not is_optional_node("WanFunInpaintToVideo")
+    assert not is_optional_node("Wan22FunControlToVideo")
+    assert not is_optional_node("IPAdapterFaceID")
+    assert not is_optional_node("ControlNetLoader")
+    assert not is_optional_node("CreateVoronoiMask")
+    assert not is_optional_node("WanVideoEmptyMMAudioLatents")
+
+
+def test_missing_lanpaint_and_warp_bypass():
+    for class_type in ("LanPaint_KSampler", "GetWarpedNoiseFromVideo"):
+        wf = _graph(class_type)
+        report = validate_workflow(wf, OBJECT_INFO, file_label=class_type)
+        assert report.ok, report.errors
+        assert "2" not in wf
+        assert wf["3"]["inputs"]["model"] == ["1", 0]
+        assert any(class_type in str(w) for w in report.warnings)

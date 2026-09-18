@@ -32,6 +32,20 @@ PORTABLE_ROOT = Path(
 ).resolve()
 
 MODELS_DIR = Path(os.getenv("MODELS_DIR", str(PROJECT_ROOT / "models"))).resolve()
+
+
+def extra_models_dirs() -> list[Path]:
+    """Additional models trees (other volumes). ``EXTRA_MODELS_DIRS`` or ``LTX_MODELS_DIRS``.
+
+    Split on ``os.pathsep`` (``;`` on Windows, ``:`` on POSIX). Commas also work.
+    """
+    raw = os.getenv("EXTRA_MODELS_DIRS") or os.getenv("LTX_MODELS_DIRS") or ""
+    out: list[Path] = []
+    for part in raw.replace(",", os.pathsep).split(os.pathsep):
+        piece = part.strip().strip('"')
+        if piece:
+            out.append(Path(piece))
+    return out
 WORKFLOWS_DIR = Path(
     os.getenv("WORKFLOWS_DIR", str(PROJECT_ROOT / "workflows"))
 ).resolve()
@@ -59,11 +73,19 @@ XAI_BASE_URL = "https://api.x.ai/v1"
 OLLAMA_URL = os.getenv("OLLAMA_URL", "http://127.0.0.1:11434").rstrip("/")
 OLLAMA_MODEL = os.getenv("OLLAMA_MODEL", "qwen3-vl-heretic")
 
-# LLM provider selection: auto (ollama -> grok) | ollama[:model] | grok
+# llama.cpp OpenAI-compat server (llama-server --api). Default :8080 — do not
+# collide with Hermes 8642 or the studio facade 8189.
+LLAMACPP_URL = os.getenv("LLAMACPP_URL", "http://127.0.0.1:8080").rstrip("/")
+LLAMACPP_MODEL = (os.getenv("LLAMACPP_MODEL") or OLLAMA_MODEL).strip()
+
+# LLM provider selection:
+#   auto (ollama -> llamacpp -> grok)
+#   ollama[:model] | llamacpp[:model] (aliases: llama.cpp, llama-cpp)
+#   grok
 LLM_PROVIDER = (os.getenv("LLM_PROVIDER", "auto") or "auto").strip().lower()
 
 # Storyboard LLM panel: preset (default|local | grok | grok+local|both |
-# grok+claude | duo) or comma list (ollama[:model], grok, claude, …)
+# grok+claude | duo) or comma list (ollama[:model], llamacpp[:model], grok, claude, …)
 # default/local = local VL heretic; grok = solo; grok+local / grok+claude = panels
 LLM_PANEL = (os.getenv("LLM_PANEL", "default") or "default").strip()
 PANEL_JUDGE = (os.getenv("PANEL_JUDGE", "ollama") or "ollama").strip()
@@ -143,7 +165,34 @@ DIAGNOSE_HEIGHT = 512
 # Per-variant generation profiles: fps + frame-count snapping (LTX=8n+1, Wan=4n+1)
 VARIANT_GEN: dict[str, dict[str, int]] = {
     "wan22": {"fps": 16, "frame_snap": 4},
+    "ltx25_t2v_i2v": {"fps": 24, "frame_snap": 8},
+    "ltx25_t2v_i2v_two_stage": {"fps": 24, "frame_snap": 8},
+    "ltx25_flf2v": {"fps": 24, "frame_snap": 8},
+    "ltx25_msr": {"fps": 24, "frame_snap": 8},
+    "ltx25_v2v_ic_lora": {"fps": 24, "frame_snap": 8},
+    "ltx25_a2v": {"fps": 24, "frame_snap": 8},
+    "ltx25_t2a": {"fps": 24, "frame_snap": 8},
+    "h3_t2v": {"fps": 24, "frame_snap": 17},
+    "h3_i2v": {"fps": 24, "frame_snap": 17},
+    "h3_flf": {"fps": 24, "frame_snap": 17},
+    "h3_r2v": {"fps": 24, "frame_snap": 17},
+    "fl2va": {"fps": 24, "frame_snap": 17},
+    "h3_fl2va": {"fps": 24, "frame_snap": 17},
+    "ref2va": {"fps": 24, "frame_snap": 17},
+    "h3_ref2va": {"fps": 24, "frame_snap": 17},
 }
+
+# MiniMax H3 16GB-class defaults (0.6–0.8 MP, ≤12s, 4 steps, CFG 1.0).
+H3_DEFAULT_WIDTH = 1152
+H3_DEFAULT_HEIGHT = 640
+H3_DEFAULT_STEPS = 4
+H3_DEFAULT_CFG = 1.0
+H3_MAX_DURATION_S = 12.0
+H3_MAX_MP = 0.8
+H3_FRAME_STEP = 17
+H3_FRAME_OFFSET = 5
+H3_MIN_FRAMES = 5
+H3_DEFAULT_FRAMES = 124  # ~5s at 24 fps (17*7+5)
 _DEFAULT_GEN = {"fps": DEFAULT_FPS, "frame_snap": 8}
 
 
@@ -246,21 +295,83 @@ MODEL_FILES: dict[str, dict[str, str]] = {
         "vae": "ae.safetensors",
     },
     "wan22": {
-        # Wan 2.2 two-stage T2V (Mickmumpitz graph): separate high/low-noise
-        # UNETs, so no "checkpoint" key — the patcher must not spray an LTX
-        # ckpt onto these UNETLoaders.
+        # Wan 2.2 two-stage T2V: sequential high/low UNETs. 16GB pick is
+        # QuantStack GGUF Q4_K_S when present; fp8 is the Comfy-Org fallback.
+        # No "checkpoint" key — do not spray an LTX ckpt onto these loaders.
         "checkpoint_high": "wan\\wan2.2_t2v_high_noise_14B_fp8_scaled.safetensors",
         "checkpoint_low": "wan\\wan2.2_t2v_low_noise_14B_fp8_scaled.safetensors",
         "text_encoder": "umt5_xxl_fp8_e4m3fn_scaled.safetensors",
         "vae": "wan_2.1_vae.safetensors",
+        "lora": "Wan21_T2V_14B_lightx2v_cfg_step_distill_lora_rank32.safetensors",
     },
     "krea2_img": {
-        # Krea-2 turbo image graph: no "checkpoint" key (single UNET keeps the
-        # template's unet_name; must not get an LTX ckpt sprayed onto it).
+        # Krea-2 turbo: NVFP4 is the 16GB/Blackwell default. No "checkpoint"
+        # key (must not get an LTX ckpt sprayed onto the UNET).
+        "diffusion": "krea2_turbo_nvfp4.safetensors",
         "text_encoder": "qwen3vl_4b_fp8_scaled.safetensors",
         "vae": "wan_2.1_vae.safetensors",
     },
 }
+MODEL_FILES["vb_wan22_vid"] = dict(MODEL_FILES["wan22"])
+MODEL_FILES["vb_krea2_img"] = dict(MODEL_FILES["krea2_img"])
+MODEL_FILES["vb_aivfx_adv_13"] = {
+    "diffusion": "wan-14B_vace_skyreels_v3_R2V_e4m3fn_v1-Q4_K_M.gguf",
+}
+MODEL_FILES["vb_qwen_edit_360"] = {
+    "diffusion": "Qwen-Image-Edit-2509-Q5_0.gguf",
+}
+MODEL_FILES["vb_aivfx_startimage"] = {
+    "diffusion": "qwen-image-edit-2511-Q5_0.gguf",
+}
+
+# Official LTX 2.5 Comfy split pack (no all-in-one checkpoint key — do not
+# spray the LTX 2.3 baked EROS ckpt onto these graphs).
+_LTX25_SPLIT = {
+    "diffusion": "ltx-2.5-22b-distilled-transformer-bf16.safetensors",
+    "vae": "ltx-2.5-video-vae-bf16.safetensors",
+    "audio_vae": "ltx-2.5-audio-vae-bf16.safetensors",
+    "text_encoder": "gemma4-12b-with-proj-ltx-2.5-bf16.safetensors",
+    "duration_head": "ltx-2.5-duration-head-bf16.safetensors",
+    "spatial_upscaler": "ltx-2.5-latent-spatial-upscaler-x2-bf16-1.0.safetensors",
+}
+MODEL_FILES["ltx25_t2v_i2v"] = dict(_LTX25_SPLIT)
+MODEL_FILES["ltx25_t2v_i2v_two_stage"] = {
+    **_LTX25_SPLIT,
+    "spatial_upscaler": "ltx-2.5-latent-spatial-upscaler-x2-bf16-1.0.safetensors",
+}
+MODEL_FILES["ltx25_flf2v"] = dict(_LTX25_SPLIT)
+MODEL_FILES["ltx25_a2v"] = dict(_LTX25_SPLIT)
+MODEL_FILES["ltx25_t2a"] = dict(_LTX25_SPLIT)
+MODEL_FILES["ltx25_v2v_ic_lora"] = {
+    **_LTX25_SPLIT,
+    "lora": "ltx-2.5-22b-ic-lora-ingredients-0.9.safetensors",
+}
+MODEL_FILES["ltx25_msr"] = {
+    **_LTX25_SPLIT,
+    "lora": "ltx-2.5-22b-ic-lora-ingredients-0.9.safetensors",
+}
+
+_H3_SPLIT = {
+    "text_encoder": "qwen3vl_32b_minimax_h3_nvfp4_awq.safetensors",
+    "vae": "minimax_h3_video_vae_fp16.safetensors",
+    "audio_vae": "minimax_h3_audio_vae_fp32.safetensors",
+}
+MODEL_FILES["h3_t2v"] = {
+    **_H3_SPLIT,
+    "diffusion": "minimax_h3_fl2va_pruned-Q4_K.gguf",
+    "lora": "minimax_h3_fl2v_turbo_4step_v1.0_768p_comfyui_bf16.safetensors",
+}
+MODEL_FILES["h3_i2v"] = dict(MODEL_FILES["h3_t2v"])
+MODEL_FILES["h3_flf"] = dict(MODEL_FILES["h3_t2v"])
+MODEL_FILES["h3_r2v"] = {
+    **_H3_SPLIT,
+    "diffusion": "minimax_h3_ref2va_pruned-Q4_K.gguf",
+    "lora": "minimax_h3_ref2v_turbo_4step_v0.1_comfyui_bf16.safetensors",
+}
+MODEL_FILES["fl2va"] = dict(MODEL_FILES["h3_t2v"])
+MODEL_FILES["h3_fl2va"] = dict(MODEL_FILES["h3_t2v"])
+MODEL_FILES["ref2va"] = dict(MODEL_FILES["h3_r2v"])
+MODEL_FILES["h3_ref2va"] = dict(MODEL_FILES["h3_r2v"])
 
 # Soft requirements: missing these warn but do not fail preflight hard-count alone
 MODEL_OPTIONAL_KEYS = frozenset({"diffusion", "checkpoint"})
@@ -309,13 +420,63 @@ MUSIC_DEFAULTS: dict[str, Any] = {
     "low_energy_s": 4.0,
 }
 
-WORKFLOW_FILES: dict[str, str] = {
+# Historical seeds — used only if manifests.yaml is missing (broken checkout).
+# Live director allowlist is derived from workflows/manifests.yaml so every
+# shipped slug stays choosable (rules + LLM). Do not hand-duplicate slugs here.
+_WORKFLOW_FILE_SEEDS: dict[str, str] = {
     "base": "base_t2v_i2v.json",
     "eros": "eros_t2v_i2v.json",
     "directors": "directors.json",
     "lipsync": "lipsync_ia2v.json",
-    "wan22": "260713_MICKMUMPITZ_WAN-2-2-VID_1-0_api.json",
+    "wan22": "260713_VIDEO-BUDDY_WAN-2-2-VID_1-0_api.json",
+    "flux": "flux_t2i.json",
+    "ltx25_t2v_i2v": "ltx-2.5/LTX-2.5_T2V_I2V_Single_Stage_Distilled_api.json",
+    "ltx25_t2v_i2v_two_stage": "ltx-2.5/LTX-2.5_T2V_I2V_Two_Stage_Distilled_api.json",
+    "ltx25_flf2v": "ltx-2.5/LTX-2.5_FLF2V_api.json",
+    "ltx25_msr": "ltx-2.5/LTX-2.5_MSR_Multi_Reference_api.json",
+    "ltx25_v2v_ic_lora": "ltx-2.5/LTX-2.5_V2V_ICLoRA_Single_Stage_Distilled_api.json",
+    "ltx25_a2v": "ltx-2.5/LTX-2.5_A2V_Two_Stage_Distilled_api.json",
+    "ltx25_t2a": "ltx-2.5/LTX-2.5_T2A_Single_Stage_Distilled_api.json",
+    "h3_t2v": "minimax-h3/MiniMax-H3_T2V_FL2VA_api.json",
+    "h3_i2v": "minimax-h3/MiniMax-H3_I2V_FL2VA_api.json",
+    "h3_flf": "minimax-h3/MiniMax-H3_FLF_FL2VA_api.json",
+    "h3_r2v": "minimax-h3/MiniMax-H3_R2V_REF2VA_api.json",
 }
+
+
+def load_manifest_workflow_files(workflows_dir: Path | None = None) -> dict[str, str]:
+    """Slug → relative JSON path from ``workflows/manifests.yaml``."""
+    root = Path(workflows_dir or WORKFLOWS_DIR)
+    path = root / "manifests.yaml"
+    if not path.is_file():
+        return {}
+    try:
+        import yaml
+
+        with path.open(encoding="utf-8") as f:
+            data = yaml.safe_load(f) or {}
+    except Exception:
+        return {}
+    out: dict[str, str] = {}
+    if not isinstance(data, dict):
+        return out
+    for slug, meta in data.items():
+        if not isinstance(meta, dict):
+            continue
+        filename = meta.get("file")
+        if isinstance(filename, str) and filename.strip():
+            out[str(slug)] = filename.replace("\\", "/")
+    return out
+
+
+def load_workflow_files(workflows_dir: Path | None = None) -> dict[str, str]:
+    """Director-routable variants: every manifests.yaml slug plus legacy seeds."""
+    files = dict(_WORKFLOW_FILE_SEEDS)
+    files.update(load_manifest_workflow_files(workflows_dir))
+    return files
+
+
+WORKFLOW_FILES: dict[str, str] = load_workflow_files()
 
 
 def ensure_dirs() -> None:
@@ -332,10 +493,13 @@ def resolve_model_path(filename: str) -> Path | None:
     subdirs = (
         "checkpoints",
         "diffusion_models",
+        "diffusion_models/gguf",
         "loras",
         "vae",
         "text_encoders",
         "unet",
+        "latent_upscale_models",
+        "model_patches",
     )
     for sub in subdirs:
         p = MODELS_DIR / sub / filename
@@ -360,6 +524,42 @@ def is_valid_ltx_frames(n: int) -> bool:
     except (TypeError, ValueError):
         return False
     return frames >= 9 and (frames - 1) % 8 == 0
+
+
+def is_h3_variant(variant: str | None) -> bool:
+    key = (variant or "").strip().lower()
+    if not key:
+        return False
+    if key in {"h3_t2v", "h3_i2v", "h3_flf", "h3_r2v", "fl2va", "ref2va", "h3", "minimax", "minimax_h3", "h3_fl2va", "h3_ref2va"}:
+        return True
+    return key.startswith("h3") or "minimax" in key or "fl2va" in key or "ref2va" in key or "/minimax-h3/" in key
+
+
+def snap_h3_frames(n: int) -> int:
+    """Nearest valid MiniMax H3 frame count (17k+5), minimum 5."""
+    try:
+        raw = int(n)
+    except (TypeError, ValueError):
+        return H3_DEFAULT_FRAMES
+    if raw <= H3_MIN_FRAMES:
+        return H3_MIN_FRAMES
+    k = max(0, round((raw - H3_FRAME_OFFSET) / H3_FRAME_STEP))
+    return k * H3_FRAME_STEP + H3_FRAME_OFFSET
+
+
+def clamp_h3_resolution(width: int, height: int) -> tuple[int, int]:
+    """Keep H3 on a 32px grid and under the 16GB ~0.8 MP sweet spot."""
+    w = max(int(width), 256)
+    h = max(int(height), 256)
+    w = (w // 32) * 32
+    h = (h // 32) * 32
+    w = max(w, 256)
+    h = max(h, 256)
+    if (w * h) / 1_000_000.0 > H3_MAX_MP:
+        scale = (H3_MAX_MP * 1_000_000.0 / float(w * h)) ** 0.5
+        w = max(256, int(w * scale) // 32 * 32)
+        h = max(256, int(h * scale) // 32 * 32)
+    return w, h
 
 
 def snap_ltx_frames(n: int) -> int:

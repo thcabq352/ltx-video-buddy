@@ -130,6 +130,8 @@ def run_music_video(
 
     # Full-video judge
     record["video_path"] = str(Path(final).resolve())
+    record["music_bed_attached"] = True
+    record["kind"] = "music_video"
     if j_enabled and visual != "fractal":
         from master_agent.judge.judge import judge_full_video
 
@@ -237,6 +239,10 @@ def _shots_visual(
             height=height,
             judge_enabled=j_enabled,
             max_judge_rounds=max_judge_rounds,
+            kind="music_video",
+            music_bed_attached=True,
+            audio_path=str(audio_path),
+            shot_index=i + 1,
         )
         if st.state != "DONE" or not st.video_path:
             record["status"] = "error"
@@ -263,6 +269,17 @@ def _shots_visual(
         final = out_dir / f"music_video_{run_id}.mp4"
         mux_audio(silent, audio_path, final)
         log(f"assembled + muxed: {final}")
+        try:
+            from master_agent.provenance import inherit_clip_provenance
+
+            inherit_clip_provenance(
+                clip_paths[0],
+                final,
+                revise_notes="music mux: source track as music bed",
+                extra={"brief": request, "prompt": request},
+            )
+        except Exception as e:
+            log(f"provenance mux skipped: {e}")
         return final
     except Exception as e:
         record["status"] = "done_with_warnings"

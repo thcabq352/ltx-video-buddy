@@ -147,20 +147,25 @@ def api_about() -> dict[str, Any]:
     return studio_about()
 
 
+@app.get("/health")
+def health_alias() -> dict[str, Any]:
+    return api_health()
+
+
 @app.get("/api/health")
 def api_health() -> dict[str, Any]:
     from master_agent.comfy.client import ComfyClient
     from master_agent.kb.store import COLLECTION_RUNS, COLLECTION_WORKFLOWS, collection_count
-    from master_agent.llm import provider_available
+    from master_agent.llm import attach_llm_health, provider_available
 
     out: dict[str, Any] = {
-        "ollama": provider_available("ollama"),
         "grok": provider_available("grok"),
         "kb": {
             "workflows": collection_count(COLLECTION_WORKFLOWS),
             "runs": collection_count(COLLECTION_RUNS),
         },
     }
+    attach_llm_health(out)
     try:
         from master_agent.control.versioned_config import get_versioned_config
 
@@ -215,8 +220,11 @@ def api_submit_job(req: JobRequest):
         raise HTTPException(400, "request must not be empty")
     if req.quality not in ("draft", "balanced", "quality"):
         raise HTTPException(400, "quality must be draft|balanced|quality")
-    if req.variant not in (None, "base", "directors", "eros", "lipsync", "wan22"):
-        raise HTTPException(400, "unknown variant")
+    if req.variant not in (None, "", "auto"):
+        from master_agent.comfy.catalog import is_known_variant
+
+        if not is_known_variant(req.variant):
+            raise HTTPException(400, f"unknown variant: {req.variant}")
     if req.upscale not in _UPSCALE_METHODS:
         raise HTTPException(400, "upscale must be rtx|seedvr2")
     if req.storyboard not in _STORYBOARD_MODES:
@@ -442,8 +450,10 @@ def api_power_tune(req: PowerTuneRequest):
 
     if not req.request.strip():
         raise HTTPException(400, "request must not be empty")
-    if req.variant not in ("base", "eros", "directors", "lipsync", "wan22", "flux"):
-        raise HTTPException(400, "unknown variant")
+    from master_agent.comfy.catalog import is_known_variant
+
+    if not is_known_variant(req.variant):
+        raise HTTPException(400, f"unknown variant: {req.variant}")
     if req.quality not in ("draft", "balanced", "quality"):
         raise HTTPException(400, "quality must be draft|balanced|quality")
     profile = get_quality_profile(req.quality)
@@ -483,6 +493,27 @@ def api_comfy_templates():
     from master_agent.comfy.cli_run import list_templates
 
     return {"items": list_templates()}
+
+
+@app.get("/api/variants")
+def api_variants():
+    """Default catalog — same list as CLI ``workflows`` / Create-tab picker."""
+    from master_agent.comfy.catalog import default_entries
+
+    return {
+        "items": [
+            {
+                "id": e.id,
+                "path": e.path,
+                "name": e.name,
+                "description": e.description,
+                "family": e.family,
+                "modes": list(e.modes),
+                "aliases": list(e.aliases),
+            }
+            for e in default_entries()
+        ]
+    }
 
 
 @app.post("/api/comfy/prepare")
@@ -693,11 +724,23 @@ def _a2a_bind(request: Request) -> tuple[str, int]:
 
 
 @app.get("/.well-known/agent.json")
+@app.get("/.well-known/agent-card.json")
 def a2a_agent_card(request: Request):
     from master_agent.a2a.protocol import agent_card
 
     host, port = _a2a_bind(request)
     return agent_card(host=host, port=port)
+
+
+@app.get("/tasks/{task_id}")
+def a2a_task_rest(task_id: str):
+    from master_agent.a2a.protocol import task_view
+
+    store = _a2a_store()
+    task = store.get(task_id)
+    if not task:
+        raise HTTPException(404, f"task not found: {task_id}")
+    return task_view(task, task_id)
 
 
 @app.post("/a2a")
@@ -712,6 +755,28 @@ def a2a_rpc(payload: dict[str, Any], request: Request):
         submit=lambda tid, body: submit_orchestrator(tid, body, store),
         host=host,
         port=port,
+    )
+
+
+@app.get("/v1/models")
+@app.get("/p/ltx/v1/models")
+def hermes_models() -> dict[str, Any]:
+    from master_agent.hermes.adapter import openai_models
+
+    return openai_models()
+
+
+@app.post("/v1/chat/completions")
+@app.post("/p/ltx/v1/chat/completions")
+def hermes_chat_completions(payload: dict[str, Any]):
+    from master_agent.a2a.protocol import submit_orchestrator
+    from master_agent.hermes.adapter import hermes_complete
+
+    store = _a2a_store()
+    return hermes_complete(
+        payload,
+        store=store,
+        submit=lambda tid, body: submit_orchestrator(tid, body, store),
     )
 
 

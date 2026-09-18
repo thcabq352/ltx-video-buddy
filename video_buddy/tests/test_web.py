@@ -33,7 +33,11 @@ class TestStudioHtml(unittest.TestCase):
         self.assertIn("c-config-hist", html)
         self.assertIn('data-tab="about"', html)
         self.assertIn("tab-about", html)
+        self.assertIn("d-llamacpp", html)
+        self.assertIn("llama.cpp", html)
         self.assertIn("Drive Comfy from the CLI first", html)
+        self.assertIn("/api/variants", html)
+        self.assertIn("loadVariants", html)
 
 
 class TestHealth(unittest.TestCase):
@@ -41,7 +45,9 @@ class TestHealth(unittest.TestCase):
         with patch("master_agent.comfy.client.ComfyClient.health") as h, patch(
             "master_agent.web.app.collection_count" if hasattr(app, "collection_count") else "master_agent.kb.store.collection_count",
             return_value=3,
-        ), patch("master_agent.llm.provider_available", return_value=True):
+        ), patch("master_agent.llm.endpoint_up", return_value=True), patch(
+            "master_agent.llm.provider_available", return_value=True
+        ):
             h.return_value = {"devices": [{"name": "gpu0", "vram_free": 16e9, "vram_total": 17e9}]}
             client = TestClient(app)
             r = client.get("/api/health")
@@ -50,6 +56,10 @@ class TestHealth(unittest.TestCase):
         self.assertTrue(data["comfyui"]["up"])
         self.assertEqual(data["comfyui"]["gpus"][0]["vram_free_gb"], 16.0)
         self.assertTrue(data["ollama"])
+        self.assertTrue(data["llamacpp"])
+        self.assertIn("local_llm", data)
+        self.assertEqual(data["local_llm"]["ollama"]["up"], True)
+        self.assertEqual(data["local_llm"]["llamacpp"]["up"], True)
 
     def test_about_card(self):
         client = TestClient(app)
@@ -59,6 +69,28 @@ class TestHealth(unittest.TestCase):
         self.assertEqual(data["name"], "VIDEO BUDDY")
         self.assertEqual(data["drive"]["first"], "cli")
         self.assertIn("comfy run", data["drive"]["graph"])
+
+    def test_default_variants_include_ltx25(self):
+        client = TestClient(app)
+        r = client.get("/api/variants")
+        self.assertEqual(r.status_code, 200)
+        ids = {item["id"] for item in r.json()["items"]}
+        for vid in (
+            "base",
+            "wan22",
+            "ltx25_t2v_i2v",
+            "ltx25_t2v_i2v_two_stage",
+            "ltx25_flf2v",
+            "ltx25_msr",
+            "ltx25_v2v_ic_lora",
+            "ltx25_a2v",
+            "ltx25_t2a",
+            "h3_t2v",
+            "h3_i2v",
+            "h3_flf",
+            "h3_r2v",
+        ):
+            self.assertIn(vid, ids)
 
 
 class TestJobs(unittest.TestCase):
@@ -70,6 +102,8 @@ class TestJobs(unittest.TestCase):
         r = client.post("/api/jobs", json={"request": "  "})
         self.assertEqual(r.status_code, 400)
         r = client.post("/api/jobs", json={"request": "x", "quality": "nope"})
+        self.assertEqual(r.status_code, 400)
+        r = client.post("/api/jobs", json={"request": "x", "variant": "not-a-real-graph"})
         self.assertEqual(r.status_code, 400)
 
     def test_rejects_media_outside_uploads(self):

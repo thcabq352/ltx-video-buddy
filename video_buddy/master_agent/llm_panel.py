@@ -7,7 +7,8 @@ Named presets:
   - ``both`` / ``panel`` / ``grok+local`` — Grok + local (judge picks)
   - ``grok+claude`` — Grok + Claude (judge picks)
   - ``duo`` — two local models (VL heretic + gemma4), legacy
-Custom comma lists still work (``claude``, ``ollama:<model>``, ``grok``, …).
+Custom comma lists still work (``claude``, ``ollama:<model>``,
+``llamacpp:<model>``, ``grok``, …).
 Unavailable or failing members are skipped with a log line, never fatal.
 """
 
@@ -21,15 +22,25 @@ from typing import Optional
 from master_agent.config import (
     ANTHROPIC_API_KEY,
     CLAUDE_MODEL,
+    LLAMACPP_MODEL,
     LLM_PANEL,
     OLLAMA_MODEL,
     PANEL_MEMBER_TIMEOUT_S,
 )
-from master_agent.llm import get_llm, provider_available
+from master_agent.llm import get_llm, normalize_provider_name, provider_available
+
+
+def _local_member() -> str:
+    """``ollama:<model>`` when Ollama is up, else ``llamacpp:<model>``."""
+    if provider_available("ollama"):
+        return f"ollama:{OLLAMA_MODEL}"
+    if provider_available("llamacpp"):
+        return f"llamacpp:{LLAMACPP_MODEL}"
+    return f"ollama:{OLLAMA_MODEL}"
 
 
 def _presets() -> dict[str, str]:
-    main = f"ollama:{OLLAMA_MODEL}"
+    main = _local_member()
     grok_local = f"grok,{main}"
     grok_claude = "grok,claude"
     return {
@@ -72,11 +83,13 @@ class PanelResolution:
 
 
 def _skip_reason(spec: str) -> str:
-    name = spec.split(":", 1)[0].strip().lower()
+    name = normalize_provider_name(spec)
     if name == "claude":
         return "ANTHROPIC_API_KEY not set"
     if name == "ollama":
         return "Ollama not reachable"
+    if name == "llamacpp":
+        return "llama.cpp not reachable"
     if name == "grok":
         return "Grok auth missing (xai-oauth or XAI_API_KEY)"
     return "provider unavailable"

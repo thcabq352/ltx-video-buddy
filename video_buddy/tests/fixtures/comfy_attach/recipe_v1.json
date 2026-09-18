@@ -1,0 +1,26 @@
+{
+  "schema": "buddy.comfy.attach/v1",
+  "kind": "WorkflowPatchPlan",
+  "previs_source": "previs/shots/alley_01.export-patch.json",
+  "director": {
+    "preferred_variants": ["wan22", "ltx25_t2v_i2v"],
+    "variant": "wan22"
+  },
+  "control_pack": {
+    "openpose": {
+      "image": "previs/openpose_alley.png",
+      "prompt_additive": "follow the OpenPose skeleton, locked body mechanics"
+    },
+    "depth": {
+      "image": "previs/depth_alley.png",
+      "prompt_additive": "respect the depth map, keep foreground/background separation"
+    },
+    "edges": {
+      "image": "previs/edges_alley.png",
+      "prompt_additive": "preserve canny edges and silhouette"
+    },
+    "camera": {
+      "prompt_additive": "slow dolly-in, 35mm, locked horizon"
+    }
+  }
+}

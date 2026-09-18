@@ -14,9 +14,15 @@ Commands:
   character create|list   CCC stage: bible -> Flux sheet -> captioned dataset
   lora setup|train|validate  Flux LoRA training via ai-toolkit + vision validation
   download-flux       One-time Flux fp8 weights download (~17GB)
+  download-models     Scan 16GB packs (LTX 2.5 / H3 / Wan / VACE / Krea / Flux / Qwen); --yes to fetch
+  setup | doctor      Scan local deps + LTX 2.5 / H3 weights (--fix-models after you agree)
+  workflows           List default catalog variants (no env flags)
   comfy run           Drive ComfyUI from the CLI (prepare + lint + queue)
+  comfy attach        Apply previs buddy.comfy.attach/v1 (dry-run; --submit to /prompt)
   diagnose            9-frame hull fire (sec/step); does not spend shift budget
   budget              status | reset-shift  (VRAM-min shift ledger)
+  hermes              status | register  (profile ltx + discovery)
+  capabilities        Gap matrix: tower-ish Comfy nodes vs Buddy wiring
   curriculum          Print LESSON_BUDDY_WORKS_HERE (L0→L5) and Part 2 gate
   about               Print the studio identity card
 """
@@ -59,16 +65,21 @@ def cmd_about(args: argparse.Namespace) -> int:
 def cmd_setup(args: argparse.Namespace) -> int:
     from master_agent.setup import cmd_setup as run_setup
 
-    return run_setup(do_fix=bool(args.fix))
+    return run_setup(do_fix=bool(args.fix), fix_models=bool(getattr(args, "fix_models", False)))
 
 
 def cmd_health(args: argparse.Namespace) -> int:
+    from master_agent.llm import format_local_llm_health
+
     client = ComfyClient()
+    rc = 0
     try:
         stats = client.health()
     except ComfyClientError as e:
         print(f"FAIL  {e}")
-        return 1
+        rc = 1
+        print(format_local_llm_health(), end="")
+        return rc
     system = stats.get("system") or {}
     devices = stats.get("devices") or []
     print(f"OK    ComfyUI at {client.base_url}")
@@ -78,7 +89,8 @@ def cmd_health(args: argparse.Namespace) -> int:
         vram_total = (dev.get("vram_total") or 0) / 1e9
         vram_free = (dev.get("vram_free") or 0) / 1e9
         print(f"      gpu={name} vram={vram_free:.1f}G free / {vram_total:.1f}G")
-    return 0
+    print(format_local_llm_health(), end="")
+    return rc
 
 
 def cmd_fetch_object_info(args: argparse.Namespace) -> int:
@@ -89,6 +101,32 @@ def cmd_fetch_object_info(args: argparse.Namespace) -> int:
         print(f"FAIL  {e}")
         return 1
     print(f"OK    cached {len(info)} node classes to state/object_info.json")
+    return 0
+
+
+def cmd_capabilities(args: argparse.Namespace) -> int:
+    from master_agent.comfy.capabilities import format_matrix, run_probe
+    from master_agent.config import WORKFLOW_FILES
+
+    prefer_live = not bool(args.offline)
+    try:
+        rows, source = run_probe(prefer_live=prefer_live)
+    except Exception as e:
+        print(f"FAIL  {e}")
+        return 1
+    if args.json:
+        print(
+            json.dumps(
+                {
+                    "object_info": source,
+                    "director_allowlist": sorted(WORKFLOW_FILES),
+                    "rows": [r.to_dict() for r in rows],
+                },
+                indent=1,
+            )
+        )
+        return 0
+    print(format_matrix(rows, source=source), end="")
     return 0
 
 
@@ -203,6 +241,78 @@ def cmd_run(args: argparse.Namespace) -> int:
     )
     from master_agent.orchestrator.pipeline import dry_run_pipeline, run_pipeline
 
+    if args.variant:
+        from master_agent.comfy.catalog import default_variant_ids, is_known_variant
+
+        if not is_known_variant(args.variant):
+            print(f"FAIL  unknown variant {args.variant!r}")
+            print("known default catalog:")
+            for vid in default_variant_ids():
+                print(f"  {vid}")
+            return 2
+
+    attach_recipe = None
+    attach_loaded = None
+    if getattr(args, "attach", None):
+        from master_agent.comfy.attach import AttachError, load_attach_recipe
+
+        try:
+            attach_loaded = load_attach_recipe(args.attach)
+            attach_recipe = attach_loaded.raw
+        except AttachError as e:
+            print(f"FAIL  attach recipe: {e}")
+            return 1
+
+    if getattr(args, "self_improve_dry", False):
+        from master_agent.orchestrator.machine import Orchestrator
+
+        args.request = _maybe_interview(args.request, no_interview=args.no_interview)
+        image_name = Path(args.image).name if getattr(args, "image", None) else None
+        audio_name = Path(args.audio).name if getattr(args, "audio", None) else None
+        st = Orchestrator().run(
+            args.request,
+            variant=args.variant,
+            duration_s=args.duration,
+            quality=args.quality,
+            seed=args.seed,
+            width=args.width,
+            height=args.height,
+            image_name=image_name,
+            audio_name=audio_name,
+            video_name=Path(args.video).name if getattr(args, "video", None) else None,
+            judge_enabled=False if args.no_judge else JUDGE_ENABLED,
+            max_judge_rounds=args.max_judge_rounds or MAX_JUDGE_ROUNDS,
+            attach_recipe=attach_recipe,
+            dry_run=True,
+            control_pack_present=bool(attach_loaded and attach_loaded.control_pack_present),
+            previs_source=(attach_loaded.previs_source if attach_loaded else ""),
+        )
+        print()
+        print(f"loop_status: {st.loop_status}")
+        print(f"attempts:    {st.attempt}/{st.max_judge_rounds}")
+        print(f"decision:    {st.judge_decision}")
+        fails = (st.quality_bar or {}).get("fails") or []
+        if fails:
+            print("quality_bar: " + ", ".join(f"{f.get('id')}:{f.get('code')}" for f in fails))
+        if st.revise_history:
+            print(f"revises:     {len(st.revise_history)}")
+        if st.provenance:
+            lin = st.provenance.get("lineage") or {}
+            judge = st.provenance.get("judge") or {}
+            print(
+                f"provenance:  schema={st.provenance.get('schema')} "
+                f"attempt_id={lin.get('attempt_id')} "
+                f"score={judge.get('score')}"
+            )
+        if st.provenance_sidecar:
+            print(f"sidecar:     {st.provenance_sidecar}")
+        print(f"dry-run     no Comfy queue, no GPU")
+        if st.loop_status == "passed":
+            return 0
+        if st.loop_status in ("exhausted", "human_veto"):
+            return 2
+        return 1
+
     client = ComfyClient()
     if not client.is_up():
         print(f"FAIL  ComfyUI is not reachable. Start: ComfyUI_windows_portable\\run_api_8188.bat")
@@ -221,6 +331,7 @@ def cmd_run(args: argparse.Namespace) -> int:
             storyboard_mode=args.storyboard,
             llm_panel=args.llm_panel,
             panel_judge=args.panel_judge,
+            attach_recipe=attach_recipe,
             client=client,
         )
 
@@ -287,6 +398,7 @@ def cmd_run(args: argparse.Namespace) -> int:
         power_mode=True if getattr(args, "power_mode", False) else (
             False if getattr(args, "no_power_mode", False) else None
         ),
+        attach_recipe=attach_recipe,
         client=client,
     )
     print()
@@ -296,6 +408,15 @@ def cmd_run(args: argparse.Namespace) -> int:
         print(f"       full judge: score={result.full_judge_score:.2f} pass={result.full_judge_pass}")
         if result.full_judge_notes:
             print(f"       notes: {result.full_judge_notes}")
+        if result.provenance:
+            lin = result.provenance.get("lineage") or {}
+            print(
+                f"       provenance: schema={result.provenance.get('schema')} "
+                f"attempt_id={lin.get('attempt_id')} "
+                f"hash={(result.provenance.get('hash') or '')[:12]}"
+            )
+        if result.provenance_sidecar:
+            print(f"       sidecar: {result.provenance_sidecar}")
         return 0 if result.status == "done" else 2
     print(f"ERROR  {result.error}")
     return 1
@@ -572,6 +693,84 @@ def cmd_download_flux(args: argparse.Namespace) -> int:
     return 0
 
 
+def cmd_download_models(args: argparse.Namespace) -> int:
+    """Scan first; download missing LTX 2.5 / H3 weights only after --yes."""
+    from master_agent.models.weights import (
+        MissingWeightsError,
+        download_missing_bundle,
+        scan_bundle,
+    )
+
+    if args.bundle:
+        bundle = args.bundle
+    elif getattr(args, "wan", False):
+        bundle = "wan22"
+    elif getattr(args, "vace", False):
+        bundle = "vace"
+    elif getattr(args, "krea", False):
+        bundle = "krea2"
+    elif getattr(args, "qwen", False):
+        bundle = "qwen_edit"
+    elif getattr(args, "flux_pack", False):
+        bundle = "flux"
+    elif args.h3:
+        bundle = "h3_all"
+    elif args.ltx25:
+        bundle = "ltx25_all"
+    else:
+        bundle = "ltx25_core"
+    status = scan_bundle(bundle)
+    print(json.dumps(status.to_dict(), indent=1) if args.json else (
+        "OK    all required weights present" if status.ok else status.to_dict()["ask"]
+    ))
+    if status.ok:
+        return 0
+    if not args.yes:
+        print("\nNothing downloaded. Re-run with --yes after you agree.")
+        return 2
+    try:
+        _status, paths = download_missing_bundle(
+            bundle,
+            yes=True,
+            include_optional=bool(args.optional),
+        )
+    except MissingWeightsError as e:
+        print(f"FAIL  {e}")
+        return 1
+    except Exception as e:
+        print(f"FAIL  {e}")
+        return 1
+    print(f"OK    {len(paths)} file(s) downloaded")
+    return 0
+
+
+def cmd_workflows(args: argparse.Namespace) -> int:
+    from master_agent.comfy.catalog import list_catalog_items
+
+    items = list_catalog_items()
+    variants = [i for i in items if i.get("kind") == "variant"]
+    if args.json:
+        print(json.dumps(items, indent=1))
+        return 0
+    if getattr(args, "vram", False):
+        from master_agent.models.vram_policy import format_vram_table, workflow_row
+
+        print(format_vram_table())
+        print(f"{len(variants)} default catalog variant(s) — 16GB class:")
+        for item in variants:
+            row = workflow_row(item["id"])
+            alt = f" → {row.safer_alternate}" if row.safer_alternate else ""
+            print(
+                f"  {item['id']:<28} {row.vram_class:<8} ~{row.expected_vram_gb:4.1f}G  "
+                f"{row.default_pack}{alt}"
+            )
+        return 0
+    print(f"{len(variants)} default catalog variant(s):")
+    for item in variants:
+        print(f"  {item['id']:<28} {item.get('path', '')}")
+    return 0
+
+
 def cmd_character(args: argparse.Namespace) -> int:
     from master_agent.config import CHARACTERS_DIR
 
@@ -801,6 +1000,74 @@ def cmd_budget(args: argparse.Namespace) -> int:
     return 0
 
 
+def cmd_hermes(args: argparse.Namespace) -> int:
+    from master_agent.hermes.gateways import discover_gateways, discover_primary_seat
+    from master_agent.hermes.profile import default_python, register_ltx_profile
+
+    video_buddy_root = Path(__file__).resolve().parent.parent
+    home = Path(args.hermes_home).expanduser() if getattr(args, "hermes_home", None) else None
+    if args.hermes_command == "register":
+        result = register_ltx_profile(
+            home=home,
+            video_buddy_root=video_buddy_root,
+            python=default_python(video_buddy_root),
+            force=bool(getattr(args, "force", False)),
+        )
+        print(f"OK    ltx profile at {result.profile_dir}")
+        if result.soul_written:
+            print("      SOUL.md written from LTX_RESEARCH_SYSTEM")
+        if result.soul_skipped:
+            print("      custom SOUL.md left in place (pass --force to overwrite)")
+        for note in result.notes:
+            print(f"      {note}")
+        print("      A2A fallback remains on :8189  POST /a2a")
+        return 0
+
+    rows = discover_gateways(home=home, host="127.0.0.1")
+    primary = discover_primary_seat(home=home, host="127.0.0.1")
+    payload = {
+        "primary": None
+        if primary is None
+        else {
+            "profile": primary.profile,
+            "source": primary.source,
+            "port": primary.port,
+            "chat_url": primary.chat_url,
+            "healthy": primary.healthy,
+        },
+        "gateways": [
+            {
+                "profile": g.profile,
+                "source": g.source,
+                "port": g.port,
+                "chat_url": g.chat_url,
+                "healthy": g.healthy,
+                "can_speak": g.can_speak,
+            }
+            for g in rows
+        ],
+        "a2a_fallback": "http://127.0.0.1:8189/a2a",
+    }
+    if args.json:
+        print(json.dumps(payload, indent=1))
+        return 0
+    if primary:
+        print(
+            f"primary  {primary.profile} source={primary.source} "
+            f"healthy={primary.healthy} {primary.chat_url}"
+        )
+    else:
+        print("primary  (none) — start studio :8189 for the buddy-adapter facade")
+    print("a2a     http://127.0.0.1:8189/a2a  (fallback)")
+    for g in rows:
+        mark = "*" if primary is not None and g.chat_url == primary.chat_url and g.source == primary.source else " "
+        print(
+            f"{mark} {g.profile:12} {g.source:14} port={g.port:<5} "
+            f"healthy={str(g.healthy):5} {g.chat_url}"
+        )
+    return 0
+
+
 def cmd_diagnose(args: argparse.Namespace) -> int:
     from master_agent.comfy.diagnose import DiagnoseFailed, ScaleRefused, run_diagnose
 
@@ -828,7 +1095,70 @@ def cmd_diagnose(args: argparse.Namespace) -> int:
     return 0 if rec.get("ok") else 1
 
 
+def cmd_comfy_attach(args: argparse.Namespace) -> int:
+    """Patch a WorkflowPatchPlan / buddy.comfy.attach/v1 recipe onto a graph."""
+    from master_agent.comfy.attach import AttachError, load_attach_recipe, run_attach
+    from master_agent.comfy.cli_run import prepare_run, unwrap_workflow
+
+    recipe_path = getattr(args, "recipe", None)
+    if not recipe_path:
+        print("FAIL  comfy attach requires --recipe PATH")
+        return 2
+    try:
+        recipe = load_attach_recipe(recipe_path)
+    except AttachError as e:
+        print(f"FAIL  {e}")
+        return 1
+    try:
+        workflow = None
+        if args.workflow_json:
+            p = Path(args.workflow_json)
+            raw = p.read_text(encoding="utf-8") if p.is_file() else args.workflow_json
+            workflow = unwrap_workflow(json.loads(raw))
+        else:
+            preferred = recipe.preferred_variants[0] if recipe.preferred_variants else "base"
+            workflow = prepare_run(
+                getattr(args, "mode", None) or "generate",
+                template_path=args.template,
+                variant=args.variant or preferred,
+                prompt=args.prompt or "",
+            )
+    except Exception as e:
+        print(f"FAIL  workflow: {e}")
+        return 1
+    submit = bool(getattr(args, "submit", False))
+    if submit and getattr(args, "dry_run", False):
+        print("FAIL  --submit and --dry-run are mutually exclusive")
+        return 2
+    runs_dir = getattr(args, "runs_dir", None)
+    try:
+        rec = run_attach(
+            recipe=recipe,
+            workflow=workflow,
+            client=ComfyClient(),
+            submit=submit,
+            runs_dir=Path(runs_dir) if runs_dir else None,
+            variant=args.variant,
+        )
+    except AttachError as e:
+        print(f"FAIL  {e}")
+        return 1
+    except Exception as e:
+        print(f"FAIL  {e}")
+        return 1
+    if args.out:
+        out = Path(args.out)
+        out.parent.mkdir(parents=True, exist_ok=True)
+        out.write_text(json.dumps(rec.get("workflow") or {}, indent=1) + "\n", encoding="utf-8")
+        print(f"wrote {out}")
+    printable = {k: v for k, v in rec.items() if k != "workflow"}
+    print(json.dumps(printable, indent=1, default=str))
+    return 0 if rec.get("ok") else 1
+
+
 def cmd_comfy(args: argparse.Namespace) -> int:
+    if getattr(args, "comfy_command", "run") == "attach":
+        return cmd_comfy_attach(args)
     from master_agent.comfy.cli_run import LintError, execute_prepared, lint_or_raise, prepare_run
 
     try:
@@ -868,7 +1198,7 @@ def cmd_comfy(args: argparse.Namespace) -> int:
             print(json.dumps({"ok": True, "nodes": len(prepared)}, indent=1))
         return 0
     try:
-        rec = execute_prepared(prepared)
+        rec = execute_prepared(prepared, variant=args.variant)
     except Exception as e:
         print(f"FAIL  {e}")
         return 1
@@ -898,9 +1228,23 @@ def main(argv: list[str] | None = None) -> int:
     p.add_argument("--json", action="store_true", help="machine-readable output")
     p.set_defaults(func=cmd_about)
 
-    p = sub.add_parser("setup", help="check or install local dependencies")
+    p = sub.add_parser(
+        "setup",
+        aliases=["doctor"],
+        help="check local deps + 16GB pack policy + LTX 2.5 / H3 weights (scan first; --fix-models after you agree)",
+    )
     p.add_argument("--fix", action="store_true", help="create venv, pip install, Playwright, .env, ffmpeg, Ollama models")
+    p.add_argument(
+        "--fix-models",
+        action="store_true",
+        help="after reviewing the missing list, download required LTX 2.5 weights (gated HF)",
+    )
     p.set_defaults(func=cmd_setup)
+
+    p = sub.add_parser("workflows", help="list default catalog variants (no env flags)")
+    p.add_argument("--json", action="store_true")
+    p.add_argument("--vram", action="store_true", help="16GB-class pack table (RTX 5060 Ti)")
+    p.set_defaults(func=cmd_workflows)
 
     p = sub.add_parser("health", help="check ComfyUI reachability")
     p.set_defaults(func=cmd_health)
@@ -938,7 +1282,7 @@ def main(argv: list[str] | None = None) -> int:
 
     p = sub.add_parser("run", help="orchestrated generation: patch -> validate -> submit -> judge")
     p.add_argument("request", help="what to generate (natural language)")
-    p.add_argument("--variant", choices=["base", "eros", "directors", "lipsync", "wan22"], help="force variant")
+    p.add_argument("--variant", help="force catalog variant (see: python -m master_agent workflows)")
     p.add_argument("--duration", type=float, default=5.0, help="seconds (default 5)")
     p.add_argument("--quality", choices=["draft", "balanced", "quality"], help="quality profile")
     p.add_argument("--seed", type=int, help="fixed seed (default: random)")
@@ -955,11 +1299,16 @@ def main(argv: list[str] | None = None) -> int:
                    help="storyboard LLM panel: preset (default|local | grok | "
                         "grok+local|both | grok+claude | duo) or comma list")
     p.add_argument("--panel-judge",
-                   help="provider that picks the winning storyboard (default: env PANEL_JUDGE or ollama)")
+                   help="provider that picks the winning storyboard (default: env PANEL_JUDGE or ollama; llamacpp[:model] ok)")
     p.add_argument("--max-full-judge-rounds", type=int, default=None,
                    help="full-video judge re-gen budget (multi-segment)")
     p.add_argument("--dry-run", action="store_true",
                    help="storyboard + patch + validate all segments, no GPU queue")
+    p.add_argument(
+        "--self-improve-dry",
+        action="store_true",
+        help="closed judge→revise→rejudge loop (quality_bar a/c/d); no Comfy queue",
+    )
     p.add_argument("--power-mode", action="store_true",
                    help="LLM graph ops after patch (object_info + RAG; validate-gated)")
     p.add_argument("--no-power-mode", action="store_true",
@@ -968,6 +1317,10 @@ def main(argv: list[str] | None = None) -> int:
                    help="post-stage upscale of the final video")
     p.add_argument("--no-interview", action="store_true",
                    help="skip the persona intake interview")
+    p.add_argument(
+        "--attach",
+        help="previs buddy.comfy.attach/v1 / WorkflowPatchPlan JSON (patch after director)",
+    )
     p.set_defaults(func=cmd_run)
 
     p = sub.add_parser(
@@ -976,12 +1329,11 @@ def main(argv: list[str] | None = None) -> int:
     )
     p.add_argument("request", help="creative brief / intent for the graph edit")
     p.add_argument("--variant", default="base",
-                   choices=["base", "eros", "directors", "lipsync", "wan22", "flux"],
-                   help="workflow variant template (default base)")
+                   help="workflow variant template (default catalog; see `workflows`)")
     p.add_argument("--quality", choices=["draft", "balanced", "quality"], default="draft")
     p.add_argument("--duration", type=float, default=5.0)
     p.add_argument("--seed", type=int)
-    p.add_argument("--provider", help="LLM provider (ollama|grok|auto)")
+    p.add_argument("--provider", help="LLM provider (ollama|llamacpp|grok|auto)")
     p.add_argument("--json", action="store_true", help="print machine-readable result")
     p.add_argument("--out", help="write patched workflow JSON to this path")
     p.set_defaults(func=cmd_power_tune)
@@ -1043,8 +1395,7 @@ def main(argv: list[str] | None = None) -> int:
     p.add_argument("--audio", required=True, help="audio file (mp3/wav/...)")
     p.add_argument("--visual", choices=["shots", "fractal"], default="shots",
                    help="shots = ComfyUI generation per shot; fractal = CPU beat-reactive zoom")
-    p.add_argument("--variant", choices=["base", "eros", "directors", "lipsync", "wan22"],
-                   help="force generation variant (shots mode)")
+    p.add_argument("--variant", help="force catalog variant (shots mode)")
     p.add_argument("--quality", choices=["draft", "balanced", "quality"], help="quality profile")
     p.add_argument("--seed", type=int, help="fixed seed (default: random)")
     p.add_argument("--width", type=int, default=768)
@@ -1064,6 +1415,26 @@ def main(argv: list[str] | None = None) -> int:
 
     p = sub.add_parser("download-flux", help="download Flux fp8 weights (~17GB, one-time)")
     p.set_defaults(func=cmd_download_flux)
+
+    p = sub.add_parser(
+        "download-models",
+        help="scan 16GB-class packs (LTX 2.5 / H3 / Wan / VACE / Krea / Flux / Qwen); download missing only with --yes",
+    )
+    p.add_argument("--ltx25", action="store_true", default=True, help="LTX 2.5 distilled split pack (default)")
+    p.add_argument("--h3", action="store_true", help="MiniMax H3 GGUF + Comfy TE/VAE pack")
+    p.add_argument("--wan", action="store_true", help="Wan 2.2 GGUF/fp8 + Lightx2v 16GB pack")
+    p.add_argument("--vace", action="store_true", help="VACE Skyreels Q4_K_M GGUF")
+    p.add_argument("--krea", action="store_true", help="Krea-2 turbo NVFP4")
+    p.add_argument("--qwen", action="store_true", help="Qwen-Image-Edit GGUF Q5_0")
+    p.add_argument("--flux-pack", dest="flux_pack", action="store_true", help="Flux.1-dev GGUF/fp8")
+    p.add_argument(
+        "--bundle",
+        help="weight bundle id (ltx25_*|h3_*|wan22|vace|krea2|flux|qwen_edit)",
+    )
+    p.add_argument("--yes", action="store_true", help="consent: download the missing mandatory set")
+    p.add_argument("--optional", action="store_true", help="also fetch optional Hub files (distilled LoRA 450, temporal upscaler)")
+    p.add_argument("--json", action="store_true")
+    p.set_defaults(func=cmd_download_models)
 
     p = sub.add_parser("character", help="CCC stage: create | list")
     p.add_argument("character_command", choices=["create", "list"])
@@ -1089,7 +1460,7 @@ def main(argv: list[str] | None = None) -> int:
         "comfy",
         help="drive ComfyUI from the CLI: prepare, lint, queue, copy into outputs/",
     )
-    p.add_argument("comfy_command", choices=["run"])
+    p.add_argument("comfy_command", choices=["run", "attach"])
     p.add_argument("--mode", choices=["raw", "template", "generate"], default="generate")
     p.add_argument("--json", dest="workflow_json", help="pasted/path API workflow JSON (raw)")
     p.add_argument("--template", help="template slug or path under workflows/")
@@ -1103,6 +1474,21 @@ def main(argv: list[str] | None = None) -> int:
         action="store_true",
         help="lint and write JSON only; do not queue Comfy",
     )
+    p.add_argument(
+        "--recipe",
+        help="attach: previs buddy.comfy.attach/v1 / WorkflowPatchPlan JSON",
+    )
+    p.add_argument(
+        "--submit",
+        action="store_true",
+        help="attach: POST the patched graph to Comfy /prompt (off by default)",
+    )
+    p.add_argument(
+        "--dry-run",
+        action="store_true",
+        help="attach: patch + validate only (default; mutually exclusive with --submit)",
+    )
+    p.add_argument("--runs-dir", dest="runs_dir", help=argparse.SUPPRESS)
     p.set_defaults(func=cmd_comfy)
 
     p = sub.add_parser(
@@ -1127,6 +1513,21 @@ def main(argv: list[str] | None = None) -> int:
     p.add_argument("budget_command", choices=["status", "reset-shift"])
     p.add_argument("--json", action="store_true", help="machine-readable snapshot")
     p.set_defaults(func=cmd_budget)
+
+    p = sub.add_parser("hermes", help="Hermes profile ltx: status | register")
+    p.add_argument("hermes_command", choices=["status", "register"])
+    p.add_argument("--hermes-home", help="override HERMES_HOME / ~/.hermes")
+    p.add_argument("--force", action="store_true", help="overwrite custom profiles/ltx/SOUL.md")
+    p.add_argument("--json", action="store_true", help="machine-readable status")
+    p.set_defaults(func=cmd_hermes)
+
+    p = sub.add_parser(
+        "capabilities",
+        help="print Comfy capability gap matrix (object_info vs Buddy wiring)",
+    )
+    p.add_argument("--offline", action="store_true", help="use cached object_info only")
+    p.add_argument("--json", action="store_true", help="machine-readable matrix")
+    p.set_defaults(func=cmd_capabilities)
 
     args = parser.parse_args(argv)
     from master_agent.control.versioned_config import announce_config

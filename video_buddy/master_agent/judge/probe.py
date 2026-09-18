@@ -33,7 +33,13 @@ def _clamp(v: float, lo: float, hi: float) -> float:
 
 
 def probe_video(path: str | Path | None) -> dict[str, Any]:
-    info: dict[str, Any] = {"exists": False, "size_bytes": 0, "duration_s": None, "frames": None}
+    info: dict[str, Any] = {
+        "exists": False,
+        "size_bytes": 0,
+        "duration_s": None,
+        "frames": None,
+        "has_audio": False,
+    }
     p = Path(path) if path else None
     if p is None or not p.is_file():
         return info
@@ -75,9 +81,34 @@ def probe_video(path: str | Path | None) -> dict[str, Any]:
             info["height"] = st.get("height")
         if info["duration_s"] is None and fmt.get("duration"):
             info["duration_s"] = float(fmt["duration"])
+        info["has_audio"] = _probe_has_audio(ffprobe, p)
     except Exception as e:
         info["probe_error"] = str(e)
     return info
+
+
+def _probe_has_audio(ffprobe: str, path: Path) -> bool:
+    try:
+        out = subprocess.run(
+            [
+                ffprobe,
+                "-v",
+                "error",
+                "-select_streams",
+                "a:0",
+                "-show_entries",
+                "stream=index",
+                "-of",
+                "csv=p=0",
+                str(path),
+            ],
+            capture_output=True,
+            text=True,
+            timeout=15,
+        )
+        return bool((out.stdout or "").strip())
+    except Exception:
+        return False
 
 
 def frame_motion_score(path: str | Path, samples: int = 6) -> Optional[float]:

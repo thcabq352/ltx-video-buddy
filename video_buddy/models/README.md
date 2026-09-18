@@ -1,6 +1,48 @@
-# LTX 2.3 model inventory (16GB / RTX 5060 Ti)
+# Model inventory (16GB / RTX 5060 Ti)
 
-Weights live here so both the LangGraph agent and ComfyUI (via `extra_model_paths.yaml`) can see them.
+Weights live here so Video Buddy and ComfyUI (via `extra_model_paths.yaml`) can see them. **Not in git.**
+
+## LTX 2.5 (default catalog — inventory first)
+
+Do **not** assume a download. `python -m master_agent doctor` scans this tree plus Comfy `models/`, `EXTRA_MODELS_DIRS`, `extra_model_paths.yaml`, and the HF hub cache. It reports the 16GB-class loader pick and **does not fetch**.
+
+Preference when several transformers exist (`VRAM_GB` default 16):
+
+1. `diffusion_models/gguf/ltx-2.5-22b-distilled-transformer-bf16-Q4_K_M.gguf`
+2. `diffusion_models/ltx-2.5-22b-distilled-transformer-nvfp4.safetensors` (if `VRAM_GB` ≥ 14)
+3. `diffusion_models/ltx-2.5-22b-distilled-transformer-comfy-int8-convrot.safetensors`
+4. official `ltx-2.5-22b-distilled-transformer-bf16.safetensors`
+
+Text encoder: `gemma4-12b-heretic-ltx25-int8convrot.safetensors` or Comfy int8 counts — official bf16 Gemma is not required. Zero-byte `model_patches/ltx-2.5-duration-head-bf16.safetensors` is **missing**.
+
+```bash
+python -m master_agent doctor
+python -m master_agent download-models --ltx25        # list confirmed-missing
+python -m master_agent download-models --ltx25 --yes  # after you agree
+```
+
+Full accepted-name table: [`../REQUIRED-FILES.md`](../REQUIRED-FILES.md).
+
+## MiniMax H3 (default catalog — inventory first)
+
+fl2va (`h3_t2v` / `h3_i2v` / `h3_flf`) and ref2va (`h3_r2v`). CFG **1.0**.
+16GB sweet spot: 0.6–0.8 MP, ≤12 s, 4 steps. Prefer Unsloth GGUF Q4_K DiT +
+Comfy TE (NVFP4 AWQ or int8/int4). GGUF TE Q4_K_M is last-resort.
+
+```bash
+python -m master_agent download-models --h3
+python -m master_agent download-models --h3 --yes
+```
+
+| Path | Role |
+|---|---|
+| `diffusion_models/gguf/minimax_h3_fl2va_pruned-Q4_K.gguf` | fl2va DiT |
+| `diffusion_models/gguf/minimax_h3_ref2va_pruned-Q4_K.gguf` | ref2va DiT |
+| `text_encoders/qwen3vl_32b_minimax_h3_nvfp4_awq.safetensors` | TE |
+| `vae/minimax_h3_video_vae_fp16.safetensors` | video VAE |
+| `vae/minimax_h3_audio_vae_fp32.safetensors` | audio VAE |
+
+## LTX 2.3 / Wan / Mickmumpitz (still used)
 
 ## Expected layout
 
@@ -71,16 +113,12 @@ Weights live here so both the LangGraph agent and ComfyUI (via `extra_model_path
 - `diffusion_models/z_image/z_image_turbo_bf16.safetensors` + `text_encoders/qwen_3_4b.safetensors`
 - `model_patches/Z-Image-Turbo-Fun-Controlnet-Union-2.1-2601-8steps.safetensors`
 
-Mickmumpitz-set downloads are scripted (resumable, re-runnable):
+Mickmumpitz / LTX 2.3 / Wan packs (legacy filenames above) are scripted:
 
 ```bash
 python state/download_models.py
 ```
 
-Download LTX weights with:
-
-```powershell
-.\scripts\download_ltx_models.ps1
-```
+LTX 2.5 is **not** that script. Use `doctor` + `download-models --ltx25` (gated Hub pack, consent-gated). There is no `scripts/download_ltx_models.ps1`.
 
 Do not commit `.safetensors` files to git.

@@ -73,6 +73,21 @@ class TestResolvePanel(unittest.TestCase):
                 resolve_panel("grok+claude").members, ["grok", "claude"]
             )
 
+    def test_llamacpp_when_ollama_down(self):
+        def avail(spec: str) -> bool:
+            name = spec.split(":", 1)[0].strip().lower()
+            return name in ("llamacpp", "llama.cpp")
+
+        with patch("master_agent.llm_panel.provider_available", side_effect=avail), patch(
+            "master_agent.llm_panel.LLAMACPP_MODEL", "hermes-local"
+        ):
+            res = resolve_panel("default")
+            custom = resolve_panel("llamacpp:my-gguf,ollama:qwen3-vl-heretic")
+        self.assertEqual(res.members, ["llamacpp:hermes-local"])
+        self.assertEqual(custom.members, ["llamacpp:my-gguf"])
+        self.assertEqual(custom.skipped[0][0], "ollama:qwen3-vl-heretic")
+        self.assertIn("Ollama", custom.skipped[0][1])
+
 
 class TestBuildStoryboardPanel(unittest.TestCase):
     def test_zero_valid_falls_back_to_heuristic(self):
