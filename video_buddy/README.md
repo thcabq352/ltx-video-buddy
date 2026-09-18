@@ -105,6 +105,10 @@ python -m master_agent comfy run --mode template --template base --set 12.steps=
 python -m master_agent comfy run --mode template --template wan22 --prepare
 python -m master_agent comfy run --mode raw --json workflow.json
 python -m master_agent comfy run --mode template --template lipsync --prepare --out prepared.json
+# Previs attach (buddy.comfy.attach/v1) — dry-run default; --submit for live /prompt
+python -m master_agent comfy attach --recipe previs.json --json workflow.json --out patched.json
+# Contract: https://github.com/thcabq352/your-video-buddy/blob/main/docs/COMFY_ATTACH_CONTRACT.md
+# Operator notes: docs/COMFY_ATTACH.md
 
 # Orchestrated generation (the Director):
 python -m master_agent run "cinematic close-up of rain on a window" --quality draft --duration 3

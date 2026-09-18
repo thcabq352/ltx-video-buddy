@@ -57,6 +57,12 @@ class RunState:
     prompt_id: Optional[str] = None
     video_path: Optional[str] = None
 
+    # Previs attach (buddy.comfy.attach/v1) — judge rules (c)/(d)
+    attach_recipe: Optional[dict[str, Any]] = None
+    previs_source: str = ""
+    control_pack_present: bool = False
+    control_pack_used: dict[str, bool] = field(default_factory=dict)
+
     # Judge
     judge_enabled: bool = True
     max_judge_rounds: int = 3
