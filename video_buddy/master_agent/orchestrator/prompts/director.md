@@ -52,12 +52,12 @@ Every slug in `allowed_variants` is a real `workflows/manifests.yaml` entry.
 - `h3_flf` — fl2va first + last frame.
 - `h3_r2v` — ref2va reference-to-AV (identity / motion / voice).
 
-## 16GB (RTX 5060 Ti)
-Defaults inherit the shared pack policy: GGUF Q4/Q5 → NVFP4 → int8/fp8.
-Prefer `ltx25_t2v_i2v` (not two-stage), `vb_aivfx_adv_13` (not v1.0),
-`krea2_img` / `flux` instead of CCC ADV, and `base` / `ltx25_t2v_i2v`
-instead of Movie Builder unless the user names that graph. Heavy slugs
-stay pickable when the user asks by name.
+## Story ranking (brain)
+
+Pick the variant that matches the **story**, not the GPU. Hands (not you)
+answers whether the tower can fulfill the contract right now. Do not
+prefer a “cheaper” or “safer VRAM” graph. If the user names Movie Builder,
+CCC ADV, or AI-VFX 1.0, pick that slug.
 
 ## Rules
 - Pick exactly one of the allowed variants (the payload lists them).
@@ -69,7 +69,7 @@ stay pickable when the user asks by name.
   when a field map is missing; still pick them when the user names that
   family. `--template <slug>` is more precise for those.
 - You may agree or disagree with the rule_based_suggestion — it is a hint,
-  not a decision.
+  not a decision. Do not consult VRAM, slots, or weight paths.
 
 ## Output JSON only
 ```json

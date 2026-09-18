@@ -248,21 +248,20 @@ POLL → RESOLVE → JUDGE → DONE/ERROR`.
   keyed by output_path/hash): [docs/CLIP_PROVENANCE.md](docs/CLIP_PROVENANCE.md).
 - Every run writes a JSON record to `state/runs/` (params, judge history,
   ClipProvenance, transitions) — the seed of the later self-learning knowledge base.
-- Variant routing is LLM-driven (`orchestrator/director.py`): the local VL heretic
-  picks among **every** `workflows/manifests.yaml` slug (`base`, `eros`,
-  `directors`, `lipsync`, `wan22`, `flux`, `vb_aivfx_*`, `vb_movie_builder`,
-  CCC / renderer / dataset / H3 / every `ltx25_*`) from the request, validated
-  against the known list with keyword rules as fallback
-  (`DIRECTOR_LLM=0` for rules-only). Keywords such as `vfx` / `possession` /
-  `movie builder` / `ltx 2.5` / `flf2v` / `msr` / `a2v` route to the matching
-  graph. Hard constraints always win: `--variant` forces, a source video
-  implies lipsync. Graphs without a safe field map queue baked leftover
-  widgets — prefer `comfy run --template <slug>` for those.
+- Variant routing is story-first (`orchestrator/director.py`): the local VL
+  heretic **ranks** among **every** `workflows/manifests.yaml` slug, then
+  Hands (`can_fulfill`) answers fit from a live snapshot. Contract:
+  `buddy.capability.contract/v1` — [docs/BRAIN_HANDS.md](docs/BRAIN_HANDS.md).
+  The brain does not pick cheaper-GPU graphs. Keyword rules fallback
+  (`DIRECTOR_LLM=0` for rules-only). Hard constraints always win:
+  `--variant` forces, a source video implies lipsync. Graphs without a
+  safe field map queue baked leftover widgets — prefer
+  `comfy run --template <slug>` for those.
 
 ## Multi-segment pipeline (storyboard + stitch + full judge)
 
-Requests longer than the per-clip VRAM cap (`SEGMENT_MAX_S`, per quality
-profile) go through `orchestrator/pipeline.py`:
+Requests longer than one Hands clip (8s last-frame chain; music-video
+keeps beat windows) go through `orchestrator/pipeline.py`:
 
 1. **Storyboard** — an LLM panel plans one shot card per segment (camera,
    action, continuity language, per-shot LTX prompt); heuristic fallback when

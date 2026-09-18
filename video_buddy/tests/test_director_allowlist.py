@@ -13,7 +13,7 @@ import yaml
 from master_agent.config import WORKFLOW_FILES, WORKFLOWS_DIR, load_workflow_files
 from master_agent.orchestrator.director import (
     _allowed_variants,
-    _vram_routing_hint,
+    _director_payload,
     choose_variant,
     rule_based_variant,
 )
@@ -93,12 +93,13 @@ def test_hard_constraints_win_over_soft_keywords():
         assert choose_variant("10eros teaser") == ("eros", "rules")
 
 
-def test_director_vram_hint_lists_heavy_safer_alternates():
-    hint = _vram_routing_hint()
-    assert "5060" in hint["gpu"]
-    assert hint["heavy"]["vb_movie_builder"] == "ltx25_t2v_i2v"
-    assert hint["heavy"]["vb_aivfx_adv"] == "vb_aivfx_adv_13"
-    assert hint["heavy"]["vb_ccc_adv"] == "flux"
+def test_director_brain_payload_has_no_vram_or_safer_graphs():
+    payload = _director_payload("movie builder", fallback="vb_movie_builder")
+    assert "vram_policy" not in payload
+    blob = __import__("json").dumps(payload).lower()
+    assert "vram" not in blob
+    assert "safer" not in blob
+    assert payload["rule_based_suggestion"] == "vb_movie_builder"
 
 
 def test_existing_keyword_routes_still_work():

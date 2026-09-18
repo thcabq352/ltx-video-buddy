@@ -199,13 +199,14 @@ class JobManager:
             job.error = result.error
 
     def _do_dry_run(self, job: Job) -> None:
-        from master_agent.config import plan_segment_durations
-        from master_agent.orchestrator.pipeline import _plan_storyboard
+        from master_agent.orchestrator.pipeline import _plan_storyboard, plan_story_segments
         from master_agent.storyboard.storyboard import storyboard_to_markdown
 
         quality = job.params.get("quality")
-        segs = plan_segment_durations(
-            float(job.params.get("duration_s") or 8.0), quality=quality
+        segs = plan_story_segments(
+            float(job.params.get("duration_s") or 8.0),
+            kind=job.kind,
+            quality=quality,
         )
         logs: list[str] = []
         cards, style, meta = _plan_storyboard(
