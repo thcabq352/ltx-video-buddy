@@ -20,7 +20,6 @@ from master_agent.config import (
     MODEL_INVENTORY_JSON,
     MODEL_OPTIONAL_KEYS,
     MODELS_DIR,
-    resolve_model_path,
 )
 
 WEIGHT_EXTENSIONS = {".safetensors", ".ckpt", ".pt", ".pth", ".bin", ".gguf"}
@@ -73,8 +72,10 @@ class Inventory:
         """Look up a model by bare filename (as workflows reference them)."""
         if not name:
             return None
-        base = Path(str(name)).name
-        return self.by_name().get(base)
+        slash = str(name).replace("\\", "/")
+        base = slash.rsplit("/", 1)[-1]
+        by_name = self.by_name()
+        return by_name.get(base) or by_name.get(slash) or by_name.get(name)
 
     def to_dict(self) -> dict[str, Any]:
         return {
@@ -135,12 +136,22 @@ def check_bundles(entries: list[ModelEntry]) -> dict[str, dict[str, Any]]:
     Missing non-optional keys mark the bundle not runnable.
     """
     names = {e.name for e in entries if not e.partial}
+    for e in entries:
+        if e.partial:
+            continue
+        rel = (e.rel_path or "").replace("\\", "/")
+        if rel:
+            names.add(rel)
+            names.add(rel.replace("/", "\\"))
+            names.add(rel.rsplit("/", 1)[-1])
     bundles: dict[str, dict[str, Any]] = {}
     for variant, files in MODEL_FILES.items():
         present: dict[str, str] = {}
         missing: dict[str, str] = {}
         for key, filename in files.items():
-            if filename in names:
+            slash = str(filename).replace("\\", "/")
+            base = slash.rsplit("/", 1)[-1]
+            if filename in names or slash in names or base in names:
                 present[key] = filename
             else:
                 missing[key] = filename
@@ -165,6 +176,28 @@ def scan_inventory(
 ) -> Inventory:
     entries = _scan_root(models_dir, "project")
     entries += _scan_root(comfyui_root / "models", "comfyui")
+    seen: set[Path] = set()
+    for root in (models_dir, comfyui_root / "models"):
+        try:
+            seen.add(root.resolve())
+        except OSError:
+            continue
+    extra_roots: list[Path] = []
+    try:
+        from master_agent.models.weights import model_search_roots
+
+        extra_roots = list(model_search_roots())
+    except Exception:
+        extra_roots = []
+    for root in extra_roots:
+        try:
+            resolved = root.resolve()
+        except OSError:
+            continue
+        if resolved in seen or not root.is_dir():
+            continue
+        seen.add(resolved)
+        entries += _scan_root(root, "search")
     inv = Inventory(
         generated_at=_utc_now(),
         models_dir=str(models_dir),

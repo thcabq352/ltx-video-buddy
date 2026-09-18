@@ -9,8 +9,13 @@ LTX 2.5 official bf16 split pack lives in ``master_agent.models.weights``
 (Hub paths under ``Lightricks/LTX-2.5``). Never auto-download those gated
 files — callers must pass ``yes=True``.
 
-Files already at their destination are skipped (SKIP). Downloads go through
-the huggingface_hub cache and are then copied into models/.
+Local-first: files already at the destination, in Comfy ``models/``,
+``EXTRA_MODELS_DIRS``, ``extra_model_paths.yaml``, or the Hugging Face hub
+cache are reused. A clear SKIP log is printed. Nothing is re-downloaded
+when a usable local copy exists.
+
+If configured model dirs are missing, this module refuses to start a Hub
+fetch and names every path it checked.
 
 Usage:
     python -m master_agent download-flux
@@ -39,6 +44,61 @@ FLUX_FILES: list[tuple[str, str, str]] = [
 ]
 
 
+class LocalModelNotFound(RuntimeError):
+    """Configured model dirs are missing or unusable; do not start a Hub fetch."""
+
+    def __init__(
+        self,
+        message: str,
+        *,
+        paths_checked: list[str],
+        filename: str = "",
+    ):
+        super().__init__(message)
+        self.paths_checked = paths_checked
+        self.filename = filename
+
+
+def _usable(path: Path) -> bool:
+    try:
+        return path.is_file() and path.stat().st_size > 0
+    except OSError:
+        return False
+
+
+def _skip_local(path: Path, dest: Path, progress: Callable[[str], None]) -> Path:
+    progress(
+        f"SKIP download of {dest.name} — local file found at {path} (not re-downloading)"
+    )
+    return path
+
+
+def _configured_model_roots() -> list[Path]:
+    """Read live config (tests and runtime env rebinds must be visible)."""
+    from master_agent.config import COMFYUI_ROOT as comfy_root
+    from master_agent.config import MODELS_DIR as models_dir
+    from master_agent.config import extra_models_dirs as extra_dirs
+
+    return [Path(models_dir), Path(comfy_root) / "models", *extra_dirs()]
+
+
+def _find_existing_local(repo_filename: str, dest: Path) -> Path | None:
+    """Reuse dest, Comfy/extra trees, accepted aliases, or the HF hub cache."""
+    if _usable(dest):
+        return dest
+    needle = Path(str(repo_filename).replace("\\", "/")).name or dest.name
+    try:
+        from master_agent.models.weights import find_weight_file
+
+        for name in (needle, dest.name, repo_filename):
+            found = find_weight_file(name)
+            if found is not None:
+                return found
+    except Exception:
+        return None
+    return None
+
+
 def download_hub_file(
     *,
     repo_id: str,
@@ -46,10 +106,48 @@ def download_hub_file(
     dest: Path,
     progress: Callable[[str], None] = print,
 ) -> Path:
-    """Download one Hub file into dest. Skips if dest already exists."""
-    if dest.is_file() and dest.stat().st_size > 0:
-        progress(f"SKIP {dest} (already exists)")
-        return dest
+    """Reuse a local copy when present. Only hits the Hub after a full scan."""
+    found = _find_existing_local(repo_filename, dest)
+    if found is not None:
+        return _skip_local(found, dest, progress)
+
+    # try_to_load_from_cache with the real repo (no network)
+    try:
+        from huggingface_hub import try_to_load_from_cache
+
+        cached = try_to_load_from_cache(repo_id=repo_id, filename=repo_filename)
+        if cached and _usable(Path(cached)):
+            return _skip_local(Path(cached), dest, progress)
+    except Exception:
+        pass
+
+    roots: list[Path] = []
+    try:
+        from master_agent.models.weights import model_search_roots
+
+        roots = list(model_search_roots())
+    except Exception:
+        roots = []
+    configured = _configured_model_roots()
+    if not any(p.is_dir() for p in configured):
+        checked: list[str] = []
+        seen: set[str] = set()
+        for path in (*configured, *roots, dest.parent):
+            key = str(path)
+            if key in seen:
+                continue
+            seen.add(key)
+            checked.append(key)
+        raise LocalModelNotFound(
+            f"Refusing to download {dest.name} from {repo_id}/{repo_filename} — "
+            "no usable local model directories were found. "
+            "Set MODELS_DIR, COMFYUI_ROOT, EXTRA_MODELS_DIRS, or "
+            "Comfy extra_model_paths.yaml.\n"
+            "Paths checked:\n" + "\n".join(f"  - {p}" for p in checked),
+            paths_checked=checked,
+            filename=dest.name,
+        )
+
     dest.parent.mkdir(parents=True, exist_ok=True)
     from huggingface_hub import hf_hub_download
     from huggingface_hub.utils import GatedRepoError
@@ -82,9 +180,20 @@ def download_flux_weights(progress: Callable[[str], None] = print) -> list[Path]
         )
 
     vae = MODELS_DIR / "vae" / FLUX_VAE
-    if vae.is_file():
-        progress(f"SKIP {vae} (already exists)")
-        paths.append(vae)
+    found_vae = vae if vae.is_file() and vae.stat().st_size > 0 else None
+    if found_vae is None:
+        try:
+            from master_agent.models.weights import find_weight_file
+
+            found_vae = find_weight_file(FLUX_VAE)
+        except Exception:
+            found_vae = None
+    if found_vae is not None:
+        progress(
+            f"SKIP download of {FLUX_VAE} — local file found at {found_vae} "
+            "(not re-downloading)"
+        )
+        paths.append(found_vae)
     else:
         progress(
             f"WARN {vae} not found; place {FLUX_VAE} in models/vae manually "

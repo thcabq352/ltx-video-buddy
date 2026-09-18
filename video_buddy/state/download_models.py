@@ -170,12 +170,33 @@ def log(msg):
     print(f"[{time.strftime('%H:%M:%S')}] {msg}", flush=True)
 
 
+def _find_local_weight(fname, dest):
+    """Reuse a file already on disk (dest, Comfy trees, HF cache, aliases)."""
+    if os.path.exists(dest) and os.path.getsize(dest) > 0:
+        return dest
+    try:
+        if ROOT not in sys.path:
+            sys.path.insert(0, ROOT)
+        from master_agent.models.weights import find_weight_file
+
+        found = find_weight_file(os.path.basename(fname.replace("\\", "/")))
+        if found is not None and found.is_file() and found.stat().st_size > 0:
+            return str(found)
+    except Exception:
+        return None
+    return None
+
+
 def fetch(repo, fname, dest_rel):
     dest = os.path.join(ROOT, dest_rel.replace("/", os.sep))
     os.makedirs(os.path.dirname(dest), exist_ok=True)
     try:
-        if os.path.exists(dest) and os.path.getsize(dest) > 0:
-            log(f"SKIP  {dest_rel} (already present, {os.path.getsize(dest)} bytes)")
+        existing = _find_local_weight(fname, dest)
+        if existing:
+            log(
+                f"SKIP download of {os.path.basename(dest)} — local file found at "
+                f"{existing} (not re-downloading)"
+            )
             return dest_rel, "SKIP"
         if os.path.islink(dest):
             os.remove(dest)  # dangling symlink left by an earlier failed move
