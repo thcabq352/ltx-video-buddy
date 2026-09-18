@@ -563,6 +563,14 @@ def _apply_local_ltx25_weights(workflow: dict[str, Any]) -> None:
         if "ckpt_name" in inputs and isinstance(inputs.get("ckpt_name"), str):
             if "ltx-2.5" in str(inputs.get("ckpt_name")).lower():
                 _set_input(node, "ckpt_name", transformer_name)
+    for _nid, node in _find_nodes_by_class(workflow, "CLIPLoader"):
+        title = str((node.get("_meta") or {}).get("title") or "").lower()
+        inputs = node.get("inputs") or {}
+        current = str(inputs.get("clip_name") or "")
+        if "enhancer" in title or "e2b" in current.lower():
+            continue
+        if any(tok in current.lower() for tok in ("gemma", "ltx-2.5", "ltx25", "ltxv")):
+            _set_input(node, "clip_name", te_name)
 
 
 def _apply_multi_ref(workflow: dict[str, Any], refs: dict[str, Any]) -> list[str]:
@@ -734,9 +742,9 @@ def _heuristic_patch(workflow: dict[str, Any], values: dict[str, Any]) -> None:
             title = str((node.get("_meta") or {}).get("title") or "").lower()
             if "neg" in title:
                 continue
-            if any(tok in ctype for tok in ("clip", "gemma", "textencode", "prompt")) or "prompt" in title:
+            if any(tok in ctype for tok in ("clip", "gemma", "textencode", "prompt", "primitivestring")) or "prompt" in title:
                 inputs = node.get("inputs") or {}
-                for key in ("text", "prompt", "string", "positive"):
+                for key in ("text", "prompt", "string", "positive", "value"):
                     if key in inputs and not isinstance(inputs[key], list):
                         inputs[key] = prompt
 
@@ -778,7 +786,12 @@ def _heuristic_patch(workflow: dict[str, Any], values: dict[str, Any]) -> None:
                     _set_input(node, "height", height)
                 if frames is not None:
                     _set_input(node, "length", int(frames))
-        for class_type in ("LTXVImgToVideo", "LTXVConditioning"):
+        for class_type in (
+            "LTXVImgToVideo",
+            "LTXVImgToVideoInplace",
+            "LTXVImgToVideoConditionOnly",
+            "LTXVConditioning",
+        ):
             for _nid, node in _find_nodes_by_class(workflow, class_type):
                 if values.get("fps") and class_type == "LTXVConditioning":
                     _set_input(node, "frame_rate", int(values.get("fps") or 24))
@@ -793,6 +806,11 @@ def _heuristic_patch(workflow: dict[str, Any], values: dict[str, Any]) -> None:
                         _set_input(node, "image", values.get("first_image") or values.get("image_name"))
                     if values.get("last_image"):
                         _set_input(node, "last_frame", values["last_image"])
+                if class_type in ("LTXVImgToVideoInplace", "LTXVImgToVideoConditionOnly"):
+                    if values.get("image_name") or values.get("first_image"):
+                        # Official 2.5 graphs: bypass=True means unused T2V.
+                        # An image must actually condition the sampler latent.
+                        _set_input(node, "bypass", False)
         for _nid, node in _find_nodes_by_class(workflow, "CreateVideo"):
             if values.get("fps"):
                 _set_input(node, "fps", float(values.get("fps") or 24))
@@ -928,6 +946,10 @@ def _heuristic_patch(workflow: dict[str, Any], values: dict[str, Any]) -> None:
             for _nid, node in _find_nodes_by_class(workflow, "LoadImage"):
                 _set_input(node, "image", first_image)
                 break
+        # Official LTX 2.5 T2V/I2V: PrimitiveBoolean drives I2V bypass via NOT.
+        # true = use image (I2V); false = unused T2V.
+        for _nid, node in _find_nodes_by_class(workflow, "PrimitiveBoolean"):
+            _set_input(node, "value", True)
     if last_image:
         for _nid, node in _find_nodes_by_class(workflow, "LoadImage"):
             title = str((node.get("_meta") or {}).get("title") or "").lower()

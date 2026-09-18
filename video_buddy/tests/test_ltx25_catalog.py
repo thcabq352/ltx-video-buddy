@@ -88,13 +88,15 @@ def test_patcher_accepts_every_shipped_template():
         assert snap_ltx_frames(meta["frames"]) == meta["frames"]
         assert meta["frames"] >= 9
         assert (meta["frames"] - 1) % 8 == 0
-        texts = [
-            node["inputs"].get("text")
-            for node in wf.values()
-            if isinstance(node, dict) and isinstance(node.get("inputs"), dict)
-            and "text" in node["inputs"]
-            and not isinstance(node["inputs"]["text"], list)
-        ]
+        texts = []
+        for node in wf.values():
+            if not isinstance(node, dict) or not isinstance(node.get("inputs"), dict):
+                continue
+            inputs = node["inputs"]
+            for key in ("text", "prompt", "value", "string"):
+                val = inputs.get(key)
+                if isinstance(val, str):
+                    texts.append(val)
         assert "slow push into a neon alley" in texts, vid
 
 
@@ -122,7 +124,16 @@ def test_local_gguf_rewrites_unet_loader_gguf(tmp_path, monkeypatch):
     assert ggufs
     assert ggufs[0][1]["inputs"]["unet_name"].endswith(".gguf")
     tes = _find_nodes_by_class(wf, "LTXAVTextEncoderLoader")
-    assert tes[0][1]["inputs"]["text_encoder"].startswith("gemma4-12b-heretic")
+    clips = _find_nodes_by_class(wf, "CLIPLoader")
+    if tes:
+        assert tes[0][1]["inputs"]["text_encoder"].startswith("gemma4-12b-heretic")
+    else:
+        names = [
+            n[1]["inputs"].get("clip_name", "")
+            for n in clips
+            if "enhancer" not in str((n[1].get("_meta") or {}).get("title") or "").lower()
+        ]
+        assert any(str(n).startswith("gemma4-12b-heretic") for n in names), names
 
 
 def test_stub_ckpt_remapped_to_official_transformer():
@@ -141,8 +152,16 @@ def test_stub_ckpt_remapped_to_official_transformer():
     assert unets, "CheckpointLoaderSimple should rewrite to UNETLoader"
     assert unets[0][1]["inputs"]["unet_name"] == official
     tes = _find_nodes_by_class(wf, "LTXAVTextEncoderLoader")
-    assert tes
-    assert tes[0][1]["inputs"]["text_encoder"].startswith("gemma4-12b-with-proj-ltx-2.5")
+    clips = _find_nodes_by_class(wf, "CLIPLoader")
+    if tes:
+        assert tes[0][1]["inputs"]["text_encoder"].startswith("gemma4-12b-with-proj-ltx-2.5")
+    else:
+        names = [
+            n[1]["inputs"].get("clip_name", "")
+            for n in clips
+            if "enhancer" not in str((n[1].get("_meta") or {}).get("title") or "").lower()
+        ]
+        assert any("gemma4-12b-with-proj-ltx-2.5" in str(n) for n in names), names
 
 
 def test_generate_mode_prepares_each_ltx25_id():
@@ -160,7 +179,9 @@ def test_resolve_workflow_path_for_alias_and_id():
 
 def test_load_template_does_not_fall_back_to_base_for_ltx25():
     raw = load_workflow_template("ltx25_flf2v")
-    assert _find_nodes_by_class(raw, "LTXVImgToVideo")
+    assert _find_nodes_by_class(raw, "LTXVImgToVideo") or _find_nodes_by_class(
+        raw, "LTXVImgToVideoInplace"
+    )
     assert _find_nodes_by_class(raw, "LoadImage")
 
 
