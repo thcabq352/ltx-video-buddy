@@ -318,10 +318,12 @@ def _resolved_ltx25_names() -> tuple[str, str]:
 
     transformer = WEIGHT_FILES["transformer"]
     text_encoder = WEIGHT_FILES["text_encoder"]
+    from master_agent.comfy.loader_names import name_from_local_path
+
     local_tr = resolve_weight(transformer)
     local_te = resolve_weight(text_encoder)
-    tr_name = local_tr.name if local_tr is not None else transformer.filename
-    te_name = local_te.name if local_te is not None else text_encoder.filename
+    tr_name = name_from_local_path(local_tr) or transformer.filename
+    te_name = name_from_local_path(local_te) or text_encoder.filename
     return tr_name, te_name
 
 
@@ -395,15 +397,17 @@ def _resolved_h3_names(bundle: str) -> tuple[str, str, str, str]:
     te = WEIGHT_FILES["h3_text_encoder"]
     vvae = WEIGHT_FILES["h3_video_vae"]
     avae = WEIGHT_FILES["h3_audio_vae"]
+    from master_agent.comfy.loader_names import name_from_local_path
+
     local_dit = resolve_weight(dit)
     local_te = resolve_weight(te)
     local_vvae = resolve_weight(vvae)
     local_avae = resolve_weight(avae)
     return (
-        local_dit.name if local_dit is not None else dit.filename,
-        local_te.name if local_te is not None else te.filename,
-        local_vvae.name if local_vvae is not None else vvae.filename,
-        local_avae.name if local_avae is not None else avae.filename,
+        name_from_local_path(local_dit) or dit.filename,
+        name_from_local_path(local_te) or te.filename,
+        name_from_local_path(local_vvae) or vvae.filename,
+        name_from_local_path(local_avae) or avae.filename,
     )
 
 
@@ -467,8 +471,12 @@ def _resolved_family_name(weight_key: str) -> str | None:
     weight = WEIGHT_FILES.get(weight_key)
     if weight is None:
         return None
+    from master_agent.comfy.loader_names import name_from_local_path
+
     found = resolve_weight(weight)
-    return found.name if found is not None else None
+    if found is None:
+        return None
+    return name_from_local_path(found) or found.name
 
 
 def _apply_local_family_weights(workflow: dict[str, Any], variant: str) -> None:
@@ -1112,6 +1120,11 @@ def load_and_patch_workflow(
 
     if variant in LTX_TEACACHE_VARIANTS or looks_like_ltx_graph(workflow):
         ensure_teacache(workflow, object_info)
+
+    if object_info:
+        from master_agent.comfy.loader_names import normalize_loader_widgets
+
+        normalize_loader_widgets(workflow, object_info=object_info)
 
     meta = {
         "variant": variant,

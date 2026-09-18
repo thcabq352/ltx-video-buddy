@@ -59,6 +59,7 @@ MODEL_INPUT_NAMES = {
     "insightface_provider",
     "ipadapter_file",
     "pulid_file",
+    "gguf_name",
 }
 
 WEIGHT_SUFFIXES = (
@@ -365,6 +366,17 @@ def validate_workflow(
         )
 
     enforce_ltx_frame_law(workflow, report, strict=strict)
+
+    from master_agent.comfy.loader_names import normalize_loader_widgets
+
+    for nid, key, old, new in normalize_loader_widgets(
+        workflow, object_info=object_info, inventory=inventory
+    ):
+        report.warn(
+            nid,
+            key,
+            f"normalized {old!r} → {new!r} to match Comfy combo list",
+        )
 
     for node_id, node in workflow.items():
         if not isinstance(node, dict):
