@@ -18,17 +18,22 @@ Comfy (`h3_t2v` / fl2va). Files live in this repo so github.com viewers do
 not need Tailscale or a private share.
 
 <p align="center">
-  <a href="docs/demo/">
+  <a href="docs/demo/H3-SHOWCASE-BMX-8s-720p.mp4">
     <img src="docs/demo/H3-SHOWCASE-BMX-8s-hero.png" alt="MiniMax H3 via Video Buddy — golden-hour BMX berm, backflip, dusty stick (~8s)" width="100%" />
   </a>
 </p>
 
 <p align="center"><em>Golden-hour BMX berm → backflip → dusty stick. ~8s. MiniMax H3 via Video Buddy / Comfy.</em></p>
 
-Poster + originating provenance:
-[`docs/demo/`](docs/demo/) (same path your-video-buddy PR #11 already
-links). A complete 720p MP4 belongs there once it passes ffprobe (8.0 s +
-`moov`); the 1080p encode is omitted from git on purpose (~10 MB).
+Play in the GitHub blob viewer (once the complete encode is checked in):
+[`docs/demo/H3-SHOWCASE-BMX-8s-720p.mp4`](docs/demo/H3-SHOWCASE-BMX-8s-720p.mp4).
+**This revision does not include that file** — the launch attach was 755 712
+bytes, `ffprobe` reported `moov atom not found`, and files under 1 MB are
+refused.
+
+Poster + originating provenance live in both
+[`docs/demo/`](docs/demo/) (sibling README links) and
+[`docs/showcase/h3-bmx/`](docs/showcase/h3-bmx/).
 
 ---
 
@@ -170,7 +175,8 @@ when you need those older filenames. Full operator docs:
 ## Repository layout
 
 ```
-docs/demo/             # public MiniMax H3 still + provenance (README demo)
+docs/demo/             # sibling-README mirror (your-video-buddy PR #11)
+docs/showcase/h3-bmx/  # same H3 BMX poster + provenance (PR #24 path)
 video_buddy/
 ├── master_agent/      # the agent: orchestrator, director, judge, persona,
 │                      # KB, characters/LoRA, music, fractal, upscale, web, MCP
@@ -188,7 +194,8 @@ video_buddy/
 - [Operator manual](video_buddy/README.md) — full CLI/web/MCP reference and changelog
 - [Doctor / download-models / catalog](video_buddy/docs/QUICKSTART.md) — inventory-first LTX 2.5 flow
 - [Required files](video_buddy/REQUIRED-FILES.md) — accepted local names + Hub catalog
-- [MiniMax H3 demo](docs/demo/) — photoreal BMX still + run sidecar
+- [MiniMax H3 demo](docs/demo/) — photoreal BMX still + run sidecar (sibling links)
+- [MiniMax H3 showcase](docs/showcase/h3-bmx/) — same files under the PR #24 path
 - [LTX 2.5 workflows](video_buddy/workflows/ltx-2.5/README.md) — ids and invoke examples
 - [MiniMax H3 workflows](video_buddy/workflows/minimax-h3/README.md) — fl2va / ref2va ids
 - [Self-improvement loop](video_buddy/docs/SELF_IMPROVEMENT_LOOP.md) — live judge → revise → re-run map

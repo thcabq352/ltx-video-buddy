@@ -528,9 +528,10 @@ local models (19-27GB) and can take several minutes — allow long timeouts.
 ## Status (2026-09-18)
 
 - **MiniMax H3 public showcase.** Photoreal BMX still + originating
-  provenance are in [`docs/demo/`](../docs/demo/) (linked from the
-  repo-root README; same path your-video-buddy PR #11 uses). 1080p encode
-  stays out of git.
+  provenance are in [`docs/demo/`](../docs/demo/) and
+  [`docs/showcase/h3-bmx/`](../docs/showcase/h3-bmx/) (linked from the
+  repo-root README). A playable 720p MP4 is **not** in git until a
+  complete attach (or other untruncated copy) lands.
 - **Music-video Remotion mode.** `python -m master_agent mv render --audio …`
   plans 30 fps beat windows, burns one unique Comfy/LTX motion clip per
   window (`prepare_run` / TeaCache), refuses still-holds and duplicate
