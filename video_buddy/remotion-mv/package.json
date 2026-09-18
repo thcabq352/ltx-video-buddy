@@ -1,0 +1,21 @@
+{
+  "name": "buddy-mv-remotion",
+  "private": true,
+  "version": "1.0.0",
+  "description": "Video Buddy music-video stitch: Sequence Comfy/LTX clips on a 30fps beat plan + full-track audio.",
+  "scripts": {
+    "start": "remotion studio src/index.ts",
+    "render": "remotion render src/index.ts MusicVideo out/MV-FIXED.mp4 --props=../out/remotion-props.json",
+    "render:720p": "remotion render src/index.ts MusicVideo out/MV-FIXED-720p.mp4 --props=../out/remotion-props.json --scale=0.666667"
+  },
+  "dependencies": {
+    "@remotion/cli": "^4.0.0",
+    "react": "^18.3.1",
+    "react-dom": "^18.3.1",
+    "remotion": "^4.0.0"
+  },
+  "devDependencies": {
+    "@types/react": "^18.3.0",
+    "typescript": "^5.6.0"
+  }
+}

@@ -1,6 +1,11 @@
 # Git worktrees
 .worktrees/
 
+# Remotion MV stitch (install locally; do not commit node_modules)
+video_buddy/remotion-mv/node_modules/
+video_buddy/remotion-mv/out/
+out/
+
 # Secrets
 .env
 **/.env

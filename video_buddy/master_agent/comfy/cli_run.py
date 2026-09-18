@@ -130,6 +130,14 @@ def prepare_run(
     prompt: str = "",
     overrides: dict[str, dict[str, Any]] | None = None,
     object_info: dict[str, Any] | None = None,
+    duration_s: float | None = None,
+    seed: int | None = None,
+    width: int | None = None,
+    height: int | None = None,
+    image_name: str | None = None,
+    frames: int | None = None,
+    filename_prefix: str | None = None,
+    negative_prompt: str | None = None,
 ) -> dict[str, Any]:
     from master_agent.comfy.graph_ops import ensure_teacache, looks_like_ltx_graph
 
@@ -145,11 +153,27 @@ def prepare_run(
     elif mode == "generate":
         from master_agent.comfy.workflow_patcher import load_and_patch_workflow
 
-        wf, meta = load_and_patch_workflow(
-            variant or "base",
-            prompt=prompt or "test",
-            object_info=object_info,
-        )
+        gen_kwargs: dict[str, Any] = {
+            "prompt": prompt or "test",
+            "object_info": object_info,
+        }
+        if duration_s is not None:
+            gen_kwargs["duration_s"] = duration_s
+        if seed is not None:
+            gen_kwargs["seed"] = seed
+        if width is not None:
+            gen_kwargs["width"] = width
+        if height is not None:
+            gen_kwargs["height"] = height
+        if image_name is not None:
+            gen_kwargs["image_name"] = image_name
+        if frames is not None:
+            gen_kwargs["frames"] = frames
+        if filename_prefix is not None:
+            gen_kwargs["filename_prefix"] = filename_prefix
+        if negative_prompt is not None:
+            gen_kwargs["negative_prompt"] = negative_prompt
+        wf, meta = load_and_patch_workflow(variant or "base", **gen_kwargs)
         warn = (meta or {}).get("prepare_warning")
         if warn:
             print(warn)

@@ -112,7 +112,7 @@ Full signatures: [TOOLS.md](TOOLS.md). Invoke MCP as `master-agent.<tool>`. CLI 
 | `create_character(description, name="", shots=0, train=False)` | `python -m master_agent character create "DESC" [--name N --shots N --train]` |
 | `train_lora(character_name, steps=0, lr=0, rank=0, validate=True)` | `python -m master_agent lora train NAME [--steps N --lr X --rank N --validate]` |
 
-CLI-only (no MCP tool): `about`, `curriculum`, `doctor`/`setup`, `workflows`, `capabilities`, `download-models`, `download-flux`, `comfy run`, `diagnose`, `budget`, `hermes`, `ui`, `fetch-object-info`, `power-tune`, `persona`, `soul`, `brief`, `fractal`, `music`, `lora setup`/`validate`, `character list`.
+CLI-only (no MCP tool): `about`, `curriculum`, `doctor`/`setup`, `workflows`, `capabilities`, `download-models`, `download-flux`, `comfy run`, `diagnose`, `budget`, `hermes`, `ui`, `fetch-object-info`, `power-tune`, `persona`, `soul`, `brief`, `fractal`, `music`, `mv plan`/`mv render`, `lora setup`/`validate`, `character list`.
 
 Drive graphs with CLI first: `comfy run`. Director pipeline: `run`. Unattended: `--no-interview`.
 
@@ -122,6 +122,7 @@ python -m master_agent comfy run --mode generate --prompt "BRIEF" --variant ltx2
 python -m master_agent comfy run --mode generate --prompt "BRIEF" --variant h3_t2v
 python -m master_agent run "BRIEF" --variant ltx25_t2v_i2v --no-interview
 python -m master_agent diagnose --variant base --prompt "garden proof"
+python -m master_agent mv render --audio track.mp3 --out out/MV-FIXED.mp4 --dry-run
 ```
 
 ## Install (Jason / Scott)

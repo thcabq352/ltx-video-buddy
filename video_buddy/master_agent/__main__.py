@@ -7,7 +7,8 @@ Commands:
   validate [file|-a]  Validate workflow JSON against /object_info + model inventory
   run                 Orchestrated video generation (storyboard -> judge -> stitch)
   fractal             Procedural fractal deep-zoom video (CPU only, no ComfyUI)
-  music               Beat-synced music video from an audio track
+  music               Beat-synced music video from an audio track (ffmpeg mux)
+  mv plan|render      Comfy/LTX → Remotion MTV mode (beat plan, unique burns)
   persona list|show|set   Intake voice (default: ara)
   soul list|show|set      Standing values (default: studio)
   brief               Interview-only: rough idea -> creative brief (--go to generate)
@@ -579,6 +580,85 @@ def cmd_fractal(args: argparse.Namespace) -> int:
             print(f"WARN  upscale failed: {e}")
     print(f"DONE   video: {video}")
     return 0
+
+
+def cmd_mv(args: argparse.Namespace) -> int:
+    """Comfy/LTX music-video mode: plan → unique burns → Remotion."""
+    from master_agent.music.mv import render_music_video
+    from master_agent.music.plan import (
+        BeatPlanError,
+        build_beat_plan,
+        write_beat_plan,
+    )
+    from master_agent.music.still_hold import StillHoldError
+    from master_agent.music.unique import DuplicateClipError
+
+    action = getattr(args, "mv_command", None) or "render"
+    audio = getattr(args, "audio", None)
+    if action == "plan":
+        if not audio:
+            print("FAIL  mv plan needs --audio <file>")
+            return 2
+        try:
+            plan = build_beat_plan(audio, fps=int(getattr(args, "fps", 30) or 30))
+        except Exception as e:
+            print(f"FAIL  beat plan: {e}")
+            return 1
+        dest = Path(args.out) if args.out else Path("out") / "beat_plan.json"
+        write_beat_plan(plan, dest)
+        if getattr(args, "json", False):
+            print(json.dumps(plan.to_dict(), indent=1))
+        else:
+            print(f"OK    {dest}")
+            print(f"      {plan.bpm:.0f} BPM, {len(plan.windows)} windows, {plan.duration_s:.2f}s @ {plan.fps}fps")
+        return 0
+
+    if not audio:
+        print("FAIL  mv render needs --audio <file>")
+        return 2
+    out = args.out or str(Path("out") / "MV-FIXED.mp4")
+    brief = (getattr(args, "prompt", None) or getattr(args, "request", None) or "music video").strip()
+    plan_arg = getattr(args, "plan", None)
+    try:
+        rec = render_music_video(
+            audio,
+            out=out,
+            prompt=brief,
+            image=getattr(args, "image", None),
+            variant=getattr(args, "variant", None),
+            dry_run=bool(getattr(args, "dry_run", False)),
+            plan=plan_arg,
+            seed=getattr(args, "seed", None),
+            width=int(getattr(args, "width", 768) or 768),
+            height=int(getattr(args, "height", 512) or 512),
+            fps=int(getattr(args, "fps", 30) or 30),
+            work_dir=getattr(args, "work_dir", None),
+        )
+    except DuplicateClipError as e:
+        print(f"FAIL  uniqueness gate: {e}")
+        return 2
+    except StillHoldError as e:
+        print(f"FAIL  still-hold: {e}")
+        return 2
+    except BeatPlanError as e:
+        print(f"FAIL  beat plan: {e}")
+        return 2
+    except Exception as e:
+        print(f"FAIL  {e}")
+        return 1
+    if getattr(args, "json", False):
+        print(json.dumps(rec, indent=1, default=str))
+    else:
+        print()
+        mode = "DRY-RUN" if rec.get("dry_run") else "DONE"
+        print(f"{mode}  plan: {rec.get('plan_path')}")
+        print(f"       windows: {len((rec.get('beat_plan') or {}).get('windows') or [])}")
+        rem = rec.get("remotion") or {}
+        print(f"       remotion props: {rem.get('props_path')}")
+        print(f"       remotion cmd: {' '.join(rem.get('command') or [])}")
+        if not rec.get("dry_run"):
+            print(f"       out: {rec.get('out')}")
+    return 0 if rec.get("ok") else 1
 
 
 def cmd_music(args: argparse.Namespace) -> int:
@@ -1412,6 +1492,41 @@ def main(argv: list[str] | None = None) -> int:
     p.add_argument("--no-interview", action="store_true",
                    help="skip the persona intake interview")
     p.set_defaults(func=cmd_music)
+
+    p = sub.add_parser(
+        "mv",
+        help="Comfy/LTX music-video mode: beat plan → unique burns → Remotion (not Grok)",
+    )
+    mv_sub = p.add_subparsers(dest="mv_command", required=True)
+    plan_p = mv_sub.add_parser("plan", help="write buddy.mv.beat_plan/v1 JSON from an audio track")
+    plan_p.add_argument("--audio", required=True, help="audio file (mp3/wav/...)")
+    plan_p.add_argument("--out", help="beat plan JSON (default out/beat_plan.json)")
+    plan_p.add_argument("--fps", type=int, default=30, help="frame grid (MTV cut is 30)")
+    plan_p.add_argument("--json", action="store_true", help="print the plan to stdout")
+    plan_p.set_defaults(func=cmd_mv)
+    rend_p = mv_sub.add_parser(
+        "render",
+        help="plan → Comfy/LTX burn (I2V if --image) → unique check → Remotion",
+    )
+    rend_p.add_argument("request", nargs="?", default="music video", help="creative brief")
+    rend_p.add_argument("--audio", required=True, help="full-track audio (mp3/wav/...)")
+    rend_p.add_argument("--out", default=str(Path("out") / "MV-FIXED.mp4"), help="1080p output")
+    rend_p.add_argument("--plan", help="reuse a buddy.mv.beat_plan/v1 JSON (skip analyze)")
+    rend_p.add_argument("--image", help="still / character lock → I2V (else T2V)")
+    rend_p.add_argument("--variant", default="ltx25_t2v_i2v", help="LTX catalog slug")
+    rend_p.add_argument("--prompt", help="override brief (else positional request)")
+    rend_p.add_argument("--seed", type=int, help="base seed (windows offset uniquely)")
+    rend_p.add_argument("--width", type=int, default=768, help="Comfy burn width")
+    rend_p.add_argument("--height", type=int, default=512, help="Comfy burn height")
+    rend_p.add_argument("--fps", type=int, default=30, help="Remotion / beat-plan fps")
+    rend_p.add_argument(
+        "--dry-run",
+        action="store_true",
+        help="plan + unique mock burns + Remotion wiring; no GPU / Comfy / Node",
+    )
+    rend_p.add_argument("--work-dir", dest="work_dir", help="scratch dir for clips + props")
+    rend_p.add_argument("--json", action="store_true")
+    rend_p.set_defaults(func=cmd_mv)
 
     p = sub.add_parser("download-flux", help="download Flux fp8 weights (~17GB, one-time)")
     p.set_defaults(func=cmd_download_flux)
