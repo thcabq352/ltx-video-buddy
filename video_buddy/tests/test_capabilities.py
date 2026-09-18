@@ -38,7 +38,7 @@ def test_list_templates_includes_director_and_manifest():
     items = list_templates()
     by_id = {i["id"]: i for i in items}
     assert by_id["wan22"]["kind"] == "variant"
-    # Default catalog (PR #6) lists every manifests.yaml slug as a variant.
+    # Default catalog lists every on-disk manifests.yaml slug as a variant.
     assert by_id["vb_aivfx_adv"]["kind"] == "variant"
     assert by_id["ltx25_t2v_i2v"]["kind"] == "variant"
     assert Path(WORKFLOWS_DIR / by_id["wan22"]["path"]).is_file()

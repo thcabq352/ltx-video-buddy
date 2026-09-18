@@ -18,7 +18,6 @@ Every slug in `allowed_variants` is a real `workflows/manifests.yaml` entry.
 - `krea2_img` / `vb_krea2_img` — Krea-2 image generation. Prefer `krea2_img`.
 - `vb_ideogram` — Ideogram API stills (needs an API key).
 - `vb_qwen_edit_360` — Qwen-Image-Edit 360 turnaround / equirectangular.
-- `vb_zimage_turbo_cn` — Z-Image Turbo + Fun-Controlnet lineart start frames.
 
 ## Variants — AI-VFX / renderer / movie
 - `vb_aivfx_adv_13` — AI-VFX compositor v1.3 (VACE Q4_K_M GGUF). 16GB default for VFX / possession / composite.
@@ -30,11 +29,10 @@ Every slug in `allowed_variants` is a real `workflows/manifests.yaml` entry.
 - `vb_ccc41_krea2` — CCC 4.1 Krea2-Edit grounded character editing.
 - `vb_dataset_tagger` — batch image → caption pairs for LoRA data.
 - `vb_tag_review` — review/edit auto-generated dataset captions.
-- `vb_ai_renderer_smpl` / `vb_ai_renderer_adv` / `vb_ai_renderer_adv_20` —
-  AI-Renderer Wan VACE start/end (+ GIMM-VFI on ADV). Files may be gitignored.
-- `vb_rtx_superres` — NVIDIA RTX Video Super Resolution.
-- `air_render_030` / `air_render_050` / `air_render_businesswoman` —
-  LTX-2.3 AI-rendering example projects (often gitignored on disk).
+
+Gitignored example slugs (`vb_zimage_turbo_cn`, `vb_ai_renderer_*`,
+`vb_rtx_superres`, `air_render_*`) are **not** in `allowed_variants` on a
+clean clone. Only pick them if they appear in the payload.
 
 ## Variants — LTX 2.5
 - `ltx25_t2v_i2v` — single-stage distilled T2V/I2V. Prefer when the request

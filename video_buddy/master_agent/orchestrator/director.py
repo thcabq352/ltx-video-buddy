@@ -1,8 +1,10 @@
 """Director brain — story ranking, then Hands fit.
 
 Decides which workflow variant a request should use. The allowlist is
-every ``workflows/manifests.yaml`` slug (via ``WORKFLOW_FILES`` /
-``load_workflow_files``). Hard constraints (forced variant, source video)
+every ``workflows/manifests.yaml`` slug whose JSON file exists on disk
+(via ``WORKFLOW_FILES`` / ``load_workflow_files``). Gitignored example
+graphs stay in the YAML as docs but are not advertised. Hard constraints
+(forced variant, source video)
 always win; otherwise the local LLM / keyword rules **rank stories**.
 Hands (``can_fulfill``) answers possible-right-now after that ranking.
 The brain never sees VRAM / slot / weight-path math and does not pick
@@ -67,18 +69,9 @@ _VARIANT_KEYWORDS = [
     ("vb_ideogram", ("ideogram",)),
     ("krea2_img", ("krea2", "krea-2", "krea 2")),
     ("flux", ("flux.1", "flux1", "character sheet", "text-to-image", "flux")),
-    ("vb_zimage_turbo_cn", ("z-image", "zimage", "fun-controlnet", "turbo cn")),
-    ("vb_rtx_superres", (
-        "rtx super", "super resolution", "nvidia superres", "rtx vsr",
-    )),
-    ("vb_ai_renderer_smpl", (
-        "renderer simple", "ai-renderer smpl", "smpl renderer",
-    )),
-    ("vb_ai_renderer_adv_20", ("renderer 2.0", "ai-renderer 2.0")),
-    ("vb_ai_renderer_adv", ("ai-renderer", "ai renderer", "renderer adv")),
-    ("air_render_030", ("bear minimum right", "right this way")),
-    ("air_render_050", ("bear minimum bar", "bear bar")),
-    ("air_render_businesswoman", ("businesswoman", "business woman")),
+    # Gitignored example slugs (air_render_*, vb_zimage_turbo_cn,
+    # vb_ai_renderer_*, vb_rtx_superres) are only routed when their JSON
+    # exists — rule_based_variant skips any variant not in WORKFLOW_FILES.
     ("wan22", ("wan 2.2", "wan2.2", "wan22", "photoreal", "photo-real", "stock photo", "film grain")),
     ("h3_r2v", ("ref2va", "h3 r2v", "h3_r2v", "reference-to-video", "minimax r2v", "minimax reference")),
     ("h3_flf", ("h3 flf", "h3_flf", "minimax first-last", "minimax flf")),

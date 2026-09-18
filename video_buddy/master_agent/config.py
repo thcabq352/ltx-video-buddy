@@ -470,10 +470,20 @@ def load_manifest_workflow_files(workflows_dir: Path | None = None) -> dict[str,
 
 
 def load_workflow_files(workflows_dir: Path | None = None) -> dict[str, str]:
-    """Director-routable variants: every manifests.yaml slug plus legacy seeds."""
+    """Director-routable variants: manifest slugs + legacy seeds whose files exist.
+
+    ``manifests.yaml`` may document gitignored example graphs. Those slugs stay
+    in the YAML as docs but are not advertised until ``(WORKFLOWS_DIR / file)``
+    is on disk.
+    """
+    root = Path(workflows_dir or WORKFLOWS_DIR)
     files = dict(_WORKFLOW_FILE_SEEDS)
     files.update(load_manifest_workflow_files(workflows_dir))
-    return files
+    return {
+        slug: rel
+        for slug, rel in files.items()
+        if (root / rel).is_file()
+    }
 
 
 WORKFLOW_FILES: dict[str, str] = load_workflow_files()

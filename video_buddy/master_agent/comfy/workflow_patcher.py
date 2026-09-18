@@ -82,31 +82,39 @@ def _load_manifests() -> dict[str, Any]:
         return yaml.safe_load(f) or {}
 
 
+def _expected_template_path(variant: str) -> Path:
+    """Best-known on-disk path for ``variant`` (may not exist)."""
+    manifests = _load_manifests()
+    meta = manifests.get(variant) or {}
+    filename = meta.get("file")
+    if isinstance(filename, str) and filename.strip():
+        return WORKFLOWS_DIR / filename.replace("\\", "/")
+    from master_agent.config import WORKFLOW_FILES
+
+    seeded = WORKFLOW_FILES.get(variant)
+    if seeded:
+        return WORKFLOWS_DIR / seeded
+    return WORKFLOWS_DIR / f"{variant}.json"
+
+
 def load_workflow_template(variant: str) -> dict[str, Any]:
     path: Path | None = None
     try:
         from master_agent.comfy.catalog import resolve_workflow_path
 
         path = resolve_workflow_path(variant)
-    except (KeyError, FileNotFoundError):
+    except KeyError:
         path = None
+    except FileNotFoundError as exc:
+        expected = _expected_template_path(variant)
+        raise FileNotFoundError(
+            f"Workflow template not found for variant={variant!r}: {expected}"
+        ) from exc
     if path is None or not path.is_file():
-        manifests = _load_manifests()
-        meta = manifests.get(variant) or {}
-        filename = meta.get("file") or f"{variant}.json"
-        path = WORKFLOWS_DIR / filename
-        if not path.is_file():
-            for cand in (
-                WORKFLOWS_DIR / f"{variant}.json",
-                WORKFLOWS_DIR / "base_t2v_i2v.json",
-            ):
-                if cand.is_file():
-                    path = cand
-                    break
-            else:
-                raise FileNotFoundError(
-                    f"Workflow template not found for variant={variant}: {path}"
-                )
+        expected = _expected_template_path(variant)
+        raise FileNotFoundError(
+            f"Workflow template not found for variant={variant!r}: {expected}"
+        )
     with path.open(encoding="utf-8") as f:
         data = json.load(f)
     if isinstance(data, dict) and "prompt" in data and isinstance(data["prompt"], dict):

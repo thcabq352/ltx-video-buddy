@@ -173,6 +173,19 @@ class TestEnsureLoraNode(unittest.TestCase):
         self.assertEqual(len(wf), 1)
 
 
+class TestMissingTemplateHardFail(unittest.TestCase):
+    def test_gitignored_slug_raises_named_file_not_found(self):
+        with self.assertRaises(FileNotFoundError) as ctx:
+            load_workflow_template("vb_rtx_superres")
+        msg = str(ctx.exception)
+        self.assertIn("vb_rtx_superres", msg)
+        self.assertIn("NVIDIA-RTX-SUPER-RESOLUTION", msg)
+
+    def test_ltx25_t2v_i2v_still_loads(self):
+        wf = load_workflow_template("ltx25_t2v_i2v")
+        self.assertTrue(any(isinstance(n, dict) and n.get("class_type") for n in wf.values()))
+
+
 class TestLanPaintKSamplerPatch(unittest.TestCase):
     def test_heuristic_writes_seed_steps_cfg(self):
         wf = {

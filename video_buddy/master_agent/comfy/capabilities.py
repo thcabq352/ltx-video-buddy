@@ -347,7 +347,7 @@ CAPABILITY_CATALOG: tuple[Capability, ...] = (
         class_types=("SeedVR2VideoUpscaler", "SeedVR2LoadDiTModel"),
         surfaces=("upscale", "template"),
         templates=("upscale_seedvr2_api.json",),
-        notes="master_agent/upscale.py method=seedvr2. RTX path points at a gitignored file.",
+        notes="master_agent/upscale.py default method=seedvr2 (in-repo JSON). RTX is gated on a gitignored file and raises FileNotFoundError when missing.",
     ),
     Capability(
         "sage_attention",

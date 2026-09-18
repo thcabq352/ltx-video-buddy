@@ -228,12 +228,6 @@ HEAVY_SLUGS: frozenset[str] = frozenset(
         "vb_ccc41_krea2",
         "vb_aivfx_adv",
         "vb_aivfx_preprocess",
-        "vb_ai_renderer_adv",
-        "vb_ai_renderer_adv_20",
-        "air_render_030",
-        "air_render_050",
-        "air_render_businesswoman",
-        "vb_zimage_turbo_cn",
         "ltx23_lipsync_v08",
     }
 )
@@ -608,62 +602,6 @@ def _build_rows() -> dict[str, WorkflowVramRow]:
             notes="Review UI — no diffusion UNET.",
         )
     )
-    add(
-        WorkflowVramRow(
-            slug="vb_rtx_superres",
-            family="upscale",
-            default_pack="nvidia-vfx",
-            expected_vram_gb=8.0,
-            vram_class="tight",
-            notes="NVIDIA RTX Video Super Resolution (nvidia-vfx). File often gitignored.",
-        )
-    )
-    add(
-        WorkflowVramRow(
-            slug="vb_zimage_turbo_cn",
-            family="zimage",
-            default_pack="z_image_turbo_bf16.safetensors",
-            expected_vram_gb=15.1,
-            vram_class="heavy",
-            safer_alternate="krea2_img",
-            prepare_warning=_warn_heavy("Z-Image Turbo ControlNet (official pack is bf16)", "krea2_img"),
-            notes="Comfy-Org z_image_turbo ships bf16. File often gitignored. No attested official NVFP4.",
-        )
-    )
-
-    for slug, alt in (
-        ("vb_ai_renderer_smpl", ""),
-        ("vb_ai_renderer_adv", "vb_ai_renderer_smpl"),
-        ("vb_ai_renderer_adv_20", "vb_ai_renderer_smpl"),
-    ):
-        heavy = slug != "vb_ai_renderer_smpl"
-        add(
-            WorkflowVramRow(
-                slug=slug,
-                family="vace",
-                default_pack=_VACE[0],
-                expected_vram_gb=13.8 if not heavy else 15.6,
-                vram_class="tight" if not heavy else "heavy",
-                safer_alternate=alt,
-                prepare_warning=_warn_heavy(slug, alt) if heavy else "",
-                notes="Wan VACE start/end (+ GIMM-VFI on ADV). Prefer Q4_K_M GGUF. Files often gitignored.",
-            )
-        )
-
-    for slug in ("air_render_030", "air_render_050", "air_render_businesswoman"):
-        add(
-            WorkflowVramRow(
-                slug=slug,
-                family="air_render",
-                default_pack=_LTX23[0],
-                expected_vram_gb=15.2,
-                vram_class="heavy",
-                safer_alternate="base",
-                prepare_warning=_warn_heavy(f"AI-RENDERING example `{slug}`", "base"),
-                notes="Example clay-scene graphs (often gitignored). Not 16GB defaults.",
-            )
-        )
-
     return rows
 
 
@@ -694,10 +632,10 @@ def workflow_row(slug: str) -> WorkflowVramRow:
 
 
 def workflow_vram_rows() -> list[WorkflowVramRow]:
-    """One row per manifests.yaml slug (plus known aliases already in _ROWS)."""
-    from master_agent.config import load_manifest_workflow_files
+    """One row per on-disk workflow slug (gitignored examples are omitted)."""
+    from master_agent.config import load_workflow_files
 
-    slugs = list(load_manifest_workflow_files())
+    slugs = list(load_workflow_files())
     if not slugs:
         slugs = list(_ROWS)
     out: list[WorkflowVramRow] = []
