@@ -26,7 +26,9 @@ from master_agent.config import (
     frames_for_duration,
     get_variant_gen,
     is_h3_variant,
+    is_ltx25_variant,
     resolve_model_path,
+    segment_max_s_for_variant,
     snap_h3_frames,
     snap_ltx_frames,
 )
@@ -1000,11 +1002,18 @@ def load_and_patch_workflow(
         width, height = clamp_resolution(width, height, quality="flux" if variant == "flux" else None)
     gen = get_variant_gen(variant)
     if frames is None:
+        if h3:
+            cap_s = H3_MAX_DURATION_S
+        elif is_ltx25_variant(variant):
+            cap_s = segment_max_s_for_variant(variant)
+        else:
+            cap_s = None
         frames = frames_for_duration(
             duration_s,
             fps=gen["fps"],
             snap=gen["frame_snap"],
-            max_s=H3_MAX_DURATION_S if h3 else None,
+            max_s=cap_s,
+            variant=variant,
         )
     else:
         frames = int(frames)

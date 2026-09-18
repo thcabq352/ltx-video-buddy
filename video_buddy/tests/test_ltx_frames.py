@@ -6,15 +6,19 @@ Run: python -m pytest tests/test_ltx_frames.py -q
 from __future__ import annotations
 
 from master_agent.comfy.validator import validate_workflow
-from master_agent.comfy.workflow_patcher import _heuristic_patch
+from master_agent.comfy.workflow_patcher import _heuristic_patch, load_and_patch_workflow
 from master_agent.config import (
     DEFAULT_FRAMES,
     DIAGNOSE_FRAMES,
     DOWNSCALE_LADDER,
+    LTX25_LEGAL_FRAMES,
     QUALITY_PROFILES,
+    SEGMENT_MAX_S,
+    frames_for_duration,
     is_valid_ltx_frames,
     snap_ltx_frames,
 )
+from master_agent.orchestrator.pipeline import plan_story_segments
 
 
 LTX_OBJECT_INFO = {
@@ -60,9 +64,34 @@ def test_snap_ltx_frames_table():
     assert snap_ltx_frames(120) == 121
     assert snap_ltx_frames(1) == 9
     assert snap_ltx_frames(121) == 121
+    assert snap_ltx_frames(192) == 193
     assert not is_valid_ltx_frames(8)
     assert is_valid_ltx_frames(9)
     assert is_valid_ltx_frames(17)
+    assert is_valid_ltx_frames(193)
+
+
+def test_ltx25_eight_seconds_is_193_frames():
+    assert frames_for_duration(8.0, fps=24, snap=8, variant="ltx25_t2v_i2v") == 193
+    assert frames_for_duration(8.0, fps=24, snap=8, variant="ltx25_t2v_i2v") == LTX25_LEGAL_FRAMES
+    # LTX 2.3 stays on the 6s 16GB cap unless an explicit max_s is passed
+    assert SEGMENT_MAX_S == 6
+    assert frames_for_duration(8.0, fps=24, snap=8) <= snap_ltx_frames(int(6 * 24))
+    assert QUALITY_PROFILES["ltx25"]["segment_max_s"] >= 8.0
+
+
+def test_plan_run_burns_are_193_frames_at_patch():
+    segs = plan_story_segments(20.0, kind="run")
+    assert segs == [8.0, 8.0, 8.0]
+    music = plan_story_segments(20.0, kind="music_video", quality="balanced")
+    assert music != [8.0, 8.0, 8.0]
+    _wf, meta = load_and_patch_workflow(
+        "ltx25_t2v_i2v",
+        prompt="neon alley push-in",
+        duration_s=8.0,
+        seed=1,
+    )
+    assert meta["frames"] == 193
 
 
 def test_defaults_are_rainey_safe():
