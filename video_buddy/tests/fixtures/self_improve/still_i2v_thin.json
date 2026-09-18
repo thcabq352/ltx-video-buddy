@@ -1,0 +1,8 @@
+{
+  "request": "i2v from this still, neon alley at night",
+  "image_name": "alley_still.png",
+  "variant": "ltx25_t2v_i2v",
+  "shot": {"title": "Shot 1", "ltx_prompt": "i2v from this still, neon alley at night"},
+  "control_pack_present": false,
+  "control_pack_used": {}
+}

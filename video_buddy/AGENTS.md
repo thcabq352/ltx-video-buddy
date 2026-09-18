@@ -122,6 +122,12 @@ The judge is a **coherent-take / retry ladder**, not an album curator.
 - Admiral / human eyes beat the judge for **aesthetic album lock**. `album_lock` from the judge is always false.
 - Split **look** (craft/motion) from **health** (probe/metadata: size, frames, duration). Discount metadata noise; retries use `look_score` only.
 - Low `brief_adherence` + high look → `human_veto` / `HUMAN_VETO`. Still no album-lock.
+- Cheap Quality Bar (buddy-core ids, no GPU): **a** missing music bed, **c**
+  thin still→I2V / missing previs, **d** unused control pack. **b** face
+  scores are not ported. Fail → `RevisePlan` → re-run → re-judge. Terminal
+  `loop_status` is `passed` / `exhausted` / `human_veto` / `error`.
+  `--self-improve-dry` closes the loop without Comfy. See
+  [`docs/SELF_IMPROVEMENT_LOOP.md`](docs/SELF_IMPROVEMENT_LOOP.md).
 
 ## Stop-lines (briefing §6)
 
@@ -173,7 +179,7 @@ Use the project venv. Prefer one file at a time for GPU-adjacent work:
 .\.venv\Scripts\python.exe -m pytest tests/test_curriculum.py -q
 .\.venv\Scripts\python.exe -m pytest tests/test_ltx_frames.py -q
 .\.venv\Scripts\python.exe -m pytest tests/test_accelerator_bypass.py -q
-.\.venv\Scripts\python.exe -m pytest tests/test_judge_split.py -q
+.\.venv\Scripts\python.exe -m pytest tests/test_judge_split.py tests/test_self_improvement_loop.py -q
 .\.venv\Scripts\python.exe -m pytest tests/test_shift_budget.py -q
 .\.venv\Scripts\python.exe -m pytest tests/test_ltx25_catalog.py tests/test_ltx25_weights.py tests/test_h3_catalog.py tests/test_h3_weights.py tests/test_capabilities.py tests/test_vram_policy.py -q
 ```

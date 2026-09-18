@@ -236,6 +236,12 @@ POLL → RESOLVE → JUDGE → DONE/ERROR`.
   rewrites the prompt or
   retunes params (`steps`, `cfg`, `stg_scale`, `stg_blocks`, `sampler_name`,
   `seed` — whitelist, clamped) and regenerates, up to `--max-judge-rounds`.
+  Cheap Quality Bar rules **a** / **c** / **d** (missing music bed, thin
+  still→I2V, unused control pack) always produce a structured revise plan
+  even when the LLM is silent. Rule **b** (face scores) is not ported.
+  Stop is `loop_status=passed|exhausted|human_veto|error` in the run JSON —
+  budget exhaustion is no longer recorded as `accept`. Closed loop without
+  Comfy: `--self-improve-dry`. Map: [docs/SELF_IMPROVEMENT_LOOP.md](docs/SELF_IMPROVEMENT_LOOP.md).
 - Every run writes a JSON record to `state/runs/` (params, judge history,
   transitions) — the seed of the later self-learning knowledge base.
 - Variant routing is LLM-driven (`orchestrator/director.py`): the local VL heretic
@@ -502,6 +508,15 @@ threads stall ~30s per DLL on Windows.
 Latency note for MCP clients: `health`/`search_*`/`validate_workflow`/
 `kb_ingest` answer in ~2s. `judge_asset` and `create_video` cold-load large
 local models (19-27GB) and can take several minutes — allow long timeouts.
+
+## Status (2026-09-18)
+
+- **Self-improvement loop closed** on the live Python orchestrator. Judge
+  fail → quality-bar revise plan (prompt + param deltas) → re-run → re-judge
+  → hard stop (`passed` / `exhausted`). Cheap rules a/c/d; vision rule b
+  skipped. Invoke: `python -m master_agent run "BRIEF" --self-improve-dry`
+  (no Comfy). Tests: `tests/test_self_improvement_loop.py`.
+  See [docs/SELF_IMPROVEMENT_LOOP.md](docs/SELF_IMPROVEMENT_LOOP.md).
 
 ## Status (2026-09-13)
 

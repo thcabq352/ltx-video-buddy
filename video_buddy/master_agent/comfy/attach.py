@@ -460,14 +460,9 @@ def evaluate_attach_judge_rules(record: dict[str, Any]) -> dict[str, bool]:
     (c) previs_source is recorded when a recipe was applied.
     (d) if a control pack was present, at least one channel is marked used.
     """
-    previs = str(record.get("previs_source") or "").strip()
-    present = bool(record.get("control_pack_present"))
-    used = record.get("control_pack_used") or {}
-    used_any = isinstance(used, dict) and any(bool(v) for v in used.values())
-    return {
-        "c": bool(previs),
-        "d": (not present) or used_any,
-    }
+    from master_agent.judge.quality_bar import attach_rule_passes
+
+    return attach_rule_passes(record)
 
 
 def run_attach(

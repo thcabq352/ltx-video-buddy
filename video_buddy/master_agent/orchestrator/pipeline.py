@@ -120,6 +120,10 @@ class PipelineResult:
         self.previs_source: Optional[str] = None
         self.control_pack_present: bool = False
         self.control_pack_used: dict[str, bool] = {}
+        self.loop_status: str = ""
+        self.quality_bar: dict[str, Any] = {}
+        self.revise_history: list[dict[str, Any]] = []
+        self.attempt: int = 0
 
     def log(self, msg: str) -> None:
         self.messages.append(msg)
@@ -149,6 +153,10 @@ class PipelineResult:
             "previs_source": self.previs_source,
             "control_pack_present": self.control_pack_present,
             "control_pack_used": self.control_pack_used,
+            "loop_status": self.loop_status,
+            "quality_bar": self.quality_bar,
+            "revise_history": self.revise_history,
+            "attempt": self.attempt,
         }
 
 
@@ -224,6 +232,9 @@ def run_pipeline(
     power_mode: Optional[bool] = None,
     attach_recipe: Optional[dict[str, Any]] = None,
     client: Optional[ComfyClient] = None,
+    dry_run: bool = False,
+    kind: str = "",
+    music_bed_attached: bool = False,
 ) -> PipelineResult:
     run_id = uuid.uuid4().hex[:12]
     result = PipelineResult(run_id, request=request)
@@ -263,6 +274,9 @@ def run_pipeline(
             max_judge_rounds=max_judge_rounds,
             power_mode=power_mode,
             attach_recipe=attach_recipe,
+            dry_run=dry_run,
+            kind=kind,
+            music_bed_attached=music_bed_attached,
         )
         result.messages.extend(st.messages)
         result.status = "done" if st.state == "DONE" else "error"
@@ -271,11 +285,15 @@ def run_pipeline(
         result.previs_source = st.previs_source
         result.control_pack_present = st.control_pack_present
         result.control_pack_used = st.control_pack_used
+        result.loop_status = st.loop_status
+        result.quality_bar = st.quality_bar
+        result.revise_history = st.revise_history
+        result.attempt = st.attempt
         if st.video_path:
             result.segment_paths = [st.video_path]
             result.segment_scores = [st.judge_score]
         result.full_judge_score = st.judge_score
-        result.full_judge_pass = st.judge_decision == "accept"
+        result.full_judge_pass = st.loop_status == "passed" or st.judge_decision == "accept"
         _write_record(result)
         return result
 
@@ -320,6 +338,9 @@ def run_pipeline(
             max_judge_rounds=max_judge_rounds,
             power_mode=power_mode,
             attach_recipe=attach_recipe,
+            dry_run=dry_run,
+            kind=kind,
+            music_bed_attached=music_bed_attached,
         )
 
     # Per-segment generation (budget can pause the remaining queue)

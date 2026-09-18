@@ -101,7 +101,7 @@ Full signatures: [TOOLS.md](TOOLS.md). Invoke MCP as `master-agent.<tool>`. CLI 
 | MCP (`master-agent`) | CLI equivalent |
 |---|---|
 | `health()` | `python -m master_agent health` |
-| `create_video(request, duration_s=5, quality="draft", variant=None, llm_panel=None, dry_run=False)` | `python -m master_agent run "BRIEF" [--duration N --quality draft --variant SLUG --llm-panel … --dry-run --no-interview]` |
+| `create_video(request, duration_s=5, quality="draft", variant=None, llm_panel=None, dry_run=False)` | `python -m master_agent run "BRIEF" [--duration N --quality draft --variant SLUG --llm-panel … --dry-run --self-improve-dry --no-interview]` |
 | `plan_storyboard(request, duration_s=8, quality="draft", llm_panel=None)` | No GPU plan preview. Closest: `run "BRIEF" --dry-run` (also lints). |
 | `judge_asset(video_path, request="", full_video=False)` | No standalone judge CLI. Judge runs inside `run` / `music`. |
 | `search_workflows(query, k=3)` | `python -m master_agent kb search "QUERY" --workflows -k 3` |

@@ -43,7 +43,7 @@ is hours. Prefer ~900s MCP timeout.
 | `diagnose` | 9-frame hull fire; prints `sec/step`; no shift-budget spend. `--prepare` lints only. |
 | `comfy run` | Prepare, lint, queue, copy into `outputs/`. `--prepare` stops before GPU. Modes: `generate` / `template` / `raw`. |
 | `comfy attach` | Apply previs `buddy.comfy.attach/v1` / WorkflowPatchPlan JSON. Default dry-run (patch + `/object_info`). `--submit` POSTs `/prompt`. |
-| `run "BRIEF"` | Director pipeline. `--dry-run` plan+lint only. `--attach RECIPE.json` patches a previs pack. `--no-interview` for unattended. `--variant` forces a catalog slug. |
+| `run "BRIEF"` | Director pipeline. `--dry-run` plan+lint only. `--self-improve-dry` closes judge→revise→rejudge (quality_bar a/c/d, no Comfy). `--attach RECIPE.json` patches a previs pack. `--no-interview` for unattended. `--variant` forces a catalog slug. |
 | `download-models` | List confirmed-missing slots. `--ltx25` / `--h3` / `--wan` / … Add `--yes` only after the ask. |
 | `download-flux` | One-time Flux fp8 weights (~17GB). |
 | `validate` | One file or `--all`. `--offline` / `--strict` (illegal LTX frames = ERROR). |
@@ -84,6 +84,7 @@ aliases `fl2va` / `ref2va`, or a path under `workflows/`).
 ```bash
 python -m master_agent run "BRIEF" --quality draft --duration 3 --no-interview
 python -m master_agent run "BRIEF" --duration 8 --dry-run --no-interview
+python -m master_agent run "music video for a synthwave track" --self-improve-dry --no-interview
 python -m master_agent run "LTX 2.5 alley" --variant ltx25_t2v_i2v --no-interview
 python -m master_agent run "talking head" --video input.mp4 --variant lipsync --no-interview
 python -m master_agent music "synthwave MV" --audio track.mp3 --no-interview

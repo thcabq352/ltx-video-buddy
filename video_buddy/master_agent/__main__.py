@@ -251,22 +251,64 @@ def cmd_run(args: argparse.Namespace) -> int:
                 print(f"  {vid}")
             return 2
 
+    attach_recipe = None
+    attach_loaded = None
+    if getattr(args, "attach", None):
+        from master_agent.comfy.attach import AttachError, load_attach_recipe
+
+        try:
+            attach_loaded = load_attach_recipe(args.attach)
+            attach_recipe = attach_loaded.raw
+        except AttachError as e:
+            print(f"FAIL  attach recipe: {e}")
+            return 1
+
+    if getattr(args, "self_improve_dry", False):
+        from master_agent.orchestrator.machine import Orchestrator
+
+        args.request = _maybe_interview(args.request, no_interview=args.no_interview)
+        image_name = Path(args.image).name if getattr(args, "image", None) else None
+        audio_name = Path(args.audio).name if getattr(args, "audio", None) else None
+        st = Orchestrator().run(
+            args.request,
+            variant=args.variant,
+            duration_s=args.duration,
+            quality=args.quality,
+            seed=args.seed,
+            width=args.width,
+            height=args.height,
+            image_name=image_name,
+            audio_name=audio_name,
+            video_name=Path(args.video).name if getattr(args, "video", None) else None,
+            judge_enabled=False if args.no_judge else JUDGE_ENABLED,
+            max_judge_rounds=args.max_judge_rounds or MAX_JUDGE_ROUNDS,
+            attach_recipe=attach_recipe,
+            dry_run=True,
+            control_pack_present=bool(attach_loaded and attach_loaded.control_pack_present),
+            previs_source=(attach_loaded.previs_source if attach_loaded else ""),
+        )
+        print()
+        print(f"loop_status: {st.loop_status}")
+        print(f"attempts:    {st.attempt}/{st.max_judge_rounds}")
+        print(f"decision:    {st.judge_decision}")
+        fails = (st.quality_bar or {}).get("fails") or []
+        if fails:
+            print("quality_bar: " + ", ".join(f"{f.get('id')}:{f.get('code')}" for f in fails))
+        if st.revise_history:
+            print(f"revises:     {len(st.revise_history)}")
+        print(f"dry-run     no Comfy queue, no GPU")
+        if st.loop_status == "passed":
+            return 0
+        if st.loop_status in ("exhausted", "human_veto"):
+            return 2
+        return 1
+
     client = ComfyClient()
     if not client.is_up():
         print(f"FAIL  ComfyUI is not reachable. Start: ComfyUI_windows_portable\\run_api_8188.bat")
         return 1
 
     args.request = _maybe_interview(args.request, no_interview=args.no_interview)
-
-    attach_recipe = None
-    if getattr(args, "attach", None):
-        from master_agent.comfy.attach import AttachError, load_attach_recipe
-
-        try:
-            attach_recipe = load_attach_recipe(args.attach).raw
-        except AttachError as e:
-            print(f"FAIL  attach recipe: {e}")
-            return 1
 
     if args.dry_run:
         return dry_run_pipeline(
@@ -1243,6 +1285,11 @@ def main(argv: list[str] | None = None) -> int:
                    help="full-video judge re-gen budget (multi-segment)")
     p.add_argument("--dry-run", action="store_true",
                    help="storyboard + patch + validate all segments, no GPU queue")
+    p.add_argument(
+        "--self-improve-dry",
+        action="store_true",
+        help="closed judge→revise→rejudge loop (quality_bar a/c/d); no Comfy queue",
+    )
     p.add_argument("--power-mode", action="store_true",
                    help="LLM graph ops after patch (object_info + RAG; validate-gated)")
     p.add_argument("--no-power-mode", action="store_true",
