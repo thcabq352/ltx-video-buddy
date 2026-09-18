@@ -7,7 +7,7 @@
 **Merged:** [PR #5](https://github.com/thcabq352/ltx-video-buddy/pull/5) (this audit + `capabilities` CLI + wan22 slug fix) then [PR #6](https://github.com/thcabq352/ltx-video-buddy/pull/6) (LTX 2.5 default catalog + scan-first download). [PR #11](https://github.com/thcabq352/ltx-video-buddy/pull/11) adds a shared `vram_policy` so every `manifests.yaml` slug inherits GGUF Q4/Q5 → NVFP4 → int8/fp8; generic VFX routes to `vb_aivfx_adv_13`.  
 **Comfy in this checkout:** not present (`video_buddy/ComfyUI_windows_portable/` is gitignored). Live tower was **not** queried from the audit VM.
 
-Post-merge: LTX 2.5 ids are in `WORKFLOW_FILES` and the default catalog. WAN / K3NK / TeaCache wiring from this audit is **unchanged**. Re-run `python -m master_agent capabilities --offline` for the live matrix.
+Post-merge: LTX 2.5 ids are in `WORKFLOW_FILES` and the default catalog. WAN / K3NK wiring from this audit is **unchanged**. LTX TeaCache is inject-when-registered (PR #4). Re-run `python -m master_agent capabilities --offline` for the live matrix.
 
 **Evidence used**
 
@@ -100,13 +100,13 @@ brief ──▶ director.choose_variant (every manifests.yaml slug)
 | Patcher field maps | No | `manifests.yaml` `fields:` for core LTX/Wan/Flux/H3 plus aivfx / movie_builder / qwen / ideogram / remaining `ltx25_*`. CCC ADV / preprocess / gitignored renderers stay baked-defaults. |
 | Heuristic patch | No | Class lists: `EmptyLTXVLatentVideo`, `KSampler`, `UNETLoader`, `WanVideoNAG` is **not** specially handled (wan22 uses named node ids) |
 | Validator | Yes — live/cache registry | Unknown `class_type` is a **hard fail** except optional nodes (TeaCache, `LanPaint_KSampler`, `GetWarpedNoiseFromVideo`, `MMAudio*`) |
-| TeaCache | Soft-bypass only | `OPTIONAL_ACCELERATOR_CLASS_TYPES` in `graph_ops.py` |
+| TeaCache | Inject-when-registered + soft-bypass | `ensure_teacache` + `OPTIONAL_ACCELERATOR_CLASS_TYPES` in `graph_ops.py` |
 | `comfy run --template` | Path or slug | **PR #5:** slugs also resolve from `manifests.yaml` |
 | Fractal | N/A | Numpy + ffmpeg. No Voronoi/Perlin/SAM/Fun nodes |
 | Music | Beat map + same director graphs | No MMAudio sampler |
 | KB `search_workflows` | Embedding over ingested JSON | Retrieval ≠ queue |
 
-**There is no `ensure_teacache` injector in this repo.** Field notes and tests implement **missing TeaCache → WARNING + rewire MODEL past the node**. That is the correct shape for the graphs Buddy actually queues (see §3 TeaCache).
+**`ensure_teacache` is the single LTX writer (PR #4).** When `TeaCache` is in `/object_info`, the patcher / `prepare_run` insert welltop-cn TeaCache on LTX MODEL after LoRA. If the class is missing, inject is a no-op and leftover nodes still WARNING + rewire. Packs are never auto-installed.
 
 ---
 
@@ -132,7 +132,7 @@ brief ──▶ director.choose_variant (every manifests.yaml slug)
 | WAN Fun Inpaint | **no** | — | **yes** (cache + **live** `WanFunInpaintToVideo`) | No graph, no mask ingest, no patcher fields. Highest-value missing node for recursive inpaint. |
 | WAN Fun Control | **no** | manifests `vb_zimage_turbo_cn` only | **yes** (live `Wan22FunControlToVideo`) | Example file lives under gitignored `AI-RENDERING-EXAMPLE FILES/`. |
 | LightX2V LoRAs | **partial** | baked in wan22 Power Lora widgets | n/a (weights) | Inventory has `Wan21_T2V_14B_lightx2v_cfg_step_distill_lora_rank32`. Patcher cannot toggle it. |
-| Wan TeaCache | **partial (bypass)** | validator drops missing accel | **live YES** `TeaCache` + `WanVideoTeaCache` | **Do not inject** onto LTX or native wan22. Wrapper TeaCache is args for `WanVideoSampler` (CACHEARGS on old cache schema). |
+| Wan TeaCache | **partial (bypass)** | validator drops missing accel | **live YES** `TeaCache` + `WanVideoTeaCache` | `WanVideoTeaCache` is CACHEARGS — do not inject onto native wan22. welltop-cn `TeaCache` on LTX is inject-when-registered (PR #4). |
 | VACE | **yes (director)** | director `vb_aivfx_adv` / `_13` (keywords: vfx, possession, vace) | **yes** | Field map writes `IterPromptBuilder.string_1`. No Stand-In wiring. |
 | Stand-In | **no** | — | **yes** `WanVideoAddStandInLatent` | Wrapper embed node; needs a Wrapper graph. |
 | SAM2 masks | **no** | — | **yes** `SAM2Segment` | AI-VFX preprocess uses **SAM3**, and is director-routed (`vb_aivfx_preprocess`) with baked widgets. |
@@ -160,13 +160,13 @@ brief ──▶ director.choose_variant (every manifests.yaml slug)
 |---|---|---|
 | LTX 2.5 default catalog + scan-first download | **yes (PR #6)** | `workflows/ltx-2.5/`, `catalog.py`, `models/weights.py`, `doctor` / `download-models --ltx25` |
 | Rainey stop-lines / 8n+1 | **yes** | `config.snap_ltx_frames`, `validator`, `AGENTS.md`, `DOWNSCALE_LADDER` first rungs 9/17/25/33 |
-| TeaCache **inject** (`ensure_teacache`) | **no** | Only `bypass_optional_accelerators` |
+| TeaCache **inject** (`ensure_teacache`) | **yes (PR #4)** | `graph_ops.ensure_teacache` from patcher + `prepare_run` |
 | TeaCache **bypass** | **yes** | `graph_ops.py`, `validator.py`, `tests/test_accelerator_bypass.py` |
 | `DOWNSCALE_LADDER` | **yes** | `config.py` + OOM retry in `machine.py` |
 
-Why inject was not (and should not be) bolted onto current graphs:
+Wan vs LTX TeaCache:
 
-`WanVideoTeaCache` in the cached registry outputs **`CACHEARGS`**, required widgets `rel_l1_thresh` / `start_step` / `end_step` — it is a WanVideoWrapper sampler argument, not a MODEL inline. `WanVideoTeaCacheKJ` is `KJNodes/deprecated` and wraps MODEL; native `wan22` still would need a measured coeff table (`14B` / `i2v_*`). LTX graphs have no TeaCache node at all. Soft-bypass is the safe pattern.
+`WanVideoTeaCache` in the cached registry outputs **`CACHEARGS`**, required widgets `rel_l1_thresh` / `start_step` / `end_step` — it is a WanVideoWrapper sampler argument, not a MODEL inline. `WanVideoTeaCacheKJ` is `KJNodes/deprecated` and wraps MODEL; native `wan22` still would need a measured coeff table (`14B` / `i2v_*`). Do not inject those Wan aliases. LTX graphs stay template-clean; **PR #4** injects welltop-cn `TeaCache` when the class is registered, and still soft-bypasses leftovers when it is not.
 
 ---
 
@@ -229,7 +229,7 @@ graphs so operators prefer `--template` for precision.
 3. **`python -m master_agent capabilities [--offline] [--json]`** prints this matrix from live or cached `object_info`.
 4. **Live-name follow-up:** catalog + soft-bypass use exact Desk names (`LanPaint_KSampler`, `GetWarpedNoiseFromVideo`, `TeaCache`). Patcher writes seed/steps/cfg on `LanPaint_KSampler`. Fun Inpaint / Fun Control / FaceID stay fail-closed.
 
-Not done (intentionally): TeaCache inject, Fun Inpaint graph, K3NK AIO I2V, RTX upscale path (source JSON is gitignored). LTX 2.5 catalog expansion landed separately in **PR #6**.
+Not done (intentionally): Fun Inpaint graph, K3NK AIO I2V, RTX upscale path (source JSON is gitignored). LTX TeaCache inject-when-registered landed in **PR #4**. LTX 2.5 catalog expansion landed separately in **PR #6**.
 
 ### Real CLI examples (post-merge)
 

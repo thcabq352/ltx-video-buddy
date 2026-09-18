@@ -328,8 +328,8 @@ def _build_rows() -> dict[str, WorkflowVramRow]:
         rows[row.slug] = row
 
     ltx25_notes = (
-        "GGUF Q4 → NVFP4 (VRAM≥14) → int8 → bf16. TeaCache not injected "
-        "(soft-bypass). DOWNSCALE_LADDER 9/17/25/33."
+        "GGUF Q4 → NVFP4 (VRAM≥14) → int8 → bf16. welltop-cn TeaCache "
+        "inject-when-registered (soft-bypass if missing). DOWNSCALE_LADDER 9/17/25/33."
     )
     for slug, pack, vram, klass, notes in (
         ("ltx25_t2v_i2v", _LTX25[0], 12.5, "safe", ltx25_notes),
@@ -404,8 +404,8 @@ def _build_rows() -> dict[str, WorkflowVramRow]:
         "16GB path: sequential high/low UNET + Lightx2v distill LoRA "
         "(Wan21_T2V_14B_lightx2v_cfg_step_distill_lora_rank32). "
         "Prefer QuantStack GGUF Q4_K_S when present; Comfy-Org fp8 is the "
-        "on-disk fallback. Dual bf16 is not a default. TeaCache is bypass-only "
-        "(do not inject onto native UNET→KSampler)."
+        "on-disk fallback. Dual bf16 is not a default. Wan TeaCache is "
+        "bypass-only (do not inject onto native UNET→KSampler)."
     )
     add(
         WorkflowVramRow(
@@ -756,7 +756,8 @@ def format_vram_table() -> str:
     lines.append("")
     lines.append(
         "Accelerators on the 16GB path: Lightx2v / turbo LoRAs when present; "
-        "TeaCache / WanVideoTeaCache soft-bypass (never inject); "
+        "LTX TeaCache inject-when-registered (soft-bypass if missing); "
+        "WanVideoTeaCache stays bypass-only; "
         "DOWNSCALE_LADDER 768x512/9 → 512x320/33 after diagnose sec/step."
     )
     return "\n".join(lines) + "\n"

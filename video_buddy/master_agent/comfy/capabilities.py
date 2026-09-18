@@ -116,7 +116,8 @@ CAPABILITY_CATALOG: tuple[Capability, ...] = (
         notes=(
             "Mickmumpitz native graph, not WanVideoWrapper Sampler. T2V UNETs only. "
             "16GB: QuantStack GGUF Q4_K_S when present, else Comfy-Org fp8 + Lightx2v. "
-            "Sequential high/low. Dual bf16 is not a default. TeaCache bypass-only."
+            "Sequential high/low. Dual bf16 is not a default. "
+            "Wan TeaCache stays bypass-only (do not inject onto UNET→KSampler)."
         ),
     ),
     Capability(
@@ -161,9 +162,10 @@ CAPABILITY_CATALOG: tuple[Capability, ...] = (
         class_types=("TeaCache", "WanVideoTeaCache", "WanVideoTeaCacheKJ", "WanVideoEasyCache"),
         surfaces=("bypass",),
         notes=(
-            "Live tower YES: TeaCache + WanVideoTeaCache. Bypass-only (validator). "
-            "WanVideoTeaCache outputs CACHEARGS, not MODEL — do not inject onto LTX "
-            "or native UNET→KSampler graphs."
+            "Live tower YES: TeaCache + WanVideoTeaCache. WanVideoTeaCache outputs "
+            "CACHEARGS — do not inject onto native UNET→KSampler. welltop-cn "
+            "`TeaCache` on LTX graphs is inject-when-registered via "
+            "graph_ops.ensure_teacache; missing class stays WARN+rewire bypass."
         ),
     ),
     Capability(

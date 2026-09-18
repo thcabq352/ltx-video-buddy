@@ -77,32 +77,6 @@ def list_templates() -> list[dict[str, str]]:
     from master_agent.comfy.catalog import list_catalog_items
 
     return list_catalog_items()
-    root = WORKFLOWS_DIR.resolve()
-    items: list[dict[str, str]] = []
-    seen: set[str] = set()
-    for slug, filename in WORKFLOW_FILES.items():
-        path = (root / filename).resolve()
-        if not path.is_file():
-            continue
-        rel = path.relative_to(root).as_posix()
-        items.append({"id": slug, "path": rel, "name": f"{slug} — {filename}", "kind": "variant"})
-        seen.add(rel)
-    for slug, filename in _manifest_files().items():
-        path = (root / filename).resolve()
-        if not path.is_file():
-            continue
-        rel = path.relative_to(root).as_posix()
-        if rel in seen:
-            continue
-        items.append({"id": slug, "path": rel, "name": f"{slug} — {filename}", "kind": "manifest"})
-        seen.add(rel)
-    if root.is_dir():
-        for path in sorted(root.rglob("*.json")):
-            rel = path.relative_to(root).as_posix()
-            if rel in seen:
-                continue
-            items.append({"id": rel, "path": rel, "name": rel, "kind": "file"})
-    return items
 
 
 def resolve_template(rel: str | Path) -> Path:
@@ -171,23 +145,20 @@ def prepare_run(
     elif mode == "generate":
         from master_agent.comfy.workflow_patcher import load_and_patch_workflow
 
-        wf, _meta = load_and_patch_workflow(
+        wf, meta = load_and_patch_workflow(
             variant or "base",
             prompt=prompt or "test",
             object_info=object_info,
         )
+        warn = (meta or {}).get("prepare_warning")
+        if warn:
+            print(warn)
         wf = apply_overrides(wf, overrides)
     else:
         raise ValueError(f"unknown mode {mode!r}")
     if looks_like_ltx_graph(wf):
         ensure_teacache(wf, object_info)
     return wf
-        wf, meta = load_and_patch_workflow(variant or "base", prompt=prompt or "test")
-        warn = (meta or {}).get("prepare_warning")
-        if warn:
-            print(warn)
-        return apply_overrides(wf, overrides)
-    raise ValueError(f"unknown mode {mode!r}")
 
 
 def lint_report(

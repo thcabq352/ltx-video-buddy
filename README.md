@@ -39,7 +39,8 @@ you.** You bring the intent; it brings the craft.
   no experimental flags. **MiniMax H3** (`h3_t2v` / `h3_i2v` / `h3_flf` /
   `h3_r2v`, aliases `fl2va` / `ref2va`) is the same: GGUF-first omni
   video+stereo audio, CFG 1.0. LTX 2.3 (`base` / `eros` / `directors` /
-  `lipsync`), Wan 2.2 T2V, music videos, and TeaCache soft-bypass still work.
+  `lipsync`), Wan 2.2 T2V, music videos, and LTX TeaCache
+  inject-when-registered (soft-bypass if the pack is missing).
 - **Scan-local-first weights.** Buddy inventories `MODELS_DIR`, Comfy
   `models/`, extra volumes, `extra_model_paths.yaml`, and the Hugging Face
   hub cache. It asks before downloading. Official bf16 Gemma is not required
@@ -215,7 +216,7 @@ What landed:
 - Seven LTX 2.5 graphs in the **default** catalog — usable with `--variant`, Create-tab, Comfy-tab, `GET /api/variants`. No env flags.
 - Inventory-first weight scan. `doctor` never fetches. `download-models --ltx25` lists confirmed-missing files and fetches only after `--yes`.
 - 16GB-class loader preference: **GGUF Q4 → NVFP4 (VRAM ≥ 14) → int8-convrot → bf16**.
-- WAN / K3NK / TeaCache paths unchanged. TeaCache is still soft-bypass (not inject).
+- WAN / K3NK paths unchanged. LTX TeaCache is inject-when-registered (PR #4); missing pack still soft-bypasses.
 - **Not** ported from [ltx2.5-research-agent](https://github.com/thcabq352/ltx2.5-research-agent): LangGraph research/scrape/A2A/Gradio harness, secrets, and the `ltx_research_agent` package.
 
 See the [operator changelog](video_buddy/README.md#status-2026-09-13) for the full history.

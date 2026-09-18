@@ -329,6 +329,8 @@ def test_ensure_teacache_rewires_lipsync_guiders():
     assert wf[nid]["inputs"]["model"] == ["5012", 0]
     assert wf["4828"]["inputs"]["model"] == [nid, 0]
     assert wf["4964"]["inputs"]["model"] == [nid, 0]
+
+
 def test_live_tower_optional_names():
     assert is_optional_node("LanPaint_KSampler")
     assert is_optional_node("GetWarpedNoiseFromVideo")
