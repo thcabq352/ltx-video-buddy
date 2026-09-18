@@ -342,6 +342,36 @@ def test_live_tower_optional_names():
     assert not is_optional_node("ControlNetLoader")
     assert not is_optional_node("CreateVoronoiMask")
     assert not is_optional_node("WanVideoEmptyMMAudioLatents")
+    assert is_optional_node("PanoramaViewerNode")
+    assert not is_optional_node("OlmDragCrop")
+
+
+def test_movie_builder_bypasses_panorama_but_fails_olmcrop():
+    """PanoramaViewer is cosmetic; OlmDragCrop sits on the encode path."""
+    from master_agent.comfy.workflow_patcher import load_workflow_template
+    from master_agent.config import OBJECT_INFO_CACHE
+    import json
+
+    wf = load_workflow_template("vb_movie_builder")
+    assert OBJECT_INFO_CACHE.is_file()
+    object_info = json.loads(OBJECT_INFO_CACHE.read_text(encoding="utf-8"))
+    report = validate_workflow(
+        wf, object_info, file_label="vb_movie_builder", object_info_source="cache"
+    )
+    classes_left = {
+        n.get("class_type")
+        for n in wf.values()
+        if isinstance(n, dict)
+    }
+    assert "PanoramaViewerNode" not in classes_left
+    assert "OlmDragCrop" in classes_left
+    crop_errors = [
+        err
+        for err in report.errors
+        if "OlmDragCrop" in str(err)
+    ]
+    assert crop_errors, "missing OlmDragCrop must hard-fail validate (do not silent-pass)"
+    assert not any("PanoramaViewerNode" in str(err) for err in report.errors)
 
 
 def test_missing_lanpaint_and_warp_bypass():

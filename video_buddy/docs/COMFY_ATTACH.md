@@ -6,14 +6,13 @@ compatible LTX or Wan **API** graph. It does not synthesize topology.
 
 ## Contract (source of truth)
 
-The apply-recipe format lives in sibling
-[your-video-buddy](https://github.com/thcabq352/your-video-buddy) `@ main`:
+The apply-recipe format is vendored in this tree:
 
-- [`docs/COMFY_ATTACH_CONTRACT.md`](https://github.com/thcabq352/your-video-buddy/blob/main/docs/COMFY_ATTACH_CONTRACT.md)
-- `buddy previs export-patch` / `buddy.comfy.attach/v1` schema in `buddy-core`
+- [`COMFY_ATTACH_CONTRACT.md`](COMFY_ATTACH_CONTRACT.md)
+- `buddy.comfy.attach/v1` schema consumed by `master_agent/comfy/attach.py`
 
-This tree implements the consumer. If the sibling contract adds fields, extend
-`master_agent/comfy/attach.py` — do not invent a second schema.
+If the contract adds fields, extend `master_agent/comfy/attach.py` — do not
+invent a second schema.
 
 ## Dry-run (default)
 

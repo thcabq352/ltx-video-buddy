@@ -77,7 +77,7 @@ REPOINT = {
         "265": {"video": "warehouse_src_30fps.mp4"},
         "3327": {"lora_name": "wan\\Wan2.1_T2V_14B_FusionX_LoRA.safetensors"},
     },
-    "workflows/260603_LTX2-3_3D-RENDERING_LIP-SNYC_v08_api.json": {
+    "workflows/260603_LTX2-3_3D-RENDERING_LIP-SYNC_v08_api.json": {
         "6108": {"image": "BusinessWoman_START-IMAGE.webp"},
         "6102": {"image": "BusinessWoman_START-IMAGE.webp"},
         "6139": {"image": "BusinessWoman_START-IMAGE.webp"},
@@ -153,7 +153,7 @@ REPOINT = {
 }
 
 LTX_APIS = [
-    "workflows/260603_LTX2-3_3D-RENDERING_LIP-SNYC_v08_api.json",
+    "workflows/260603_LTX2-3_3D-RENDERING_LIP-SYNC_v08_api.json",
     "workflows/AI-RENDERING-EXAMPLE FILES/030_BearMinimum_RightThisWay/030_BearMinimum_RightThisWay_api.json",
     "workflows/AI-RENDERING-EXAMPLE FILES/050_BearMinimum_Bar/050_BearMinimum_Bar_workflow_api.json",
     "workflows/AI-RENDERING-EXAMPLE FILES/BusinessWoman/BusinessWoman_Workflow_api.json",

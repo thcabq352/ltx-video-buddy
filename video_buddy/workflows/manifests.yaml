@@ -495,9 +495,9 @@ vb_aivfx_adv_13:
       input: seed
 
 ltx23_lipsync_v08:
-  file: 260603_LTX2-3_3D-RENDERING_LIP-SNYC_v08_api.json
+  file: 260603_LTX2-3_3D-RENDERING_LIP-SYNC_v08_api.json
   format: api
-  ui_source: 260603_LTX2-3_3D-RENDERING_LIP-SNYC_v08.json
+  ui_source: 260603_LTX2-3_3D-RENDERING_LIP-SYNC_v08.json
   description: LTX-2.3 3D-rendering lip-sync (clay/depth/mouth guides + OmniNFT/ic-loras)
   vram_class: heavy
   vram_peak_gb: 15.4

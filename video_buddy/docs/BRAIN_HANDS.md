@@ -3,19 +3,17 @@
 Director (brain) ranks **stories**. Hands answers whether the live tower
 can fulfill that story **right now**. Capacity math stays out of routing.
 
-## Sibling contract
+## Contract
 
-Source of truth is Rust buddy-core in
-[your-video-buddy](https://github.com/thcabq352/your-video-buddy) `@ main`:
+Source of truth for this tree is this file plus
+`master_agent/capability.py` / `master_agent/hands.py`:
 
-- [`docs/BRAIN_HANDS.md`](https://github.com/thcabq352/your-video-buddy/blob/main/docs/BRAIN_HANDS.md)
 - `CapabilityContract` / `Hands.can_fulfill` → `FitResult`
 - 8s last-frame chaining owned by Hands (`plan_last_frame_chain`)
 
-That repo / PR #9 was **not fetchable** from this environment (404). This
-is **not** a second schema — field names match the PR #9 contract Scott
-listed. If the Rust struct lands extra keys, add them without dropping
-these. Never serialize VRAM, slot, or weight-path fields on the contract.
+Field names match `buddy.capability.contract/v1`. If a sibling Rust
+struct lands extra keys, add them without dropping these. Never serialize
+VRAM, slot, or weight-path fields on the contract.
 
 ## Python live orchestrator
 

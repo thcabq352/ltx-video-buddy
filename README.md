@@ -27,9 +27,10 @@ not need Tailscale or a private share.
 
 Play in the GitHub blob viewer:
 [`docs/demo/H3-SHOWCASE-BMX-8s-720p.mp4`](docs/demo/H3-SHOWCASE-BMX-8s-720p.mp4)
-(8.0 s, 1280×720, 4 197 204 bytes). Poster + provenance also live at
-[`docs/demo/`](docs/demo/) and [`docs/showcase/h3-bmx/`](docs/showcase/h3-bmx/).
-The 1080p encode is omitted from git (~10 MB).
+(8.0 s, 1280×720, 4 197 204 bytes). Poster + provenance live at
+[`docs/demo/`](docs/demo/). [`docs/showcase/h3-bmx/`](docs/showcase/h3-bmx/)
+is a pointer to that folder (no second copy). The 1080p encode is omitted
+from git (~10 MB).
 
 ---
 
@@ -171,8 +172,8 @@ when you need those older filenames. Full operator docs:
 ## Repository layout
 
 ```
-docs/demo/             # sibling-README mirror (your-video-buddy PR #11)
-docs/showcase/h3-bmx/  # same H3 BMX poster + provenance (PR #24 path)
+docs/demo/             # H3 BMX poster + 720p + provenance
+docs/showcase/h3-bmx/  # pointer README to docs/demo/
 video_buddy/
 ├── master_agent/      # the agent: orchestrator, director, judge, persona,
 │                      # KB, characters/LoRA, music, fractal, upscale, web, MCP
@@ -190,8 +191,8 @@ video_buddy/
 - [Operator manual](video_buddy/README.md) — full CLI/web/MCP reference and changelog
 - [Doctor / download-models / catalog](video_buddy/docs/QUICKSTART.md) — inventory-first LTX 2.5 flow
 - [Required files](video_buddy/REQUIRED-FILES.md) — accepted local names + Hub catalog
-- [MiniMax H3 demo](docs/demo/) — photoreal BMX still + run sidecar (sibling links)
-- [MiniMax H3 showcase](docs/showcase/h3-bmx/) — same files under the PR #24 path
+- [MiniMax H3 demo](docs/demo/) — photoreal BMX still + run sidecar
+- [MiniMax H3 showcase](docs/showcase/h3-bmx/) — pointer to `docs/demo/`
 - [LTX 2.5 workflows](video_buddy/workflows/ltx-2.5/README.md) — ids and invoke examples
 - [MiniMax H3 workflows](video_buddy/workflows/minimax-h3/README.md) — fl2va / ref2va ids
 - [Self-improvement loop](video_buddy/docs/SELF_IMPROVEMENT_LOOP.md) — live judge → revise → re-run map

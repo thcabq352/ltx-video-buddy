@@ -312,21 +312,34 @@ CAPABILITY_CATALOG: tuple[Capability, ...] = (
         ),
     ),
     Capability(
+        "vb_movie_builder",
+        "MickMumpitz Movie Builder (LTX 2.3 ADV)",
+        class_types=("ShotAssembler", "OlmDragCrop"),
+        surfaces=("director", "patcher", "template"),
+        templates=("vb_movie_builder",),
+        notes=(
+            "OlmDragCrop is on the first-shot encode path (ImageExists → "
+            "reference latent → KSampler). Required pack: ComfyUI-Olm-DragCrop "
+            "(or equivalent). Missing class fails Hands / validate — do not "
+            "silent-bypass or /prompt 400s. PanoramaViewerNode is preview-only "
+            "and soft-bypasses when unregistered."
+        ),
+    ),
+    Capability(
         "mickmumpitz_vfx",
-        "MickMumpitz AI-VFX / Movie Builder / CCC",
+        "MickMumpitz AI-VFX / CCC",
         class_types=("WanVacePhantomSimpleV2", "CCC_PromptStudio", "ShotAssembler"),
         surfaces=("director", "patcher", "template"),
         templates=(
             "vb_aivfx_adv",
             "vb_aivfx_adv_13",
-            "vb_movie_builder",
             "vb_ccc_adv",
             "vb_ccc41_krea2",
         ),
         notes=(
-            "Director-routed (movie builder / ccc / aivfx). "
-            "Movie Builder + CCC ADV are HEAVY on 16GB — safer: ltx25_t2v_i2v / flux. "
+            "Director-routed (ccc / aivfx). CCC ADV is HEAVY on 16GB — safer: flux. "
             "CCC ADV has no safe prompt widget — baked defaults; prefer --template. "
+            "Movie Builder is a separate capability (requires OlmDragCrop). "
             "Some example files gitignored."
         ),
     ),

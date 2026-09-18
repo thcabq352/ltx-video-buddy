@@ -47,6 +47,7 @@ video_buddy/downloads/
 video_buddy/workflows/AI-RENDERING-EXAMPLE FILES/
 video_buddy/workflows/*.rar
 video_buddy/workflows/*.zip
+video_buddy/workflows/DepthMap_animated_00085.mp4
 
 # Partial downloads
 **/*.part

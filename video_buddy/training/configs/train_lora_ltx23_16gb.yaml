@@ -1,6 +1,6 @@
 # LoRA (scene OR style) — LTX-2.3 (22B) on a 16GB card (RTX 5060 Ti)
 #
-# Trains a LoRA for the LTX-2.3 pipeline (workflows/260603_LTX2-3_3D-RENDERING_LIP-SNYC_v08,
+# Trains a LoRA for the LTX-2.3 pipeline (workflows/260603_LTX2-3_3D-RENDERING_LIP-SYNC_v08,
 # master_agent). Same config works for:
 #   - SCENE LoRAs (a location / set / lighting look)   -> dataset: stills+clips of that scene
 #   - STYLE LoRAs (lego, claymation, pixel-art, ...)    -> dataset: 20-100 images in that style

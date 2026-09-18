@@ -1,0 +1,18 @@
+name: pytest
+
+on:
+  push:
+  pull_request:
+
+jobs:
+  unit:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Unit tests (no Comfy, no GPU)
+        run: |
+          pip install -r video_buddy/requirements.txt
+          PYTHONPATH=video_buddy pytest video_buddy/tests/test_ltx25_catalog.py video_buddy/tests/test_brain_hands.py video_buddy/tests/test_loader_names.py video_buddy/tests/test_ltx_frames.py -q

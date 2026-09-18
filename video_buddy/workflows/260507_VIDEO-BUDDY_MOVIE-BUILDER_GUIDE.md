@@ -96,6 +96,13 @@ seed changes often fix voice/lip-sync without losing the visual.
   matching shot group alongside character references. Lighting, geometry, and
   palette match across cuts.
 
+**Required pack (not cosmetic):** `OlmDragCrop` sits on the first-shot
+encode path (`ImageExists` → reference latent → `KSampler` → later I2V).
+Install ComfyUI-Olm-DragCrop (or the pack that registers `OlmDragCrop`).
+Buddy does **not** silent-bypass this class — missing pack fails Hands /
+`validate_workflow` instead of 400 on `/prompt`. `PanoramaViewerNode` is
+preview-only and soft-bypasses when unregistered.
+
 ## Final movie output / assembler
 
 - ShotAssembler concatenates every shot in shotlist order into one video.

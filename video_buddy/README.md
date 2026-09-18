@@ -107,7 +107,7 @@ python -m master_agent comfy run --mode raw --json workflow.json
 python -m master_agent comfy run --mode template --template lipsync --prepare --out prepared.json
 # Previs attach (buddy.comfy.attach/v1) — dry-run default; --submit for live /prompt
 python -m master_agent comfy attach --recipe previs.json --json workflow.json --out patched.json
-# Contract: https://github.com/thcabq352/your-video-buddy/blob/main/docs/COMFY_ATTACH_CONTRACT.md
+# Contract: docs/COMFY_ATTACH_CONTRACT.md
 # Operator notes: docs/COMFY_ATTACH.md
 
 # Orchestrated generation (the Director):
@@ -530,8 +530,7 @@ local models (19-27GB) and can take several minutes — allow long timeouts.
 ## Status (2026-09-18)
 
 - **MiniMax H3 public showcase.** Photoreal BMX still + originating
-  provenance are in [`docs/demo/`](../docs/demo/) and
-  [`docs/showcase/h3-bmx/`](../docs/showcase/h3-bmx/) (linked from the
+  provenance are in [`docs/demo/`](../docs/demo/) (linked from the
   repo-root README). A playable 720p MP4 is **not** in git until a
   complete attach (or other untruncated copy) lands.
 - **Music-video Remotion mode.** `python -m master_agent mv render --audio …`
