@@ -155,6 +155,54 @@ def _find_nodes_by_class(workflow: dict[str, Any], class_type: str) -> list[tupl
     return out
 
 
+_SAMPLER_CLASSES = frozenset(
+    {"KSampler", "KSamplerAdvanced", "SamplerCustomAdvanced", "LanPaint_KSampler"}
+)
+_SAMPLER_LATENT_KEYS = frozenset({"latent_image", "latent"})
+
+
+def image_feeds_sampler_latent(workflow: dict[str, Any], filename: str) -> bool:
+    """True when ``filename`` is on a node that links into a sampler latent.
+
+    A dangling unused LoadImage does not count.
+    """
+    if not filename:
+        return False
+    owners: list[str] = []
+    for nid, node in workflow.items():
+        if not isinstance(node, dict):
+            continue
+        for value in (node.get("inputs") or {}).values():
+            if value == filename:
+                owners.append(str(nid))
+    if not owners:
+        return False
+    children: dict[str, list[tuple[str, str]]] = {}
+    for nid, node in workflow.items():
+        if not isinstance(node, dict):
+            continue
+        for key, value in (node.get("inputs") or {}).items():
+            if isinstance(value, list) and len(value) == 2:
+                children.setdefault(str(value[0]), []).append((str(nid), str(key)))
+    seen: set[str] = set()
+    stack = list(owners)
+    while stack:
+        cur = stack.pop()
+        if cur in seen:
+            continue
+        seen.add(cur)
+        for dst, key in children.get(cur, []):
+            dst_node = workflow.get(dst)
+            if (
+                isinstance(dst_node, dict)
+                and dst_node.get("class_type") in _SAMPLER_CLASSES
+                and key in _SAMPLER_LATENT_KEYS
+            ):
+                return True
+            stack.append(dst)
+    return False
+
+
 def _set_input(node: dict[str, Any], key: str, value: Any) -> bool:
     if "inputs" not in node or not isinstance(node["inputs"], dict):
         node["inputs"] = {}
@@ -252,6 +300,12 @@ def _sanitize_ltx_nodes(workflow: dict[str, Any]) -> None:
         ):
             merged.pop(bad, None)
         node["inputs"] = {**merged, **links}
+
+    for _nid, node in _find_nodes_by_class(workflow, "GemmaAPITextEncode"):
+        inputs = node.setdefault("inputs", {})
+        if not isinstance(inputs.get("enhance_prompt"), bool):
+            inputs["enhance_prompt"] = False
+        inputs.pop("ckpt_name", None)
 
     for _nid, node in _find_nodes_by_class(workflow, "RandomNoise"):
         inputs = node.setdefault("inputs", {})
@@ -553,10 +607,9 @@ def _apply_local_ltx25_weights(workflow: dict[str, Any]) -> None:
     transformer_name, te_name = _resolved_ltx25_names()
     for class_type in ("UNETLoader", "UnetLoaderGGUF", "DiffusionModelLoader"):
         for _nid, node in _find_nodes_by_class(workflow, class_type):
-            inputs = node.get("inputs") or {}
-            current = inputs.get("unet_name") or inputs.get("ckpt_name") or ""
-            if isinstance(current, str) and "ltx-2.5" in current.lower():
-                _set_transformer_loader(node, transformer_name)
+            # Always pin 2.5 loaders to the local/official 2.5 transformer.
+            # A 2.3 all-in-one must not remain on unet_name after patch.
+            _set_transformer_loader(node, transformer_name)
     for _nid, node in _find_nodes_by_class(workflow, "LTXAVTextEncoderLoader"):
         _set_input(node, "text_encoder", te_name)
         inputs = node.get("inputs") or {}
@@ -876,6 +929,8 @@ def _heuristic_patch(workflow: dict[str, Any], values: dict[str, Any]) -> None:
 
     # All checkpoint-consuming loaders used by LTX graphs
     if ckpt:
+        ckpt_l = str(ckpt).lower()
+        spray_unet = "ltx-2.5" in ckpt_l or "ltx2.5" in ckpt_l
         for class_type in (
             "CheckpointLoaderSimple",
             "LTXVAudioVAELoader",
@@ -896,6 +951,9 @@ def _heuristic_patch(workflow: dict[str, Any], values: dict[str, Any]) -> None:
                 ):
                     _set_input(node, "ckpt_name", ckpt)
                 if "unet_name" in inputs:
+                    # Do not write a 2.3 all-in-one onto official 2.5 UNET loaders.
+                    if class_type in ("UNETLoader", "DiffusionModelLoader") and not spray_unet:
+                        continue
                     _set_input(node, "unet_name", ckpt)
         if text_encoder:
             for _nid, node in _find_nodes_by_class(workflow, "LTXAVTextEncoderLoader"):
@@ -1062,7 +1120,11 @@ def load_and_patch_workflow(
     preferred = models.get("checkpoint") or models.get("diffusion")
     # Variants with no single all-in-one checkpoint (e.g. wan22's dual UNETs)
     # must not get a fallback LTX ckpt sprayed onto their loaders.
-    checkpoint = resolve_checkpoint_name(preferred) if preferred else None
+    # LTX 2.5 is a split pack: never resolve a 2.3 all-in-one onto UNETLoader.
+    if is_ltx25_variant(variant):
+        checkpoint = None
+    else:
+        checkpoint = resolve_checkpoint_name(preferred) if preferred else None
     lora = models.get("lora")
     text_encoder = models.get("text_encoder")
     clip_l = models.get("clip_l")

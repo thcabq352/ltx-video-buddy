@@ -224,7 +224,7 @@
     },
     "class_type": "LTXAddVideoICLoRAGuide",
     "_meta": {
-      "title": "🅛🅣🅧 Add Video IC-LoRA Guide"
+      "title": "\ud83c\udd5b\ud83c\udd63\ud83c\udd67 Add Video IC-LoRA Guide"
     }
   },
   "9002:9005": {
@@ -469,7 +469,6 @@
     "inputs": {
       "api_key": "",
       "enhance_prompt": false,
-      "ckpt_name": "ltx-2.5-22b-distilled-transformer-bf16.safetensors",
       "prompt": [
         "5509",
         0
@@ -477,7 +476,7 @@
     },
     "class_type": "GemmaAPITextEncode",
     "_meta": {
-      "title": "🅛🅣🅧 Gemma API Text Encode - NEGATIVE"
+      "title": "\ud83c\udd5b\ud83c\udd63\ud83c\udd67 Gemma API Text Encode - NEGATIVE"
     }
   },
   "5014:5557": {
@@ -495,7 +494,6 @@
     "inputs": {
       "api_key": "",
       "enhance_prompt": false,
-      "ckpt_name": "ltx-2.5-22b-distilled-transformer-bf16.safetensors",
       "prompt": [
         "5508",
         0
@@ -503,7 +501,7 @@
     },
     "class_type": "GemmaAPITextEncode",
     "_meta": {
-      "title": "🅛🅣🅧 Gemma API Text Encode - POSITIVE"
+      "title": "\ud83c\udd5b\ud83c\udd63\ud83c\udd67 Gemma API Text Encode - POSITIVE"
     }
   },
   "5014:9015": {
@@ -597,7 +595,7 @@
     },
     "class_type": "LTXICLoRALoaderModelOnly",
     "_meta": {
-      "title": "🅛🅣🅧 IC-LoRA Loader Model Only"
+      "title": "\ud83c\udd5b\ud83c\udd63\ud83c\udd67 IC-LoRA Loader Model Only"
     }
   },
   "4852": {

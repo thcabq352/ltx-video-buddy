@@ -590,8 +590,7 @@
   "5014:5504": {
     "inputs": {
       "api_key": "",
-      "enhance_prompt": "ltx-2.3-22b-dev.safetensors",
-      "ckpt_name": "ltx-2.3-22b-dev.safetensors",
+      "enhance_prompt": false,
       "prompt": [
         "5508",
         0
@@ -606,7 +605,6 @@
     "inputs": {
       "api_key": "",
       "enhance_prompt": false,
-      "ckpt_name": "ltx-2.3-22b-dev.safetensors",
       "prompt": [
         "5509",
         0

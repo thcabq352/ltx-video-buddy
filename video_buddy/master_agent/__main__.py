@@ -240,7 +240,15 @@ def cmd_run(args: argparse.Namespace) -> int:
         MAX_FULL_JUDGE_ROUNDS,
         MAX_JUDGE_ROUNDS,
     )
-    from master_agent.orchestrator.pipeline import dry_run_pipeline, run_pipeline
+    from master_agent.orchestrator.pipeline import (
+        dry_run_pipeline,
+        duration_from_request,
+        run_pipeline,
+    )
+
+    parsed_duration = duration_from_request(args.request)
+    if parsed_duration and args.duration == 5.0:
+        args.duration = parsed_duration
 
     if args.variant:
         from master_agent.comfy.catalog import default_variant_ids, is_known_variant
@@ -315,13 +323,8 @@ def cmd_run(args: argparse.Namespace) -> int:
         return 1
 
     client = ComfyClient()
-    if not client.is_up():
-        print(f"FAIL  ComfyUI is not reachable. Start: ComfyUI_windows_portable\\run_api_8188.bat")
-        return 1
-
-    args.request = _maybe_interview(args.request, no_interview=args.no_interview)
-
     if args.dry_run:
+        args.request = _maybe_interview(args.request, no_interview=args.no_interview)
         return dry_run_pipeline(
             args.request,
             variant=args.variant,
@@ -334,7 +337,15 @@ def cmd_run(args: argparse.Namespace) -> int:
             panel_judge=args.panel_judge,
             attach_recipe=attach_recipe,
             client=client,
+            kind="run",
+            image_name=Path(args.image).name if getattr(args, "image", None) else None,
         )
+
+    if not client.is_up():
+        print(f"FAIL  ComfyUI is not reachable. Start: ComfyUI_windows_portable\\run_api_8188.bat")
+        return 1
+
+    args.request = _maybe_interview(args.request, no_interview=args.no_interview)
 
     # Auto-route music videos to the beat-synced pipeline (explicit --variant wins)
     if args.audio and not args.variant and _music_intent(args.request, args.audio, args.quality):

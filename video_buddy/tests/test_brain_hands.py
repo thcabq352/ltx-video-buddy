@@ -220,11 +220,30 @@ def test_forced_variant_skips_hands_fallback():
     )
 
 
+def test_snapshot_hands_rejects_movie_builder_without_olmcrop():
+    contract = contract_from_variant(
+        "vb_movie_builder", duration_s=8.0, story_duration_s=8.0
+    )
+    hands = SnapshotHands(
+        HandsSnapshot(
+            vram_free_gb=24.0,
+            vram_total_gb=24.0,
+            present_weights=None,
+            object_info={"ShotAssembler": {}, "KSampler": {}},
+        )
+    )
+    fit = hands.can_fulfill(contract)
+    assert fit.ok is False
+    assert fit.reason == "missing_nodes"
+    assert "OlmDragCrop" in (fit.detail or "")
+
+
 def test_pipeline_uses_hands_chain_not_vram_ladder():
-    from master_agent.orchestrator.pipeline import plan_story_segments
+    from master_agent.orchestrator.pipeline import duration_from_request, plan_story_segments
 
     segs = plan_story_segments(20.0, kind="run")
     assert segs == [8.0, 8.0, 8.0]
+    assert duration_from_request("20 second neon alley push-in") == 20.0
 
 
 def test_music_video_does_not_use_last_frame_chain():
@@ -233,3 +252,24 @@ def test_music_video_does_not_use_last_frame_chain():
     segs = plan_story_segments(20.0, kind="music_video", quality="balanced")
     assert segs != [8.0, 8.0, 8.0]
     assert pytest.approx(sum(segs), abs=0.05) == 20.0
+
+
+def test_chain_clip_2_plus_is_i2v_from_last_frame_not_flf():
+    from master_agent.comfy.workflow_patcher import (
+        image_feeds_sampler_latent,
+        load_and_patch_workflow,
+    )
+
+    chain = plan_last_frame_chain(20)
+    assert [c.use_last_frame for c in chain.clips] == [False, True, True]
+    wf, meta = load_and_patch_workflow(
+        "ltx25_t2v_i2v",
+        prompt="neon alley push-in",
+        duration_s=8.0,
+        seed=1,
+        image_name="chain_last_1.png",
+    )
+    assert meta["frames"] == 193
+    assert image_feeds_sampler_latent(wf, "chain_last_1.png")
+    dumped = str(wf)
+    assert "chain_last_1.png" in dumped

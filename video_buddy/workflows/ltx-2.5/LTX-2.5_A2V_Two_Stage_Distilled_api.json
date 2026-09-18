@@ -313,8 +313,7 @@
   "5014:5504": {
     "inputs": {
       "api_key": "",
-      "enhance_prompt": "ltx-2.3-22b-dev.safetensors",
-      "ckpt_name": "ltx-2.3-22b-dev.safetensors",
+      "enhance_prompt": false,
       "prompt": [
         "5508",
         0
@@ -322,14 +321,13 @@
     },
     "class_type": "GemmaAPITextEncode",
     "_meta": {
-      "title": "🅛🅣🅧 Gemma API Text Encode - POSITIVE"
+      "title": "\ud83c\udd5b\ud83c\udd63\ud83c\udd67 Gemma API Text Encode - POSITIVE"
     }
   },
   "5014:5505": {
     "inputs": {
       "api_key": "",
       "enhance_prompt": false,
-      "ckpt_name": "ltx-2.3-22b-dev.safetensors",
       "prompt": [
         "5509",
         0
@@ -337,7 +335,7 @@
     },
     "class_type": "GemmaAPITextEncode",
     "_meta": {
-      "title": "🅛🅣🅧 Gemma API Text Encode - NEGATIVE"
+      "title": "\ud83c\udd5b\ud83c\udd63\ud83c\udd67 Gemma API Text Encode - NEGATIVE"
     }
   },
   "5508": {
