@@ -1,11 +1,13 @@
-"""Director brain — LLM request routing.
+"""Director brain — story ranking, then Hands fit.
 
 Decides which workflow variant a request should use. The allowlist is
 every ``workflows/manifests.yaml`` slug (via ``WORKFLOW_FILES`` /
 ``load_workflow_files``). Hard constraints (forced variant, source video)
-always win; otherwise the local LLM picks, with keyword rules as fallback.
-The LLM never sees secrets and its answer is validated against the known
-variant list before use.
+always win; otherwise the local LLM / keyword rules **rank stories**.
+Hands (``can_fulfill``) answers possible-right-now after that ranking.
+The brain never sees VRAM / slot / weight-path math and does not pick
+“cheaper GPU” graphs. The LLM never sees secrets and its answer is
+validated against the known variant list before use.
 """
 
 from __future__ import annotations
@@ -15,8 +17,10 @@ import re
 from pathlib import Path
 from typing import Any, Optional
 
+from master_agent.capability import CapabilityContract, contract_from_variant
 from master_agent.comfy.catalog import default_variant_ids, is_known_variant
 from master_agent.config import DIRECTOR_LLM, WORKFLOW_FILES
+from master_agent.hands import FitResult, Hands, default_hands
 
 # First match wins. Keep specific family phrases before generic ones
 # (`vfx` / `ccc` / `shots`). Hard constraints in choose_variant still win.
@@ -101,22 +105,6 @@ def _allowed_variants() -> set[str]:
     return allowed
 
 
-def _vram_routing_hint() -> dict[str, Any]:
-    """Compact 16GB policy for the LLM router (no invented packs)."""
-    from master_agent.models.vram_policy import (
-        HEAVY_SLUGS,
-        TARGET_GPU,
-        TARGET_VRAM_GB,
-        safer_alternate,
-    )
-
-    return {
-        "gpu": f"{TARGET_GPU} {TARGET_VRAM_GB:.0f}GB",
-        "prefer": "safe/tight slugs unless the user names a heavy graph",
-        "heavy": {slug: safer_alternate(slug) for slug in sorted(HEAVY_SLUGS)},
-    }
-
-
 def rule_based_variant(request: str) -> str:
     text = (request or "").lower()
     allowed = set(WORKFLOW_FILES)
@@ -128,31 +116,86 @@ def rule_based_variant(request: str) -> str:
     return "base"
 
 
+def _director_payload(request: str, *, fallback: str) -> dict[str, Any]:
+    """LLM router payload. Story ranking only — no VRAM / safer-alternate."""
+    return {
+        "request": request,
+        "allowed_variants": sorted(_allowed_variants()),
+        "rule_based_suggestion": fallback,
+    }
+
+
+def rank_story_candidates(
+    request: str,
+    *,
+    has_video: bool = False,
+    force: str | None = None,
+    attach_recipe: Any = None,
+) -> list[tuple[str, str]]:
+    """Brain: narrative ranking. No VRAM ladder, no cheaper-GPU remaps."""
+    if force:
+        return [(force, "forced")]
+    if has_video:
+        return [("lipsync", "input")]
+    ranked: list[tuple[str, str]] = []
+    seen: set[str] = set()
+
+    def _add(variant: str, source: str) -> None:
+        if not variant or variant in seen:
+            return
+        seen.add(variant)
+        ranked.append((variant, source))
+
+    if attach_recipe is not None:
+        from master_agent.comfy.attach import attach_director_override
+
+        override = attach_director_override(attach_recipe)
+        if override:
+            _add(override, "attach")
+    fallback = rule_based_variant(request)
+    if DIRECTOR_LLM:
+        llm_variant = _llm_variant(request, fallback=fallback)
+        if llm_variant:
+            _add(llm_variant, "llm")
+    _add(fallback, "rules")
+    if fallback != "base":
+        _add("base", "fallback")
+    return ranked or [("base", "rules")]
+
+
 def choose_variant(
     request: str,
     *,
     has_video: bool = False,
     force: str | None = None,
     attach_recipe: Any = None,
+    hands: Hands | None = None,
+    contract: CapabilityContract | None = None,
 ) -> tuple[str, str]:
-    """Returns (variant, source) where source is forced|input|attach|llm|rules."""
-    if force:
-        return force, "forced"
-    if has_video:
-        return "lipsync", "input"
-    if attach_recipe is not None:
-        from master_agent.comfy.attach import attach_director_override
-
-        override = attach_director_override(attach_recipe)
-        if override:
-            return override, "attach"
-    fallback = rule_based_variant(request)
-    if not DIRECTOR_LLM:
-        return fallback, "rules"
-    llm_variant = _llm_variant(request, fallback=fallback)
-    if llm_variant:
-        return llm_variant, "llm"
-    return fallback, "rules"
+    """Rank stories, then ask Hands for fit. Returns (variant, source)."""
+    ranked = rank_story_candidates(
+        request, has_video=has_video, force=force, attach_recipe=attach_recipe
+    )
+    head_variant, head_source = ranked[0]
+    if head_source in ("forced", "input"):
+        return head_variant, head_source
+    checker = hands if hands is not None else default_hands()
+    for variant, source in ranked:
+        spec = contract or contract_from_variant(variant)
+        if spec.variant != variant:
+            spec = contract_from_variant(
+                variant,
+                duration_s=spec.duration_s,
+                story_duration_s=spec.story_duration_s,
+                width=spec.resolution[0],
+                height=spec.resolution[1],
+                audio=spec.audio,
+                control_layers=spec.control_layers,
+            )
+        fit: FitResult = checker.can_fulfill(spec)
+        if fit.ok:
+            return variant, source
+    return ranked[-1]
 
 
 def _llm_variant(request: str, *, fallback: str) -> Optional[str]:
@@ -167,12 +210,7 @@ def _llm_variant(request: str, *, fallback: str) -> Optional[str]:
     system = path.read_text(encoding="utf-8") if path.is_file() else (
         "Pick the workflow variant. Return JSON variant/reason."
     )
-    payload = {
-        "request": request,
-        "allowed_variants": sorted(_allowed_variants()),
-        "rule_based_suggestion": fallback,
-        "vram_policy": _vram_routing_hint(),
-    }
+    payload = _director_payload(request, fallback=fallback)
     try:
         llm = get_llm(temperature=0.1)
         resp = llm.invoke(

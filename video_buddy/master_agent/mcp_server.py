@@ -129,10 +129,9 @@ def plan_storyboard(
 ) -> dict:
     """Plan only: segment split + LLM-panel storyboard (with KB recall).
     No GPU, no validation — fast way to preview what a run would shoot."""
-    from master_agent.config import plan_segment_durations
-    from master_agent.orchestrator.pipeline import _plan_storyboard
+    from master_agent.orchestrator.pipeline import _plan_storyboard, plan_story_segments
 
-    segs = plan_segment_durations(duration_s, quality=quality)
+    segs = plan_story_segments(duration_s, quality=quality)
     logs: list[str] = []
     cards, style, meta = _quiet(
         _plan_storyboard,

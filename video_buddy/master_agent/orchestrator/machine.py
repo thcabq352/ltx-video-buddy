@@ -83,6 +83,7 @@ class Orchestrator:
     # ── states ────────────────────────────────────────────
 
     def _select_variant(self, st: RunState, force_variant: Optional[str]) -> str:
+        from master_agent.hands import LiveHands
         from master_agent.orchestrator.director import choose_variant
 
         variant, source = choose_variant(
@@ -90,6 +91,7 @@ class Orchestrator:
             has_video=bool(st.video_name),
             force=force_variant,
             attach_recipe=st.attach_recipe,
+            hands=LiveHands(client=self.client),
         )
         if source not in ("forced", "input"):
             st.log(f"director routed variant={variant} ({source})")

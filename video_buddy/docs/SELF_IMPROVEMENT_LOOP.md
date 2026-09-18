@@ -23,7 +23,7 @@ recorded as `accept`.
 
 | Piece | Where | Notes |
 |---|---|---|
-| Director variant routing | `orchestrator/director.py` | LLM + keyword rules; attach preference |
+| Director variant routing | `orchestrator/director.py` | Story rank (LLM + rules), then Hands `can_fulfill` |
 | Multi-segment pipeline | `orchestrator/pipeline.py` | Storyboard → per-seg `Orchestrator.run` → stitch → full-video judge → weak-shot regen |
 | State machine | `orchestrator/machine.py` | PATCH → VALIDATE → SUBMIT → POLL → RESOLVE → JUDGE |
 | OOM downscale | `machine._handle_job_error` | Walks `DOWNSCALE_LADDER` / `vram_policy.downscale_ladder_for` |

@@ -27,6 +27,7 @@ from master_agent.config import (
     STORYBOARD_MODE,
     plan_segment_durations,
 )
+from master_agent.hands import Hands, default_hands
 from master_agent.judge.judge import judge_full_video, parse_weak_shot_indices
 from master_agent.judge.probe import probe_video
 from master_agent.orchestrator.machine import Orchestrator
@@ -203,6 +204,25 @@ def _budget_admit(result: PipelineResult, scene_id: str, variant: Optional[str],
     return row
 
 
+_MUSIC_KINDS = frozenset({"music", "music_video", "mv", "music_video_mv"})
+
+
+def plan_story_segments(
+    duration_s: float,
+    *,
+    kind: str = "",
+    quality: Optional[str] = None,
+    hands: Hands | None = None,
+) -> list[float]:
+    """Split a story. Hands owns the 8s last-frame chain; music keeps beats/quality."""
+    kind_l = (kind or "").strip().lower()
+    if kind_l in _MUSIC_KINDS:
+        return plan_segment_durations(duration_s, quality=quality)
+    checker = hands if hands is not None else default_hands()
+    chain = checker.plan_last_frame_chain(float(duration_s))
+    return [float(c.duration_s) for c in chain.clips]
+
+
 def _synthetic_cards(request: str, segs: list[float]) -> list[ShotCard]:
     return [
         ShotCard(
@@ -249,7 +269,7 @@ def run_pipeline(
     base_seed = seed if seed is not None else random.randint(0, 2**32 - 1)
     orch = Orchestrator(client=client)
 
-    segs = plan_segment_durations(duration_s, quality=quality)
+    segs = plan_story_segments(duration_s, kind=kind, quality=quality)
     result.segment_durations = segs
     result.log(f"plan: {duration_s}s -> {len(segs)} segment(s) {segs} (judge={j_enabled})")
 
@@ -331,6 +351,15 @@ def run_pipeline(
     def _gen_segment(i: int, seed_bump: int = 0) -> RunState:
         card = cards[i]
         seg_seed = (base_seed + seed_bump + card.seed_offset) & 0xFFFFFFFF
+        seg_image = image_name
+        if i > 0 and result.segment_paths:
+            from master_agent.hands import extract_last_frame
+
+            dest = OUTPUTS_DIR / result.run_id / f"chain_last_{i}.png"
+            frame = extract_last_frame(result.segment_paths[i - 1], dest)
+            if frame is not None:
+                seg_image = str(frame)
+                result.log(f"hands last-frame chain: clip {i + 1} from {frame.name}")
         return orch.run(
             request,
             prompt=card.ltx_prompt or request,
@@ -342,7 +371,7 @@ def run_pipeline(
             width=width,
             height=height,
             video_name=video_name,
-            image_name=image_name,
+            image_name=seg_image,
             audio_name=audio_name,
             judge_enabled=j_enabled,
             max_judge_rounds=max_judge_rounds,
@@ -530,7 +559,7 @@ def dry_run_pipeline(
     from master_agent.comfy.workflow_patcher import load_and_patch_workflow
 
     sb_mode = (storyboard_mode or STORYBOARD_MODE).strip().lower()
-    segs = plan_segment_durations(duration_s, quality=quality)
+    segs = plan_story_segments(duration_s, quality=quality)
     print(f"plan: {duration_s}s -> {len(segs)} segment(s) {segs}")
 
     client = client or ComfyClient()
