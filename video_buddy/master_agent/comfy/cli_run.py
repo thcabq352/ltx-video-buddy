@@ -77,32 +77,6 @@ def list_templates() -> list[dict[str, str]]:
     from master_agent.comfy.catalog import list_catalog_items
 
     return list_catalog_items()
-    root = WORKFLOWS_DIR.resolve()
-    items: list[dict[str, str]] = []
-    seen: set[str] = set()
-    for slug, filename in WORKFLOW_FILES.items():
-        path = (root / filename).resolve()
-        if not path.is_file():
-            continue
-        rel = path.relative_to(root).as_posix()
-        items.append({"id": slug, "path": rel, "name": f"{slug} — {filename}", "kind": "variant"})
-        seen.add(rel)
-    for slug, filename in _manifest_files().items():
-        path = (root / filename).resolve()
-        if not path.is_file():
-            continue
-        rel = path.relative_to(root).as_posix()
-        if rel in seen:
-            continue
-        items.append({"id": slug, "path": rel, "name": f"{slug} — {filename}", "kind": "manifest"})
-        seen.add(rel)
-    if root.is_dir():
-        for path in sorted(root.rglob("*.json")):
-            rel = path.relative_to(root).as_posix()
-            if rel in seen:
-                continue
-            items.append({"id": rel, "path": rel, "name": rel, "kind": "file"})
-    return items
 
 
 def resolve_template(rel: str | Path) -> Path:
@@ -155,25 +129,36 @@ def prepare_run(
     variant: str | None = None,
     prompt: str = "",
     overrides: dict[str, dict[str, Any]] | None = None,
+    object_info: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
+    from master_agent.comfy.graph_ops import ensure_teacache, looks_like_ltx_graph
+
     if mode == "raw":
         if not isinstance(workflow, dict):
             raise ValueError("raw mode requires a workflow dict")
-        return apply_overrides(workflow, overrides)
-    if mode == "template":
+        wf = apply_overrides(workflow, overrides)
+    elif mode == "template":
         raw_path = Path(template_path or "")
         path = raw_path if raw_path.is_file() else resolve_template(template_path or "")
         data = json.loads(path.read_text(encoding="utf-8"))
-        return apply_overrides(unwrap_workflow(data), overrides)
-    if mode == "generate":
+        wf = apply_overrides(unwrap_workflow(data), overrides)
+    elif mode == "generate":
         from master_agent.comfy.workflow_patcher import load_and_patch_workflow
 
-        wf, meta = load_and_patch_workflow(variant or "base", prompt=prompt or "test")
+        wf, meta = load_and_patch_workflow(
+            variant or "base",
+            prompt=prompt or "test",
+            object_info=object_info,
+        )
         warn = (meta or {}).get("prepare_warning")
         if warn:
             print(warn)
-        return apply_overrides(wf, overrides)
-    raise ValueError(f"unknown mode {mode!r}")
+        wf = apply_overrides(wf, overrides)
+    else:
+        raise ValueError(f"unknown mode {mode!r}")
+    if looks_like_ltx_graph(wf):
+        ensure_teacache(wf, object_info)
+    return wf
 
 
 def lint_report(

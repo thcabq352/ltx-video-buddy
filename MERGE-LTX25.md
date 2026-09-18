@@ -45,7 +45,8 @@ the `ltx_research_agent` package name.
 | `ltx25_t2a` | `t2a` | `LTX-2.5_T2A_Single_Stage_Distilled_api.json` |
 
 Existing `base` / `eros` / `directors` / `lipsync` / `wan22` stay on the same
-path. WAN / K3NK / TeaCache behavior is unchanged (TeaCache still soft-bypass).
+path. WAN / K3NK paths are unchanged. LTX TeaCache is inject-when-registered
+(PR #4); leftover / missing nodes still soft-bypass.
 
 New `*_api.json` under `workflows/` auto-registers. LTX 2.5 ids are always in
 the default menu even if tower nodes or weights are missing.

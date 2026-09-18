@@ -966,6 +966,7 @@ def load_and_patch_workflow(
     stg_blocks: Optional[list[int]] = None,
     sampler_name: Optional[str] = None,
     frames: Optional[int] = None,
+    object_info: Optional[dict[str, Any]] = None,
     first_image: Optional[str] = None,
     last_image: Optional[str] = None,
     loras: Optional[list[dict[str, Any]]] = None,
@@ -1102,6 +1103,15 @@ def load_and_patch_workflow(
 
     # Final sanitize after extras
     _sanitize_ltx_nodes(workflow)
+
+    from master_agent.comfy.graph_ops import (
+        LTX_TEACACHE_VARIANTS,
+        ensure_teacache,
+        looks_like_ltx_graph,
+    )
+
+    if variant in LTX_TEACACHE_VARIANTS or looks_like_ltx_graph(workflow):
+        ensure_teacache(workflow, object_info)
 
     meta = {
         "variant": variant,

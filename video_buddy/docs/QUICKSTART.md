@@ -186,7 +186,7 @@ class does not become a queued graph. Expected post-merge shape:
 | Wan 2.2 T2V (native UNET) | **yes** | `--variant wan22` |
 | K3NK WAN 2.2 AIO I2V | **no** | Not in `MODEL_FILES` / no graph |
 | WanVideoWrapper / Fun Inpaint / Fun Control | **no** (graphs) | Catalog / fail-closed |
-| TeaCache / `WanVideoTeaCache` | **bypass** | Missing node → WARNING + rewire; **not** inject |
+| TeaCache / `WanVideoTeaCache` | **inject + bypass** | welltop-cn `TeaCache` injects on LTX when registered; missing / Wan aliases → WARNING + rewire |
 | Movie Builder / AI-VFX / CCC | **yes** | Director keywords (`vfx`, `movie builder`, `ccc`) or `--variant` / `--template`. CCC ADV queues baked widgets. |
 | CPU fractal | **yes** | `python -m master_agent fractal` (not Comfy Voronoi/Perlin) |
 | SeedVR2 | **yes (post)** | `--upscale seedvr2` |
@@ -212,8 +212,9 @@ bf16/fp16 dual-UNET is never the default. Expected VRAM is a hypothesis.
 | Qwen Edit | `vb_qwen_edit_360` | GGUF Q5_0 + Lightning | ~12G | |
 | K3NK AIO I2V | — | — | — | No attested pack; do not invent |
 
-16GB accelerators: Lightx2v / turbo LoRAs when present; TeaCache soft-bypass
-(never inject); `DOWNSCALE_LADDER` after diagnose `sec/step`.
+16GB accelerators: Lightx2v / turbo LoRAs when present; LTX TeaCache
+inject-when-registered (soft-bypass if missing); `DOWNSCALE_LADDER` after
+diagnose `sec/step`.
 
 ```bash
 python -m master_agent workflows --vram
@@ -232,5 +233,6 @@ https://github.com/thcabq352/ltx2.5-research-agent :
 - The `ltx_research_agent` package name
 - Imagine client / OAuth
 
-WAN / K3NK / TeaCache behavior in this repo is **unchanged** (TeaCache still
-soft-bypass). Historical copy table: [`../../MERGE-LTX25.md`](../../MERGE-LTX25.md).
+WAN / K3NK paths are **unchanged**. LTX TeaCache is inject-when-registered
+(PR #4); missing pack still soft-bypasses. Historical copy table:
+[`../../MERGE-LTX25.md`](../../MERGE-LTX25.md).

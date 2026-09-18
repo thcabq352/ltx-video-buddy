@@ -8,6 +8,7 @@ After applying, callers should ``validate_workflow`` against live/cached
 from __future__ import annotations
 
 import copy
+import json
 from dataclasses import dataclass, field
 from typing import Any, Optional
 
@@ -114,6 +115,195 @@ def _upstream_link(node: dict[str, Any]) -> list | None:
     return None
 
 
+# welltop-cn/ComfyUI-TeaCache — LTX-Video recommended widgets (~1.7x).
+# Current pack INPUT_TYPES: model, model_type, rel_l1_thresh, start_percent,
+# end_percent, cache_device. max_skip_steps is set only when the node exposes it.
+TEACACHE_CLASS = "TeaCache"
+TEACACHE_LTX_MODEL_TYPE = "ltxv"
+TEACACHE_LTX_DEFAULTS: dict[str, Any] = {
+    "model_type": TEACACHE_LTX_MODEL_TYPE,
+    "rel_l1_thresh": 0.06,
+    "start_percent": 0.0,
+    "end_percent": 1.0,
+    "cache_device": "cuda",
+}
+LTX_TEACACHE_VARIANTS = frozenset({"base", "eros", "directors", "lipsync"})
+_LTX_GRAPH_MARKERS = frozenset(
+    {
+        "EmptyLTXVLatentVideo",
+        "LTXVEmptyLatentVideo",
+        "LTXVEmptyLatentAudio",
+        "LTXVConditioning",
+        "LTXVConcatAVLatent",
+        "MultimodalGuider",
+        "LTXICLoRALoaderModelOnly",
+    }
+)
+_MODEL_LOADER_CLASSES = (
+    "UNETLoader",
+    "CheckpointLoaderSimple",
+    "DiffusionModelLoader",
+)
+_LORA_CLASSES = (
+    "LTXICLoRALoaderModelOnly",
+    "LoraLoaderModelOnly",
+    "LoraLoader",
+)
+
+
+def looks_like_ltx_graph(workflow: dict[str, Any]) -> bool:
+    """True when the API graph is an LTX (not Flux/Wan/Krea) path."""
+    for node in workflow.values():
+        if isinstance(node, dict) and node.get("class_type") in _LTX_GRAPH_MARKERS:
+            return True
+    return False
+
+
+def _teacache_input_spec(object_info: dict[str, Any] | None) -> dict[str, Any]:
+    if not isinstance(object_info, dict):
+        return {}
+    info = object_info.get(TEACACHE_CLASS)
+    if not isinstance(info, dict):
+        return {}
+    inputs = info.get("input") or {}
+    if not isinstance(inputs, dict):
+        return {}
+    required = inputs.get("required") if isinstance(inputs.get("required"), dict) else {}
+    optional = inputs.get("optional") if isinstance(inputs.get("optional"), dict) else {}
+    merged = dict(required)
+    merged.update(optional)
+    return merged
+
+
+def teacache_defaults(object_info: dict[str, Any] | None = None) -> dict[str, Any]:
+    """LTX-safe TeaCache widgets. ``max_skip_steps=3`` only if the pack exposes it."""
+    widgets = dict(TEACACHE_LTX_DEFAULTS)
+    spec = _teacache_input_spec(object_info)
+    if spec:
+        if "max_skip_steps" in spec:
+            widgets["max_skip_steps"] = 3
+        if "cache_device" not in spec:
+            widgets.pop("cache_device", None)
+        model_type_spec = spec.get("model_type")
+        if isinstance(model_type_spec, (list, tuple)) and model_type_spec:
+            choices = model_type_spec[0]
+            if isinstance(choices, (list, tuple)):
+                if TEACACHE_LTX_MODEL_TYPE not in choices and "LTX-Video" in choices:
+                    widgets["model_type"] = "LTX-Video"
+    return widgets
+
+
+def _model_source_id(workflow: dict[str, Any]) -> str | None:
+    """Last LoRA on the MODEL path, else the first diffusion loader."""
+    for class_type in _LORA_CLASSES:
+        matches = _find_by_class(workflow, class_type)
+        if matches:
+            return matches[-1][0]
+    for class_type in _MODEL_LOADER_CLASSES:
+        matches = _find_by_class(workflow, class_type)
+        if matches:
+            return matches[0][0]
+    return None
+
+
+def _rewire_model_consumers(
+    workflow: dict[str, Any],
+    src_id: str,
+    dest_id: str,
+    *,
+    skip: set[str] | None = None,
+) -> None:
+    ignore = skip or set()
+    for nid, node in workflow.items():
+        if nid == dest_id or nid in ignore:
+            continue
+        if not isinstance(node, dict):
+            continue
+        inputs = node.get("inputs") or {}
+        for key, value in list(inputs.items()):
+            if (
+                isinstance(value, list)
+                and len(value) == 2
+                and str(value[0]) == str(src_id)
+                and value[1] == 0
+            ):
+                inputs[key] = [str(dest_id), 0]
+
+
+def ensure_teacache(
+    workflow: dict[str, Any],
+    object_info: dict[str, Any] | None = None,
+    *,
+    model_type: str = TEACACHE_LTX_MODEL_TYPE,
+) -> str | None:
+    """Insert or refresh welltop-cn ``TeaCache`` on the MODEL path.
+
+    After the last LoRA/loader, before guider/sampler. When ``object_info`` is
+    omitted, reads ``cached_object_info()``. If ``TeaCache`` is not registered,
+    do not insert — ``bypass_optional_accelerators`` still strips leftovers.
+    """
+    registry = object_info if object_info is not None else cached_object_info()
+    if not isinstance(registry, dict) or TEACACHE_CLASS not in registry:
+        return None
+    if not looks_like_ltx_graph(workflow):
+        return None
+
+    widgets = teacache_defaults(registry)
+    chosen_type = model_type or TEACACHE_LTX_MODEL_TYPE
+    widgets["model_type"] = chosen_type
+    spec = _teacache_input_spec(registry)
+    model_type_spec = spec.get("model_type")
+    if isinstance(model_type_spec, (list, tuple)) and model_type_spec:
+        choices = model_type_spec[0]
+        if isinstance(choices, (list, tuple)) and chosen_type not in choices:
+            if "ltxv" in choices:
+                widgets["model_type"] = "ltxv"
+            elif "LTX-Video" in choices:
+                widgets["model_type"] = "LTX-Video"
+
+    existing = _find_by_class(workflow, TEACACHE_CLASS)
+    if existing:
+        nid, node = existing[0]
+        inputs = node.setdefault("inputs", {})
+        if not isinstance(inputs, dict):
+            node["inputs"] = inputs = {}
+        if not _is_link(inputs.get("model")):
+            src_id = _model_source_id(workflow)
+            if src_id is None:
+                return None
+            inputs["model"] = [str(src_id), 0]
+            _rewire_model_consumers(workflow, src_id, nid, skip={nid})
+        for key, value in widgets.items():
+            inputs[key] = value
+        return nid
+
+    src_id = _model_source_id(workflow)
+    if src_id is None:
+        return None
+    new_id = _next_node_id(workflow)
+    workflow[new_id] = {
+        "class_type": TEACACHE_CLASS,
+        "inputs": {"model": [str(src_id), 0], **widgets},
+        "_meta": {"title": "TeaCache (LTX)"},
+    }
+    _rewire_model_consumers(workflow, src_id, new_id, skip={new_id})
+    return new_id
+
+
+def cached_object_info() -> dict[str, Any]:
+    """Disk cache only — never downloads, never requires a live Comfy."""
+    try:
+        from master_agent.config import OBJECT_INFO_CACHE
+
+        if OBJECT_INFO_CACHE.is_file():
+            data = json.loads(OBJECT_INFO_CACHE.read_text(encoding="utf-8"))
+            if isinstance(data, dict):
+                return data
+    except (OSError, TypeError, ValueError, json.JSONDecodeError):
+        pass
+    return {}
+
+
 def bypass_optional_accelerators(
     workflow: dict[str, Any],
     object_info: dict[str, Any] | None = None,
@@ -149,6 +339,7 @@ def bypass_optional_accelerators(
         workflow.pop(sid, None)
         dropped.append((sid, str(class_type)))
     return dropped
+
 
 
 # Ops the power-mode LLM may emit
@@ -456,14 +647,22 @@ def _op_delete_input(wf: dict[str, Any], op: dict[str, Any]) -> None:
 
 __all__ = [
     "ALLOWED_OPS",
+    "LTX_TEACACHE_VARIANTS",
     "OPTIONAL_ACCELERATOR_CLASS_TYPES",
+    "TEACACHE_CLASS",
+    "TEACACHE_LTX_DEFAULTS",
+    "TEACACHE_LTX_MODEL_TYPE",
     "OPTIONAL_NODE_CLASS_TYPES",
     "OPTIONAL_TOWER_CLASS_TYPES",
     "OpResult",
     "apply_ops",
     "bypass_optional_accelerators",
+    "cached_object_info",
+    "ensure_teacache",
     "is_optional_accelerator",
+    "looks_like_ltx_graph",
     "is_optional_node",
     "object_info_snippets",
     "summarize_workflow",
+    "teacache_defaults",
 ]

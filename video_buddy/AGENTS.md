@@ -105,15 +105,37 @@ It always prepares + lints first, then queues the short fire, prints wall time a
 - **`length=8` is junk.** LTX wants `8n+1` (min 9). Length 8 collapses to a 1-frame file. Never queue 8; snap to 9.
 - **Know `sec/step` before scale.** Ada field note: 285 s/step dropped to 66.5 s/step after a lowvram / hull-sized fire. Do not climb `DOWNSCALE_LADDER` or raise frames until diagnose recorded `sec/step`.
 - **Audio field is `frames_number`** on `LTXVEmptyLatentAudio`, paired with video `length`.
+- **TeaCache:** `graph_ops.ensure_teacache` injects welltop-cn `TeaCache` on LTX MODEL after LoRA / before guider when `/object_info` has the class. LTX defaults: `model_type=ltxv`, `rel_l1_thresh=0.06`, `start_percent=0`, `end_percent=1`, `cache_device=cuda`; `max_skip_steps=3` only if the node exposes it. Pack: https://github.com/welltop-cn/ComfyUI-TeaCache (~1.7x). Templates stay clean — the patcher / `comfy run` inject. If the class is missing, do **not** insert; leftover nodes still **bypass** (WARN + rewire). Do not auto-install packs. Wan-only aliases (`WanVideoTeaCache`, `WanVideoTeaCacheKJ`) are not LTX TeaCache.
 - **LTX 2.5 default catalog (PR #6, merged).** `ltx25_*` variants (and research aliases `t2v_i2v` / `flf2v` / …) are listed with no env flag. Inventory first. 16GB-class loader pick: GGUF Q4 → NVFP4 (if `VRAM_GB` ≥ 14) → int8-convrot → bf16. Heretic/int8 TE counts; official bf16 Gemma is not required. Zero-byte duration-head = missing. `doctor` reports the pick and does **not** fetch. `download-models --ltx25` lists confirmed-missing; `--yes` only after the ask.
 - **MiniMax H3 default catalog.** `h3_t2v` / `h3_i2v` / `h3_flf` (fl2va) and `h3_r2v` (ref2va). Aliases `fl2va` / `ref2va`. GGUF Q4_K DiT first, then NVFP4/int8. Prefer Comfy Qwen3-VL TE (NVFP4 AWQ / int8 / int4) — GGUF TE Q4_K_M is too heavy as default. CFG stays 1.0. 16GB sweet spot: 0.6–0.8 MP, ≤12 s, 4 steps. `download-models --h3` lists confirmed-missing; `--yes` only after the ask. Do not break LTX 2.5 / WAN paths.
-- **Shared 16GB policy** (`master_agent.models.vram_policy`). Every `manifests.yaml` slug inherits GGUF Q4/Q5 → NVFP4 → int8/fp8. Doctor row `vram-policy`. `workflows --vram` prints the family table. Wan/VACE/Krea/Flux/Qwen follow the same pick. Heavy graphs (Movie Builder, CCC ADV, AI-VFX 1.0, clay lipsync, example renderers) stay available with a safer alternate + prepare warning. K3NK AIO is not a default (no attested pack). Lightx2v / turbo LoRAs when present; TeaCache bypass-only; `DOWNSCALE_LADDER` after diagnose.
+- **Shared 16GB policy** (`master_agent.models.vram_policy`). Every `manifests.yaml` slug inherits GGUF Q4/Q5 → NVFP4 → int8/fp8. Doctor row `vram-policy`. `workflows --vram` prints the family table. Wan/VACE/Krea/Flux/Qwen follow the same pick. Heavy graphs (Movie Builder, CCC ADV, AI-VFX 1.0, clay lipsync, example renderers) stay available with a safer alternate + prepare warning. K3NK AIO is not a default (no attested pack). Lightx2v / turbo LoRAs when present; LTX TeaCache inject-when-registered (soft-bypass if the pack is missing); `DOWNSCALE_LADDER` after diagnose.
 - **Missing TeaCache / LanPaint_KSampler / GetWarpedNoiseFromVideo / MMAudio* → bypass**, not a hard-fail. Do not auto-install packs. Live tower (2026-09-13, 4114 classes) registers exact `TeaCache` + `WanVideoTeaCache`. There is no `VideoNoiseWarp` class — use `GetWarpedNoiseFromVideo`. Do not bypass structural nodes (`WanFunInpaintToVideo`, `Wan22FunControlToVideo`, `IPAdapterFaceID`). WAN / K3NK / TeaCache paths were **not** rewritten by the 2.5 merge.
 - **Tracker `DONE` can lie.** Confirm with history + `ffprobe` + size/frames. Junk `<100KB` or `<3` frames is FAIL even if the tracker says done.
 - **Port-in-use ≠ kill the cook.** If `:8188` / `:8189` is already bound, do not kill a running render. Attach or wait.
 - **Budget ~80 VRAM-min HOLD** with a shift-reset ledger. HOLD is `input-required`, not failed. `budget reset-shift` archives `previous_used` / `previous_shift_id` and never wipes history.
 - **Windows folder-prefixed weights** stay backslash style (`wan\file.safetensors`).
 - **LoRA A/B locks the encoder.** `gemma_3_12B_it_fp8_scaled` is the proven TE family. Do not swap the default TE for Heretic mid-A/B. Only LoRA name/strength may change.
+
+## TeaCache
+
+Buddy-native path is **inject-when-registered**, not baked JSON:
+
+1. `master_agent.comfy.graph_ops.ensure_teacache` is the only writer.
+2. `load_and_patch_workflow` (diagnose / draft / generate) and `prepare_run` (`comfy run` raw/template) call it on LTX graphs (`base`, `eros`, `directors`, `lipsync`).
+3. If `TeaCache` is in `/object_info` (or `state/object_info.json` cache), a welltop-cn node is inserted on MODEL after the last LoRA (`LoraLoaderModelOnly` / `LTXICLoRALoaderModelOnly`) and before `MultimodalGuider` / `CFGGuider` / sampler.
+4. If the class is missing, inject is a no-op. Any leftover TeaCache-style node is still **soft-bypassed** (WARN + rewire). Validation PASSes. Packs are never auto-installed.
+
+| Widget | LTX default |
+|---|---|
+| `class_type` | `TeaCache` |
+| `model_type` | `ltxv` (or `LTX-Video` if that is the only enum) |
+| `rel_l1_thresh` | `0.06` |
+| `start_percent` | `0` |
+| `end_percent` | `1` |
+| `cache_device` | `cuda` (omitted if the node has no such input) |
+| `max_skip_steps` | `3` **only if** the pack exposes the input |
+
+Install on Scott’s Comfy: https://github.com/welltop-cn/ComfyUI-TeaCache (LTX-Video, ~1.7x). Wan-only `WanVideoTeaCache` / `WanVideoTeaCacheKJ` aliases are **not** this node; they still bypass when missing.
 
 ## Judge ≠ taste
 
@@ -137,6 +159,7 @@ The judge is a **coherent-take / retry ladder**, not an album curator.
 
 - **LTX frame law.** Valid lengths are `8n+1`, minimum **9**. `snap_ltx_frames()` never returns 8. The patcher writes `EmptyLTXVLatentVideo.length` and `LTXVEmptyLatentAudio.frames_number` together. Validator WARNs and auto-corrects unless `--strict` (ERROR). `DEFAULT_FRAMES`, diagnose, and draft start at 9. Long-run templates keep their length but still snap illegal counts. `DOWNSCALE_LADDER` first rungs are 9/17/25/33 — not 121.
 - **Diagnose before scale.** Measure `sec/step` on a 9-frame hull before raising res/frames. Scale is refused until `state/control/diagnose_hull.json` has `sec_per_step`.
+- **TeaCache.** Single path: `ensure_teacache` in `graph_ops` (called from `load_and_patch_workflow` and `prepare_run`). When `TeaCache` exists in object_info, insert/refresh welltop-cn node after LoRA before sampler/guider (`ltxv`, `rel_l1_thresh=0.06`, `start_percent=0`, `end_percent=1`; `max_skip_steps=3` if exposed). When missing, skip insert; leftover `TeaCache` / `WanVideoTeaCache*` still WARNING + bypass and validate PASSes. Install on Scott’s Comfy: `https://github.com/welltop-cn/ComfyUI-TeaCache`. Do not auto-install packs. Do not bake TeaCache into JSON templates.
 - **Optional-node bypass.** Missing optional nodes (`TeaCache`, `WanVideoTeaCache`, `LanPaint_KSampler`, `GetWarpedNoiseFromVideo`, `MMAudioSampler`, …) are WARNING + bypass: the typed upstream link is rewired past the node and the node is dropped. Validation still PASSes. Do not auto-install packs. Do not bypass Fun Inpaint / Fun Control / FaceID / ControlNet / Voronoi — those are payload nodes.
 - **Judge look vs health.** Payload has `look_score`, `health_score`, and `combined_score` (back-compat). Retry ladder uses **look only**. Low `brief_adherence` + high look is `human_veto`. Probe `min_frames=3`; junk `<100KB` is a health fail.
 - **Shift reset.** `RenderBudget.reset_shift()` archives `{event:shift_reset, previous_used, previous_shift_id}` then `used=0` `paused=False`. Never wipe the ledger. Diagnose/dry-run do not increment `used`. HOLD is A2A `input-required`, not `failed`.
