@@ -3,14 +3,15 @@
 Every first-class API graph is listed and selectable with no env flags.
 Sources (merged, first id wins for a given file):
 
-1. Explicit ``WORKFLOW_FILES`` (derived from ``workflows/manifests.yaml``
-   plus legacy seeds — every manifest slug is director-routable)
-2. ``workflows/manifests.yaml`` entries that point at a file
+1. Explicit ``WORKFLOW_FILES`` (manifest slugs + legacy seeds whose JSON
+   files exist on disk — gitignored example graphs are not advertised)
+2. ``workflows/manifests.yaml`` entries that point at a file that exists
 3. Auto-scan ``workflows/ltx-2.5/*.json`` and ``workflows/minimax-h3/*.json``
 4. Auto-scan any other ``*_api.json`` under ``workflows/``
 
-Missing tower nodes/weights never hide an id from the menu. Queue-time
-checks raise a clear ask-to-download error instead.
+Missing tower nodes/weights never hide an id from the menu. Missing
+template files do: a slug is not known until ``(WORKFLOWS_DIR / file)``
+is present. Queue-time checks raise a clear ask-to-download error instead.
 """
 
 from __future__ import annotations
@@ -296,11 +297,13 @@ def load_catalog() -> tuple[CatalogEntry, ...]:
             ),
         )
 
-    # 2) Seed WORKFLOW_FILES (manifest-derived director allowlist + legacy ids)
+    # 2) Seed WORKFLOW_FILES (on-disk director allowlist + legacy ids)
     manifests = _load_manifests()
     for vid, filename in _seed_workflow_files().items():
         rel = str(filename).replace("\\", "/")
         if vid in by_id:
+            continue
+        if not (root / rel).is_file():
             continue
         meta = manifests.get(vid) if isinstance(manifests.get(vid), dict) else {}
         _add(
@@ -326,6 +329,8 @@ def load_catalog() -> tuple[CatalogEntry, ...]:
             continue
         rel = str(filename).replace("\\", "/")
         if vid in by_id:
+            continue
+        if not (root / rel).is_file():
             continue
         _add(
             by_id,

@@ -15,7 +15,7 @@ from master_agent.config import (
     H3_MAX_DURATION_S,
     H3_MAX_MP,
     WORKFLOWS_DIR,
-    load_manifest_workflow_files,
+    load_workflow_files,
 )
 from master_agent.control.cost import estimate_cost
 from master_agent.models.vram_policy import (
@@ -44,8 +44,8 @@ from master_agent.models.weights import (
 from master_agent.setup import check_vram_policy, snapshot
 
 
-def _manifest_slugs() -> list[str]:
-    return list(load_manifest_workflow_files())
+def _on_disk_slugs() -> list[str]:
+    return list(load_workflow_files())
 
 
 def test_target_is_rtx_5060_ti_16gb():
@@ -54,12 +54,12 @@ def test_target_is_rtx_5060_ti_16gb():
     assert NVFP4_MIN_VRAM_GB == 14.0
 
 
-def test_every_manifest_slug_has_a_policy_row():
-    slugs = _manifest_slugs()
+def test_every_on_disk_slug_has_a_policy_row():
+    slugs = _on_disk_slugs()
     assert slugs
     rows = {row.slug: row for row in workflow_vram_rows()}
     missing = [s for s in slugs if s not in rows]
-    assert not missing, f"16GB policy missing manifest slugs: {missing}"
+    assert not missing, f"16GB policy missing on-disk slugs: {missing}"
     for slug in slugs:
         row = workflow_row(slug)
         assert row.family

@@ -145,11 +145,15 @@ MAX_WIDTH = int(os.getenv("MAX_WIDTH", "768"))
 MAX_HEIGHT = int(os.getenv("MAX_HEIGHT", "512"))
 # Total requested length (multi-segment stitches clips up to this)
 MAX_DURATION_S = float(os.getenv("MAX_DURATION_S", "30"))
-# Per-clip cap on 16GB (single Comfy job); longer asks are split into segments
+# Per-clip cap on 16GB (single Comfy job); longer asks are split into segments.
+# LTX 2.3 stays at 6s. LTX 2.5 Hands clips are 8s → 193 frames (8n+1), which
+# sits one frame past 8 * 24 = 192, so the 2.5 cap must allow that +1.
 SEGMENT_MAX_S = float(os.getenv("SEGMENT_MAX_S", "6"))
 DEFAULT_STEPS = int(os.getenv("DEFAULT_STEPS", "12"))
 DEFAULT_CFG = float(os.getenv("DEFAULT_CFG", "1.0"))
 DEFAULT_FPS = 24
+LTX25_LEGAL_FRAMES = 193  # 8 * 24 + 1
+LTX25_SEGMENT_MAX_S = float(os.getenv("LTX25_SEGMENT_MAX_S", str(LTX25_LEGAL_FRAMES / DEFAULT_FPS)))
 DEFAULT_QUALITY = os.getenv("DEFAULT_QUALITY", "balanced")  # draft | balanced | quality
 # LTX frame law: valid counts are 8n+1 with a hard minimum of 9 (never 8, never 121-by-default).
 DEFAULT_FRAMES = 9
@@ -229,6 +233,14 @@ QUALITY_PROFILES: dict[str, dict] = {
         "segment_max_s": 6.0,
         "max_width": 1024,
         "max_height": 1024,
+        "max_total_s": 30.0,
+    },
+    # LTX 2.5 Hands chain: 8s burns at 193 frames. Do not use for LTX 2.3.
+    "ltx25": {
+        "steps": 12,
+        "segment_max_s": LTX25_LEGAL_FRAMES / DEFAULT_FPS,
+        "max_width": 768,
+        "max_height": 512,
         "max_total_s": 30.0,
     },
 }
@@ -470,10 +482,20 @@ def load_manifest_workflow_files(workflows_dir: Path | None = None) -> dict[str,
 
 
 def load_workflow_files(workflows_dir: Path | None = None) -> dict[str, str]:
-    """Director-routable variants: every manifests.yaml slug plus legacy seeds."""
+    """Director-routable variants: manifest slugs + legacy seeds whose files exist.
+
+    ``manifests.yaml`` may document gitignored example graphs. Those slugs stay
+    in the YAML as docs but are not advertised until ``(WORKFLOWS_DIR / file)``
+    is on disk.
+    """
+    root = Path(workflows_dir or WORKFLOWS_DIR)
     files = dict(_WORKFLOW_FILE_SEEDS)
     files.update(load_manifest_workflow_files(workflows_dir))
-    return files
+    return {
+        slug: rel
+        for slug, rel in files.items()
+        if (root / rel).is_file()
+    }
 
 
 WORKFLOW_FILES: dict[str, str] = load_workflow_files()
@@ -551,6 +573,24 @@ def is_valid_ltx_frames(n: int) -> bool:
     return frames >= 9 and (frames - 1) % 8 == 0
 
 
+def is_ltx25_variant(variant: str | None) -> bool:
+    key = (variant or "").strip().lower().replace("\\", "/")
+    if not key:
+        return False
+    if key.startswith("ltx25") or key.startswith("ltx-2.5") or key.startswith("ltx2.5"):
+        return True
+    if "ltx-2.5" in key or "ltx 2.5" in key:
+        return True
+    try:
+        from master_agent.comfy.catalog import LTX25_FILES, RESEARCH_ALIASES
+
+        if key in LTX25_FILES or key in RESEARCH_ALIASES:
+            return True
+    except Exception:
+        pass
+    return False
+
+
 def is_h3_variant(variant: str | None) -> bool:
     key = (variant or "").strip().lower()
     if not key:
@@ -599,25 +639,37 @@ def snap_ltx_frames(n: int) -> int:
     return k * 8 + 1
 
 
+def segment_max_s_for_variant(variant: str | None = None) -> float:
+    """Per-clip duration cap. LTX 2.5 allows 193 frames; LTX 2.3 stays at 6s."""
+    if is_ltx25_variant(variant):
+        return LTX25_SEGMENT_MAX_S
+    return SEGMENT_MAX_S
+
+
 def frames_for_duration(
     duration_s: float,
     fps: int = DEFAULT_FPS,
     *,
     max_s: float | None = None,
     snap: int = 8,
+    variant: str | None = None,
 ) -> int:
-    """Convert seconds to a frame count (snap*n+1), clamped by segment max."""
-    cap = max_s if max_s is not None else SEGMENT_MAX_S
-    d = min(max(duration_s, 1.0), cap)
+    """Convert seconds to a frame count (snap*n+1), clamped by segment max.
+
+    Snap to a legal count first. Do not clamp away the +1 frame that sits
+    just past ``cap * fps`` (8s at 24 fps → 192 raw → 193 legal).
+    """
+    cap = max_s if max_s is not None else segment_max_s_for_variant(variant)
+    d = min(max(float(duration_s), 1.0), cap)
     raw = int(round(d * fps))
+    if snap == 8:
+        frames = snap_ltx_frames(raw)
+        max_legal = snap_ltx_frames(int(cap * fps))
+        return min(frames, max_legal)
     n = max(1, round((raw - 1) / snap))
     frames = n * snap + 1
-    max_frames = int(cap * fps)
-    max_n = max(1, (max_frames - 1) // snap)
-    frames = min(frames, max_n * snap + 1)
-    if snap == 8:
-        return snap_ltx_frames(frames)
-    return frames
+    max_n = max(1, (int(cap * fps) - 1) // snap)
+    return min(frames, max_n * snap + 1)
 
 
 def plan_segment_durations(

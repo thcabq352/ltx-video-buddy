@@ -13,6 +13,38 @@ def find_ffmpeg() -> Optional[str]:
     return shutil.which("ffmpeg")
 
 
+def trim_leading_frames(video: Path, dest: Path, *, frames: int = 1) -> Path:
+    """Drop the first N frames so a shared last/first is not doubled on concat."""
+    ff = find_ffmpeg()
+    dest = Path(dest)
+    dest.parent.mkdir(parents=True, exist_ok=True)
+    if not ff or frames <= 0:
+        shutil.copy2(video, dest)
+        return dest
+    cmd = [
+        ff,
+        "-y",
+        "-i",
+        str(video),
+        "-vf",
+        f"select=gte(n\\,{frames})",
+        "-vsync",
+        "vfr",
+        "-c:v",
+        "libx264",
+        "-pix_fmt",
+        "yuv420p",
+        "-c:a",
+        "copy",
+        str(dest),
+    ]
+    proc = subprocess.run(cmd, capture_output=True, text=True)
+    if proc.returncode == 0 and dest.is_file() and dest.stat().st_size > 0:
+        return dest
+    shutil.copy2(video, dest)
+    return dest
+
+
 def concat_videos(paths: list[Path], dest: Path) -> Path:
     """Concatenate videos in order. Returns dest path."""
     paths = [Path(p) for p in paths if Path(p).is_file()]

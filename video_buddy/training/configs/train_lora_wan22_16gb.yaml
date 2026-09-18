@@ -1,6 +1,6 @@
 # LoRA (scene OR style) — Wan 2.2 14B on a 16GB card (RTX 5060 Ti)
 #
-# Trains a LoRA for the Wan pipeline (workflows/260713_MICKMUMPITZ_WAN-2-2-VID).
+# Trains a LoRA for the Wan pipeline (workflows/260713_VIDEO-BUDDY_WAN-2-2-VID).
 # Same config works for SCENE and STYLE LoRAs — see training/README.md.
 # Based on ai-toolkit's train_lora_wan22_14b_24gb.yaml, cut down for 16GB:
 # lower resolutions, 4-bit transformer + fp8 text encoder, low_vram.

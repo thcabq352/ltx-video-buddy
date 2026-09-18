@@ -7,7 +7,8 @@ Tailscale, no extra host.
 This is the path **your-video-buddy PR #11** already links:
 `https://github.com/thcabq352/ltx-video-buddy/tree/main/docs/demo`
 
-Canonical write-up (same files): [`docs/showcase/h3-bmx/`](../showcase/h3-bmx/).
+[`docs/showcase/h3-bmx/`](../showcase/h3-bmx/) is a pointer README to this
+folder (same files; do not keep a second copy).
 
 **Golden-hour BMX berm → backflip → dusty stick. ~8s. MiniMax H3 via Video Buddy / Comfy.**
 
@@ -22,7 +23,7 @@ blob playback — 8.0 s, 1280×720, `moov` present.
 
 | File | What it is |
 |---|---|
-| [`H3-SHOWCASE-BMX-8s-hero.png`](H3-SHOWCASE-BMX-8s-hero.png) | Poster / still (in-repo). Also at [`docs/showcase/h3-bmx/`](../showcase/h3-bmx/). |
+| [`H3-SHOWCASE-BMX-8s-hero.png`](H3-SHOWCASE-BMX-8s-hero.png) | Poster / still (in-repo). |
 | [`H3-SHOWCASE-BMX-8s.provenance.json`](H3-SHOWCASE-BMX-8s.provenance.json) | Originating run record; local Windows paths stripped. |
 | [`H3-SHOWCASE-BMX-8s-720p.mp4`](H3-SHOWCASE-BMX-8s-720p.mp4) | In-repo playback (4 197 204 bytes, 8.0 s, 1280×720, `moov` present). |
 | `H3-SHOWCASE-BMX-8s-1080p.mp4` | Optional 1080p encode (~10 MB). **Omitted** to keep git lean. |

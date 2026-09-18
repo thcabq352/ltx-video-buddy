@@ -149,7 +149,7 @@ brief ──▶ director.choose_variant (every manifests.yaml slug)
 | MMAudio | **partial (bypass)** | music = spectral-flux beats + mux | **live related** `MMAudioModelLoader` / `Sampler` / `VoCoder` | No exact class named `MMAudio`. Not wired as a generator. |
 | SeedVR2 | **yes (post)** | `upscale.py` + `workflows/upscale_seedvr2_api.json` | **yes** | Works as a finisher. RTX method points at gitignored Mickmumpitz filename. |
 | Sage-attention | **hyp / partial** | — | **yes** patch nodes | Launch flag not in repo. No graph inserts `*SageAttention*`. Bypass list does not include them (they are not MODEL passthroughs in the TeaCache sense). |
-| Movie Builder (LTX 2.3 ADV) | **yes (director)** | `vb_movie_builder` API + first-shot `PrimitiveStringMultiline` field map | mostly yes; `OlmDragCrop` / `PanoramaViewerNode` **missing** from cache | Would fail live validate on those two classes unless packs added or bypassed. |
+| Movie Builder (LTX 2.3 ADV) | **yes (director)** | `vb_movie_builder` API + first-shot `PrimitiveStringMultiline` field map | `ShotAssembler` yes; `OlmDragCrop` **missing** from cache (required); `PanoramaViewerNode` cosmetic bypass | `OlmDragCrop` is on the encode path — Hands / validate fail if the pack is missing. Do not silent-pass. `PanoramaViewerNode` soft-bypasses. |
 | Flux t2i (CCC sheets) | **yes** | `character/sheet.py` + director `flux` (character sheet / text-to-image) | yes | Still the stills path, now also director-routable. |
 
 ---
@@ -217,7 +217,7 @@ graphs so operators prefer `--template` for precision.
 6. **Warp via `GetWarpedNoiseFromVideo`** (not `VideoNoiseWarp`). Soft-bypass is in; still need a graph that feeds warp into Fun Inpaint / LanPaint.
 7. **FaceID** — live class is `IPAdapterFaceID`. Convert one SDXL ADV graph to API **or** drop SD1.5 FaceID in favor of Stand-In / PulID on Wan.
 8. **MMAudio** — use `MMAudioModelLoader` / `MMAudioSampler` / `MMAudioVoCoder`. Soft-bypass is in; music pipeline is still beat-mux.
-9. **Movie Builder / CCC** — now director-routable. Soft-bypass `OlmDragCrop` / `PanoramaViewerNode` if they stay cosmetic. Prefer `--template` when you need every leftover widget left alone.
+9. **Movie Builder / CCC** — now director-routable. Soft-bypass `PanoramaViewerNode` (preview only). `OlmDragCrop` is required (encode path) — fail doctor / Hands / validate when missing. Prefer `--template` when you need every leftover widget left alone.
 10. **Power mode** — if ever enabled for VFX, feed `object_info` snippets for *candidate* classes (Fun/VACE/SAM2), not only classes already in the graph. High risk; keep validate-gated.
 
 ---

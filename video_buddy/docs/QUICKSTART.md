@@ -55,7 +55,7 @@ python -m master_agent run "interpolate these frames" --variant flf2v --image st
 python -m master_agent comfy run --mode generate --variant t2v_i2v --prompt "x" --prepare
 
 # MiniMax H3 (CFG 1.0, 4 steps, 0.6–0.8 MP / ≤12s on 16GB)
-# Public photoreal still: ../../docs/demo/ and ../../docs/showcase/h3-bmx/
+# Public photoreal still: ../../docs/demo/ (showcase/h3-bmx is a pointer)
 python -m master_agent comfy run --mode generate --variant h3_t2v --prompt "neon rain, stereo city bed"
 python -m master_agent comfy run --mode generate --variant fl2va --prompt "x" --prepare
 python -m master_agent run "lock this face" --variant h3_r2v --image ref.png --no-interview
@@ -171,9 +171,8 @@ python -m master_agent capabilities         # prefer live /object_info
 python -m master_agent comfy attach --recipe previs.json --json graph.json   # dry-run attach
 ```
 
-Previs attach contract: sibling
-[your-video-buddy `COMFY_ATTACH_CONTRACT.md`](https://github.com/thcabq352/your-video-buddy/blob/main/docs/COMFY_ATTACH_CONTRACT.md).
-Operator notes in this tree: [`COMFY_ATTACH.md`](COMFY_ATTACH.md).
+Previs attach contract: [`COMFY_ATTACH_CONTRACT.md`](COMFY_ATTACH_CONTRACT.md).
+Operator notes: [`COMFY_ATTACH.md`](COMFY_ATTACH.md).
 
 `--offline` uses the committed cache. The matrix is **read-only** — a live
 class does not become a queued graph. Expected post-merge shape:

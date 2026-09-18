@@ -1,16 +1,23 @@
 # LTX 2.5 API workflows
 
-Queueable ComfyUI API-format graphs (`POST /prompt`). Ported from
-[ltx2.5-research-agent](https://github.com/thcabq352/ltx2.5-research-agent)
-and merged to Video Buddy `main` in PR #6. Video Buddy lists **all of these
-in the default catalog** — no env flag.
+Queueable ComfyUI API-format graphs (`POST /prompt`). Converted from the
+official Lightricks UI examples at
+[Lightricks/ComfyUI-LTXVideo `example_workflows/2.5`](https://github.com/Lightricks/ComfyUI-LTXVideo/tree/master/example_workflows/2.5)
+(`class_type` + `inputs` dicts). Video Buddy lists **all of these in the
+default catalog** — no env flag.
 
-Stub checkpoint names in the JSON (`ltx-2.5-22b-distilled.safetensors` on
-`CheckpointLoaderSimple`) are remapped at patch time. The default loader
-follows the 16GB-class pick — **GGUF Q4 → NVFP4 (`VRAM_GB` ≥ 14) →
-int8-convrot → official bf16** — and rewrites `CheckpointLoaderSimple` to
-`UNETLoader` / `UnetLoaderGGUF` + `LTXAVTextEncoderLoader`. Official bf16
-Gemma is not required when a heretic / int8 TE is present.
+Each video graph is loader → text encode / conditioning → sample →
+decode (`VAEDecodeTiled` / `LTXVTiledVAEDecode`) → `CreateVideo` +
+`SaveVideo`. `ltx25_t2v_i2v` uses official `LTXVImgToVideoInplace`
+(bypass when no still; first-frame latent when `image_name` is set).
+`ltx25_flf2v` is the same single-stage graph plus a last-frame insert
+(`LTXVImgToVideoInplaceKJ`). `ltx25_msr` is the official Ingredients
+multi-reference sheet graph saved under the Buddy MSR filename.
+
+The patcher still rewrites `CheckpointLoaderSimple` → `UNETLoader` /
+`UnetLoaderGGUF` and remaps local GGUF / heretic TE names onto the
+official loaders. Official bf16 Gemma is not required when a heretic /
+int8 TE is present. TeaCache stays inject-when-registered.
 
 See [`../../REQUIRED-FILES.md`](../../REQUIRED-FILES.md) and
 [`../../docs/QUICKSTART.md`](../../docs/QUICKSTART.md).

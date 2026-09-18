@@ -1,19 +1,518 @@
 {
-  "1": {
-    "class_type": "CheckpointLoaderSimple",
-    "inputs": { "ckpt_name": "ltx-2.5-22b-distilled.safetensors" }
+  "11": {
+    "inputs": {
+      "value": 5
+    },
+    "class_type": "PrimitiveFloat",
+    "_meta": {
+      "title": "duration in seconds"
+    }
   },
-  "2": {
-    "class_type": "CLIPTextEncode",
-    "inputs": { "text": "warm room tone and soft synth", "clip": ["1", 1] },
-    "_meta": { "title": "Positive Prompt" }
+  "13": {
+    "inputs": {
+      "source": [
+        "2:5556",
+        0
+      ]
+    },
+    "class_type": "PreviewAny",
+    "_meta": {
+      "title": "Effective positive prompt"
+    }
   },
-  "3": {
+  "7": {
+    "inputs": {
+      "value": ""
+    },
+    "class_type": "PrimitiveStringMultiline",
+    "_meta": {
+      "title": "Prompt (negative)"
+    }
+  },
+  "10": {
+    "inputs": {
+      "value": 24
+    },
+    "class_type": "PrimitiveFloat",
+    "_meta": {
+      "title": "fps (frames per second)"
+    }
+  },
+  "5574": {
+    "inputs": {
+      "filename_prefix": "audio/ltx_t2a",
+      "format": "mp3",
+      "format.quality": "320k",
+      "audio": [
+        "5:5573",
+        0
+      ]
+    },
+    "class_type": "SaveAudioAdvanced",
+    "_meta": {
+      "title": "Save Audio (Advanced)"
+    }
+  },
+  "1:27": {
+    "inputs": {
+      "vae_name": "ltx-2.5-audio-vae-bf16.safetensors"
+    },
+    "class_type": "VAELoader",
+    "_meta": {
+      "title": "Load VAE - Audio"
+    }
+  },
+  "1:28": {
+    "inputs": {
+      "unet_name": "ltx-2.5-22b-distilled-transformer-bf16.safetensors",
+      "weight_dtype": "default"
+    },
+    "class_type": "UNETLoader",
+    "_meta": {
+      "title": "Load Diffusion Model"
+    }
+  },
+  "1:30": {
+    "inputs": {
+      "model": [
+        "1:28",
+        0
+      ]
+    },
+    "class_type": "LTXVAudioOnlyModel",
+    "_meta": {
+      "title": "Audio-Only Model"
+    }
+  },
+  "1:31": {
+    "inputs": {
+      "clip_name": "gemma4-12b-with-proj-ltx-2.5-bf16.safetensors",
+      "type": "ltxv",
+      "device": "default"
+    },
+    "class_type": "CLIPLoader",
+    "_meta": {
+      "title": "Load CLIP - Text Enhancer"
+    }
+  },
+  "1:32": {
+    "inputs": {
+      "clip_name": "gemma4-12b-with-proj-ltx-2.5-bf16.safetensors",
+      "type": "ltxv",
+      "device": "default"
+    },
+    "class_type": "CLIPLoader",
+    "_meta": {
+      "title": "Load CLIP - Text Encoder"
+    }
+  },
+  "3:5563": {
+    "inputs": {
+      "batch_size": 1,
+      "frames_number": [
+        "2:4988",
+        0
+      ],
+      "frame_rate": [
+        "3:5562",
+        0
+      ],
+      "audio_vae": [
+        "1:27",
+        0
+      ]
+    },
     "class_type": "LTXVEmptyLatentAudio",
-    "inputs": { "batch_size": 1, "frames_number": 145, "frame_rate": 24 }
+    "_meta": {
+      "title": "Empty Audio Latent"
+    }
   },
-  "4": {
-    "class_type": "SaveAudio",
-    "inputs": { "audio": ["3", 0], "filename_prefix": "ltx25_t2a" }
+  "3:5565": {
+    "inputs": {
+      "video_latent": [
+        "3:5564",
+        0
+      ],
+      "audio_latent": [
+        "3:5563",
+        0
+      ]
+    },
+    "class_type": "LTXVConcatAVLatent",
+    "_meta": {
+      "title": "Concat A/V Latent"
+    }
+  },
+  "3:5564": {
+    "inputs": {},
+    "class_type": "LTXVAudioOnlyEmptyVideoLatent",
+    "_meta": {
+      "title": "Audio-Only Video Latent"
+    }
+  },
+  "3:5562": {
+    "inputs": {
+      "a": [
+        "2:5017",
+        0
+      ]
+    },
+    "class_type": "LTXFloatToInt",
+    "_meta": {
+      "title": "fps -> int"
+    }
+  },
+  "5:5573": {
+    "inputs": {
+      "samples": [
+        "4:5571",
+        1
+      ],
+      "audio_vae": [
+        "1:27",
+        0
+      ]
+    },
+    "class_type": "LTXVAudioVAEDecode",
+    "_meta": {
+      "title": "Decode Audio"
+    }
+  },
+  "2:5549": {
+    "inputs": {
+      "max_length": 600,
+      "sampling_mode": "on",
+      "sampling_mode.temperature": 0.01,
+      "sampling_mode.top_k": 0,
+      "sampling_mode.top_p": 1,
+      "sampling_mode.min_p": 0,
+      "sampling_mode.repetition_penalty": 1.15,
+      "sampling_mode.seed": 0,
+      "sampling_mode.presence_penalty": 0,
+      "thinking": false,
+      "use_default_template": true,
+      "clip": [
+        "1:31",
+        0
+      ],
+      "prompt": [
+        "6",
+        0
+      ]
+    },
+    "class_type": "TextGenerateLTX2Prompt",
+    "_meta": {
+      "title": "Positive prompt (t2v) enhancer - TextGenerateLTX2Prompt"
+    }
+  },
+  "2:5556": {
+    "inputs": {
+      "switch": false,
+      "on_false": [
+        "6",
+        0
+      ],
+      "on_true": [
+        "2:5549",
+        0
+      ]
+    },
+    "class_type": "ComfySwitchNode",
+    "_meta": {
+      "title": "If/Else Switch"
+    }
+  },
+  "2:5560": {
+    "inputs": {
+      "switch": [
+        "2:5557",
+        0
+      ],
+      "on_false": [
+        "2:1241",
+        1
+      ],
+      "on_true": [
+        "2:5505",
+        0
+      ]
+    },
+    "class_type": "ComfySwitchNode",
+    "_meta": {
+      "title": "negative conditioning source - If/Else Switch"
+    }
+  },
+  "2:5558": {
+    "inputs": {
+      "switch": [
+        "2:5557",
+        0
+      ],
+      "on_false": [
+        "2:1241",
+        0
+      ],
+      "on_true": [
+        "2:5504",
+        0
+      ]
+    },
+    "class_type": "ComfySwitchNode",
+    "_meta": {
+      "title": "positive conditioning source - If/Else Switch"
+    }
+  },
+  "2:5504": {
+    "inputs": {
+      "api_key": "",
+      "enhance_prompt": false,
+      "prompt": [
+        "6",
+        0
+      ]
+    },
+    "class_type": "GemmaAPITextEncode",
+    "_meta": {
+      "title": "\ud83c\udd5b\ud83c\udd63\ud83c\udd67 Gemma API Text Encode - POSITIVE"
+    }
+  },
+  "2:5505": {
+    "inputs": {
+      "api_key": "",
+      "enhance_prompt": false,
+      "prompt": [
+        "7",
+        0
+      ]
+    },
+    "class_type": "GemmaAPITextEncode",
+    "_meta": {
+      "title": "\ud83c\udd5b\ud83c\udd63\ud83c\udd67 Gemma API Text Encode - NEGATIVE"
+    }
+  },
+  "2:5557": {
+    "inputs": {
+      "string": "",
+      "substring": "ltxv_",
+      "case_sensitive": true
+    },
+    "class_type": "StringContains",
+    "_meta": {
+      "title": "has ltxv api key?"
+    }
+  },
+  "2:5507": {
+    "inputs": {
+      "value": [
+        "11",
+        0
+      ]
+    },
+    "class_type": "PrimitiveFloat",
+    "_meta": {
+      "title": "Duration in seconds - Float"
+    }
+  },
+  "2:5017": {
+    "inputs": {
+      "value": [
+        "10",
+        0
+      ]
+    },
+    "class_type": "PrimitiveFloat",
+    "_meta": {
+      "title": "fps"
+    }
+  },
+  "2:5561": {
+    "inputs": {
+      "expression": "1 + floor(a*b/8)*8",
+      "values.a": [
+        "2:5017",
+        0
+      ],
+      "values.b": [
+        "2:5507",
+        0
+      ]
+    },
+    "class_type": "ComfyMathExpression",
+    "_meta": {
+      "title": "calculate frames count - Math Expression"
+    }
+  },
+  "2:4988": {
+    "inputs": {
+      "value": [
+        "2:5561",
+        1
+      ]
+    },
+    "class_type": "PrimitiveInt",
+    "_meta": {
+      "title": "number of frames"
+    }
+  },
+  "2:1241": {
+    "inputs": {
+      "positive": [
+        "2:2483",
+        0
+      ],
+      "negative": [
+        "2:2612",
+        0
+      ],
+      "frame_rate": [
+        "2:5017",
+        0
+      ]
+    },
+    "class_type": "LTXVConditioning",
+    "_meta": {
+      "title": "LTXVConditioning"
+    }
+  },
+  "2:2483": {
+    "inputs": {
+      "text": [
+        "2:5556",
+        0
+      ],
+      "clip": [
+        "1:32",
+        0
+      ]
+    },
+    "class_type": "CLIPTextEncode",
+    "_meta": {
+      "title": "CLIP Text Encode (Positive Prompt)"
+    }
+  },
+  "2:2612": {
+    "inputs": {
+      "text": [
+        "7",
+        0
+      ],
+      "clip": [
+        "1:32",
+        0
+      ]
+    },
+    "class_type": "CLIPTextEncode",
+    "_meta": {
+      "title": "CLIP Text Encode (Negative Prompt)"
+    }
+  },
+  "4:5571": {
+    "inputs": {
+      "av_latent": [
+        "4:5570",
+        0
+      ]
+    },
+    "class_type": "LTXVSeparateAVLatent",
+    "_meta": {
+      "title": "Separate A/V Latent"
+    }
+  },
+  "4:5567": {
+    "inputs": {
+      "cfg": 1,
+      "model": [
+        "1:30",
+        0
+      ],
+      "positive": [
+        "2:5558",
+        0
+      ],
+      "negative": [
+        "2:5560",
+        0
+      ]
+    },
+    "class_type": "CFGGuider",
+    "_meta": {
+      "title": "CFG Guider"
+    }
+  },
+  "4:5566": {
+    "inputs": {
+      "noise_seed": 42
+    },
+    "class_type": "RandomNoise",
+    "_meta": {
+      "title": "RandomNoise"
+    }
+  },
+  "4:5568": {
+    "inputs": {
+      "sampler_name": "euler_ancestral"
+    },
+    "class_type": "KSamplerSelect",
+    "_meta": {
+      "title": "KSamplerSelect"
+    }
+  },
+  "4:5569": {
+    "inputs": {
+      "sigmas": "1.0, 0.99375, 0.9875, 0.98125, 0.975, 0.909375, 0.725, 0.421875, 0.0"
+    },
+    "class_type": "ManualSigmas",
+    "_meta": {
+      "title": "ManualSigmas"
+    }
+  },
+  "4:5570": {
+    "inputs": {
+      "noise": [
+        "4:5566",
+        0
+      ],
+      "guider": [
+        "4:5567",
+        0
+      ],
+      "sampler": [
+        "4:5568",
+        0
+      ],
+      "sigmas": [
+        "4:5569",
+        0
+      ],
+      "latent_image": [
+        "3:5565",
+        0
+      ]
+    },
+    "class_type": "SamplerCustomAdvanced",
+    "_meta": {
+      "title": "SamplerCustomAdvanced"
+    }
+  },
+  "12": {
+    "inputs": {
+      "audio": [
+        "5:5573",
+        0
+      ]
+    },
+    "class_type": "PreviewAudio",
+    "_meta": {
+      "title": "Preview Audio"
+    }
+  },
+  "6": {
+    "inputs": {
+      "value": ""
+    },
+    "class_type": "PrimitiveStringMultiline",
+    "_meta": {
+      "title": "Prompt (positive)"
+    }
   }
 }

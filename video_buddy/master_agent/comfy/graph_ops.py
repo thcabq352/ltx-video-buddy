@@ -54,8 +54,18 @@ OPTIONAL_TOWER_CLASS_TYPES = frozenset(
         "MMAudioFeatureUtils",
     }
 )
+# Preview / inspect-only nodes with no encode consumers. Missing pack → bypass.
+# OlmDragCrop is NOT here: Movie Builder wires it into ImageExists → reference
+# latent → KSampler. Silent-bypass would 400 on /prompt or drop the still.
+OPTIONAL_COSMETIC_CLASS_TYPES = frozenset(
+    {
+        "PanoramaViewerNode",
+    }
+)
 OPTIONAL_NODE_CLASS_TYPES = (
-    OPTIONAL_ACCELERATOR_CLASS_TYPES | OPTIONAL_TOWER_CLASS_TYPES
+    OPTIONAL_ACCELERATOR_CLASS_TYPES
+    | OPTIONAL_TOWER_CLASS_TYPES
+    | OPTIONAL_COSMETIC_CLASS_TYPES
 )
 _ACCELERATOR_NAME_MARKERS = (
     "teacache",
@@ -649,6 +659,7 @@ __all__ = [
     "ALLOWED_OPS",
     "LTX_TEACACHE_VARIANTS",
     "OPTIONAL_ACCELERATOR_CLASS_TYPES",
+    "OPTIONAL_COSMETIC_CLASS_TYPES",
     "TEACACHE_CLASS",
     "TEACACHE_LTX_DEFAULTS",
     "TEACACHE_LTX_MODEL_TYPE",

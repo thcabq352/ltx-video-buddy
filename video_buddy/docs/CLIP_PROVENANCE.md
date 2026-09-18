@@ -22,8 +22,7 @@ these.
 Do not write `<stem>.provenance.json` for new clips. A read-only fallback
 still opens a legacy `.provenance.json` if a `.buddy.json` is missing.
 The public H3 BMX still ships the original showcase sidecar as
-[`docs/demo/H3-SHOWCASE-BMX-8s.provenance.json`](../../docs/demo/H3-SHOWCASE-BMX-8s.provenance.json)
-(also [`docs/showcase/h3-bmx/`](../../docs/showcase/h3-bmx/)).
+[`docs/demo/H3-SHOWCASE-BMX-8s.provenance.json`](../../docs/demo/H3-SHOWCASE-BMX-8s.provenance.json).
 
 ## Required fields (every attempt)
 

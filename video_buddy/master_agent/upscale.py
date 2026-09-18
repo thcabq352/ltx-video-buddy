@@ -1,12 +1,13 @@
 """Post-stage video upscaling via ComfyUI.
 
 Two methods:
-  rtx     — NVIDIA RTX Video Super Resolution (fast, fixed-function hardware
-            path via the RTX nodes pack). Patches the validated Mickmumpitz
-            RTX-SR workflow: node 12 (VHS_LoadVideo) + node 14 (resolution).
-  seedvr2 — SeedVR2 diffusion upscaler (slow, production-grade). Minimal
+  seedvr2 — SeedVR2 diffusion upscaler (default). Minimal
             VHS_LoadVideo -> SeedVR2 -> VHS_VideoCombine chain using the
+            in-repo ``workflows/upscale_seedvr2_api.json`` and
             models/SEEDVR2/ weights.
+  rtx     — NVIDIA RTX Video Super Resolution. Gated on an on-disk
+            template under ``AI-RENDERING-EXAMPLE FILES/`` (gitignored).
+            Raises FileNotFoundError with the expected path when missing.
 
 Both reuse the Orchestrator's submit/poll/resolve machinery — nothing new.
 """
@@ -30,6 +31,14 @@ RTX_WORKFLOW = (
 SEEDVR2_WORKFLOW = WORKFLOWS_DIR / "upscale_seedvr2_api.json"
 
 
+def _require_workflow(path: Path, method: str) -> Path:
+    if not path.is_file():
+        raise FileNotFoundError(
+            f"upscale method={method!r} template not found: {path}"
+        )
+    return path
+
+
 def _patch_workflow(
     method: str,
     video_name: str,
@@ -39,13 +48,13 @@ def _patch_workflow(
     seedvr2_resolution: int,
 ) -> dict:
     if method == "rtx":
-        wf = json.loads(RTX_WORKFLOW.read_text(encoding="utf-8"))
+        wf = json.loads(_require_workflow(RTX_WORKFLOW, method).read_text(encoding="utf-8"))
         wf["12"]["inputs"]["video"] = video_name
         wf["14"]["inputs"]["resolution"] = rtx_resolution
         wf["17"]["inputs"]["filename_prefix"] = f"rtx_upscale_{run_id}"
         return wf
     if method == "seedvr2":
-        wf = json.loads(SEEDVR2_WORKFLOW.read_text(encoding="utf-8"))
+        wf = json.loads(_require_workflow(SEEDVR2_WORKFLOW, method).read_text(encoding="utf-8"))
         wf["1"]["inputs"]["video"] = video_name
         wf["4"]["inputs"]["resolution"] = seedvr2_resolution
         wf["6"]["inputs"]["filename_prefix"] = f"seedvr2_upscale_{run_id}"
@@ -56,7 +65,7 @@ def _patch_workflow(
 def upscale_video(
     video_path: str | Path,
     *,
-    method: str = "rtx",
+    method: str = "seedvr2",
     run_id: Optional[str] = None,
     rtx_resolution: str = "2160p",
     seedvr2_resolution: int = 1080,
@@ -67,6 +76,12 @@ def upscale_video(
     video_path = Path(video_path)
     if not video_path.is_file():
         raise FileNotFoundError(f"video not found: {video_path}")
+    if method == "rtx":
+        _require_workflow(RTX_WORKFLOW, method)
+    elif method == "seedvr2":
+        _require_workflow(SEEDVR2_WORKFLOW, method)
+    else:
+        raise ValueError(f"unknown upscale method: {method!r} (rtx | seedvr2)")
     client = client or ComfyClient()
     run_id = run_id or video_path.stem[:12]
 

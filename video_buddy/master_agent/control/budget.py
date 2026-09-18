@@ -203,7 +203,12 @@ def frames_for_scene(duration_s: float, variant: str | None = None) -> int:
     from master_agent.config import frames_for_duration, get_variant_gen
 
     gen = get_variant_gen(variant)
-    return frames_for_duration(duration_s, fps=int(gen["fps"]), snap=int(gen["frame_snap"]))
+    return frames_for_duration(
+        duration_s,
+        fps=int(gen["fps"]),
+        snap=int(gen["frame_snap"]),
+        variant=variant,
+    )
 
 
 def admit_scene(

@@ -21,12 +21,14 @@ from master_agent.comfy.catalog import (
     resolve_workflow_path,
 )
 from master_agent.comfy.cli_run import list_templates, prepare_run
+from master_agent.comfy.validator import validate_workflow
 from master_agent.comfy.workflow_patcher import (
     _find_nodes_by_class,
+    image_feeds_sampler_latent,
     load_and_patch_workflow,
     load_workflow_template,
 )
-from master_agent.config import WORKFLOW_FILES, WORKFLOWS_DIR, snap_ltx_frames
+from master_agent.config import OBJECT_INFO_CACHE, WORKFLOW_FILES, WORKFLOWS_DIR, snap_ltx_frames
 
 
 @pytest.fixture(autouse=True)
@@ -88,13 +90,15 @@ def test_patcher_accepts_every_shipped_template():
         assert snap_ltx_frames(meta["frames"]) == meta["frames"]
         assert meta["frames"] >= 9
         assert (meta["frames"] - 1) % 8 == 0
-        texts = [
-            node["inputs"].get("text")
-            for node in wf.values()
-            if isinstance(node, dict) and isinstance(node.get("inputs"), dict)
-            and "text" in node["inputs"]
-            and not isinstance(node["inputs"]["text"], list)
-        ]
+        texts = []
+        for node in wf.values():
+            if not isinstance(node, dict) or not isinstance(node.get("inputs"), dict):
+                continue
+            inputs = node["inputs"]
+            for key in ("text", "prompt", "value", "string"):
+                val = inputs.get(key)
+                if isinstance(val, str):
+                    texts.append(val)
         assert "slow push into a neon alley" in texts, vid
 
 
@@ -122,7 +126,16 @@ def test_local_gguf_rewrites_unet_loader_gguf(tmp_path, monkeypatch):
     assert ggufs
     assert ggufs[0][1]["inputs"]["unet_name"].endswith(".gguf")
     tes = _find_nodes_by_class(wf, "LTXAVTextEncoderLoader")
-    assert tes[0][1]["inputs"]["text_encoder"].startswith("gemma4-12b-heretic")
+    clips = _find_nodes_by_class(wf, "CLIPLoader")
+    if tes:
+        assert tes[0][1]["inputs"]["text_encoder"].startswith("gemma4-12b-heretic")
+    else:
+        names = [
+            n[1]["inputs"].get("clip_name", "")
+            for n in clips
+            if "enhancer" not in str((n[1].get("_meta") or {}).get("title") or "").lower()
+        ]
+        assert any(str(n).startswith("gemma4-12b-heretic") for n in names), names
 
 
 def test_stub_ckpt_remapped_to_official_transformer():
@@ -141,8 +154,16 @@ def test_stub_ckpt_remapped_to_official_transformer():
     assert unets, "CheckpointLoaderSimple should rewrite to UNETLoader"
     assert unets[0][1]["inputs"]["unet_name"] == official
     tes = _find_nodes_by_class(wf, "LTXAVTextEncoderLoader")
-    assert tes
-    assert tes[0][1]["inputs"]["text_encoder"].startswith("gemma4-12b-with-proj-ltx-2.5")
+    clips = _find_nodes_by_class(wf, "CLIPLoader")
+    if tes:
+        assert tes[0][1]["inputs"]["text_encoder"].startswith("gemma4-12b-with-proj-ltx-2.5")
+    else:
+        names = [
+            n[1]["inputs"].get("clip_name", "")
+            for n in clips
+            if "enhancer" not in str((n[1].get("_meta") or {}).get("title") or "").lower()
+        ]
+        assert any("gemma4-12b-with-proj-ltx-2.5" in str(n) for n in names), names
 
 
 def test_generate_mode_prepares_each_ltx25_id():
@@ -160,7 +181,9 @@ def test_resolve_workflow_path_for_alias_and_id():
 
 def test_load_template_does_not_fall_back_to_base_for_ltx25():
     raw = load_workflow_template("ltx25_flf2v")
-    assert _find_nodes_by_class(raw, "LTXVImgToVideo")
+    assert _find_nodes_by_class(raw, "LTXVImgToVideo") or _find_nodes_by_class(
+        raw, "LTXVImgToVideoInplace"
+    )
     assert _find_nodes_by_class(raw, "LoadImage")
 
 
@@ -184,3 +207,96 @@ def test_extra_ltx25_workflow_dirs_finds_sibling_tree(tmp_path, monkeypatch):
     monkeypatch.setattr("master_agent.config.PROJECT_ROOT", tmp_path / "video_buddy")
     dirs = extra_ltx25_workflow_dirs()
     assert extra.resolve() in [d.resolve() for d in dirs]
+
+
+_VIDEO_LTX25 = [vid for vid in SHIPPED_LTX25 if vid != "ltx25_t2a"]
+_DECODE_CLASSES = {
+    "LTXVTiledVAEDecode",
+    "VAEDecode",
+    "VAEDecodeTiled",
+    "LTXVSpatioTemporalTiledVAEDecode",
+}
+_SAVER_CLASSES = {"CreateVideo", "SaveVideo", "VHS_VideoCombine"}
+_SAMPLER_CLASSES = {"KSampler", "KSamplerAdvanced", "SamplerCustomAdvanced", "LanPaint_KSampler"}
+
+
+def _nodes_of(wf, *classes):
+    out = []
+    for nid, node in wf.items():
+        if isinstance(node, dict) and node.get("class_type") in classes:
+            out.append((nid, node))
+    return out
+
+
+def test_shipped_ltx25_video_graphs_are_not_stubs():
+    for vid in _VIDEO_LTX25:
+        path = WORKFLOWS_DIR / LTX25_FILES[vid]
+        assert path.stat().st_size >= 2000, f"{vid} is still a stub ({path.stat().st_size} bytes)"
+        raw = load_workflow_template(vid)
+        decodes = _nodes_of(raw, *_DECODE_CLASSES)
+        assert decodes, f"{vid} missing decode node"
+        savers = _nodes_of(raw, *_SAVER_CLASSES)
+        assert savers, f"{vid} missing video saver"
+        vhs = _nodes_of(raw, "VHS_VideoCombine")
+        for nid, node in vhs:
+            images = (node.get("inputs") or {}).get("images")
+            if isinstance(images, list) and images:
+                src = raw.get(str(images[0]))
+                src_class = src.get("class_type") if isinstance(src, dict) else None
+                assert src_class not in _SAMPLER_CLASSES, (
+                    f"{vid} wires {src_class} LATENT into VHS_VideoCombine.images"
+                )
+
+
+def test_first_frame_widget_feeds_sampler_after_patch():
+    for vid in ("ltx25_t2v_i2v", "ltx25_t2v_i2v_two_stage", "ltx25_flf2v"):
+        wf, _meta = load_and_patch_workflow(
+            vid,
+            prompt="neon alley",
+            image_name="first.png",
+            duration_s=2.0,
+            seed=1,
+        )
+        assert image_feeds_sampler_latent(wf, "first.png"), (
+            f"{vid}: first.png is unused (dangling LoadImage only)"
+        )
+
+
+def test_validate_committed_ltx25_rejects_latent_to_image():
+    assert OBJECT_INFO_CACHE.is_file()
+    import json
+
+    object_info = json.loads(OBJECT_INFO_CACHE.read_text(encoding="utf-8"))
+    for vid in _VIDEO_LTX25:
+        wf, _meta = load_and_patch_workflow(
+            vid, prompt="catalog validate", duration_s=2.0, seed=1, image_name="first.png"
+        )
+        report = validate_workflow(
+            wf, object_info, file_label=vid, object_info_source="cache"
+        )
+        latent_image = [
+            err
+            for err in report.errors
+            if "LATENT" in str(err) and "IMAGE" in str(err)
+        ]
+        assert not latent_image, f"{vid} LATENT→IMAGE: {latent_image}"
+
+
+def test_ltx25_patch_does_not_spray_23_checkpoint():
+    wf, _meta = load_and_patch_workflow(
+        "ltx25_t2v_i2v",
+        prompt="neon alley",
+        duration_s=2.0,
+        seed=1,
+        image_name="first.png",
+    )
+    banned = ("ltx-2.3", "ltx2.3", "10eros", "10Eros", "EROS")
+    for nid, node in _nodes_of(wf, "UNETLoader", "UnetLoaderGGUF", "DiffusionModelLoader"):
+        name = str((node.get("inputs") or {}).get("unet_name") or "")
+        assert "ltx-2.5" in name.lower() or name.lower().endswith(".gguf"), (
+            f"{nid} unet_name={name!r} is not an LTX 2.5 transformer"
+        )
+        assert not any(tok.lower() in name.lower() for tok in banned), name
+    dumped = str(wf)
+    assert "LTX2.3_DISTILLED" not in dumped
+    assert "10Eros" not in dumped

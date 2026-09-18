@@ -2,8 +2,7 @@
 
 **Public demo (photoreal):** golden-hour BMX berm → backflip → dusty stick,
 ~8s, MiniMax H3 via Video Buddy / Comfy. Poster + provenance live at
-[`docs/demo/`](../../../docs/demo/) and
-[`docs/showcase/h3-bmx/`](../../../docs/showcase/h3-bmx/) (in-repo, no
+[`docs/demo/`](../../../docs/demo/) (in-repo, no
 Tailscale).
 
 Queueable ComfyUI API-format graphs (`POST /prompt`). Native ComfyUI ≥0.30

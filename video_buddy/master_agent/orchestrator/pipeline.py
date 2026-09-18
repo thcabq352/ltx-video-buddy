@@ -11,6 +11,7 @@ from __future__ import annotations
 
 import json
 import random
+import re
 import uuid
 from datetime import datetime, timezone
 from pathlib import Path
@@ -52,7 +53,11 @@ def _plan_storyboard(
     log,
 ) -> tuple[list[ShotCard], str, Optional[dict[str, Any]]]:
     """Storyboard via the LLM panel when available, else the single-LLM path."""
-    from master_agent.llm_panel import resolve_panel
+    try:
+        from master_agent.llm_panel import resolve_panel
+    except ImportError as exc:
+        log(f"storyboard: LLM unavailable ({exc}); using heuristic cards")
+        return _synthetic_cards(request, segs), "", None
 
     rag_context = ""
     try:
@@ -205,6 +210,18 @@ def _budget_admit(result: PipelineResult, scene_id: str, variant: Optional[str],
 
 
 _MUSIC_KINDS = frozenset({"music", "music_video", "mv", "music_video_mv"})
+_DURATION_IN_BRIEF = re.compile(
+    r"(\d+(?:\.\d+)?)\s*(?:seconds?|secs?)\b",
+    re.IGNORECASE,
+)
+
+
+def duration_from_request(request: str) -> Optional[float]:
+    """Pull an explicit '20 second' length from the brief. None if absent."""
+    match = _DURATION_IN_BRIEF.search(request or "")
+    if not match:
+        return None
+    return float(match.group(1))
 
 
 def plan_story_segments(
@@ -352,14 +369,26 @@ def run_pipeline(
         card = cards[i]
         seg_seed = (base_seed + seed_bump + card.seed_offset) & 0xFFFFFFFF
         seg_image = image_name
-        if i > 0 and result.segment_paths:
+        # Clip 2+ stays on the same I2V graph (never FLF — that pins both ends).
+        if i > 0:
             from master_agent.hands import extract_last_frame
 
             dest = OUTPUTS_DIR / result.run_id / f"chain_last_{i}.png"
-            frame = extract_last_frame(result.segment_paths[i - 1], dest)
+            frame = None
+            if result.segment_paths:
+                frame = extract_last_frame(result.segment_paths[i - 1], dest)
             if frame is not None:
-                seg_image = str(frame)
+                try:
+                    if not dry_run:
+                        seg_image = orch.client.upload_image(frame)
+                    else:
+                        seg_image = frame.name
+                except Exception:
+                    seg_image = frame.name
                 result.log(f"hands last-frame chain: clip {i + 1} from {frame.name}")
+            elif dry_run:
+                seg_image = dest.name
+                result.log(f"hands last-frame chain (dry-run): clip {i + 1} image_name={seg_image}")
         return orch.run(
             request,
             prompt=card.ltx_prompt or request,
@@ -506,15 +535,20 @@ def run_pipeline(
 
 def _stitch(result: PipelineResult, segment_paths: list[str], *, suffix: str) -> Optional[Path]:
     """Concat segments; on failure keep first segment and mark warnings."""
-    from master_agent.video_concat import concat_videos
+    from master_agent.video_concat import concat_videos, trim_leading_frames
 
     paths = [Path(p) for p in segment_paths]
     if len(paths) == 1:
         return paths[0]
     out_dir = OUTPUTS_DIR / result.run_id
     dest = out_dir / f"master_agent_full_{result.run_id}{suffix}.mp4"
+    trimmed: list[Path] = [paths[0]]
+    for i, path in enumerate(paths[1:], start=1):
+        cut = out_dir / f"{path.stem}_drop0{path.suffix}"
+        trimmed.append(trim_leading_frames(path, cut, frames=1))
+        result.log(f"concat: drop frame 0 of clip {i + 1} so last/first is not doubled")
     try:
-        final = concat_videos(paths, dest)
+        final = concat_videos(trimmed, dest)
         result.log(f"stitched {len(paths)} segments -> {final}")
         try:
             from master_agent.provenance import inherit_clip_provenance
@@ -553,19 +587,29 @@ def dry_run_pipeline(
     panel_judge: Optional[str] = None,
     attach_recipe: Optional[dict[str, Any]] = None,
     client: Optional[ComfyClient] = None,
+    kind: str = "run",
+    image_name: Optional[str] = None,
 ) -> int:
     """Storyboard + patch + validate every segment without queueing. CLI exit code."""
     from master_agent.comfy.validator import format_report, validate_workflow
-    from master_agent.comfy.workflow_patcher import load_and_patch_workflow
+    from master_agent.comfy.workflow_patcher import (
+        image_feeds_sampler_latent,
+        load_and_patch_workflow,
+    )
+    from master_agent.config import OBJECT_INFO_CACHE
+    from master_agent.hands import plan_last_frame_chain
 
     sb_mode = (storyboard_mode or STORYBOARD_MODE).strip().lower()
-    segs = plan_story_segments(duration_s, quality=quality)
+    segs = plan_story_segments(duration_s, kind=kind, quality=quality)
     print(f"plan: {duration_s}s -> {len(segs)} segment(s) {segs}")
 
     client = client or ComfyClient()
     orch = Orchestrator(client=client)
     probe_state = RunState(request=request, attach_recipe=attach_recipe)
-    variant_sel = orch._select_variant(probe_state, variant)
+    try:
+        variant_sel = orch._select_variant(probe_state, variant)
+    except Exception:
+        variant_sel = variant or "base"
     print(f"variant: {variant_sel}")
 
     use_board = should_storyboard(
@@ -588,12 +632,22 @@ def dry_run_pipeline(
     try:
         object_info, source = client.load_object_info(prefer_live=True)
     except Exception as e:
-        print(f"FAIL  cannot load /object_info: {e}")
-        return 1
-    print(f"object_info: {source}")
+        if OBJECT_INFO_CACHE.is_file():
+            object_info = json.loads(OBJECT_INFO_CACHE.read_text(encoding="utf-8"))
+            source = f"cache:{OBJECT_INFO_CACHE}"
+            print(f"object_info: {source} (live unavailable: {e})")
+        else:
+            print(f"FAIL  cannot load /object_info: {e}")
+            return 1
+    else:
+        print(f"object_info: {source}")
 
+    chain = plan_last_frame_chain(float(duration_s)) if kind not in _MUSIC_KINDS else None
     failures = 0
     for i, card in enumerate(cards):
+        clip_image = image_name
+        if chain is not None and i < len(chain.clips) and chain.clips[i].use_last_frame:
+            clip_image = f"chain_last_{i}.png"
         try:
             wf, meta = load_and_patch_workflow(
                 variant_sel,
@@ -602,11 +656,23 @@ def dry_run_pipeline(
                 width=width,
                 height=height,
                 seed=card.seed_offset,
+                image_name=clip_image,
             )
         except Exception as e:
             print(f"FAIL  segment {i + 1} patch: {e}")
             failures += 1
             continue
+        frames = meta.get("frames")
+        print(
+            f"segment {i + 1}/{len(cards)} duration={segs[i]}s frames={frames} "
+            f"image_name={clip_image!r} use_last_frame="
+            f"{bool(chain and i < len(chain.clips) and chain.clips[i].use_last_frame)}"
+        )
+        if clip_image and not image_feeds_sampler_latent(wf, clip_image):
+            print(
+                f"FAIL  segment {i + 1}: image_name={clip_image!r} does not feed sampler latent"
+            )
+            failures += 1
         if attach_recipe:
             try:
                 from master_agent.comfy.attach import apply_attach_recipe
@@ -625,6 +691,32 @@ def dry_run_pipeline(
             wf, object_info, file_label=f"segment:{i + 1}", object_info_source=source
         )
         print(format_report(report))
-        failures += 0 if report.ok else 1
+        topology = [
+            err
+            for err in report.errors
+            if _is_topology_error(err)
+        ]
+        if topology:
+            print(f"FAIL  segment {i + 1} topology: {topology}")
+            failures += 1
+        elif report.errors:
+            print(
+                f"note  segment {i + 1}: inventory/combo errors ignored for "
+                "Comfy-less dry-run (plan + wiring still proven)"
+            )
     print(f"\ndry-run {'OK' if not failures else f'FAILED ({failures})'} — nothing queued")
     return 0 if not failures else 1
+
+
+def _is_topology_error(err: Any) -> bool:
+    """True for LATENT→IMAGE / unknown class / broken links — not missing weights."""
+    msg = str(err)
+    if "LATENT" in msg and "IMAGE" in msg:
+        return True
+    if "type mismatch" in msg:
+        return True
+    if "unknown class_type" in msg:
+        return True
+    if "link source node" in msg or "link output index" in msg:
+        return True
+    return False

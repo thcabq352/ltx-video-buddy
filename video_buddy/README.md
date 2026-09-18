@@ -107,7 +107,7 @@ python -m master_agent comfy run --mode raw --json workflow.json
 python -m master_agent comfy run --mode template --template lipsync --prepare --out prepared.json
 # Previs attach (buddy.comfy.attach/v1) — dry-run default; --submit for live /prompt
 python -m master_agent comfy attach --recipe previs.json --json workflow.json --out patched.json
-# Contract: https://github.com/thcabq352/your-video-buddy/blob/main/docs/COMFY_ATTACH_CONTRACT.md
+# Contract: docs/COMFY_ATTACH_CONTRACT.md
 # Operator notes: docs/COMFY_ATTACH.md
 
 # Orchestrated generation (the Director):
@@ -344,16 +344,18 @@ then stitches with Remotion at 1080p (`out/MV-FIXED.mp4`). See
 
 ## Upscale post-stage
 
-`--upscale rtx|seedvr2` on `run`/`fractal`/`music` (or
+`--upscale seedvr2|rtx` on `run`/`fractal`/`music` (or
 `master_agent.upscale.upscale_video(path, method=...)`) pushes the final
-video through ComfyUI:
+video through ComfyUI. Default method is **`seedvr2`**.
 
-- `rtx` — NVIDIA RTX Video Super Resolution (fast), via the validated
-  Mickmumpitz RTX-SR workflow (nodes 12/14 patched per input).
 - `seedvr2` — SeedVR2 diffusion upscaler (slow, production-grade) via
-  `workflows/upscale_seedvr2_api.json`, a minimal
+  the in-repo `workflows/upscale_seedvr2_api.json`, a minimal
   VHS_LoadVideo → SeedVR2 → VHS_VideoCombine chain on the `models/SEEDVR2/`
   weights.
+- `rtx` — NVIDIA RTX Video Super Resolution. The template lives under
+  gitignored `workflows/AI-RENDERING-EXAMPLE FILES/` and is **not**
+  shipped on a clean clone. `method="rtx"` raises `FileNotFoundError`
+  with the expected path when that file is missing.
 
 ## Persona, soul & intake interview (default-on)
 
@@ -528,8 +530,7 @@ local models (19-27GB) and can take several minutes — allow long timeouts.
 ## Status (2026-09-18)
 
 - **MiniMax H3 public showcase.** Photoreal BMX still + originating
-  provenance are in [`docs/demo/`](../docs/demo/) and
-  [`docs/showcase/h3-bmx/`](../docs/showcase/h3-bmx/) (linked from the
+  provenance are in [`docs/demo/`](../docs/demo/) (linked from the
   repo-root README). A playable 720p MP4 is **not** in git until a
   complete attach (or other untruncated copy) lands.
 - **Music-video Remotion mode.** `python -m master_agent mv render --audio …`
@@ -607,10 +608,10 @@ local models (19-27GB) and can take several minutes — allow long timeouts.
   (`cut_to_windows`), muxes the track (`mux_audio` in `video_concat.py`).
   `--visual fractal` skips ComfyUI entirely. `run --audio` auto-routes music
   intent (keywords or audio longer than one segment) here.
-- **Upscale post-stage** (`master_agent/upscale.py`, `--upscale`): `rtx` via
-  the validated RTX-SR workflow (verified live: 320x240 → 1920x1080),
-  `seedvr2` via new `workflows/upscale_seedvr2_api.json` (minimal chain on
-  the SEEDVR2 weights, validates PASS live).
+- **Upscale post-stage** (`master_agent/upscale.py`, `--upscale`): default
+  `seedvr2` via in-repo `workflows/upscale_seedvr2_api.json`. `rtx` is
+  gated on a gitignored Mickmumpitz RTX-SR file and raises
+  `FileNotFoundError` on a clean clone.
 - **Web UI**: Fractal + Music tabs with `POST /api/fractal`, `/api/music`,
   `/api/upload` (state/uploads/); GPU gate covers music-shots jobs, fractal
   jobs overlap. 91 pytest green.
