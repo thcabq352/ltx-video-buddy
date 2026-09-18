@@ -28,7 +28,6 @@ from master_agent.config import (
     JUDGE_ENABLED,
     MAX_JUDGE_ROUNDS,
     MAX_RETRIES,
-    OUTPUTS_DIR,
     POWER_MODE,
     POWER_MODE_MAX_OPS,
     POWER_MODE_REPAIR,
@@ -51,7 +50,14 @@ from master_agent.orchestrator.state import (
     LOOP_STARTED,
     RunState,
 )
-from master_agent.provenance import latest_revise_notes, persist_clip_provenance, read_clip_provenance
+from master_agent.provenance import (
+    apply_sidecar_to_state,
+    latest_revise_notes,
+    persist_clip_provenance,
+    plan_clip_paths,
+    planned_clip_path,
+    read_sidecar_for_state,
+)
 
 # Param hints the judge may tune (whitelist; anything else is ignored)
 RETUNE_ALLOWED = {"steps", "cfg", "stg_scale", "stg_blocks", "sampler_name", "seed"}
@@ -236,12 +242,12 @@ class Orchestrator:
         return False
 
     def _resolve(self, st: RunState) -> bool:
-        OUTPUTS_DIR.mkdir(parents=True, exist_ok=True)
+        dst = planned_clip_path(st)
+        dst.parent.mkdir(parents=True, exist_ok=True)
         for info in self._output_files:
             src = ComfyClient.resolve_output_path(info)
             if not src.is_file():
                 continue
-            dst = OUTPUTS_DIR / f"{st.run_id}_{src.name}"
             try:
                 shutil.copy2(src, dst)
                 st.video_path = str(dst)
@@ -263,10 +269,11 @@ class Orchestrator:
         from pathlib import Path
 
         while True:
-            prior = read_clip_provenance(st.video_path)
+            prior = read_sidecar_for_state(st)
             if prior:
+                lin = prior.get("lineage") or {}
                 st.log(
-                    f"provenance read attempt={prior.get('attempt')} "
+                    f"provenance read attempt_id={lin.get('attempt_id')} "
                     f"hash={(prior.get('hash') or '')[:12]}"
                 )
             if st.dry_run and not (st.video_path and Path(st.video_path).is_file()):
@@ -325,6 +332,13 @@ class Orchestrator:
                 st.transition("DONE")
                 return
 
+            prior = read_sidecar_for_state(st)
+            if prior:
+                apply_sidecar_to_state(st, prior)
+                st.log(
+                    f"provenance source-of-truth "
+                    f"{(prior.get('lineage') or {}).get('attempt_id')}"
+                )
             plan = self._revise_plan(st, result)
             if not plan.actionable:
                 st.loop_status = LOOP_EXHAUSTED
@@ -339,6 +353,7 @@ class Orchestrator:
             )
             st.attempt += 1
             st.judge_round = st.attempt - 1
+            persist_clip_provenance(st, revise_notes=latest_revise_notes(st))
 
             if st.dry_run:
                 st.transition("JUDGE")
@@ -451,6 +466,7 @@ class Orchestrator:
         control_pack_present: bool = False,
         control_pack_used: Optional[dict[str, bool]] = None,
         previs_source: str = "",
+        shot_index: int = 1,
     ) -> RunState:
         run_id = uuid.uuid4().hex[:12]
         st = RunState(
@@ -458,6 +474,7 @@ class Orchestrator:
             run_id=run_id,
             prompt=prompt or request,
             shot=shot,
+            shot_index=max(1, int(shot_index or 1)),
             duration_s=duration_s,
             quality=quality,
             seed=seed,
@@ -483,6 +500,8 @@ class Orchestrator:
         try:
             st.variant = self._select_variant(st, variant)
             st.log(f"variant={st.variant} duration={duration_s}s quality={quality or 'default'}")
+            plan_clip_paths(st)
+            persist_clip_provenance(st, revise_notes=latest_revise_notes(st))
 
             if st.dry_run:
                 st.log("self-improve dry-run: skip Comfy queue, close judge→revise→rejudge")

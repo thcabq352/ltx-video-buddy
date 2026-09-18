@@ -242,6 +242,7 @@ def _shots_visual(
             kind="music_video",
             music_bed_attached=True,
             audio_path=str(audio_path),
+            shot_index=i + 1,
         )
         if st.state != "DONE" or not st.video_path:
             record["status"] = "error"
@@ -275,7 +276,7 @@ def _shots_visual(
                 clip_paths[0],
                 final,
                 revise_notes="music mux: source track as music bed",
-                extra={"prompt": request},
+                extra={"brief": request, "prompt": request},
             )
         except Exception as e:
             log(f"provenance mux skipped: {e}")

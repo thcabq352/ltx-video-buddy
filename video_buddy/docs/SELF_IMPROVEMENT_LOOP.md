@@ -96,9 +96,9 @@ until pass or `max_judge_rounds` (`--max-judge-rounds` / `MAX_JUDGE_ROUNDS`).
 - `quality_bar` — `{evaluated, skipped, fails, pass}`
 - `revise_history` — per-attempt prompt/param deltas
 - `provenance` / `provenance_history` / `provenance_sidecar` — ClipProvenance
-  (`buddy.clip.provenance/v1`) keyed by `path` / `hash`. Same object is
-  written next to the clip as `<clip_stem>.provenance.json` whenever a file
-  exists. See [CLIP_PROVENANCE.md](CLIP_PROVENANCE.md).
+  (`buddy.clip.provenance/v1`) keyed by `output_path` / `hash`. Same object
+  is written next to the planned clip as `{output_dir}/shot-N.buddy.json`.
+  Sidecar is read before each revise. See [CLIP_PROVENANCE.md](CLIP_PROVENANCE.md).
 
 ## Remaining holes
 

@@ -91,6 +91,13 @@ class RunState:
     provenance: dict[str, Any] = field(default_factory=dict)
     provenance_history: list[dict[str, Any]] = field(default_factory=list)
     provenance_sidecar: str = ""
+    shot_index: int = 1
+    shot_id: str = ""
+    output_dir: str = ""
+    planned_clip: str = ""
+    parent_shot_id: str = ""
+    parent_attempt_id: str = ""
+    fps: Optional[int] = None
 
     # Closed loop without Comfy / GPU (tests + --self-improve-dry)
     dry_run: bool = False

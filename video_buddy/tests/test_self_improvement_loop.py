@@ -101,9 +101,12 @@ def test_decide_action_exhausted_is_not_accept():
 
 
 def _dry_orch(tmp_path=None, **kwargs) -> RunState:
-    runs = tmp_path / "runs" if tmp_path is not None else None
+    runs = tmp_path / "runs" if tmp_path is not None else Path("/tmp/buddy-runs")
+    outs = tmp_path / "outputs" if tmp_path is not None else Path("/tmp/buddy-outputs")
     with patch("master_agent.orchestrator.director.DIRECTOR_LLM", False), patch(
-        "master_agent.orchestrator.machine.RUNS_DIR", runs or Path("/tmp/buddy-runs")
+        "master_agent.orchestrator.machine.RUNS_DIR", runs
+    ), patch(
+        "master_agent.provenance.OUTPUTS_DIR", outs
     ):
         return Orchestrator().run(dry_run=True, judge_enabled=False, **kwargs)
 
@@ -174,6 +177,8 @@ def test_dry_loop_never_queues_comfy(tmp_path):
 
     with patch("master_agent.orchestrator.director.DIRECTOR_LLM", False), patch(
         "master_agent.orchestrator.machine.RUNS_DIR", tmp_path / "runs"
+    ), patch(
+        "master_agent.provenance.OUTPUTS_DIR", tmp_path / "outputs"
     ):
         st = Orchestrator(client=BoomClient()).run(
             "music video for a synthwave track",
@@ -214,6 +219,8 @@ def test_max_attempts_sets_exhausted_terminal_state(tmp_path):
         side_effect=lambda ctx=None: sticky_fail(ctx),
     ), patch(
         "master_agent.orchestrator.machine.RUNS_DIR", tmp_path / "runs"
+    ), patch(
+        "master_agent.provenance.OUTPUTS_DIR", tmp_path / "outputs"
     ):
         st = Orchestrator().run(
             "music video for a synthwave track",
@@ -259,6 +266,8 @@ def test_live_rerun_path_repatches_without_real_comfy(tmp_path):
         orch, "_resolve", ok_resolve
     ), patch(
         "master_agent.orchestrator.machine.RUNS_DIR", tmp_path / "runs"
+    ), patch(
+        "master_agent.provenance.OUTPUTS_DIR", tmp_path / "outputs"
     ):
         st = orch.run(
             "i2v from this still, neon alley",
@@ -296,6 +305,9 @@ def test_cmd_self_improve_dry_exit(capsys, monkeypatch, tmp_path):
     )
     monkeypatch.setattr(
         "master_agent.orchestrator.machine.RUNS_DIR", tmp_path / "runs"
+    )
+    monkeypatch.setattr(
+        "master_agent.provenance.OUTPUTS_DIR", tmp_path / "outputs"
     )
     args = Namespace(
         request="music video for a synthwave track",

@@ -283,6 +283,7 @@ def run_pipeline(
             dry_run=dry_run,
             kind=kind,
             music_bed_attached=music_bed_attached,
+            shot_index=1,
         )
         result.messages.extend(st.messages)
         result.status = "done" if st.state == "DONE" else "error"
@@ -350,6 +351,7 @@ def run_pipeline(
             dry_run=dry_run,
             kind=kind,
             music_bed_attached=music_bed_attached,
+            shot_index=i + 1,
         )
 
     # Per-segment generation (budget can pause the remaining queue)
@@ -492,11 +494,11 @@ def _stitch(result: PipelineResult, segment_paths: list[str], *, suffix: str) ->
                 paths[0],
                 final,
                 revise_notes="pipeline stitch",
-                extra={"prompt": result.request, "workflow_id": ""},
+                extra={"brief": result.request, "prompt": result.request},
             )
             result.provenance = payload
             result.provenance_sidecar = str(
-                Path(final).with_name(Path(final).stem + ".provenance.json")
+                Path(final).with_name(Path(final).stem + ".buddy.json")
             )
         except Exception as e:
             result.log(f"provenance stitch skipped: {e}")
