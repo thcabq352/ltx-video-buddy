@@ -18,6 +18,7 @@ Commands:
   setup | doctor      Scan local deps + LTX 2.5 / H3 weights (--fix-models after you agree)
   workflows           List default catalog variants (no env flags)
   comfy run           Drive ComfyUI from the CLI (prepare + lint + queue)
+  comfy attach        Apply previs buddy.comfy.attach/v1 (dry-run; --submit to /prompt)
   diagnose            9-frame hull fire (sec/step); does not spend shift budget
   budget              status | reset-shift  (VRAM-min shift ledger)
   hermes              status | register  (profile ltx + discovery)
@@ -257,6 +258,16 @@ def cmd_run(args: argparse.Namespace) -> int:
 
     args.request = _maybe_interview(args.request, no_interview=args.no_interview)
 
+    attach_recipe = None
+    if getattr(args, "attach", None):
+        from master_agent.comfy.attach import AttachError, load_attach_recipe
+
+        try:
+            attach_recipe = load_attach_recipe(args.attach).raw
+        except AttachError as e:
+            print(f"FAIL  attach recipe: {e}")
+            return 1
+
     if args.dry_run:
         return dry_run_pipeline(
             args.request,
@@ -268,6 +279,7 @@ def cmd_run(args: argparse.Namespace) -> int:
             storyboard_mode=args.storyboard,
             llm_panel=args.llm_panel,
             panel_judge=args.panel_judge,
+            attach_recipe=attach_recipe,
             client=client,
         )
 
@@ -334,6 +346,7 @@ def cmd_run(args: argparse.Namespace) -> int:
         power_mode=True if getattr(args, "power_mode", False) else (
             False if getattr(args, "no_power_mode", False) else None
         ),
+        attach_recipe=attach_recipe,
         client=client,
     )
     print()
@@ -1021,7 +1034,70 @@ def cmd_diagnose(args: argparse.Namespace) -> int:
     return 0 if rec.get("ok") else 1
 
 
+def cmd_comfy_attach(args: argparse.Namespace) -> int:
+    """Patch a WorkflowPatchPlan / buddy.comfy.attach/v1 recipe onto a graph."""
+    from master_agent.comfy.attach import AttachError, load_attach_recipe, run_attach
+    from master_agent.comfy.cli_run import prepare_run, unwrap_workflow
+
+    recipe_path = getattr(args, "recipe", None)
+    if not recipe_path:
+        print("FAIL  comfy attach requires --recipe PATH")
+        return 2
+    try:
+        recipe = load_attach_recipe(recipe_path)
+    except AttachError as e:
+        print(f"FAIL  {e}")
+        return 1
+    try:
+        workflow = None
+        if args.workflow_json:
+            p = Path(args.workflow_json)
+            raw = p.read_text(encoding="utf-8") if p.is_file() else args.workflow_json
+            workflow = unwrap_workflow(json.loads(raw))
+        else:
+            preferred = recipe.preferred_variants[0] if recipe.preferred_variants else "base"
+            workflow = prepare_run(
+                getattr(args, "mode", None) or "generate",
+                template_path=args.template,
+                variant=args.variant or preferred,
+                prompt=args.prompt or "",
+            )
+    except Exception as e:
+        print(f"FAIL  workflow: {e}")
+        return 1
+    submit = bool(getattr(args, "submit", False))
+    if submit and getattr(args, "dry_run", False):
+        print("FAIL  --submit and --dry-run are mutually exclusive")
+        return 2
+    runs_dir = getattr(args, "runs_dir", None)
+    try:
+        rec = run_attach(
+            recipe=recipe,
+            workflow=workflow,
+            client=ComfyClient(),
+            submit=submit,
+            runs_dir=Path(runs_dir) if runs_dir else None,
+            variant=args.variant,
+        )
+    except AttachError as e:
+        print(f"FAIL  {e}")
+        return 1
+    except Exception as e:
+        print(f"FAIL  {e}")
+        return 1
+    if args.out:
+        out = Path(args.out)
+        out.parent.mkdir(parents=True, exist_ok=True)
+        out.write_text(json.dumps(rec.get("workflow") or {}, indent=1) + "\n", encoding="utf-8")
+        print(f"wrote {out}")
+    printable = {k: v for k, v in rec.items() if k != "workflow"}
+    print(json.dumps(printable, indent=1, default=str))
+    return 0 if rec.get("ok") else 1
+
+
 def cmd_comfy(args: argparse.Namespace) -> int:
+    if getattr(args, "comfy_command", "run") == "attach":
+        return cmd_comfy_attach(args)
     from master_agent.comfy.cli_run import LintError, execute_prepared, lint_or_raise, prepare_run
 
     try:
@@ -1175,6 +1251,10 @@ def main(argv: list[str] | None = None) -> int:
                    help="post-stage upscale of the final video")
     p.add_argument("--no-interview", action="store_true",
                    help="skip the persona intake interview")
+    p.add_argument(
+        "--attach",
+        help="previs buddy.comfy.attach/v1 / WorkflowPatchPlan JSON (patch after director)",
+    )
     p.set_defaults(func=cmd_run)
 
     p = sub.add_parser(
@@ -1314,7 +1394,7 @@ def main(argv: list[str] | None = None) -> int:
         "comfy",
         help="drive ComfyUI from the CLI: prepare, lint, queue, copy into outputs/",
     )
-    p.add_argument("comfy_command", choices=["run"])
+    p.add_argument("comfy_command", choices=["run", "attach"])
     p.add_argument("--mode", choices=["raw", "template", "generate"], default="generate")
     p.add_argument("--json", dest="workflow_json", help="pasted/path API workflow JSON (raw)")
     p.add_argument("--template", help="template slug or path under workflows/")
@@ -1328,6 +1408,21 @@ def main(argv: list[str] | None = None) -> int:
         action="store_true",
         help="lint and write JSON only; do not queue Comfy",
     )
+    p.add_argument(
+        "--recipe",
+        help="attach: previs buddy.comfy.attach/v1 / WorkflowPatchPlan JSON",
+    )
+    p.add_argument(
+        "--submit",
+        action="store_true",
+        help="attach: POST the patched graph to Comfy /prompt (off by default)",
+    )
+    p.add_argument(
+        "--dry-run",
+        action="store_true",
+        help="attach: patch + validate only (default; mutually exclusive with --submit)",
+    )
+    p.add_argument("--runs-dir", dest="runs_dir", help=argparse.SUPPRESS)
     p.set_defaults(func=cmd_comfy)
 
     p = sub.add_parser(

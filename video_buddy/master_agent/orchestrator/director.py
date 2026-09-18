@@ -133,12 +133,19 @@ def choose_variant(
     *,
     has_video: bool = False,
     force: str | None = None,
+    attach_recipe: Any = None,
 ) -> tuple[str, str]:
-    """Returns (variant, source) where source is forced|input|llm|rules."""
+    """Returns (variant, source) where source is forced|input|attach|llm|rules."""
     if force:
         return force, "forced"
     if has_video:
         return "lipsync", "input"
+    if attach_recipe is not None:
+        from master_agent.comfy.attach import attach_director_override
+
+        override = attach_director_override(attach_recipe)
+        if override:
+            return override, "attach"
     fallback = rule_based_variant(request)
     if not DIRECTOR_LLM:
         return fallback, "rules"

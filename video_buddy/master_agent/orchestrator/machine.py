@@ -66,7 +66,10 @@ class Orchestrator:
         from master_agent.orchestrator.director import choose_variant
 
         variant, source = choose_variant(
-            st.request or "", has_video=bool(st.video_name), force=force_variant
+            st.request or "",
+            has_video=bool(st.video_name),
+            force=force_variant,
+            attach_recipe=st.attach_recipe,
         )
         if source not in ("forced", "input"):
             st.log(f"director routed variant={variant} ({source})")
@@ -99,6 +102,29 @@ class Orchestrator:
         st.workflow_meta = meta
         st.seed = meta.get("seed")
         self._workflow = workflow
+        if st.attach_recipe:
+            try:
+                from master_agent.comfy.attach import apply_attach_recipe
+
+                object_info = None
+                try:
+                    object_info, _src = self.client.load_object_info(prefer_live=True)
+                except ComfyClientError:
+                    object_info = None
+                attached = apply_attach_recipe(
+                    self._workflow, st.attach_recipe, object_info=object_info
+                )
+                self._workflow = attached.workflow
+                st.previs_source = attached.previs_source
+                st.control_pack_present = attached.control_pack_present
+                st.control_pack_used = attached.control_pack_used
+                st.log(
+                    f"attach recipe applied previs_source={attached.previs_source!r} "
+                    f"used={attached.control_pack_used}"
+                )
+            except Exception as e:
+                st.fail(f"attach failed: {e}")
+                return False
         if st.power_mode or POWER_MODE:
             self._power_mode(st)
         return True
@@ -305,6 +331,7 @@ class Orchestrator:
         judge_enabled: Optional[bool] = None,
         max_judge_rounds: int = MAX_JUDGE_ROUNDS,
         power_mode: Optional[bool] = None,
+        attach_recipe: Optional[dict[str, Any]] = None,
     ) -> RunState:
         run_id = uuid.uuid4().hex[:12]
         st = RunState(
@@ -323,6 +350,7 @@ class Orchestrator:
             judge_enabled=JUDGE_ENABLED if judge_enabled is None else judge_enabled,
             max_judge_rounds=max_judge_rounds,
             power_mode=POWER_MODE if power_mode is None else bool(power_mode),
+            attach_recipe=attach_recipe,
         )
         try:
             st.variant = self._select_variant(st, variant)

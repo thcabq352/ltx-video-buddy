@@ -167,7 +167,12 @@ python -m master_agent capabilities --offline
 python -m master_agent capabilities --json
 python -m master_agent fetch-object-info    # refresh state/object_info.json from live Comfy
 python -m master_agent capabilities         # prefer live /object_info
+python -m master_agent comfy attach --recipe previs.json --json graph.json   # dry-run attach
 ```
+
+Previs attach contract: sibling
+[your-video-buddy `COMFY_ATTACH_CONTRACT.md`](https://github.com/thcabq352/your-video-buddy/blob/main/docs/COMFY_ATTACH_CONTRACT.md).
+Operator notes in this tree: [`COMFY_ATTACH.md`](COMFY_ATTACH.md).
 
 `--offline` uses the committed cache. The matrix is **read-only** — a live
 class does not become a queued graph. Expected post-merge shape:

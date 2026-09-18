@@ -122,6 +122,7 @@ Start ComfyUI on `:8188` (Windows portable: `ComfyUI_windows_portable\run_api_81
 ```bash
 python -m master_agent health
 python -m master_agent comfy run --mode generate --variant ltx25_t2v_i2v --prompt "neon rain"
+python -m master_agent comfy attach --recipe previs.json --json workflow.json   # dry-run attach
 python -m master_agent run "cinematic close-up of rain on a window"
 python -m master_agent music "dreamy synthwave MV" --audio track.mp3
 ```
