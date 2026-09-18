@@ -25,15 +25,11 @@ not need Tailscale or a private share.
 
 <p align="center"><em>Golden-hour BMX berm → backflip → dusty stick. ~8s. MiniMax H3 via Video Buddy / Comfy.</em></p>
 
-Play in the GitHub blob viewer (once the complete encode is checked in):
-[`docs/demo/H3-SHOWCASE-BMX-8s-720p.mp4`](docs/demo/H3-SHOWCASE-BMX-8s-720p.mp4).
-**This revision does not include that file** — the launch attach was 755 712
-bytes, `ffprobe` reported `moov atom not found`, and files under 1 MB are
-refused.
-
-Poster + originating provenance live in both
-[`docs/demo/`](docs/demo/) (sibling README links) and
-[`docs/showcase/h3-bmx/`](docs/showcase/h3-bmx/).
+Play in the GitHub blob viewer:
+[`docs/demo/H3-SHOWCASE-BMX-8s-720p.mp4`](docs/demo/H3-SHOWCASE-BMX-8s-720p.mp4)
+(8.0 s, 1280×720, 4 197 204 bytes). Poster + provenance also live at
+[`docs/demo/`](docs/demo/) and [`docs/showcase/h3-bmx/`](docs/showcase/h3-bmx/).
+The 1080p encode is omitted from git (~10 MB).
 
 ---
 

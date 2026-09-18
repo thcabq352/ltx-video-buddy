@@ -11,13 +11,12 @@ Canonical write-up (same files): [`docs/showcase/h3-bmx/`](../showcase/h3-bmx/).
 
 **Golden-hour BMX berm → backflip → dusty stick. ~8s. MiniMax H3 via Video Buddy / Comfy.**
 
-[![MiniMax H3 via Video Buddy — golden-hour BMX berm, backflip, dusty stick](H3-SHOWCASE-BMX-8s-hero.png)](H3-SHOWCASE-BMX-8s-hero.png)
+[![MiniMax H3 via Video Buddy — golden-hour BMX berm, backflip, dusty stick](H3-SHOWCASE-BMX-8s-hero.png)](H3-SHOWCASE-BMX-8s-720p.mp4)
 
 The poster is a still from the same run (rider inverted mid-backflip, red-rock
-park, late sun). Intended GitHub blob playback:
-[`H3-SHOWCASE-BMX-8s-720p.mp4`](H3-SHOWCASE-BMX-8s-720p.mp4) — **not in this
-revision**. Launch attaches keep arriving at 755 712 bytes (`mdat` declared
-~4.2 MB, no `moov`, `ffprobe` fails). Gate: refuse anything under 1 MB.
+park, late sun). Click it (or open
+[`H3-SHOWCASE-BMX-8s-720p.mp4`](H3-SHOWCASE-BMX-8s-720p.mp4)) for GitHub
+blob playback — 8.0 s, 1280×720, `moov` present.
 
 ## Files
 
@@ -25,8 +24,8 @@ revision**. Launch attaches keep arriving at 755 712 bytes (`mdat` declared
 |---|---|
 | [`H3-SHOWCASE-BMX-8s-hero.png`](H3-SHOWCASE-BMX-8s-hero.png) | Poster / still (in-repo). Also at [`docs/showcase/h3-bmx/`](../showcase/h3-bmx/). |
 | [`H3-SHOWCASE-BMX-8s.provenance.json`](H3-SHOWCASE-BMX-8s.provenance.json) | Originating run record; local Windows paths stripped. |
-| `H3-SHOWCASE-BMX-8s-720p.mp4` | Preferred in-repo playback (~4.1 MB, ~8.0 s, must have `moov`). **Not committed.** |
-| `H3-SHOWCASE-BMX-8s-1080p.mp4` | Optional 1080p encode (~9.9 MB, 1920×1080). Same attach-cap. |
+| [`H3-SHOWCASE-BMX-8s-720p.mp4`](H3-SHOWCASE-BMX-8s-720p.mp4) | In-repo playback (4 197 204 bytes, 8.0 s, 1280×720, `moov` present). |
+| `H3-SHOWCASE-BMX-8s-1080p.mp4` | Optional 1080p encode (~10 MB). **Omitted** to keep git lean. |
 
 GitHub’s README renderer shows the poster. A committed `.mp4` plays in the
 github.com blob viewer (click the file). `<video>` tags are stripped on

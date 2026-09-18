@@ -10,10 +10,10 @@ The same filenames are mirrored at [`docs/demo/`](../../demo/) so
 
 **Golden-hour BMX berm → backflip → dusty stick. ~8s. MiniMax H3 via Video Buddy / Comfy.**
 
-[![MiniMax H3 via Video Buddy — golden-hour BMX berm, backflip, dusty stick](H3-SHOWCASE-BMX-8s-hero.png)](H3-SHOWCASE-BMX-8s-hero.png)
+[![MiniMax H3 via Video Buddy — golden-hour BMX berm, backflip, dusty stick](H3-SHOWCASE-BMX-8s-hero.png)](H3-SHOWCASE-BMX-8s-720p.mp4)
 
 The poster is a still from the same run (rider inverted mid-backflip, red-rock
-park, late sun). Open the PNG on github.com for the image.
+park, late sun). Click it for the 720p clip in the GitHub blob viewer.
 
 ## Files
 
@@ -21,12 +21,8 @@ park, late sun). Open the PNG on github.com for the image.
 |---|---|
 | [`H3-SHOWCASE-BMX-8s-hero.png`](H3-SHOWCASE-BMX-8s-hero.png) | Poster / still (in-repo). Also at [`docs/demo/`](../../demo/). |
 | [`H3-SHOWCASE-BMX-8s.provenance.json`](H3-SHOWCASE-BMX-8s.provenance.json) | Originating Comfy / Buddy run record (local Windows paths stripped). |
-| `H3-SHOWCASE-BMX-8s-720p.mp4` | Preferred in-repo playback (~4.1 MB, ~8.0 s, needs `moov`). **Not committed** — launch attaches keep arriving truncated (755 712 bytes, `mdat` only, `ffprobe`: moov atom not found). |
-| `H3-SHOWCASE-BMX-8s-1080p.mp4` | Optional 1080p encode (~9.9 MB, 1920×1080). Same attach-cap; omit until a complete file exists. |
-
-Do not commit a file under 1 MB or one that fails `ffprobe` / PNG `IEND`.
-Sibling README links that expect `docs/demo/H3-SHOWCASE-BMX-8s-720p.mp4`
-will 404 until a complete encode is checked in to **both** folders.
+| [`H3-SHOWCASE-BMX-8s-720p.mp4`](H3-SHOWCASE-BMX-8s-720p.mp4) | In-repo playback (4 197 204 bytes, 8.0 s, 1280×720, `moov` present). Same file as [`docs/demo/`](../../demo/). |
+| `H3-SHOWCASE-BMX-8s-1080p.mp4` | Optional 1080p encode (~10 MB). **Omitted** to keep git lean. |
 
 GitHub’s README renderer shows the poster. A committed `.mp4` plays in the
 github.com blob viewer (click the file). `<video>` tags are stripped on
