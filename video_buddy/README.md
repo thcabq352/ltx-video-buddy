@@ -242,8 +242,8 @@ POLL → RESOLVE → JUDGE → DONE/ERROR`.
   Stop is `loop_status=passed|exhausted|human_veto|error` in the run JSON —
   budget exhaustion is no longer recorded as `accept`. Closed loop without
   Comfy: `--self-improve-dry`. Map: [docs/SELF_IMPROVEMENT_LOOP.md](docs/SELF_IMPROVEMENT_LOOP.md).
-  Every clip writes ClipProvenance (`<stem>.provenance.json` + run JSON,
-  keyed by path/hash): [docs/CLIP_PROVENANCE.md](docs/CLIP_PROVENANCE.md).
+  Every clip writes ClipProvenance (`shot-N.buddy.json` + run JSON,
+  keyed by output_path/hash): [docs/CLIP_PROVENANCE.md](docs/CLIP_PROVENANCE.md).
 - Every run writes a JSON record to `state/runs/` (params, judge history,
   ClipProvenance, transitions) — the seed of the later self-learning knowledge base.
 - Variant routing is LLM-driven (`orchestrator/director.py`): the local VL heretic
@@ -519,12 +519,13 @@ local models (19-27GB) and can take several minutes — allow long timeouts.
   skipped. Invoke: `python -m master_agent run "BRIEF" --self-improve-dry`
   (no Comfy). Tests: `tests/test_self_improvement_loop.py`.
   See [docs/SELF_IMPROVEMENT_LOOP.md](docs/SELF_IMPROVEMENT_LOOP.md).
-- **ClipProvenance** (`buddy.clip.provenance/v1`) is written with every clip:
-  sidecar `<clip_stem>.provenance.json` plus the same object on the run JSON
-  (keyed by `path` / `hash`). Prompt, model/workflow id, seed/params,
-  attempt/iteration, judge score + reasons, revise notes. Live orchestrator
-  reads/writes on generate, revise, and re-run. Tests:
-  `tests/test_clip_provenance.py`. See
+- **ClipProvenance** (`buddy.clip.provenance/v1`, Rust PR #7 shape) is written
+  with every clip: sidecar `{output_dir}/shot-N.buddy.json` plus the same
+  object on the run JSON (`output_path` / `hash`). Prompts (brief/positive/
+  negative/additives), engine (comfy + workflow/variant), params (seed/steps/
+  cfg/size/fps/duration/refs), lineage (shot/attempt/parent), honest judge
+  (`cpu_fail_rules` kind), revise_notes, created_at. Sidecar is read before
+  each revise. Tests: `tests/test_clip_provenance.py`. See
   [docs/CLIP_PROVENANCE.md](docs/CLIP_PROVENANCE.md).
 
 ## Status (2026-09-13)

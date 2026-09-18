@@ -129,8 +129,8 @@ The judge is a **coherent-take / retry ladder**, not an album curator.
   `--self-improve-dry` closes the loop without Comfy. See
   [`docs/SELF_IMPROVEMENT_LOOP.md`](docs/SELF_IMPROVEMENT_LOOP.md).
   Every clip stores ClipProvenance (`buddy.clip.provenance/v1`) as
-  `<clip_stem>.provenance.json` plus the same object on the run JSON
-  (`path` / `hash`). Wire-compatible with buddy-core `ClipProvenance`.
+  `{output_dir}/shot-N.buddy.json` plus the same object on the run JSON
+  (`output_path` / `hash`). Sidecar is the source of truth before revise.
   See [`docs/CLIP_PROVENANCE.md`](docs/CLIP_PROVENANCE.md).
 
 ## Stop-lines (briefing §6)

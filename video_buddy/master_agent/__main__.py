@@ -297,10 +297,12 @@ def cmd_run(args: argparse.Namespace) -> int:
         if st.revise_history:
             print(f"revises:     {len(st.revise_history)}")
         if st.provenance:
+            lin = st.provenance.get("lineage") or {}
+            judge = st.provenance.get("judge") or {}
             print(
                 f"provenance:  schema={st.provenance.get('schema')} "
-                f"attempt={st.provenance.get('attempt')} "
-                f"score={st.provenance.get('judge_score')}"
+                f"attempt_id={lin.get('attempt_id')} "
+                f"score={judge.get('score')}"
             )
         if st.provenance_sidecar:
             print(f"sidecar:     {st.provenance_sidecar}")
@@ -407,9 +409,10 @@ def cmd_run(args: argparse.Namespace) -> int:
         if result.full_judge_notes:
             print(f"       notes: {result.full_judge_notes}")
         if result.provenance:
+            lin = result.provenance.get("lineage") or {}
             print(
                 f"       provenance: schema={result.provenance.get('schema')} "
-                f"attempt={result.provenance.get('attempt')} "
+                f"attempt_id={lin.get('attempt_id')} "
                 f"hash={(result.provenance.get('hash') or '')[:12]}"
             )
         if result.provenance_sidecar:
