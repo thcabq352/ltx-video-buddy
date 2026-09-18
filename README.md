@@ -18,17 +18,17 @@ Comfy (`h3_t2v` / fl2va). Files live in this repo so github.com viewers do
 not need Tailscale or a private share.
 
 <p align="center">
-  <a href="docs/showcase/h3-bmx/">
-    <img src="docs/showcase/h3-bmx/H3-SHOWCASE-BMX-8s-hero.png" alt="MiniMax H3 via Video Buddy — golden-hour BMX berm, backflip, dusty stick (~8s)" width="100%" />
+  <a href="docs/demo/">
+    <img src="docs/demo/H3-SHOWCASE-BMX-8s-hero.png" alt="MiniMax H3 via Video Buddy — golden-hour BMX berm, backflip, dusty stick (~8s)" width="100%" />
   </a>
 </p>
 
 <p align="center"><em>Golden-hour BMX berm → backflip → dusty stick. ~8s. MiniMax H3 via Video Buddy / Comfy.</em></p>
 
 Poster + originating provenance:
-[`docs/showcase/h3-bmx/`](docs/showcase/h3-bmx/). A 720p MP4 belongs in that
-folder when the complete encode is checked in; the 1080p encode is omitted
-from git on purpose (~10 MB).
+[`docs/demo/`](docs/demo/) (same path your-video-buddy PR #11 already
+links). A complete 720p MP4 belongs there once it passes ffprobe (8.0 s +
+`moov`); the 1080p encode is omitted from git on purpose (~10 MB).
 
 ---
 
@@ -170,7 +170,7 @@ when you need those older filenames. Full operator docs:
 ## Repository layout
 
 ```
-docs/showcase/h3-bmx/  # public MiniMax H3 still + provenance (README demo)
+docs/demo/             # public MiniMax H3 still + provenance (README demo)
 video_buddy/
 ├── master_agent/      # the agent: orchestrator, director, judge, persona,
 │                      # KB, characters/LoRA, music, fractal, upscale, web, MCP
@@ -188,7 +188,7 @@ video_buddy/
 - [Operator manual](video_buddy/README.md) — full CLI/web/MCP reference and changelog
 - [Doctor / download-models / catalog](video_buddy/docs/QUICKSTART.md) — inventory-first LTX 2.5 flow
 - [Required files](video_buddy/REQUIRED-FILES.md) — accepted local names + Hub catalog
-- [MiniMax H3 showcase](docs/showcase/h3-bmx/) — photoreal BMX still + run sidecar
+- [MiniMax H3 demo](docs/demo/) — photoreal BMX still + run sidecar
 - [LTX 2.5 workflows](video_buddy/workflows/ltx-2.5/README.md) — ids and invoke examples
 - [MiniMax H3 workflows](video_buddy/workflows/minimax-h3/README.md) — fl2va / ref2va ids
 - [Self-improvement loop](video_buddy/docs/SELF_IMPROVEMENT_LOOP.md) — live judge → revise → re-run map
