@@ -72,6 +72,9 @@ _VARIANT_KEYWORDS = [
     # Gitignored example slugs (air_render_*, vb_zimage_turbo_cn,
     # vb_ai_renderer_*, vb_rtx_superres) are only routed when their JSON
     # exists — rule_based_variant skips any variant not in WORKFLOW_FILES.
+    # "heal" / "fill" alone are substrings of unrelated words ("health").
+    # FaceID and Voronoi stay unwired — see capabilities notes.
+    ("wan_fun_inpaint", ("fun inpaint", "wan inpaint", "inpaint", "heal mask")),
     ("wan22", ("wan 2.2", "wan2.2", "wan22", "photoreal", "photo-real", "stock photo", "film grain")),
     ("h3_r2v", ("ref2va", "h3 r2v", "h3_r2v", "reference-to-video", "minimax r2v", "minimax reference")),
     ("h3_flf", ("h3 flf", "h3_flf", "minimax first-last", "minimax flf")),

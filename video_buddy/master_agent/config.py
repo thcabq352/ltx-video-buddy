@@ -169,6 +169,7 @@ DIAGNOSE_HEIGHT = 512
 # Per-variant generation profiles: fps + frame-count snapping (LTX=8n+1, Wan=4n+1)
 VARIANT_GEN: dict[str, dict[str, int]] = {
     "wan22": {"fps": 16, "frame_snap": 4},
+    "wan_fun_inpaint": {"fps": 16, "frame_snap": 4},
     "ltx25_t2v_i2v": {"fps": 24, "frame_snap": 8},
     "ltx25_t2v_i2v_two_stage": {"fps": 24, "frame_snap": 8},
     "ltx25_flf2v": {"fps": 24, "frame_snap": 8},
@@ -315,6 +316,14 @@ MODEL_FILES: dict[str, dict[str, str]] = {
         "text_encoder": "umt5_xxl_fp8_e4m3fn_scaled.safetensors",
         "vae": "wan_2.1_vae.safetensors",
         "lora": "Wan21_T2V_14B_lightx2v_cfg_step_distill_lora_rank32.safetensors",
+    },
+    "wan_fun_inpaint": {
+        # Same attested Wan 2.2 high/low names as wan22. No "checkpoint" key
+        # (must not spray an LTX ckpt). No lora key — Lightx2v stays on wan22.
+        "checkpoint_high": "wan\\wan2.2_t2v_high_noise_14B_fp8_scaled.safetensors",
+        "checkpoint_low": "wan\\wan2.2_t2v_low_noise_14B_fp8_scaled.safetensors",
+        "text_encoder": "umt5_xxl_fp8_e4m3fn_scaled.safetensors",
+        "vae": "wan_2.1_vae.safetensors",
     },
     "krea2_img": {
         # Krea-2 turbo: NVFP4 is the 16GB/Blackwell default. No "checkpoint"

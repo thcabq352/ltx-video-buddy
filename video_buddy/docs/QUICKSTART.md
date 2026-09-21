@@ -185,7 +185,8 @@ class does not become a queued graph. Expected post-merge shape:
 | LTX lipsync | **yes** | `--video` or `--variant lipsync` |
 | Wan 2.2 T2V (native UNET) | **yes** | `--variant wan22` |
 | K3NK WAN 2.2 AIO I2V | **no** | Not in `MODEL_FILES` / no graph |
-| WanVideoWrapper / Fun Inpaint / Fun Control | **no** (graphs) | Catalog / fail-closed |
+| Fun Inpaint | **yes** (`wan_fun_inpaint`) | LoadImage + LoadImageMask → WanFunInpaintToVideo |
+| WanVideoWrapper / Fun Control | **no** (graphs) | Catalog / fail-closed |
 | TeaCache / `WanVideoTeaCache` | **inject + bypass** | welltop-cn `TeaCache` injects on LTX when registered; missing / Wan aliases → WARNING + rewire |
 | Movie Builder / AI-VFX / CCC | **yes** | Director keywords (`vfx`, `movie builder`, `ccc`) or `--variant` / `--template`. CCC ADV queues baked widgets. |
 | CPU fractal | **yes** | `python -m master_agent fractal` (not Comfy Voronoi/Perlin) |

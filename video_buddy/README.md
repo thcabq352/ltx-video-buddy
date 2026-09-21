@@ -193,7 +193,7 @@ python -m master_agent capabilities --json
 # object_info is validation + this probe — not graph synthesis.
 ```
 
-Live tower Fun Inpaint / FaceID / Voronoi stay **unwired**. LTX TeaCache is
+Fun Inpaint is the `wan_fun_inpaint` template (start image + mask). FaceID and Voronoi stay **unwired** (deferred; see capabilities notes). LTX TeaCache is
 inject-when-registered (`ensure_teacache`); leftover / Wan aliases still
 soft-bypass. Full matrix: [AUDIT.md](AUDIT.md).
 
@@ -574,8 +574,9 @@ local models (19-27GB) and can take several minutes — allow long timeouts.
   pack still soft-bypasses.
 - **Capability audit (PR #5, merged).** `python -m master_agent capabilities
   [--offline] [--json]`. `WORKFLOW_FILES` is derived from
-  `workflows/manifests.yaml` (every slug is director-routable). Fun Inpaint /
-  Fun Control / FaceID stay fail-closed. See [AUDIT.md](AUDIT.md).
+  `workflows/manifests.yaml` (every slug is director-routable). Fun Inpaint
+  is `wan_fun_inpaint` (mask via `LoadImageMask`). Fun Control / FaceID stay
+  fail-closed. See [AUDIT.md](AUDIT.md).
 - Operator sheet: [docs/QUICKSTART.md](docs/QUICKSTART.md).
 
 ## Status (2026-08-04, third pass)

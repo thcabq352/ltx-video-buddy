@@ -26,7 +26,7 @@ Operator reported **4114** node classes. The markdown at `/workspace/music-video
 
 | Exact live class | In Buddy graphs? | Wiring now |
 |---|---|---|
-| `WanFunInpaintToVideo` | no | Catalog only. **Not** soft-bypass (payload). |
+| `WanFunInpaintToVideo` | `wan_fun_inpaint` | API template: LoadImage + LoadImageMask → node. **Not** soft-bypass (payload). |
 | `Wan22FunControlToVideo` | no | Catalog only. **Not** soft-bypass. |
 | `LanPaint_KSampler` | no | Patcher writes seed/steps/cfg. Soft-bypass if missing. |
 | `IPAdapterFaceID` | UI-only SDXL ADV | **Not** soft-bypass. |
@@ -129,7 +129,7 @@ brief ──▶ director.choose_variant (every manifests.yaml slug)
 | Wan 2.2 T2V (Mick native high/low UNET) | **yes** | director `wan22` → `260713_VIDEO-BUDDY_WAN-2-2-VID_1-0_api.json` | yes (`WanVideoNAG`) | **Was broken** as `comfy run --template wan22` (stale `MICKMUMPITZ_*` filename). Fixed in PR #5. Still T2V UNETs, not I2V AIO. |
 | K3NK WAN 2.2 AIO I2V HIGH/LOW fp8 | **hyp / no** | — | no class; no inventory name | Need weights + I2V template + `MODEL_FILES` keys. Do not spray onto `wan22` T2V loaders. |
 | WanVideoWrapper | **no** | — | **yes** (119 `WanVideo*` classes) | Native `wan22` uses `UNETLoader`+`KSamplerAdvanced`, not `WanVideoSampler`. Wrapper is unused. |
-| WAN Fun Inpaint | **no** | — | **yes** (cache + **live** `WanFunInpaintToVideo`) | No graph, no mask ingest, no patcher fields. Highest-value missing node for recursive inpaint. |
+| WAN Fun Inpaint | **yes** | director `wan_fun_inpaint` (`inpaint` / `fun inpaint` / `heal mask`) | **yes** (cache + **live** `WanFunInpaintToVideo`) | Template wires LoadImage + LoadImageMask. Core node has no mask input; mask is `SetLatentNoiseMask` on its latent. UNET is attested Wan 2.2 high-noise, not K3NK. |
 | WAN Fun Control | **no** | manifests `vb_zimage_turbo_cn` only | **yes** (live `Wan22FunControlToVideo`) | Example file lives under gitignored `AI-RENDERING-EXAMPLE FILES/`. |
 | LightX2V LoRAs | **partial** | baked in wan22 Power Lora widgets | n/a (weights) | Inventory has `Wan21_T2V_14B_lightx2v_cfg_step_distill_lora_rank32`. Patcher cannot toggle it. |
 | Wan TeaCache | **partial (bypass)** | validator drops missing accel | **live YES** `TeaCache` + `WanVideoTeaCache` | `WanVideoTeaCache` is CACHEARGS — do not inject onto native wan22. welltop-cn `TeaCache` on LTX is inject-when-registered (PR #4). |
@@ -229,7 +229,7 @@ graphs so operators prefer `--template` for precision.
 3. **`python -m master_agent capabilities [--offline] [--json]`** prints this matrix from live or cached `object_info`.
 4. **Live-name follow-up:** catalog + soft-bypass use exact Desk names (`LanPaint_KSampler`, `GetWarpedNoiseFromVideo`, `TeaCache`). Patcher writes seed/steps/cfg on `LanPaint_KSampler`. Fun Inpaint / Fun Control / FaceID stay fail-closed.
 
-Not done (intentionally): Fun Inpaint graph, K3NK AIO I2V, RTX upscale path (source JSON is gitignored). LTX TeaCache inject-when-registered landed in **PR #4**. LTX 2.5 catalog expansion landed separately in **PR #6**.
+Not done (intentionally): K3NK AIO I2V, RTX upscale path (source JSON is gitignored), FaceID API conversion, Comfy Voronoi/Perlin plates. Fun Inpaint is `wan_fun_inpaint` (LoadImage + LoadImageMask). LTX TeaCache inject-when-registered landed in **PR #4**. LTX 2.5 catalog expansion landed separately in **PR #6**.
 
 ### Real CLI examples (post-merge)
 

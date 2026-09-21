@@ -245,6 +245,52 @@ wan22:
       node_id: "194"
       input: filename_prefix
 
+wan_fun_inpaint:
+  file: wan_fun_inpaint_api.json
+  description: >
+    Wan Fun Inpaint. LoadImage start plate + LoadImageMask (red = inpaint)
+    feed WanFunInpaintToVideo and SetLatentNoiseMask. Single KSampler on the
+    attested Wan 2.2 high-noise UNET. Not a K3NK AIO (no attested pack).
+  vram_class: tight
+  vram_peak_gb: 13.2
+  fields:
+    prompt:
+      node_id: "4"
+      input: text
+    negative_prompt:
+      node_id: "5"
+      input: text
+    image:
+      node_id: "6"
+      input: image
+    image_name:
+      node_id: "6"
+      input: image
+    mask:
+      node_id: "7"
+      input: image
+    frames:
+      node_id: "8"
+      input: length
+    width:
+      node_id: "8"
+      input: width
+    height:
+      node_id: "8"
+      input: height
+    seed:
+      node_id: "10"
+      input: seed
+    steps:
+      node_id: "10"
+      input: steps
+    cfg:
+      node_id: "10"
+      input: cfg
+    filename_prefix:
+      node_id: "12"
+      input: filename_prefix
+
 krea2_img:
   file: 260713_VIDEO-BUDDY_KREA-2-IMG_1-0_api.json
   description: Krea-2 NVFP4 image generation (image variant — not video-pipeline routed; negative is ConditioningZeroOut)
