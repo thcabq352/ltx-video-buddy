@@ -808,6 +808,7 @@ def _heuristic_patch(workflow: dict[str, Any], values: dict[str, Any]) -> None:
         "EmptyHunyuanLatentVideo",
         "EmptyLatentImage",
         "LTXVEmptyLatentVideo",
+        "WanFunInpaintToVideo",
     ):
         for _nid, node in _find_nodes_by_class(workflow, class_type):
             if width is not None:
@@ -1016,6 +1017,11 @@ def _heuristic_patch(workflow: dict[str, Any], values: dict[str, Any]) -> None:
         for _nid, node in _find_nodes_by_class(workflow, "LTXVImgToVideo"):
             _set_input(node, "last_frame", last_image)
 
+    mask_name = values.get("mask") or values.get("mask_name")
+    if mask_name:
+        for _nid, node in _find_nodes_by_class(workflow, "LoadImageMask"):
+            _set_input(node, "image", mask_name)
+
     video_name = values.get("video_name")
     if video_name:
         for _nid, node in _find_nodes_by_class(workflow, "LoadVideo"):
@@ -1055,6 +1061,7 @@ def load_and_patch_workflow(
     steps: Optional[int] = None,
     cfg: Optional[float] = None,
     image_name: Optional[str] = None,
+    mask_name: Optional[str] = None,
     audio_name: Optional[str] = None,
     video_name: Optional[str] = None,
     filename_prefix: str = "ltx_agent",
@@ -1164,6 +1171,9 @@ def load_and_patch_workflow(
         "vae_name": vae_name,
         "text_encoder": text_encoder,
         "image_name": image_name or first_image,
+        "image": image_name or first_image,
+        "mask": mask_name,
+        "mask_name": mask_name,
         "first_image": first_image or image_name,
         "last_image": last_image,
         "audio_name": audio_name,

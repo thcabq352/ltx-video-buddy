@@ -1,0 +1,106 @@
+{
+  "1": {
+    "class_type": "UNETLoader",
+    "inputs": {
+      "unet_name": "wan\\wan2.2_t2v_high_noise_14B_fp8_scaled.safetensors",
+      "weight_dtype": "default"
+    },
+    "_meta": {"title": "Wan 2.2 High Noise (attested)"}
+  },
+  "2": {
+    "class_type": "CLIPLoader",
+    "inputs": {
+      "clip_name": "umt5_xxl_fp8_e4m3fn_scaled.safetensors",
+      "type": "wan",
+      "device": "default"
+    },
+    "_meta": {"title": "Wan CLIP"}
+  },
+  "3": {
+    "class_type": "VAELoader",
+    "inputs": {"vae_name": "wan_2.1_vae.safetensors"},
+    "_meta": {"title": "Wan VAE"}
+  },
+  "4": {
+    "class_type": "CLIPTextEncode",
+    "inputs": {
+      "text": "inpaint the masked region, keep the rest of the plate still",
+      "clip": ["2", 0]
+    },
+    "_meta": {"title": "Positive Prompt"}
+  },
+  "5": {
+    "class_type": "CLIPTextEncode",
+    "inputs": {
+      "text": "blurry, warped, extra limbs, watermark, text",
+      "clip": ["2", 0]
+    },
+    "_meta": {"title": "Negative Prompt"}
+  },
+  "6": {
+    "class_type": "LoadImage",
+    "inputs": {"image": "fun_inpaint_start.png"},
+    "_meta": {"title": "Start Image"}
+  },
+  "7": {
+    "class_type": "LoadImageMask",
+    "inputs": {"image": "fun_inpaint_mask.png", "channel": "red"},
+    "_meta": {"title": "Inpaint Mask"}
+  },
+  "8": {
+    "class_type": "WanFunInpaintToVideo",
+    "inputs": {
+      "positive": ["4", 0],
+      "negative": ["5", 0],
+      "vae": ["3", 0],
+      "width": 832,
+      "height": 480,
+      "length": 81,
+      "batch_size": 1,
+      "start_image": ["6", 0]
+    },
+    "_meta": {"title": "Wan Fun Inpaint"}
+  },
+  "9": {
+    "class_type": "SetLatentNoiseMask",
+    "inputs": {
+      "samples": ["8", 2],
+      "mask": ["7", 0]
+    },
+    "_meta": {"title": "Apply Uploaded Mask"}
+  },
+  "10": {
+    "class_type": "KSampler",
+    "inputs": {
+      "model": ["1", 0],
+      "seed": 1,
+      "steps": 8,
+      "cfg": 1.0,
+      "sampler_name": "euler",
+      "scheduler": "simple",
+      "positive": ["8", 0],
+      "negative": ["8", 1],
+      "latent_image": ["9", 0],
+      "denoise": 1.0
+    },
+    "_meta": {"title": "KSampler"}
+  },
+  "11": {
+    "class_type": "VAEDecode",
+    "inputs": {"samples": ["10", 0], "vae": ["3", 0]},
+    "_meta": {"title": "VAE Decode"}
+  },
+  "12": {
+    "class_type": "VHS_VideoCombine",
+    "inputs": {
+      "images": ["11", 0],
+      "frame_rate": 16,
+      "loop_count": 0,
+      "filename_prefix": "wan_fun_inpaint",
+      "format": "video/h264-mp4",
+      "pingpong": false,
+      "save_output": true
+    },
+    "_meta": {"title": "Video Combine"}
+  }
+}

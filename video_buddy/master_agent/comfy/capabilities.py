@@ -142,8 +142,15 @@ CAPABILITY_CATALOG: tuple[Capability, ...] = (
         "wan_fun_inpaint",
         "WAN Fun Inpaint",
         class_types=("WanFunInpaintToVideo",),
-        surfaces=(),
-        notes="Live tower YES. No shipped API graph or patcher field.",
+        surfaces=("director", "patcher", "template"),
+        templates=("wan_fun_inpaint",),
+        notes=(
+            "Template wan_fun_inpaint: LoadImage start plate + LoadImageMask "
+            "→ SetLatentNoiseMask on the WanFunInpaintToVideo latent. The core "
+            "node has no mask widget (it builds a temporal concat_mask from "
+            "start_image); the uploaded mask is the spatial noise mask. UNET is "
+            "the attested Wan 2.2 high-noise file, not an invented K3NK AIO."
+        ),
     ),
     Capability(
         "wan_fun_control",
@@ -251,7 +258,9 @@ CAPABILITY_CATALOG: tuple[Capability, ...] = (
         templates=(),
         notes=(
             "Live tower YES: IPAdapterFaceID. SDXL ADV UI graphs also have "
-            "IPAdapterUnifiedLoader (not API, not routed). No director/patcher path."
+            "IPAdapterUnifiedLoader (not API, not routed). No director/patcher path. "
+            "Deferred: a queueable FaceID API graph needs its own conversion of "
+            "those UI files; it is not a small add-on to Fun Inpaint."
         ),
     ),
     Capability(
@@ -279,7 +288,9 @@ CAPABILITY_CATALOG: tuple[Capability, ...] = (
         surfaces=(),
         notes=(
             "Live tower YES: CreateVoronoiMask, Image Perlin Power Fractal. "
-            "Buddy fractal path is CPU numpy, not these nodes."
+            "Buddy fractal path is CPU numpy, not these nodes. "
+            "Deferred: a Comfy Voronoi/Perlin plate is a separate graph from "
+            "the CPU fractal path and from the Fun Inpaint template."
         ),
     ),
     Capability(

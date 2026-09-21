@@ -44,13 +44,14 @@ def test_list_templates_includes_director_and_manifest():
     assert Path(WORKFLOWS_DIR / by_id["wan22"]["path"]).is_file()
 
 
-def test_probe_marks_fun_inpaint_present_but_unwired():
+def test_probe_marks_fun_inpaint_wired():
     info = {"WanFunInpaintToVideo": {}, "EmptyLTXVLatentVideo": {}}
     rows = {r.capability.id: r for r in probe_capabilities(info)}
     fun = rows["wan_fun_inpaint"]
     assert fun.in_object_info == ["WanFunInpaintToVideo"]
-    assert fun.verdict == "no"
-    assert "no graph" in fun.gap.lower() or "no graph" in fun.capability.notes.lower()
+    assert fun.verdict == "yes"
+    assert "director" in fun.capability.surfaces
+    assert "wan_fun_inpaint" in fun.in_templates
     ltx = rows["ltx_t2v"]
     assert ltx.verdict == "yes"
     assert "director" in ltx.capability.surfaces
