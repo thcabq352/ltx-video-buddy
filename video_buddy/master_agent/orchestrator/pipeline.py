@@ -10,6 +10,7 @@ Single-segment requests delegate straight to Orchestrator.run.
 from __future__ import annotations
 
 import json
+import logging
 import random
 import re
 import uuid
@@ -40,6 +41,8 @@ from master_agent.storyboard.storyboard import (
     should_storyboard,
     storyboard_to_markdown,
 )
+
+log = logging.getLogger(__name__)
 
 
 def _plan_storyboard(
@@ -189,7 +192,7 @@ def _write_record(result: PipelineResult) -> None:
         if ingest_run_record(result.to_dict()):
             result.log("kb: run record ingested")
     except Exception:
-        pass
+        log.debug("kb ingest failed for pipeline record", exc_info=True)
 
 
 def _budget_admit(result: PipelineResult, scene_id: str, variant: Optional[str], duration_s: float) -> dict[str, Any]:
@@ -384,6 +387,11 @@ def run_pipeline(
                     else:
                         seg_image = frame.name
                 except Exception:
+                    log.debug(
+                        "last-frame upload failed; using local filename %s",
+                        frame.name,
+                        exc_info=True,
+                    )
                     seg_image = frame.name
                 result.log(f"hands last-frame chain: clip {i + 1} from {frame.name}")
             elif dry_run:
@@ -437,7 +445,7 @@ def run_pipeline(
         try:
             orch.client.free_memory()
         except Exception:
-            pass
+            log.debug("free_memory failed after segment", exc_info=True)
 
     if result.budget_held and not result.segment_paths:
         result.status = "paused"
@@ -509,7 +517,7 @@ def run_pipeline(
                 try:
                     orch.client.free_memory()
                 except Exception:
-                    pass
+                    log.debug("free_memory failed after regen", exc_info=True)
             final = _stitch(result, result.segment_paths, suffix=f"_r{fr + 1}")
             if final is None:
                 _write_record(result)

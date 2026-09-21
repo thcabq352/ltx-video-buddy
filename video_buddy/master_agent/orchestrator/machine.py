@@ -13,6 +13,7 @@ Design rules:
 from __future__ import annotations
 
 import json
+import logging
 import re
 import shutil
 import uuid
@@ -58,6 +59,8 @@ from master_agent.provenance import (
     planned_clip_path,
     read_sidecar_for_state,
 )
+
+log = logging.getLogger(__name__)
 
 # Param hints the judge may tune (whitelist; anything else is ignored)
 RETUNE_ALLOWED = {"steps", "cfg", "stg_scale", "stg_blocks", "sampler_name", "seed"}
@@ -552,5 +555,5 @@ class Orchestrator:
             if ingest_run_record(st.to_dict()):
                 st.log("kb: run record ingested")
         except Exception:
-            pass
+            log.debug("kb ingest failed for run %s", st.run_id, exc_info=True)
         return st

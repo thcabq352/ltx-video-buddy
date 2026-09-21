@@ -186,6 +186,7 @@ def upsert_docs(
         coll.upsert(ids=ids, documents=texts, metadatas=clean)
         return len(ids)
     except Exception:
+        log.debug("kb upsert failed for %s", collection, exc_info=True)
         return 0
 
 

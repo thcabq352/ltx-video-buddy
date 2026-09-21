@@ -12,6 +12,7 @@ for the whole track (fast, CPU-only).
 from __future__ import annotations
 
 import json
+import logging
 import random
 import uuid
 from datetime import datetime, timezone
@@ -29,6 +30,8 @@ from master_agent.config import (
 )
 from master_agent.music.beats import BeatMap, analyze_audio, plan_shot_windows
 from master_agent.video_concat import concat_videos, cut_to_windows, mux_audio
+
+_log = logging.getLogger(__name__)
 
 MUSIC_KEYWORDS = ("music video", "song", "beat", "track", "mv")
 
@@ -258,7 +261,7 @@ def _shots_visual(
         try:
             orch.client.free_memory()
         except Exception:
-            pass
+            _log.debug("free_memory failed after music shot", exc_info=True)
 
     record["segment_paths"] = clip_paths
     record["segment_scores"] = scores
@@ -305,4 +308,4 @@ def _write_record(run_id: str, record: dict, *, log=print) -> None:
         if ingest_run_record(record):
             log("kb: run record ingested")
     except Exception:
-        pass
+        _log.debug("kb ingest failed for music record", exc_info=True)
