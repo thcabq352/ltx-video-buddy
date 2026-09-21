@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+import threading
 import time
 import uuid
 from pathlib import Path
@@ -24,6 +25,15 @@ class ComfyClientError(RuntimeError):
 
 
 class ComfyClient:
+    """HTTP bridge to one ComfyUI server.
+
+    Calls share one ``httpx.Client`` per base URL (keep-alive pool). History
+    polling used to open and close a client on every tick.
+    """
+
+    _pool: dict[str, httpx.Client] = {}
+    _pool_lock = threading.Lock()
+
     def __init__(self, base_url: str = COMFYUI_URL, timeout: float = 60.0):
         self.base_url = base_url.rstrip("/")
         self.timeout = timeout
@@ -32,12 +42,35 @@ class ComfyClient:
     def _url(self, path: str) -> str:
         return f"{self.base_url}{path}"
 
+    def _http(self) -> httpx.Client:
+        """Reusable client for this server. Per-call timeouts override the default."""
+        with ComfyClient._pool_lock:
+            client = ComfyClient._pool.get(self.base_url)
+            if client is None or client.is_closed:
+                client = httpx.Client(
+                    timeout=self.timeout,
+                    limits=httpx.Limits(
+                        max_keepalive_connections=10,
+                        max_connections=20,
+                    ),
+                )
+                ComfyClient._pool[self.base_url] = client
+            return client
+
+    @classmethod
+    def close_pool(cls) -> None:
+        """Close every pooled client. Tests use this so the next call rebuilds."""
+        with cls._pool_lock:
+            clients = list(cls._pool.values())
+            cls._pool.clear()
+        for client in clients:
+            client.close()
+
     def health(self) -> dict[str, Any]:
         try:
-            with httpx.Client(timeout=10.0) as client:
-                r = client.get(self._url("/system_stats"))
-                r.raise_for_status()
-                return r.json()
+            r = self._http().get(self._url("/system_stats"), timeout=10.0)
+            r.raise_for_status()
+            return r.json()
         except Exception as e:
             raise ComfyClientError(
                 f"ComfyUI is not reachable at {self.base_url}. "
@@ -54,11 +87,10 @@ class ComfyClient:
     def free_memory(self, unload_models: bool = True, free_memory: bool = True) -> None:
         payload = {"unload_models": unload_models, "free_memory": free_memory}
         try:
-            with httpx.Client(timeout=self.timeout) as client:
-                r = client.post(self._url("/free"), json=payload)
-                # Some builds return 200 empty; ignore 404 if endpoint missing
-                if r.status_code not in (200, 204, 404):
-                    r.raise_for_status()
+            r = self._http().post(self._url("/free"), json=payload, timeout=self.timeout)
+            # Some builds return 200 empty; ignore 404 if endpoint missing
+            if r.status_code not in (200, 204, 404):
+                r.raise_for_status()
         except httpx.HTTPError as e:
             # Non-fatal: VRAM free is best-effort
             print(f"[comfy] /free warning: {e}")
@@ -66,16 +98,15 @@ class ComfyClient:
     def queue_prompt(self, workflow: dict[str, Any]) -> str:
         """Submit API-format workflow (node_id → node dict). Returns prompt_id."""
         body = {"prompt": workflow, "client_id": self.client_id}
-        with httpx.Client(timeout=self.timeout) as client:
-            r = client.post(self._url("/prompt"), json=body)
-            if r.status_code >= 400:
-                detail = r.text
-                try:
-                    detail = json.dumps(r.json(), indent=2)
-                except Exception:
-                    pass
-                raise ComfyClientError(f"ComfyUI /prompt failed ({r.status_code}): {detail}")
-            data = r.json()
+        r = self._http().post(self._url("/prompt"), json=body, timeout=self.timeout)
+        if r.status_code >= 400:
+            detail = r.text
+            try:
+                detail = json.dumps(r.json(), indent=2)
+            except Exception:
+                pass
+            raise ComfyClientError(f"ComfyUI /prompt failed ({r.status_code}): {detail}")
+        data = r.json()
         if "error" in data:
             raise ComfyClientError(f"ComfyUI rejected prompt: {data['error']}")
         prompt_id = data.get("prompt_id")
@@ -84,16 +115,14 @@ class ComfyClient:
         return prompt_id
 
     def get_history(self, prompt_id: str) -> dict[str, Any]:
-        with httpx.Client(timeout=self.timeout) as client:
-            r = client.get(self._url(f"/history/{prompt_id}"))
-            r.raise_for_status()
-            return r.json()
+        r = self._http().get(self._url(f"/history/{prompt_id}"), timeout=self.timeout)
+        r.raise_for_status()
+        return r.json()
 
     def get_queue(self) -> dict[str, Any]:
-        with httpx.Client(timeout=self.timeout) as client:
-            r = client.get(self._url("/queue"))
-            r.raise_for_status()
-            return r.json()
+        r = self._http().get(self._url("/queue"), timeout=self.timeout)
+        r.raise_for_status()
+        return r.json()
 
     def wait_for_prompt(
         self,
@@ -130,10 +159,11 @@ class ComfyClient:
         with path.open("rb") as f:
             files = {"image": (path.name, f, "application/octet-stream")}
             data = {"type": image_type, "overwrite": str(overwrite).lower()}
-            with httpx.Client(timeout=120.0) as client:
-                r = client.post(self._url("/upload/image"), files=files, data=data)
-                r.raise_for_status()
-                out = r.json()
+            r = self._http().post(
+                self._url("/upload/image"), files=files, data=data, timeout=120.0
+            )
+            r.raise_for_status()
+            out = r.json()
         return out.get("name") or path.name
 
     def upload_audio(self, path: Path, overwrite: bool = True) -> str:
@@ -145,20 +175,20 @@ class ComfyClient:
         with path.open("rb") as f:
             files = {"image": (path.name, f, "application/octet-stream")}
             data = {"type": "input", "overwrite": str(overwrite).lower()}
-            with httpx.Client(timeout=120.0) as client:
-                r = client.post(self._url("/upload/image"), files=files, data=data)
-                if r.status_code >= 400:
-                    # Fallback: return basename; user must place file in ComfyUI/input
-                    return path.name
-                out = r.json()
+            r = self._http().post(
+                self._url("/upload/image"), files=files, data=data, timeout=120.0
+            )
+            if r.status_code >= 400:
+                # Fallback: return basename; user must place file in ComfyUI/input
+                return path.name
+            out = r.json()
         return out.get("name") or path.name
 
     def fetch_object_info(self) -> dict[str, Any]:
         """GET /object_info — the live node registry used by the validator."""
-        with httpx.Client(timeout=self.timeout) as client:
-            r = client.get(self._url("/object_info"))
-            r.raise_for_status()
-            return r.json()
+        r = self._http().get(self._url("/object_info"), timeout=self.timeout)
+        r.raise_for_status()
+        return r.json()
 
     def refresh_object_info_cache(
         self, cache_path: Path = OBJECT_INFO_CACHE
