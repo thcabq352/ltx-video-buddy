@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+import logging
 import time
 import uuid
 from pathlib import Path
@@ -17,6 +18,8 @@ from master_agent.config import (
     OBJECT_INFO_CACHE,
     POLL_INTERVAL_S,
 )
+
+log = logging.getLogger(__name__)
 
 
 class ComfyClientError(RuntimeError):
@@ -61,6 +64,7 @@ class ComfyClient:
                     r.raise_for_status()
         except httpx.HTTPError as e:
             # Non-fatal: VRAM free is best-effort
+            log.debug("free_memory /free failed", exc_info=True)
             print(f"[comfy] /free warning: {e}")
 
     def queue_prompt(self, workflow: dict[str, Any]) -> str:
@@ -149,6 +153,12 @@ class ComfyClient:
                 r = client.post(self._url("/upload/image"), files=files, data=data)
                 if r.status_code >= 400:
                     # Fallback: return basename; user must place file in ComfyUI/input
+                    log.debug(
+                        "audio upload failed (%s) for %s: %s",
+                        r.status_code,
+                        path.name,
+                        (r.text or "")[:300],
+                    )
                     return path.name
                 out = r.json()
         return out.get("name") or path.name

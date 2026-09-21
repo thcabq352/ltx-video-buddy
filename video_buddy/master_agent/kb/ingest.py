@@ -3,11 +3,14 @@
 from __future__ import annotations
 
 import json
+import logging
 from pathlib import Path
 from typing import Any
 
 from master_agent.config import RUNS_DIR, WORKFLOWS_DIR
 from master_agent.kb.store import COLLECTION_RUNS, COLLECTION_WORKFLOWS, upsert_docs
+
+log = logging.getLogger(__name__)
 
 
 def _workflow_digest(path: Path) -> str:
@@ -19,6 +22,7 @@ def _workflow_digest(path: Path) -> str:
     try:
         wf = json.loads(path.read_text(encoding="utf-8"))
     except Exception:
+        log.debug("kb workflow digest unreadable: %s", path, exc_info=True)
         return f"workflow {path.stem} (unreadable)"
     if isinstance(wf, dict) and isinstance(wf.get("nodes"), list):
         return _ui_workflow_digest(path, wf["nodes"])
@@ -76,6 +80,7 @@ def _guide_digest(path: Path) -> str:
     try:
         text = path.read_text(encoding="utf-8")
     except Exception:
+        log.debug("kb guide digest unreadable: %s", path, exc_info=True)
         return f"guide {path.stem} (unreadable)"
     return f"guide {path.stem}:\n{text.strip()[:4000]}"
 
@@ -158,6 +163,7 @@ def ingest_run_file(path: Path) -> int:
     try:
         record = json.loads(path.read_text(encoding="utf-8"))
     except Exception:
+        log.debug("kb ingest skipped unreadable run file %s", path, exc_info=True)
         return 0
     return ingest_run_record(record)
 

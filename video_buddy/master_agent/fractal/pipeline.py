@@ -11,6 +11,7 @@ Optional beat-reactive audio + mux. Emits kind: "fractal" run records.
 from __future__ import annotations
 
 import json
+import logging
 import uuid
 from datetime import datetime, timezone
 from pathlib import Path
@@ -29,6 +30,8 @@ from master_agent.fractal.render import (
     render_zoom_video,
     soft_mask_from_gray,
 )
+
+_log = logging.getLogger(__name__)
 
 
 def _clamp_int(v, lo: int, hi: int, default: int) -> int:
@@ -226,7 +229,7 @@ def _write_record(run_id: str, record: dict, *, log=print) -> None:
         if ingest_run_record(record):
             log("kb: run record ingested")
     except Exception:
-        pass
+        _log.debug("kb ingest failed for fractal record", exc_info=True)
 
 
 __all__ = ["run_fractal", "TARGETS", "PALETTES", "MODES"]
