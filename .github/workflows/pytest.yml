@@ -15,4 +15,17 @@ jobs:
       - name: Unit tests (no Comfy, no GPU)
         run: |
           pip install -r video_buddy/requirements.txt
-          PYTHONPATH=video_buddy pytest video_buddy/tests/test_ltx25_catalog.py video_buddy/tests/test_brain_hands.py video_buddy/tests/test_loader_names.py video_buddy/tests/test_ltx_frames.py -q
+          # Catalog/loader/frame law (existing) plus the suites README and
+          # AUDIT already treat as the no-GPU bar: director, upscale,
+          # accelerator bypass, music video, clip provenance.
+          PYTHONPATH=video_buddy pytest -q \
+            video_buddy/tests/test_ltx25_catalog.py \
+            video_buddy/tests/test_brain_hands.py \
+            video_buddy/tests/test_loader_names.py \
+            video_buddy/tests/test_ltx_frames.py \
+            video_buddy/tests/test_director_allowlist.py \
+            video_buddy/tests/test_director_vision.py \
+            video_buddy/tests/test_upscale.py \
+            video_buddy/tests/test_accelerator_bypass.py \
+            video_buddy/tests/test_music_video.py \
+            video_buddy/tests/test_clip_provenance.py
