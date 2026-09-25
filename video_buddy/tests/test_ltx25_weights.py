@@ -43,7 +43,7 @@ def test_official_filenames_and_stub_aliases():
     assert STUB_ALIASES["ltx-2.5-ic-lora.safetensors"] == WEIGHT_FILES["ic_lora"].filename
     assert WEIGHT_FILES["transformer"].gated is True
     assert WEIGHT_FILES["transformer"].mandatory is True
-    assert WEIGHT_FILES["duration_head"].mandatory is True
+    assert WEIGHT_FILES["duration_head"].mandatory is False
     assert WEIGHT_FILES["spatial_upscaler"].mandatory is True
     assert WEIGHT_FILES["distilled_lora"].mandatory is False
     for key in (
@@ -247,7 +247,9 @@ def test_class16_install_only_asks_for_zero_byte_duration_head(tmp_path: Path):
     empty.write_bytes(b"")
 
     core = scan_bundle("ltx25_core", roots=[root])
-    assert {w.key for w in core.missing_mandatory} == {"duration_head"}
+    assert core.missing_mandatory == []
+    assert core.ok is True
+    assert "duration_head" in {w.key for w in core.missing_optional}
     assert "transformer" in core.found_paths
     assert core.found_paths["transformer"].endswith(".gguf")
     assert "text_encoder" in core.found_paths
@@ -257,6 +259,25 @@ def test_class16_install_only_asks_for_zero_byte_duration_head(tmp_path: Path):
     ic = scan_bundle("ltx25_iclora", roots=[root])
     assert "ic_lora" not in {w.key for w in ic.missing_mandatory}
     assert Path(ic.found_paths["ic_lora"]).name.endswith("pixel-spatial-upscaler-x2-1.0.safetensors")
+
+
+def test_a2v_require_weights_without_duration_head(tmp_path: Path):
+    root = tmp_path / "models"
+    files = {
+        "diffusion_models/gguf/ltx-2.5-22b-distilled-transformer-bf16-Q4_K_M.gguf": b"gguf",
+        "text_encoders/gemma4-12b-heretic-ltx25-int8convrot.safetensors": b"te",
+        "vae/ltx-2.5-video-vae-bf16.safetensors": b"vae",
+        "vae/ltx-2.5-audio-vae-bf16.safetensors": b"avae",
+        "latent_upscale_models/ltx-2.5-latent-spatial-upscaler-x2-bf16-1.0.safetensors": b"up",
+    }
+    for rel, blob in files.items():
+        path = root / rel
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.write_bytes(blob)
+    status = require_weights("ltx25_a2v", roots=[root])
+    assert status is not None
+    assert status.ok is True
+    assert "duration_head" not in {w.key for w in status.missing_mandatory}
 
 
 def test_hf_hub_snapshot_counts_as_present(tmp_path: Path):

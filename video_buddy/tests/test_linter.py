@@ -14,3 +14,31 @@ def test_linter_blocks_unknown_class():
         hard_gate(report)
     clean = ValidationReport(file="ok")
     assert hard_gate(clean) is clean
+
+
+def test_v3_combo_and_lipsync_placeholder():
+    from master_agent.comfy.validator import validate_workflow
+    from master_agent.comfy.workflow_patcher import load_workflow_template
+
+    info = {
+        "LoadVideo": {
+            "input": {
+                "required": {
+                    "file": ["COMBO", {"options": ["a.mp4", "warehouse_src_30fps.mp4"]}],
+                }
+            },
+            "output": ["VIDEO"],
+        }
+    }
+    bad = {
+        "1": {
+            "class_type": "LoadVideo",
+            "inputs": {"file": "other.mp4"},
+        }
+    }
+    report = validate_workflow(bad, info, file_label="combo")
+    assert any("not in combo choices" in err.message for err in report.errors)
+
+    lipsync = load_workflow_template("lipsync")
+    held = validate_workflow(lipsync, info, file_label="lipsync")
+    assert any("warehouse_src_30fps.mp4" in err.message for err in held.errors)

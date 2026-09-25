@@ -143,11 +143,42 @@ class JobManager:
             sys.stdout, sys.stderr = old_out, old_err
             job.finished_at = time.time()
 
+    def _guard_media(self, job: Job) -> bool:
+        """Fail fast when the chosen graph cannot consume the attached files."""
+        from master_agent.orchestrator.talking import media_route_error, preview_media_variant
+
+        p = job.params
+        preview = preview_media_variant(
+            job.request,
+            variant=p.get("variant"),
+            has_image=bool(p.get("image_path")),
+            has_audio=bool(p.get("audio_path")),
+            has_video=bool(p.get("video_path")),
+        )
+        err = media_route_error(
+            preview,
+            has_image=bool(p.get("image_path")),
+            has_audio=bool(p.get("audio_path")),
+            has_video=bool(p.get("video_path")),
+        )
+        if err:
+            print(err)
+            job.error = err
+            return False
+        note = p.get("audio_duration_note")
+        if note:
+            print(f"warn: {note}")
+        if p.get("image_path") and p.get("audio_path") and not p.get("video_path"):
+            print(f"route: photo + voice → {preview}")
+        return True
+
     def _do_run(self, job: Job) -> None:
         from master_agent.comfy.client import ComfyClient
         from master_agent.orchestrator.pipeline import run_pipeline
 
         p = job.params
+        if not self._guard_media(job):
+            return
         client = ComfyClient()
         image_name = audio_name = video_name = None
         if p.get("image_path"):
@@ -202,6 +233,8 @@ class JobManager:
         from master_agent.orchestrator.pipeline import _plan_storyboard, plan_story_segments
         from master_agent.storyboard.storyboard import storyboard_to_markdown
 
+        if not self._guard_media(job):
+            return
         quality = job.params.get("quality")
         segs = plan_story_segments(
             float(job.params.get("duration_s") or 8.0),

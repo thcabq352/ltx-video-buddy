@@ -329,11 +329,11 @@
           <img class="drop-preview" id="c-image-preview" alt="">
         </div>
         <div class="drop" id="c-audio-drop" data-for="c-audio" data-kind="audio"
-             title="Dialogue or music for lipsync / audio conditioning">
+             title="Voice or music. A still plus this file is a talking clip.">
           <button type="button" class="drop-clear" data-clear="c-audio">clear</button>
           <input type="file" id="c-audio" accept="audio/*,.mp3,.wav,.m4a,.flac,.ogg">
           <span class="drop-title">Audio</span>
-          <span class="drop-hint">lipsync / VO · MP3 WAV M4A</span>
+          <span class="drop-hint">photo + voice · MP3 WAV</span>
           <span class="drop-name" id="c-audio-name"></span>
           <audio class="drop-preview" id="c-audio-preview" controls></audio>
         </div>
@@ -348,6 +348,7 @@
         </div>
       </div>
       <div id="c-media-pills"></div>
+      <p class="muted" id="c-talking-hint"></p>
 
       <details class="adv">
         <summary>Advanced</summary>
@@ -867,15 +868,40 @@ function updateCreateMediaPills() {
   add("c-audio", "audio");
   add("c-video", "video");
   box.innerHTML = pills.join("");
-  // gentle variant hint when video/audio attached and still on auto
-  const v = $("c-variant");
-  if (v && !v.dataset.userSet) {
-    if ($("c-video")?.files?.length || $("c-audio")?.files?.length) {
-      // leave auto — director routes lipsync when media present
+  const hint = $("c-talking-hint");
+  const img = $("c-image")?.files?.length;
+  const aud = $("c-audio")?.files?.length;
+  const vid = $("c-video")?.files?.length;
+  const variant = ($("c-variant")?.value || "").toLowerCase();
+  const h3NoAudio = ["h3", "h3_t2v", "h3_i2v", "h3_flf", "fl2va", "minimax"].includes(variant);
+  if (hint) {
+    if (img && aud && !vid && (variant === "lipsync" || h3NoAudio)) {
+      hint.textContent = "This variant does not take a voice file with a still. Leave variant on auto (ltx25_a2v) or pick h3_r2v for MiniMax reference audio.";
+    } else if (img && aud && !vid && !variant) {
+      hint.textContent = "Photo + voice routes to ltx25_a2v. Name MiniMax, Hailuo, or H3 in the brief — or pick h3_r2v — for H3 reference audio.";
+    } else if (!img && aud && !vid && (variant === "lipsync" || !variant)) {
+      hint.textContent = "lipsync needs a source video. A still plus this audio uses ltx25_a2v.";
+    } else {
+      hint.textContent = "";
     }
   }
+  const duration = $("c-duration");
+  if (img && aud && !vid && duration && !duration.dataset.userSet) {
+    const el = $("c-audio-preview");
+    const apply = () => {
+      if (el && isFinite(el.duration) && el.duration > 0) {
+        duration.value = String(Math.round(Math.min(el.duration, 30) * 10) / 10);
+      }
+    };
+    if (el && el.readyState >= 1) apply();
+    else if (el) el.addEventListener("loadedmetadata", apply, {once: true});
+  }
 }
-$("c-variant").addEventListener("change", () => { $("c-variant").dataset.userSet = "1"; });
+$("c-variant").addEventListener("change", () => {
+  $("c-variant").dataset.userSet = "1";
+  updateCreateMediaPills();
+});
+$("c-duration").addEventListener("input", () => { $("c-duration").dataset.userSet = "1"; });
 
 // create
 $("c-panel").onchange = () => {
@@ -894,6 +920,12 @@ function createParams() {
     storyboard: $("c-storyboard").value || null,
     upscale: $("c-upscale").value || null,
     seed: seedRaw === "" ? null : parseInt(seedRaw, 10),
+    follow_audio: !!(
+      $("c-image")?.files?.length &&
+      $("c-audio")?.files?.length &&
+      !$("c-video")?.files?.length &&
+      !$("c-duration")?.dataset.userSet
+    ),
     judge_strictness: parseFloat($("c-strictness")?.value || "0.5"),
     learning_rate: parseFloat($("c-learn")?.value || "0.3"),
   };
@@ -923,15 +955,9 @@ async function submitJob(dryRun) {
   $("c-generate").disabled = true;
   $("c-preview").disabled = true;
   try {
-    // dry-run is storyboard-only — still allow media paths for future, but no Comfy upload yet
-    if (!dryRun) {
-      p.image_path = await uploadFile("c-image");
-      p.audio_path = await uploadFile("c-audio");
-      p.video_path = await uploadFile("c-video");
-    } else {
-      // skip large uploads for preview; media not used in dry-run planning
-      p.image_path = p.audio_path = p.video_path = null;
-    }
+    p.image_path = await uploadFile("c-image");
+    p.audio_path = await uploadFile("c-audio");
+    p.video_path = await uploadFile("c-video");
     $("c-status").textContent = dryRun ? " planning…" : " queued on GPU…";
     const job = await api("/api/jobs", {body: p});
     pollJob(job.id, dryRun);

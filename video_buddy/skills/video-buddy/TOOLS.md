@@ -89,6 +89,8 @@ python -m master_agent run "BRIEF" --duration 8 --dry-run --no-interview
 python -m master_agent run "music video for a synthwave track" --self-improve-dry --no-interview
 python -m master_agent run "LTX 2.5 alley" --variant ltx25_t2v_i2v --no-interview
 python -m master_agent run "talking head" --video input.mp4 --variant lipsync --no-interview
+python -m master_agent run "she says the line" --image face.png --audio line.wav --no-interview
+python -m master_agent run "hailuo, she says the line" --image face.png --audio line.wav --variant h3_r2v --no-interview
 python -m master_agent music "synthwave MV" --audio track.mp3 --no-interview
 python -m master_agent mv render "I'm in love with a bot" --audio track.mp3 --out out/MV-FIXED.mp4
 python -m master_agent mv render --audio track.mp3 --dry-run

@@ -60,9 +60,9 @@ A typical ready line looks like:
 
 `OK    ltx25-weights  GGUF Q4 (…-Q4_K_M.gguf) — 16GB-class preference #1; present (…)`
 
-A duration-head that is **0 bytes** fails this row even when every other
-slot is filled. The hint then points at `download-models --ltx25`, not
-`--fix`.
+A duration-head that is **0 bytes** is not present. It is optional: no
+shipped LTX 2.5 graph loads it, so a missing or zero-byte file does not
+fail `ltx25-weights`. The ask lists it under optional weights.
 
 Set extra trees in `.env` when weights live on another drive:
 
@@ -88,7 +88,7 @@ zero-byte files.
 | `latent_upscale_models/ltx-2.5-latent-spatial-upscaler-x2-bf16-1.0.safetensors` | two-stage / official pack |
 | `loras/ltx-2.5-22b-distilled-lora-450-bf16.safetensors` | optional distilled LoRA |
 | `loras/ltx-2.5-22b-ic-lora-pixel-spatial-upscaler-x2-1.0.safetensors` | IC-LoRA stand-in (also Ingredients) |
-| `model_patches/ltx-2.5-duration-head-bf16.safetensors` | **mandatory; 0 bytes = missing** |
+| `model_patches/ltx-2.5-duration-head-bf16.safetensors` | optional; 0 bytes = not present |
 
 API graphs may also live under sibling `ltx_director/workflows/ltx-2.5/`
 (same filenames). Buddy ships copies in `workflows/ltx-2.5/` and falls
@@ -102,7 +102,7 @@ back to that sibling tree.
 | Text encoder | `gemma4-12b-with-proj-ltx-2.5-bf16.safetensors` | Comfy int8, `gemma4-12b-heretic-ltx25-int8convrot.safetensors` |
 | Video VAE | `ltx-2.5-video-vae-bf16.safetensors` | `ltx-2.5-video-vae-conv-bf16.safetensors` |
 | Audio VAE | `ltx-2.5-audio-vae-bf16.safetensors` | — |
-| Duration head | `ltx-2.5-duration-head-bf16.safetensors` | — (zero-byte is missing) |
+| Duration head | `ltx-2.5-duration-head-bf16.safetensors` | optional (zero-byte is not present; does not block) |
 | Spatial upscaler | `ltx-2.5-latent-spatial-upscaler-x2-bf16-1.0.safetensors` | — |
 | IC-LoRA / MSR | `ltx-2.5-22b-ic-lora-ingredients-0.9.safetensors` | pixel-spatial IC-LoRA, stubs `ltx-2.5-ic-lora.safetensors` / `ltx-2.5-msr.safetensors` |
 
@@ -131,7 +131,7 @@ checklist. Use it when doctor reports a slot empty.
 | `text_encoders/gemma4-12b-with-proj-ltx-2.5-bf16.safetensors` | `models/text_encoders/` | 26.3 GB |
 | `vae/ltx-2.5-video-vae-bf16.safetensors` | `models/vae/` | 1.5 GB |
 | `vae/ltx-2.5-audio-vae-bf16.safetensors` | `models/vae/` | 365 MB |
-| `model_patches/ltx-2.5-duration-head-bf16.safetensors` | `models/model_patches/` | 3.8 MB |
+| `model_patches/ltx-2.5-duration-head-bf16.safetensors` | `models/model_patches/` | 3.8 MB, optional |
 | `latent_upscale_models/ltx-2.5-latent-spatial-upscaler-x2-bf16-1.0.safetensors` | `models/latent_upscale_models/` | 996 MB |
 
 IC-LoRA / MSR additionally use

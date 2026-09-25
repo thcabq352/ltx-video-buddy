@@ -13,7 +13,7 @@ Preference when several transformers exist (`VRAM_GB` default 16):
 3. `diffusion_models/ltx-2.5-22b-distilled-transformer-comfy-int8-convrot.safetensors`
 4. official `ltx-2.5-22b-distilled-transformer-bf16.safetensors`
 
-Text encoder: `gemma4-12b-heretic-ltx25-int8convrot.safetensors` or Comfy int8 counts — official bf16 Gemma is not required. Zero-byte `model_patches/ltx-2.5-duration-head-bf16.safetensors` is **missing**.
+Text encoder: `gemma4-12b-heretic-ltx25-int8convrot.safetensors` or Comfy int8 counts — official bf16 Gemma is not required. The duration head is optional (no shipped 2.5 graph loads it). A zero-byte `model_patches/ltx-2.5-duration-head-bf16.safetensors` is not present and does not fail the core pack.
 
 ```bash
 python -m master_agent doctor

@@ -124,6 +124,13 @@ def test_hard_constraints_win_over_soft_keywords():
             "input",
         )
         assert choose_variant("a dub of my clip") == ("lipsync", "rules")
+        assert choose_variant(
+            "lip sync this photo", has_image=True, has_audio=True
+        ) == ("ltx25_a2v", "input")
+        assert choose_variant(
+            "use hailuo on this photo", has_image=True, has_audio=True
+        ) == ("h3_r2v", "input")
+        assert choose_variant("minimax h3 native stereo") == ("h3_t2v", "rules")
         assert choose_variant("rain on a window") == ("base", "rules")
         assert choose_variant("10eros teaser") == ("eros", "rules")
 

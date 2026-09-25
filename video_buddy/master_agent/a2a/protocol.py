@@ -68,7 +68,14 @@ def agent_card(*, host: str = "127.0.0.1", port: int = STUDIO_PORT) -> dict[str,
         "version": __version__,
         "protocolVersion": "0.2.9",
         "capabilities": {"streaming": False, "pushNotifications": False},
-        "defaultInputModes": ["text"],
+        "defaultInputModes": [
+            "text",
+            "image/png",
+            "image/jpeg",
+            "image/webp",
+            "audio/wav",
+            "audio/mpeg",
+        ],
         "defaultOutputModes": ["text", "video/mp4"],
         "skills": [
             {
@@ -120,6 +127,34 @@ def _message_text(params: dict[str, Any]) -> str:
     return text.strip()
 
 
+def _message_media(params: dict[str, Any]) -> dict[str, str | None]:
+    """Paths from metadata or file parts (uri/path + mimeType)."""
+    meta = params.get("metadata") if isinstance(params.get("metadata"), dict) else {}
+    message = params.get("message") or params
+    out: dict[str, str | None] = {
+        "image_path": meta.get("image_path") or None,
+        "audio_path": meta.get("audio_path") or None,
+        "video_path": meta.get("video_path") or None,
+    }
+    parts = message.get("parts") if isinstance(message, dict) else None
+    if isinstance(parts, list):
+        for part in parts:
+            if not isinstance(part, dict):
+                continue
+            file = part.get("file") if isinstance(part.get("file"), dict) else {}
+            uri = file.get("uri") or file.get("path") or part.get("uri") or part.get("path")
+            mime = str(file.get("mimeType") or part.get("mimeType") or part.get("mime") or "")
+            if not uri:
+                continue
+            if mime.startswith("image/") and not out["image_path"]:
+                out["image_path"] = str(uri)
+            elif mime.startswith("audio/") and not out["audio_path"]:
+                out["audio_path"] = str(uri)
+            elif mime.startswith("video/") and not out["video_path"]:
+                out["video_path"] = str(uri)
+    return out
+
+
 def handle_rpc(
     payload: dict[str, Any],
     *,
@@ -143,12 +178,27 @@ def handle_rpc(
         if not text:
             return err(-32602, "empty message text")
         meta = params.get("metadata") or {}
+        if not isinstance(meta, dict):
+            meta = {}
+        media = _message_media(params if isinstance(params, dict) else {})
+        explicit_duration = isinstance(meta, dict) and "duration_s" in meta or (
+            isinstance(params, dict) and "duration_s" in params
+        )
+        if explicit_duration:
+            duration_s = meta.get("duration_s") if "duration_s" in meta else params.get("duration_s")
+        elif media["image_path"] and media["audio_path"] and not media["video_path"]:
+            duration_s = None
+        else:
+            duration_s = 5.0
         body = {
             "request": text,
             "quality": meta.get("quality") or params.get("quality") or DEFAULT_QUALITY,
             "dry_run": bool(meta.get("dry_run") or params.get("dry_run")),
             "variant": meta.get("variant") or params.get("variant"),
-            "duration_s": meta.get("duration_s") or params.get("duration_s") or 5.0,
+            "duration_s": duration_s,
+            "image_path": media["image_path"],
+            "audio_path": media["audio_path"],
+            "video_path": media["video_path"],
         }
         task_id = store.create(text)
         submit(task_id, body)
@@ -175,14 +225,31 @@ def submit_orchestrator(task_id: str, body: dict[str, Any], store: TaskStore) ->
             from master_agent.orchestrator.pipeline import dry_run_pipeline, run_pipeline
             from master_agent.web.jobs import MANAGER
 
+            from pathlib import Path
+
             quality = body.get("quality") or DEFAULT_QUALITY
-            duration_s = float(body.get("duration_s") or 5.0)
+            image_path = body.get("image_path")
+            audio_path = body.get("audio_path")
+            video_path = body.get("video_path")
+            duration_s = body.get("duration_s")
+            if duration_s is None and image_path and audio_path and not video_path:
+                from master_agent.orchestrator.talking import duration_following_audio
+
+                duration_s, _note = duration_following_audio(str(audio_path))
+            duration_s = float(duration_s or 5.0)
+
+            def _name(path: str | None) -> str | None:
+                return Path(path).name if path else None
+
             if body.get("dry_run"):
                 code = dry_run_pipeline(
                     body["request"],
                     variant=body.get("variant"),
                     quality=quality,
                     duration_s=duration_s,
+                    image_name=_name(image_path),
+                    audio_name=_name(audio_path),
+                    video_name=_name(video_path),
                 )
                 store.set(
                     task_id,
@@ -190,12 +257,27 @@ def submit_orchestrator(task_id: str, body: dict[str, Any], store: TaskStore) ->
                     result={"status": "dry-run", "code": code},
                 )
                 return
+            def _uploaded(path: str | None, upload) -> str | None:
+                if not path:
+                    return None
+                file = Path(path)
+                if file.is_file():
+                    return upload(file)
+                return file.name
+
             with MANAGER.gpu_lock():
+                from master_agent.comfy.client import ComfyClient
+
+                client = ComfyClient()
                 result = run_pipeline(
                     body["request"],
                     quality=quality,
                     variant=body.get("variant"),
                     duration_s=duration_s,
+                    image_name=_uploaded(image_path, client.upload_image),
+                    audio_name=_uploaded(audio_path, client.upload_audio),
+                    video_name=_uploaded(video_path, client.upload_image),
+                    client=client,
                 )
             status = result.status if hasattr(result, "status") else (result or {}).get("status")
             payload = result.to_dict() if hasattr(result, "to_dict") else dict(result or {})

@@ -90,6 +90,42 @@ def test_message_send_defaults_quality_draft_and_duration():
     assert captured["duration_s"] == 5.0
 
 
+def test_message_send_forwards_photo_and_audio(tmp_path):
+    store = TaskStore()
+    captured = {}
+
+    def submit(task_id, body):
+        captured.update(body)
+
+    image = tmp_path / "face.png"
+    audio = tmp_path / "line.wav"
+    image.write_bytes(b"png")
+    audio.write_bytes(b"wav")
+    handle_rpc(
+        {
+            "jsonrpc": "2.0",
+            "id": 11,
+            "method": "message/send",
+            "params": {
+                "message": {
+                    "parts": [
+                        {"type": "text", "text": "she says the line"},
+                        {"type": "file", "file": {"uri": str(image), "mimeType": "image/png"}},
+                        {"type": "file", "file": {"uri": str(audio), "mimeType": "audio/wav"}},
+                    ]
+                }
+            },
+        },
+        store=store,
+        submit=submit,
+    )
+    assert captured["image_path"] == str(image)
+    assert captured["audio_path"] == str(audio)
+    assert captured["duration_s"] is None
+    assert "image/png" in agent_card()["defaultInputModes"]
+    assert "audio/wav" in agent_card()["defaultInputModes"]
+
+
 def test_submit_orchestrator_uses_gpu_lock(monkeypatch):
     import time
 

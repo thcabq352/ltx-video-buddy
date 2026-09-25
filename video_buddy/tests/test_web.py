@@ -235,8 +235,52 @@ class TestJobs(unittest.TestCase):
                 "master_agent.comfy.client.ComfyClient"
             ) as mock_client:
                 inst = mock_client.return_value
-                inst.upload_image.return_value = "start.png"
-                inst.upload_audio.return_value = "vo.wav"
+                inst.upload_image.side_effect = lambda path: Path(path).name
+                inst.upload_audio.return_value = "ui_vo.wav"
+                client = TestClient(app)
+                vid = uploads / "ui_src.mp4"
+                vid.write_bytes(b"\x00\x00\x00\x18ftyp")
+                r = client.post(
+                    "/api/jobs",
+                    json={
+                        "request": "talking head",
+                        "image_path": str(img),
+                        "audio_path": str(aud),
+                        "video_path": str(vid),
+                        "variant": "lipsync",
+                    },
+                )
+                self.assertEqual(r.status_code, 200, r.text)
+                job = MANAGER.get(r.json()["id"])
+                for _ in range(100):
+                    if job.status in ("done", "error"):
+                        break
+                    import time
+
+                    time.sleep(0.05)
+            self.assertEqual(job.status, "done", job.error)
+            kwargs = rp.call_args.kwargs
+            self.assertEqual(kwargs.get("image_name"), "ui_start.png")
+            self.assertEqual(kwargs.get("audio_name"), "ui_vo.wav")
+            self.assertEqual(kwargs.get("video_name"), "ui_src.mp4")
+            self.assertEqual(kwargs.get("variant"), "lipsync")
+            self.assertEqual(job.result.get("media", {}).get("image_name"), "ui_start.png")
+        finally:
+            img.unlink(missing_ok=True)
+            aud.unlink(missing_ok=True)
+            (uploads / "ui_src.mp4").unlink(missing_ok=True)
+
+    def test_run_job_lipsync_without_video_fails(self):
+        from master_agent.config import STATE_DIR
+
+        uploads = STATE_DIR / "uploads"
+        uploads.mkdir(parents=True, exist_ok=True)
+        img = uploads / "ui_still.png"
+        aud = uploads / "ui_voice.wav"
+        img.write_bytes(b"\x89PNG\r\n\x1a\n")
+        aud.write_bytes(b"RIFF")
+        try:
+            with patch("master_agent.orchestrator.pipeline.run_pipeline") as rp:
                 client = TestClient(app)
                 r = client.post(
                     "/api/jobs",
@@ -255,12 +299,9 @@ class TestJobs(unittest.TestCase):
                     import time
 
                     time.sleep(0.05)
-            self.assertEqual(job.status, "done", job.error)
-            kwargs = rp.call_args.kwargs
-            self.assertEqual(kwargs.get("image_name"), "start.png")
-            self.assertEqual(kwargs.get("audio_name"), "vo.wav")
-            self.assertEqual(kwargs.get("variant"), "lipsync")
-            self.assertEqual(job.result.get("media", {}).get("image_name"), "start.png")
+            self.assertEqual(job.status, "error")
+            self.assertIn("ltx25_a2v", job.error or "")
+            rp.assert_not_called()
         finally:
             img.unlink(missing_ok=True)
             aud.unlink(missing_ok=True)

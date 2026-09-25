@@ -177,3 +177,48 @@ def test_h3_does_not_use_ltx_frame_law():
     )
     assert meta["frames"] != snap_ltx_frames(meta["frames"]) or meta["frames"] == 124
     assert meta["frames"] == 124
+
+
+def test_h3_r2v_wires_reference_audio():
+    from master_agent.config import snap_h3_frames as snap
+
+    wf, meta = load_and_patch_workflow(
+        "h3_r2v",
+        prompt="slow push into a neon alley",
+        seed=1,
+        duration_s=5.0,
+        image_name="hero.png",
+        audio_name="line.wav",
+    )
+    audios = [
+        node["inputs"].get("audio")
+        for node in wf.values()
+        if isinstance(node, dict) and node.get("class_type") == "LoadAudio"
+    ]
+    assert "line.wav" in audios
+    refs = [
+        node
+        for node in wf.values()
+        if isinstance(node, dict) and node.get("class_type") == "MiniMaxH3ReferenceToVideo"
+    ]
+    assert refs
+    inputs = refs[0]["inputs"]
+    assert inputs["ref_audios.ref_audio_0"][1] == 0
+    assert inputs["length"] == meta["frames"] == snap(meta["frames"])
+    assert "<audio_1>" in inputs["prompt"]
+    assert "slow push into a neon alley" in inputs["prompt"]
+
+
+def test_h3_fl2va_rejects_voice_file():
+    from master_agent.orchestrator.talking import media_route_error, preview_media_variant
+
+    err = media_route_error("h3_i2v", has_image=True, has_audio=True)
+    assert err
+    assert "ltx25_a2v" in err
+    assert "h3_r2v" in err
+    assert preview_media_variant(
+        "lip sync this photo", has_image=True, has_audio=True
+    ) == "ltx25_a2v"
+    assert preview_media_variant(
+        "use hailuo on this photo", has_image=True, has_audio=True
+    ) == "h3_r2v"

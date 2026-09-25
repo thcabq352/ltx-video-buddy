@@ -146,6 +146,8 @@ python -m master_agent health
 python -m master_agent comfy run --mode generate --variant ltx25_t2v_i2v --prompt "neon rain"
 python -m master_agent comfy attach --recipe previs.json --json workflow.json   # dry-run attach
 python -m master_agent run "cinematic close-up of rain on a window"
+python -m master_agent run "she says the line" --image face.png --audio line.wav
+python -m master_agent run "hailuo, she says the line" --image face.png --audio line.wav --variant h3_r2v
 python -m master_agent music "dreamy synthwave MV" --audio track.mp3
 python -m master_agent mv render "I'm in love with a bot" --audio track.mp3 --out out/MV-FIXED.mp4
 python -m master_agent mv render --audio track.mp3 --dry-run   # plan + unique + Remotion wiring, no GPU

@@ -171,33 +171,28 @@ class ComfyClient:
         return out.get("name") or path.name
 
     def upload_audio(self, path: Path, overwrite: bool = True) -> str:
-        """Upload audio via generic upload if available; else copy name only."""
+        """Upload audio through the same media endpoint as images. One POST."""
         path = Path(path)
         if not path.is_file():
             raise ComfyClientError(f"Audio not found: {path}")
-        # Prefer /upload/image-style endpoint used by many builds for media
         with path.open("rb") as f:
             files = {"image": (path.name, f, "application/octet-stream")}
             data = {"type": "input", "overwrite": str(overwrite).lower()}
-            with httpx.Client(timeout=120.0) as client:
-                r = client.post(self._url("/upload/image"), files=files, data=data)
-                if r.status_code >= 400:
-                    # Fallback: return basename; user must place file in ComfyUI/input
-                    log.debug(
-                        "audio upload failed (%s) for %s: %s",
-                        r.status_code,
-                        path.name,
-                        (r.text or "")[:300],
-                    )
-                    return path.name
-                out = r.json()
             r = self._http().post(
                 self._url("/upload/image"), files=files, data=data, timeout=120.0
             )
-            if r.status_code >= 400:
-                # Fallback: return basename; user must place file in ComfyUI/input
-                return path.name
-            out = r.json()
+        if r.status_code >= 400:
+            snippet = (r.text or "")[:300]
+            log.debug(
+                "audio upload failed (%s) for %s: %s",
+                r.status_code,
+                path.name,
+                snippet,
+            )
+            raise ComfyClientError(
+                f"audio upload failed ({r.status_code}) for {path.name}: {snippet}"
+            )
+        out = r.json()
         return out.get("name") or path.name
 
     def fetch_object_info(self) -> dict[str, Any]:

@@ -23,7 +23,7 @@ from typing import Any, Optional
 
 from master_agent.comfy.client import ComfyClient, ComfyClientError
 from master_agent.comfy.linter import LintBlocked, hard_gate, lint_workflow
-from master_agent.comfy.workflow_patcher import load_and_patch_workflow
+from master_agent.comfy.workflow_patcher import load_and_patch_workflow, media_wiring_error
 from master_agent.config import (
     DOWNSCALE_LADDER,
     JUDGE_ENABLED,
@@ -92,6 +92,8 @@ class Orchestrator:
         variant, source = choose_variant(
             st.request or "",
             has_video=bool(st.video_name),
+            has_image=bool(st.image_name),
+            has_audio=bool(st.audio_name),
             force=force_variant,
             attach_recipe=st.attach_recipe,
             hands=LiveHands(client=self.client),
@@ -116,6 +118,7 @@ class Orchestrator:
                 image_name=st.image_name,
                 audio_name=st.audio_name,
                 video_name=st.video_name,
+                audio_start_s=st.audio_start_s,
                 filename_prefix="master_agent",
                 stg_scale=st.stg_scale,
                 stg_blocks=st.stg_blocks,
@@ -152,6 +155,15 @@ class Orchestrator:
                 return False
         if st.power_mode or POWER_MODE:
             self._power_mode(st)
+        wiring = media_wiring_error(
+            self._workflow,
+            image_name=st.image_name,
+            audio_name=st.audio_name,
+            video_name=st.video_name,
+        )
+        if wiring:
+            st.fail(wiring)
+            return False
         return True
 
     def _power_mode(self, st: RunState) -> None:
@@ -468,6 +480,7 @@ class Orchestrator:
         kind: str = "",
         music_bed_attached: bool = False,
         audio_path: Optional[str] = None,
+        audio_start_s: float = 0.0,
         control_pack_present: bool = False,
         control_pack_used: Optional[dict[str, bool]] = None,
         previs_source: str = "",
@@ -489,6 +502,7 @@ class Orchestrator:
             image_name=image_name,
             audio_name=audio_name,
             audio_path=audio_path,
+            audio_start_s=float(audio_start_s or 0.0),
             kind=kind,
             music_bed_attached=music_bed_attached,
             judge_enabled=JUDGE_ENABLED if judge_enabled is None else judge_enabled,
@@ -504,6 +518,19 @@ class Orchestrator:
         )
         try:
             st.variant = self._select_variant(st, variant)
+            from master_agent.orchestrator.talking import media_route_error
+
+            route_err = media_route_error(
+                st.variant,
+                has_image=bool(st.image_name),
+                has_audio=bool(st.audio_name),
+                has_video=bool(st.video_name),
+            )
+            if route_err:
+                st.fail(route_err)
+                return self._finish(st)
+            if st.image_name and st.audio_name and not st.video_name:
+                st.log(f"route: photo + voice → {st.variant}")
             st.log(f"variant={st.variant} duration={duration_s}s quality={quality or 'default'}")
             plan_clip_paths(st)
             persist_clip_provenance(st, revise_notes=latest_revise_notes(st))

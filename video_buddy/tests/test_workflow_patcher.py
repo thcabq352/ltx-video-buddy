@@ -5,6 +5,7 @@ Run: .venv/Scripts/python.exe -m pytest tests/test_workflow_patcher.py -q
 
 from __future__ import annotations
 
+import json
 import unittest
 from pathlib import Path
 from unittest.mock import patch
@@ -199,6 +200,59 @@ class TestLanPaintKSamplerPatch(unittest.TestCase):
         self.assertEqual(inputs["seed"], 99)
         self.assertEqual(inputs["steps"], 8)
         self.assertEqual(inputs["cfg"], 1.5)
+
+
+class TestAudioToVideoClock(unittest.TestCase):
+    def test_a2v_duration_audio_and_enhancer_retarget(self):
+        with patch(
+            "master_agent.comfy.workflow_patcher._text_enhancer_filename",
+            return_value=None,
+        ):
+            wf, meta = load_and_patch_workflow(
+                "ltx25_a2v",
+                prompt="she speaks",
+                seed=1,
+                duration_s=3.0,
+                audio_start_s=1.5,
+                image_name="face.png",
+                audio_name="voice.wav",
+            )
+        self.assertEqual(wf["5512"]["inputs"]["value"], 3.0)
+        self.assertEqual(wf["5601"]["inputs"]["value"], 1.5)
+        latents = [
+            node["inputs"].get("length")
+            for node in wf.values()
+            if isinstance(node, dict) and node.get("class_type") == "EmptyLTXVLatentVideo"
+        ]
+        self.assertIn(73, latents)
+        images = [
+            node["inputs"].get("image")
+            for node in wf.values()
+            if isinstance(node, dict) and node.get("class_type") == "LoadImage"
+        ]
+        self.assertIn("face.png", images)
+        audios = [
+            node["inputs"].get("audio")
+            for node in wf.values()
+            if isinstance(node, dict) and node.get("class_type") == "LoadAudio"
+        ]
+        self.assertIn("voice.wav", audios)
+        booleans = [
+            node["inputs"].get("value")
+            for node in wf.values()
+            if isinstance(node, dict) and node.get("class_type") == "PrimitiveBoolean"
+        ]
+        self.assertIn(True, booleans)
+        inplace = [
+            node
+            for node in wf.values()
+            if isinstance(node, dict) and node.get("class_type") == "LTXVImgToVideoInplace"
+        ]
+        self.assertTrue(inplace)
+        self.assertFalse(inplace[0]["inputs"].get("bypass"))
+        blob = json.dumps(wf)
+        self.assertNotIn("gemma4_e2b", blob)
+        self.assertEqual(meta["frames"], 73)
 
 
 if __name__ == "__main__":

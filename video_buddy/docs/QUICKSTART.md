@@ -64,6 +64,13 @@ python -m master_agent run "lock this face" --variant h3_r2v --image ref.png --n
 python -m master_agent comfy run --mode generate --variant base --prompt "a test shot"
 python -m master_agent comfy run --mode generate --variant wan22 --prompt "photoreal street"
 python -m master_agent run "talking head dub" --video input.mp4 --variant lipsync --no-interview
+
+# Photo + voice → talking clip (ltx25_a2v). Needs the LTX 2.5 core pack
+# (transformer, Gemma TE, video VAE, audio VAE, spatial upscaler).
+# The duration head is optional. gemma4_e2b is optional (retargeted if missing).
+python -m master_agent run "she says the line" --image face.png --audio line.wav --no-interview
+# MiniMax H3 reference audio is h3_r2v (still + wav/mp3), not fl2va:
+python -m master_agent run "hailuo, she says the line" --image face.png --audio line.wav --variant h3_r2v --no-interview
 ```
 
 `--prepare` lints and writes JSON. It does **not** require weights or a GPU
