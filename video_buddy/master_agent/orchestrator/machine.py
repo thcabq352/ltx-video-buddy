@@ -104,6 +104,7 @@ class Orchestrator:
 
     def _patch(self, st: RunState) -> bool:
         """(Re)build the workflow from current params. Returns success."""
+        self._inject_spoken_line(st)
         try:
             workflow, meta = load_and_patch_workflow(
                 st.variant or "base",
@@ -123,6 +124,7 @@ class Orchestrator:
                 stg_scale=st.stg_scale,
                 stg_blocks=st.stg_blocks,
                 sampler_name=st.sampler_name,
+                spoken_line=st.spoken_line or None,
             )
         except Exception as e:
             st.fail(f"patch failed: {e}")
@@ -165,6 +167,46 @@ class Orchestrator:
             st.fail(wiring)
             return False
         return True
+
+    @staticmethod
+    def _resolve_h3_line(st: RunState) -> None:
+        """Fill a missing H3 line from the brief or a local transcriber, else warn."""
+        from master_agent.orchestrator.h3_voice import (
+            H3_MISSING_LINE_WARNING,
+            resolve_spoken_line,
+        )
+        from master_agent.orchestrator.talking import H3_AUDIO_VARIANTS, canonical_variant
+
+        if canonical_variant(st.variant) not in H3_AUDIO_VARIANTS:
+            return
+        if not st.audio_name and not st.audio_path:
+            return
+        if not (st.spoken_line or "").strip():
+            st.spoken_line = resolve_spoken_line("", st.request, st.audio_path)
+        if not (st.spoken_line or "").strip():
+            st.log(f"warn: {H3_MISSING_LINE_WARNING}")
+
+    @staticmethod
+    def _inject_spoken_line(st: RunState) -> None:
+        """Keep the H3 spoken line in the prompt across revise re-patches."""
+        if not (st.spoken_line or "").strip():
+            return
+        from master_agent.orchestrator.h3_voice import inject_spoken_line
+        from master_agent.orchestrator.talking import H3_AUDIO_VARIANTS, canonical_variant
+
+        if canonical_variant(st.variant) not in H3_AUDIO_VARIANTS:
+            return
+        st.prompt = inject_spoken_line(st.prompt or st.request, st.spoken_line)
+
+    def _skip_judge(self, st: RunState) -> None:
+        """--no-judge: one render. No judge call, no quality-bar revise, no a2."""
+        st.judge_decision = "skipped"
+        st.judge_reason = "judge skipped (--no-judge): one render, no quality_bar revise"
+        st.loop_status = LOOP_PASSED
+        st.quality_bar = {}
+        st.log("judge skipped: one render, no quality_bar revise")
+        persist_clip_provenance(st, revise_notes=latest_revise_notes(st))
+        st.transition("DONE")
 
     def _power_mode(self, st: RunState) -> None:
         """LLM graph ops on the patched workflow; keep base graph if invalid."""
@@ -473,6 +515,9 @@ class Orchestrator:
         image_name: Optional[str] = None,
         audio_name: Optional[str] = None,
         judge_enabled: Optional[bool] = None,
+        revise_enabled: Optional[bool] = None,
+        spoken_line: Optional[str] = None,
+        voice_sample: Optional[dict[str, Any]] = None,
         max_judge_rounds: int = MAX_JUDGE_ROUNDS,
         power_mode: Optional[bool] = None,
         attach_recipe: Optional[dict[str, Any]] = None,
@@ -506,6 +551,9 @@ class Orchestrator:
             kind=kind,
             music_bed_attached=music_bed_attached,
             judge_enabled=JUDGE_ENABLED if judge_enabled is None else judge_enabled,
+            revise_enabled=True if revise_enabled is None else bool(revise_enabled),
+            spoken_line=(spoken_line or "").strip(),
+            voice_sample=dict(voice_sample or {}),
             max_judge_rounds=max_judge_rounds,
             power_mode=POWER_MODE if power_mode is None else bool(power_mode),
             attach_recipe=attach_recipe,
@@ -540,11 +588,16 @@ class Orchestrator:
                 )
                 if voice_warn:
                     st.log(f"warn: {voice_warn}")
+                self._resolve_h3_line(st)
             st.log(f"variant={st.variant} duration={duration_s}s quality={quality or 'default'}")
             plan_clip_paths(st)
             persist_clip_provenance(st, revise_notes=latest_revise_notes(st))
 
             if st.dry_run:
+                if not st.revise_enabled:
+                    st.log("dry-run: --no-judge is one pass, no quality_bar revise")
+                    self._skip_judge(st)
+                    return self._finish(st)
                 st.log("self-improve dry-run: skip Comfy queue, close judge→revise→rejudge")
                 st.transition("JUDGE")
                 self._judge(st)
@@ -562,8 +615,11 @@ class Orchestrator:
             st.transition("RESOLVE")
             if not self._resolve(st):
                 return self._finish(st)
-            st.transition("JUDGE")
-            self._judge(st)
+            if not st.revise_enabled:
+                self._skip_judge(st)
+            else:
+                st.transition("JUDGE")
+                self._judge(st)
         except Exception as e:
             st.fail(f"unhandled orchestrator error: {e}")
         return self._finish(st)

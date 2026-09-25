@@ -78,7 +78,7 @@ The public H3 BMX still ships the original showcase sidecar as
 |---|---|
 | Prompts | `brief` / `positive` / `negative` / `additives` |
 | Engine | `backend=comfy` + `workflow_id` / `variant` |
-| Params | `seed`, `steps`, `cfg`, `size` `[w,h]`, `fps`, `duration`, `refs` |
+| Params | `seed`, `steps`, `cfg`, `size` `[w,h]`, `fps`, `duration`, `refs`. Optional `voice_sample` (`original_duration_s`, `start_s`, `end_s`, `method`, `trimmed`) when an H3 sample was trimmed or passed through. Optional `prompts.spoken_line` when a line was supplied. |
 | Lineage | `shot_id`, `attempt_id`, `iteration`, `parent_shot_id`, `parent_attempt_id` |
 | Judge | `score` (honest) + `fail_reasons` (`kind=cpu_fail_rules` for quality-bar a/c/d) |
 | Other | `revise_notes` that produced this attempt, `created_at`, `output_path`, `hash` |

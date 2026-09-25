@@ -84,8 +84,8 @@ def agent_card(*, host: str = "127.0.0.1", port: int = STUDIO_PORT) -> dict[str,
                 "description": (
                     "A2A message/send with a video brief, or MCP create_video. "
                     "Photo + voice defaults to ltx25_a2v. "
-                    "h3_r2v uses your audio as a voice reference; it doesn't lip-sync to it. "
-                    "Use ltx25_a2v for a supplied voice."
+                    "H3 speaks your line in the voice of your 2-12 s sample and animates the mouth to it (coarse sync). "
+                    "For tight lip-sync to an exact recording, use ltx25_a2v."
                 ),
                 "tags": ["ltx", "comfyui", "video"],
             }
@@ -217,6 +217,13 @@ def handle_rpc(
             "image_path": media["image_path"],
             "audio_path": media["audio_path"],
             "video_path": media["video_path"],
+            "spoken_line": (
+                meta.get("line")
+                or meta.get("dialogue")
+                or meta.get("spoken_line")
+                or params.get("line")
+                or params.get("dialogue")
+            ),
         }
         task_id = store.create(text)
         submit(task_id, body)
@@ -238,6 +245,17 @@ def handle_rpc(
         if voice_warn:
             result["warning"] = voice_warn
             result["notes"] = voice_warn
+            from master_agent.orchestrator.h3_voice import (
+                h3_missing_line_warning,
+                resolve_spoken_line,
+            )
+
+            spoken = resolve_spoken_line(body.get("spoken_line"), text, None)
+            missing = h3_missing_line_warning(spoken, h3_voice=True)
+            if spoken:
+                result["spoken_line"] = spoken
+            if missing:
+                result["line_warning"] = missing
         return ok(result)
 
     if method == "tasks/get":
@@ -296,6 +314,7 @@ def submit_orchestrator(task_id: str, body: dict[str, Any], store: TaskStore) ->
                     image_name=_name(image_path),
                     audio_name=_name(audio_path),
                     video_name=_name(video_path),
+                    spoken_line=body.get("spoken_line"),
                 )
                 dry_result: dict[str, Any] = {"status": "dry-run", "code": code}
                 if voice_warn:
@@ -315,6 +334,45 @@ def submit_orchestrator(task_id: str, body: dict[str, Any], store: TaskStore) ->
                     return upload(file)
                 return file.name
 
+            voice_sample = None
+            spoken_line = body.get("spoken_line")
+            if image_path and audio_path and not video_path:
+                from master_agent.orchestrator.h3_voice import (
+                    VoiceSampleError,
+                    h3_voice_preflight,
+                )
+                from master_agent.orchestrator.talking import is_h3_voice_route
+
+                if is_h3_voice_route(
+                    body.get("request"),
+                    variant=body.get("variant"),
+                    has_image=True,
+                    has_audio=True,
+                    has_video=bool(video_path),
+                ):
+                    try:
+                        pre = h3_voice_preflight(
+                            request=str(body.get("request") or ""),
+                            variant=body.get("variant"),
+                            audio_path=str(audio_path),
+                            has_image=True,
+                            has_video=bool(video_path),
+                            line=spoken_line,
+                        )
+                    except VoiceSampleError as exc:
+                        store.set(
+                            task_id,
+                            state="failed",
+                            error=str(exc),
+                            result={"status": "error", "error": str(exc), "warning": voice_warn},
+                        )
+                        return
+                    audio_path = pre.audio_path
+                    voice_sample = pre.voice_sample
+                    spoken_line = pre.spoken_line or spoken_line
+                    if pre.line_warning:
+                        voice_warn = voice_warn or pre.line_warning
+
             with MANAGER.gpu_lock():
                 from master_agent.comfy.client import ComfyClient
 
@@ -326,7 +384,10 @@ def submit_orchestrator(task_id: str, body: dict[str, Any], store: TaskStore) ->
                     duration_s=duration_s,
                     image_name=_uploaded(image_path, client.upload_image),
                     audio_name=_uploaded(audio_path, client.upload_audio),
+                    audio_path=audio_path,
                     video_name=_uploaded(video_path, client.upload_image),
+                    spoken_line=spoken_line,
+                    voice_sample=voice_sample,
                     client=client,
                 )
             status = result.status if hasattr(result, "status") else (result or {}).get("status")

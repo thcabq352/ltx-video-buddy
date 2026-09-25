@@ -117,10 +117,10 @@ python -m master_agent run "talking head dub" --video input.mp4 --variant lipsyn
 # Default route is ltx25_a2v, which keeps the supplied voice.
 python -m master_agent run "she says the line" --image face.png --audio line.wav --no-interview
 # Naming Hailuo / MiniMax / H3 still routes to h3_r2v (fl2va does not take a voice file).
-# h3_r2v uses your audio as a voice reference; it doesn't lip-sync to it. Use ltx25_a2v for a supplied voice.
-python -m master_agent run "hailuo, she says the line" --image face.png --audio line.wav --variant h3_r2v --no-interview
+# H3 speaks your line in the voice of your 2-12 s sample and animates the mouth to it (coarse sync). For tight lip-sync to an exact recording, use ltx25_a2v.
+python -m master_agent run "The ringmaster clown speaks directly to camera, lips synced to the voice" --image face.png --audio sample.wav --variant h3_r2v --line "Hey there, Keep Local AI runs on your own machine." --no-interview
 python -m master_agent run "LTX 2.5 alley" --variant ltx25_t2v_i2v --no-interview
-python -m master_agent run "..." --no-judge  # skip the judge loop
+python -m master_agent run "..." --no-judge  # one render: no judge, no quality-bar revise
 
 # Multi-segment (duration beyond the per-clip VRAM cap auto-splits):
 python -m master_agent run "premium coffee commercial" --duration 8 --quality draft

@@ -1,11 +1,13 @@
 """Photo + voice routing helpers.
 
 A still plus a wav/mp3 is a talking clip. The default graph is LTX 2.5
-audio-to-video (``ltx25_a2v``), which keeps the supplied voice.
-``h3_r2v`` is used only when the brief names MiniMax / Hailuo / H3 /
-ref2va, or when that variant is forced. Its audio is a voice reference
-for speech the model generates. ``lipsync`` stays video-in. fl2va H3
-graphs generate their own soundtrack and must not swallow a voice file.
+audio-to-video (``ltx25_a2v``), which keeps the supplied voice and
+lip-syncs tightly to that recording. ``h3_r2v`` is used only when the
+brief names MiniMax / Hailuo / H3 / ref2va, or when that variant is
+forced. H3 speaks a written line in the voice of a 2–12 s sample and
+animates the mouth to it (coarse sync). ``lipsync`` stays video-in.
+fl2va H3 graphs generate their own soundtrack and must not swallow a
+voice file.
 """
 
 from __future__ import annotations
@@ -33,10 +35,10 @@ H3_NO_INPUT_AUDIO = frozenset({
 })
 A2V_VARIANTS = frozenset({"ltx25_a2v", "a2v"})
 
-# Live tower: H3 ref2va regenerates speech from the clip. It does not drive the mouth.
+# Live tower: H3 speaks the written line in the sample voice. Sync is coarse.
 H3_R2V_AUDIO_LABEL = (
-    "h3_r2v uses your audio as a voice reference; it doesn't lip-sync to it. "
-    "Use ltx25_a2v for a supplied voice."
+    "H3 speaks your line in the voice of your 2-12 s sample and animates the mouth to it (coarse sync). "
+    "For tight lip-sync to an exact recording, use ltx25_a2v."
 )
 
 _H3_REQUEST = re.compile(r"\b(?:minimax|hailuo|ref2va|h3_r2v|h3)\b", re.IGNORECASE)
@@ -121,6 +123,27 @@ def h3_r2v_audio_warning(
     return H3_R2V_AUDIO_LABEL
 
 
+def is_h3_voice_route(
+    request: str | None = None,
+    *,
+    variant: str | None = None,
+    has_image: bool = False,
+    has_audio: bool = False,
+    has_video: bool = False,
+) -> bool:
+    """True when photo + audio is actually routed to H3 ref2va."""
+    if has_video or not (has_image and has_audio):
+        return False
+    routed = preview_media_variant(
+        request or "",
+        variant=variant,
+        has_image=has_image,
+        has_audio=has_audio,
+        has_video=has_video,
+    )
+    return canonical_variant(routed) in H3_AUDIO_VARIANTS
+
+
 def media_route_error(
     variant: str | None,
     *,
@@ -139,6 +162,7 @@ def media_route_error(
     if canon in H3_NO_INPUT_AUDIO and has_audio:
         return (
             f"{canon} generates its own soundtrack and does not take a voice file. "
+            "For a 2–12 s voice sample plus a written line, use --variant h3_r2v. "
             f"{H3_R2V_AUDIO_LABEL} "
             "The default photo + voice path is --variant ltx25_a2v."
         )

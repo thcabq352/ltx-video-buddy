@@ -121,8 +121,8 @@ H3_META: dict[str, dict[str, Any]] = {
     "h3_r2v": {
         "description": (
             "MiniMax H3 ref2va reference-to-AV (images / video / audio). "
-            "h3_r2v uses your audio as a voice reference; it doesn't lip-sync to it. "
-            "Use ltx25_a2v for a supplied voice."
+            "H3 speaks your line in the voice of your 2-12 s sample and animates the mouth to it (coarse sync). "
+            "For tight lip-sync to an exact recording, use ltx25_a2v."
         ),
         "modes": ["r2v", "ref2va"],
         "weight_bundle": "h3_ref2va",

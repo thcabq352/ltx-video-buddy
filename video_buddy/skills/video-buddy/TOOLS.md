@@ -90,8 +90,8 @@ python -m master_agent run "music video for a synthwave track" --self-improve-dr
 python -m master_agent run "LTX 2.5 alley" --variant ltx25_t2v_i2v --no-interview
 python -m master_agent run "talking head" --video input.mp4 --variant lipsync --no-interview
 python -m master_agent run "she says the line" --image face.png --audio line.wav --no-interview
-# h3_r2v uses your audio as a voice reference; it doesn't lip-sync to it. Use ltx25_a2v for a supplied voice.
-python -m master_agent run "hailuo, she says the line" --image face.png --audio line.wav --variant h3_r2v --no-interview
+# H3 speaks your line in the voice of your 2-12 s sample and animates the mouth to it (coarse sync). For tight lip-sync to an exact recording, use ltx25_a2v.
+python -m master_agent run "The ringmaster clown speaks directly to camera, lips synced to the voice" --image face.png --audio sample.wav --variant h3_r2v --line "Hey there, Keep Local AI runs on your own machine." --no-interview
 python -m master_agent music "synthwave MV" --audio track.mp3 --no-interview
 python -m master_agent mv render "I'm in love with a bot" --audio track.mp3 --out out/MV-FIXED.mp4
 python -m master_agent mv render --audio track.mp3 --dry-run
@@ -106,7 +106,7 @@ LTX 2.5 (no env flag): `ltx25_t2v_i2v` (`t2v_i2v`), `ltx25_t2v_i2v_two_stage`,
 
 MiniMax H3: `h3_t2v` / `h3_i2v` / `h3_flf` (fl2va), `h3_r2v` (ref2va).
 Aliases `fl2va` / `ref2va`. CFG 1.0. Do not break LTX 2.5 / WAN paths.
-h3_r2v uses your audio as a voice reference; it doesn't lip-sync to it. Use ltx25_a2v for a supplied voice.
+H3 speaks your line in the voice of your 2-12 s sample and animates the mouth to it (coarse sync). For tight lip-sync to an exact recording, use ltx25_a2v.
 
 Still-working: `base`, `eros`, `directors`, `lipsync`, `wan22`, `flux`,
 `vb_movie_builder`, CCC / renderer / AI-VFX slugs. List: `python -m master_agent workflows`.

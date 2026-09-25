@@ -137,7 +137,7 @@ def rank_story_candidates(
     if has_image and has_audio:
         from master_agent.orchestrator.talking import requests_h3
 
-        # Named H3 / Hailuo / ref2va stays on h3_r2v (voice reference, not a driving track).
+        # Named H3 / Hailuo / ref2va stays on h3_r2v (sample voice + written line, coarse sync).
         if requests_h3(request):
             return [("h3_r2v", "input")]
         return [("ltx25_a2v", "input")]

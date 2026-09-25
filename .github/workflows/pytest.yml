@@ -28,4 +28,8 @@ jobs:
             video_buddy/tests/test_upscale.py \
             video_buddy/tests/test_accelerator_bypass.py \
             video_buddy/tests/test_music_video.py \
-            video_buddy/tests/test_clip_provenance.py
+            video_buddy/tests/test_clip_provenance.py \
+            video_buddy/tests/test_h3_voice_sample.py \
+            video_buddy/tests/test_h3_catalog.py \
+            video_buddy/tests/test_cli_routing.py \
+            video_buddy/tests/test_a2a.py
