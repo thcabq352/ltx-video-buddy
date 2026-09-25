@@ -214,14 +214,18 @@ def build_clip_provenance(
         parent_shot = None
     if parent_attempt == "":
         parent_attempt = None
+    prompts: dict[str, Any] = {
+        "brief": str(getattr(st, "request", "") or ""),
+        "positive": str(getattr(st, "prompt", "") or getattr(st, "request", "") or ""),
+        "negative": str(getattr(st, "negative_prompt", "") or ""),
+        "additives": _additives_from_state(st),
+    }
+    spoken = str(getattr(st, "spoken_line", "") or "").strip()
+    if spoken:
+        prompts["spoken_line"] = spoken
     payload = {
         "schema": CLIP_PROVENANCE_SCHEMA,
-        "prompts": {
-            "brief": str(getattr(st, "request", "") or ""),
-            "positive": str(getattr(st, "prompt", "") or getattr(st, "request", "") or ""),
-            "negative": str(getattr(st, "negative_prompt", "") or ""),
-            "additives": _additives_from_state(st),
-        },
+        "prompts": prompts,
         "engine": {
             "backend": "comfy",
             "workflow_id": variant,
@@ -255,6 +259,15 @@ def build_clip_provenance(
         "output_path": clip_str,
         "hash": digest,
     }
+    sample = getattr(st, "voice_sample", None) or {}
+    if isinstance(sample, dict) and sample.get("method"):
+        payload["params"]["voice_sample"] = {
+            "original_duration_s": sample.get("original_duration_s"),
+            "start_s": sample.get("start_s"),
+            "end_s": sample.get("end_s"),
+            "method": sample.get("method"),
+            "trimmed": bool(sample.get("trimmed")),
+        }
     return payload
 
 

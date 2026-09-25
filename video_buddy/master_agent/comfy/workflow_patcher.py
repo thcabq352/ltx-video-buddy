@@ -239,13 +239,15 @@ def media_wiring_error(
         return (
             f"image {image_name!r} was refused: it does not feed the sampler. "
             "Photo + voice uses --variant ltx25_a2v. "
-            "h3_r2v uses your audio as a voice reference; it doesn't lip-sync to it."
+            "H3 speaks your line in the voice of your 2-12 s sample and animates the mouth to it (coarse sync). "
+            "For tight lip-sync to an exact recording, use ltx25_a2v."
         )
     if audio_name and not _filename_has_consumer(workflow, audio_name):
         return (
             f"audio {audio_name!r} was refused: no node consumes it. "
             "Photo + voice uses --variant ltx25_a2v. "
-            "h3_r2v uses your audio as a voice reference; it doesn't lip-sync to it."
+            "H3 speaks your line in the voice of your 2-12 s sample and animates the mouth to it (coarse sync). "
+            "For tight lip-sync to an exact recording, use ltx25_a2v."
         )
     if video_name and not _filename_has_consumer(workflow, video_name):
         return (
@@ -1344,18 +1346,22 @@ def _wire_h3_reference_media(workflow: dict[str, Any], values: dict[str, Any]) -
             inputs["ref_audios.ref_audio_0"] = [audio_id, 0]
             prompt = str(inputs.get("prompt") or "")
             extra = ""
+            voice_clause = " The subject speaks in the voice of the reference audio."
             if "<audio_1>" not in prompt:
                 extra += " Reference: <audio_1>."
             if "reference audio" not in prompt.lower():
-                extra += " The subject speaks in sync with the reference audio."
+                extra += voice_clause
             if image and "<image_1>" not in prompt:
                 extra = " Reference: <image_1> <audio_1>." + (
-                    " The subject speaks in sync with the reference audio."
-                    if "reference audio" not in prompt.lower()
-                    else ""
+                    voice_clause if "reference audio" not in prompt.lower() else ""
                 )
             if extra:
                 inputs["prompt"] = (prompt.rstrip() + extra).strip()
+        line = values.get("spoken_line")
+        if line:
+            from master_agent.orchestrator.h3_voice import inject_spoken_line
+
+            inputs["prompt"] = inject_spoken_line(str(inputs.get("prompt") or ""), str(line))
 
 
 def load_and_patch_workflow(
@@ -1374,6 +1380,7 @@ def load_and_patch_workflow(
     audio_name: Optional[str] = None,
     video_name: Optional[str] = None,
     audio_start_s: float = 0.0,
+    spoken_line: Optional[str] = None,
     filename_prefix: str = "ltx_agent",
     global_prompt: Optional[str] = None,
     segment_prompts: Optional[list[str]] = None,
@@ -1488,6 +1495,7 @@ def load_and_patch_workflow(
         "last_image": last_image,
         "audio_name": audio_name,
         "video_name": video_name,
+        "spoken_line": (spoken_line or "").strip() or None,
         "audio_start_s": float(audio_start_s or 0.0),
         "duration_s": float(duration_s),
         "filename_prefix": filename_prefix,

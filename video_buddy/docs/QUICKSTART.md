@@ -30,7 +30,7 @@ tower nodes or weights are missing.
 | `h3_t2v` | `fl2va` | MiniMax H3 fl2va text-to-AV (native stereo) |
 | `h3_i2v` | — | MiniMax H3 fl2va image-to-AV |
 | `h3_flf` | — | MiniMax H3 fl2va first + last frame |
-| `h3_r2v` | `ref2va` | MiniMax H3 ref2va voice reference (not lip-sync) |
+| `h3_r2v` | `ref2va` | MiniMax H3 ref2va: line in a 2–12 s sample voice (coarse mouth sync) |
 
 The director allowlist is every `workflows/manifests.yaml` slug (derived in
 `load_workflow_files()`). Rules + LLM can pick `base`, `eros`, `directors`,
@@ -70,8 +70,8 @@ python -m master_agent run "talking head dub" --video input.mp4 --variant lipsyn
 # The duration head is optional. gemma4_e2b is optional (retargeted if missing).
 python -m master_agent run "she says the line" --image face.png --audio line.wav --no-interview
 # MiniMax H3 reference audio is h3_r2v (still + wav/mp3), not fl2va.
-# h3_r2v uses your audio as a voice reference; it doesn't lip-sync to it. Use ltx25_a2v for a supplied voice.
-python -m master_agent run "hailuo, she says the line" --image face.png --audio line.wav --variant h3_r2v --no-interview
+# H3 speaks your line in the voice of your 2-12 s sample and animates the mouth to it (coarse sync). For tight lip-sync to an exact recording, use ltx25_a2v.
+python -m master_agent run "The ringmaster clown speaks directly to camera, lips synced to the voice" --image face.png --audio sample.wav --variant h3_r2v --line "Hey there, Keep Local AI runs on your own machine." --no-interview
 ```
 
 `--prepare` lints and writes JSON. It does **not** require weights or a GPU

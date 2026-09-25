@@ -200,6 +200,9 @@ def test_mcp_create_video_warns_on_h3_photo_voice(monkeypatch, tmp_path: Path):
         "master_agent.orchestrator.talking.duration_following_audio",
         lambda _path, probe=None: (3.9, None),
     )
+    # Live H3 voice mode probes the sample before queue. Stub bytes have
+    # duration 0, so the gate must see a 2–12 s sample.
+    monkeypatch.setattr("master_agent.music.beats.audio_duration", lambda _path: 4.0)
     from master_agent.mcp_server import create_video
 
     warned = create_video(

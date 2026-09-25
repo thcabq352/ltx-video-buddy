@@ -88,7 +88,9 @@ CAPABILITY_CATALOG: tuple[Capability, ...] = (
         templates=("h3_t2v", "h3_i2v", "h3_flf", "h3_r2v"),
         notes=(
             "Default catalog. fl2va = t2v/i2v/flf, ref2va = r2v. "
-            "16GB pick: GGUF Q4_K DiT + Comfy TE (NVFP4/int8). CFG stays 1.0."
+            "16GB pick: GGUF Q4_K DiT + Comfy TE (NVFP4/int8). CFG stays 1.0. "
+            "H3 speaks your line in the voice of your 2-12 s sample and animates the mouth to it (coarse sync). "
+            "For tight lip-sync to an exact recording, use ltx25_a2v."
         ),
     ),
     Capability(

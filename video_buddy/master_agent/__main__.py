@@ -290,6 +290,7 @@ def cmd_run(args: argparse.Namespace) -> int:
         duration_following_audio,
         h3_r2v_audio_warning,
         is_audio_driven,
+        is_h3_voice_route,
         media_route_error,
         preview_media_variant,
         skip_music_autoroute,
@@ -298,6 +299,8 @@ def cmd_run(args: argparse.Namespace) -> int:
     has_image = bool(getattr(args, "image", None))
     has_audio = bool(getattr(args, "audio", None))
     has_video = bool(getattr(args, "video", None))
+    spoken_line = (getattr(args, "line", None) or "").strip()
+    voice_sample = None
     preview = preview_media_variant(
         args.request,
         variant=args.variant,
@@ -314,6 +317,34 @@ def cmd_run(args: argparse.Namespace) -> int:
     if route_err:
         print(f"FAIL  {route_err}")
         return 1
+    from master_agent.orchestrator.h3_voice import VoiceSampleError, h3_voice_preflight
+
+    if is_h3_voice_route(
+        args.request,
+        variant=args.variant,
+        has_image=has_image,
+        has_audio=has_audio,
+        has_video=has_video,
+    ):
+        try:
+            pre = h3_voice_preflight(
+                request=args.request,
+                variant=args.variant,
+                audio_path=args.audio,
+                has_image=has_image,
+                has_video=has_video,
+                line=spoken_line or None,
+            )
+        except VoiceSampleError as exc:
+            print(f"FAIL  {exc}")
+            return 1
+        args.audio = pre.audio_path
+        voice_sample = pre.voice_sample
+        spoken_line = pre.spoken_line or ""
+        if pre.trimmed_note:
+            print(f"warn: {pre.trimmed_note}")
+        if pre.line_warning:
+            print(f"warn: {pre.line_warning}")
     if (
         has_audio
         and not getattr(args, "duration_set", False)
@@ -359,7 +390,11 @@ def cmd_run(args: argparse.Namespace) -> int:
             image_name=image_name,
             audio_name=audio_name,
             video_name=Path(args.video).name if getattr(args, "video", None) else None,
+            audio_path=args.audio if getattr(args, "audio", None) else None,
             judge_enabled=False if args.no_judge else JUDGE_ENABLED,
+            revise_enabled=True,
+            spoken_line=spoken_line or None,
+            voice_sample=voice_sample,
             max_judge_rounds=args.max_judge_rounds or MAX_JUDGE_ROUNDS,
             attach_recipe=attach_recipe,
             dry_run=True,
@@ -411,6 +446,7 @@ def cmd_run(args: argparse.Namespace) -> int:
             image_name=Path(args.image).name if getattr(args, "image", None) else None,
             audio_name=Path(args.audio).name if getattr(args, "audio", None) else None,
             video_name=Path(args.video).name if getattr(args, "video", None) else None,
+            spoken_line=spoken_line or None,
         )
 
     if not client.is_up():
@@ -438,6 +474,7 @@ def cmd_run(args: argparse.Namespace) -> int:
             width=args.width,
             height=args.height,
             judge_enabled=False if args.no_judge else JUDGE_ENABLED,
+            revise_enabled=not args.no_judge,
             max_judge_rounds=args.max_judge_rounds or MAX_JUDGE_ROUNDS,
             llm_panel=args.llm_panel,
             panel_judge=args.panel_judge,
@@ -478,8 +515,12 @@ def cmd_run(args: argparse.Namespace) -> int:
         video_name=video_name,
         image_name=image_name,
         audio_name=audio_name,
+        audio_path=args.audio if getattr(args, "audio", None) else None,
         storyboard_mode=args.storyboard,
         judge_enabled=False if args.no_judge else JUDGE_ENABLED,
+        revise_enabled=not args.no_judge,
+        spoken_line=spoken_line or None,
+        voice_sample=voice_sample,
         max_judge_rounds=args.max_judge_rounds or MAX_JUDGE_ROUNDS,
         max_full_judge_rounds=args.max_full_judge_rounds or MAX_FULL_JUDGE_ROUNDS,
         llm_panel=args.llm_panel,
@@ -772,6 +813,7 @@ def cmd_music(args: argparse.Namespace) -> int:
         width=args.width,
         height=args.height,
         judge_enabled=False if args.no_judge else JUDGE_ENABLED,
+        revise_enabled=not args.no_judge,
         max_judge_rounds=args.max_judge_rounds or MAX_JUDGE_ROUNDS,
         llm_panel=args.llm_panel,
         panel_judge=args.panel_judge,
@@ -1456,8 +1498,8 @@ def main(argv: list[str] | None = None) -> int:
         "--variant",
         help=(
             "force catalog variant (see: python -m master_agent workflows). "
-            "h3_r2v uses your audio as a voice reference; it doesn't lip-sync to it. "
-            "Use ltx25_a2v for a supplied voice."
+            "H3 speaks your line in the voice of your 2-12 s sample and animates the mouth to it (coarse sync). "
+            "For tight lip-sync to an exact recording, use ltx25_a2v."
         ),
     )
     p.add_argument(
@@ -1475,7 +1517,20 @@ def main(argv: list[str] | None = None) -> int:
     p.add_argument("--video", help="source video file (lipsync); uploaded to ComfyUI first")
     p.add_argument("--image", help="source image file (i2v); uploaded to ComfyUI first")
     p.add_argument("--audio", help="source audio file; uploaded to ComfyUI first")
-    p.add_argument("--no-judge", action="store_true", help="skip the judge loop")
+    p.add_argument(
+        "--line",
+        default=None,
+        help=(
+            "Exact words for H3 voice mode (h3_r2v). Injected word for word. "
+            "The --audio file is a 2–12 s voice sample; longer samples are trimmed "
+            "to the loudest 12 s."
+        ),
+    )
+    p.add_argument(
+        "--no-judge",
+        action="store_true",
+        help="one render: skip the judge and the quality-bar revise (no second attempt)",
+    )
     p.add_argument("--max-judge-rounds", type=int, default=None, help="judge retry budget")
     p.add_argument("--storyboard", choices=["smart", "always", "multi_only", "off"],
                    help="storyboard mode (default: env STORYBOARD_MODE or smart)")
@@ -1584,7 +1639,11 @@ def main(argv: list[str] | None = None) -> int:
     p.add_argument("--seed", type=int, help="fixed seed (default: random)")
     p.add_argument("--width", type=int, default=768)
     p.add_argument("--height", type=int, default=512)
-    p.add_argument("--no-judge", action="store_true", help="skip the judge loop")
+    p.add_argument(
+        "--no-judge",
+        action="store_true",
+        help="one render per shot: skip the judge and the quality-bar revise",
+    )
     p.add_argument("--max-judge-rounds", type=int, default=None, help="judge retry budget")
     p.add_argument("--llm-panel",
                    help="storyboard LLM panel: preset (default|local | grok | "

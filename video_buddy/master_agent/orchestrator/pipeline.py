@@ -268,8 +268,12 @@ def run_pipeline(
     video_name: Optional[str] = None,
     image_name: Optional[str] = None,
     audio_name: Optional[str] = None,
+    audio_path: Optional[str] = None,
     storyboard_mode: Optional[str] = None,
     judge_enabled: Optional[bool] = None,
+    revise_enabled: Optional[bool] = None,
+    spoken_line: Optional[str] = None,
+    voice_sample: Optional[dict[str, Any]] = None,
     max_judge_rounds: int = MAX_JUDGE_ROUNDS,
     max_full_judge_rounds: int = MAX_FULL_JUDGE_ROUNDS,
     judge_threshold: float = JUDGE_SCORE_THRESHOLD,
@@ -369,8 +373,12 @@ def run_pipeline(
             video_name=video_name,
             image_name=image_name,
             audio_name=audio_name,
+            audio_path=audio_path,
             audio_start_s=audio_starts[0] if audio_starts else 0.0,
             judge_enabled=j_enabled,
+            revise_enabled=revise_enabled,
+            spoken_line=spoken_line,
+            voice_sample=voice_sample,
             max_judge_rounds=max_judge_rounds,
             power_mode=power_mode,
             attach_recipe=attach_recipe,
@@ -465,8 +473,12 @@ def run_pipeline(
             video_name=video_name,
             image_name=seg_image,
             audio_name=audio_name,
+            audio_path=audio_path,
             audio_start_s=audio_starts[i] if i < len(audio_starts) else 0.0,
             judge_enabled=j_enabled,
+            revise_enabled=revise_enabled,
+            spoken_line=spoken_line,
+            voice_sample=voice_sample,
             max_judge_rounds=max_judge_rounds,
             power_mode=power_mode,
             attach_recipe=attach_recipe,
@@ -655,6 +667,7 @@ def dry_run_pipeline(
     image_name: Optional[str] = None,
     audio_name: Optional[str] = None,
     video_name: Optional[str] = None,
+    spoken_line: Optional[str] = None,
 ) -> int:
     """Storyboard + patch + validate every segment without queueing. CLI exit code."""
     from master_agent.comfy.validator import format_report, validate_workflow
@@ -711,6 +724,23 @@ def dry_run_pipeline(
         )
         if voice_warn:
             print(f"warn: {voice_warn}")
+        from master_agent.orchestrator.h3_voice import (
+            h3_missing_line_warning,
+            resolve_spoken_line,
+        )
+        from master_agent.orchestrator.talking import is_h3_voice_route
+
+        if is_h3_voice_route(
+            request,
+            variant=variant,
+            has_image=bool(image_name),
+            has_audio=bool(audio_name),
+            has_video=bool(video_name),
+        ):
+            spoken_line = resolve_spoken_line(spoken_line, request) or spoken_line
+            missing = h3_missing_line_warning(spoken_line, h3_voice=True)
+            if missing:
+                print(f"warn: {missing}")
         if talking.note:
             print(f"warn: {talking.note}")
     else:
@@ -785,6 +815,7 @@ def dry_run_pipeline(
                 audio_name=audio_name,
                 video_name=video_name,
                 audio_start_s=audio_starts[i] if i < len(audio_starts) else 0.0,
+                spoken_line=spoken_line,
             )
         except Exception as e:
             print(f"FAIL  segment {i + 1} patch: {e}")

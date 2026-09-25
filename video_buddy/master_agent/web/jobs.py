@@ -183,6 +183,24 @@ class JobManager:
             )
             if voice_warn:
                 print(f"warn: {voice_warn}")
+            from master_agent.orchestrator.h3_voice import (
+                h3_missing_line_warning,
+                resolve_spoken_line,
+            )
+            from master_agent.orchestrator.talking import is_h3_voice_route
+
+            if is_h3_voice_route(
+                job.request,
+                variant=p.get("variant"),
+                has_image=True,
+                has_audio=True,
+                has_video=False,
+            ):
+                spoken = resolve_spoken_line(p.get("line"), job.request, None)
+                p["spoken_line"] = spoken or None
+                missing = h3_missing_line_warning(spoken, h3_voice=True)
+                if missing:
+                    print(f"warn: {missing}")
         return True
 
     def _do_run(self, job: Job) -> None:
@@ -192,13 +210,44 @@ class JobManager:
         p = job.params
         if not self._guard_media(job):
             return
+        audio_path = p.get("audio_path")
+        if audio_path:
+            from master_agent.orchestrator.h3_voice import VoiceSampleError, h3_voice_preflight
+            from master_agent.orchestrator.talking import is_h3_voice_route
+
+            if is_h3_voice_route(
+                job.request,
+                variant=p.get("variant"),
+                has_image=bool(p.get("image_path")),
+                has_audio=True,
+                has_video=bool(p.get("video_path")),
+            ):
+                try:
+                    pre = h3_voice_preflight(
+                        request=job.request,
+                        variant=p.get("variant"),
+                        audio_path=audio_path,
+                        has_image=bool(p.get("image_path")),
+                        has_video=bool(p.get("video_path")),
+                        line=p.get("line") or p.get("spoken_line"),
+                    )
+                except VoiceSampleError as exc:
+                    print(f"FAIL  {exc}")
+                    job.error = str(exc)
+                    return
+                audio_path = pre.audio_path or audio_path
+                p["audio_path"] = audio_path
+                p["voice_sample"] = pre.voice_sample
+                p["spoken_line"] = pre.spoken_line or None
+                if pre.trimmed_note:
+                    print(f"warn: {pre.trimmed_note}")
         client = ComfyClient()
         image_name = audio_name = video_name = None
         if p.get("image_path"):
             image_name = client.upload_image(Path(p["image_path"]))
             print(f"uploaded image -> ComfyUI: {image_name}")
-        if p.get("audio_path"):
-            audio_name = client.upload_audio(Path(p["audio_path"]))
+        if audio_path:
+            audio_name = client.upload_audio(Path(audio_path))
             print(f"uploaded audio -> ComfyUI: {audio_name}")
         if p.get("video_path"):
             # Comfy treats source video like an image upload into input/
@@ -214,6 +263,9 @@ class JobManager:
             video_name=video_name,
             image_name=image_name,
             audio_name=audio_name,
+            audio_path=p.get("audio_path"),
+            spoken_line=p.get("spoken_line") or p.get("line"),
+            voice_sample=p.get("voice_sample"),
             storyboard_mode=p.get("storyboard"),
             llm_panel=p.get("llm_panel"),
             client=client,

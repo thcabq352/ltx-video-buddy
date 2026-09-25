@@ -62,6 +62,7 @@ def run_music_video(
     width: int = 768,
     height: int = 512,
     judge_enabled: Optional[bool] = None,
+    revise_enabled: Optional[bool] = None,
     max_judge_rounds: int = MAX_JUDGE_ROUNDS,
     judge_threshold: float = JUDGE_SCORE_THRESHOLD,
     llm_panel: Optional[str] = None,
@@ -75,6 +76,7 @@ def run_music_video(
     out_dir = OUTPUTS_DIR / run_id
     out_dir.mkdir(parents=True, exist_ok=True)
     j_enabled = JUDGE_ENABLED if judge_enabled is None else judge_enabled
+    revise_on = True if revise_enabled is None else bool(revise_enabled)
     base_seed = seed if seed is not None else random.randint(0, 2**32 - 1)
 
     log(f"analyzing audio: {audio_path}")
@@ -112,6 +114,7 @@ def run_music_video(
             request, run_id, out_dir, bmap, audio_path,
             variant=variant, quality=quality, base_seed=base_seed,
             width=width, height=height, j_enabled=j_enabled,
+            revise_enabled=revise_on,
             max_judge_rounds=max_judge_rounds, llm_panel=llm_panel,
             panel_judge=panel_judge, client=client, log=log, record=record,
         )
@@ -184,7 +187,7 @@ def _fractal_visual(run_id, out_dir, bmap, *, width, height, seed, audio_path, l
 def _shots_visual(
     request, run_id, out_dir, bmap, audio_path, *,
     variant, quality, base_seed, width, height, j_enabled,
-    max_judge_rounds, llm_panel, panel_judge, client, log, record,
+    revise_enabled, max_judge_rounds, llm_panel, panel_judge, client, log, record,
 ):
     from master_agent.orchestrator.machine import Orchestrator
     from master_agent.orchestrator.pipeline import _plan_storyboard, _synthetic_cards
@@ -241,6 +244,7 @@ def _shots_visual(
             width=width,
             height=height,
             judge_enabled=j_enabled,
+            revise_enabled=revise_enabled,
             max_judge_rounds=max_judge_rounds,
             kind="music_video",
             music_bed_attached=True,

@@ -56,6 +56,9 @@ class RunState:
     audio_name: Optional[str] = None
     audio_path: Optional[str] = None
     audio_start_s: float = 0.0
+    # H3 voice sample trim (optional ClipProvenance params.voice_sample)
+    voice_sample: dict[str, Any] = field(default_factory=dict)
+    spoken_line: str = ""
     kind: str = ""
     music_bed_attached: bool = False
     has_audio: bool = False
@@ -78,6 +81,8 @@ class RunState:
 
     # Judge
     judge_enabled: bool = True
+    # False with --no-judge: one render, no quality-bar revise, no a2.
+    revise_enabled: bool = True
     max_judge_rounds: int = 3
     judge_round: int = 0
     attempt: int = 1

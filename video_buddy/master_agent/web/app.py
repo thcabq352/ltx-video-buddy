@@ -51,6 +51,8 @@ class JobRequest(BaseModel):
     upscale: Optional[str] = None
     seed: Optional[int] = None
     storyboard: Optional[str] = None
+    # Exact words for H3 voice mode (h3_r2v). Empty skips the injection and warns.
+    line: Optional[str] = None
 
 
 class JudgeRequest(BaseModel):
@@ -255,6 +257,7 @@ def api_submit_job(req: JobRequest):
         upscale=req.upscale,
         seed=req.seed,
         storyboard=req.storyboard,
+        line=(req.line or "").strip() or None,
     )
     return job.to_dict()
 

@@ -82,14 +82,17 @@ def create_video(
     image_path: str | None = None,
     audio_path: str | None = None,
     video_path: str | None = None,
+    line: str | None = None,
 ) -> dict:
     """Generate a video end-to-end (director routing, storyboard panel,
     per-segment judge, stitch, full judge). dry_run=True plans and validates
     without spending GPU. image_path + audio_path (no video) is a talking clip
     and defaults to ltx25_a2v. Naming MiniMax, Hailuo, H3, or ref2va — or
     passing variant h3_r2v — still routes to h3_r2v.
-    h3_r2v uses your audio as a voice reference; it doesn't lip-sync to it. Use ltx25_a2v for a supplied voice.
-    That warning is returned on the response when the route is h3_r2v.
+    H3 speaks your line in the voice of your 2-12 s sample and animates the mouth to it (coarse sync). For tight lip-sync to an exact recording, use ltx25_a2v.
+    Pass line (the exact words) with a 2–12 s audio_path. Under 2 s is rejected
+    before queue; over 12 s is trimmed. That warning is returned on the response
+    when the route is h3_r2v. A missing line sets line_warning and does not fail.
     Returns paths, scores and judge notes."""
     from pathlib import Path
 
@@ -121,6 +124,53 @@ def create_video(
         has_audio=bool(audio_path),
         has_video=bool(video_path),
     )
+    spoken_line = (line or "").strip()
+    voice_sample = None
+    line_warning = None
+    from master_agent.orchestrator.talking import is_h3_voice_route
+
+    h3_voice = is_h3_voice_route(
+        request,
+        variant=variant,
+        has_image=bool(image_path),
+        has_audio=bool(audio_path),
+        has_video=bool(video_path),
+    )
+    if h3_voice and audio_path and not dry_run:
+        from master_agent.orchestrator.h3_voice import VoiceSampleError, h3_voice_preflight
+
+        try:
+            pre = h3_voice_preflight(
+                request=request,
+                variant=variant,
+                audio_path=audio_path,
+                has_image=bool(image_path),
+                has_video=bool(video_path),
+                line=spoken_line or None,
+            )
+        except VoiceSampleError as exc:
+            return {
+                "status": "error",
+                "error": str(exc),
+                "warning": voice_warn,
+                "notes": voice_warn,
+            }
+        audio_path = pre.audio_path
+        if audio_path:
+            audio_name = Path(audio_path).name
+        voice_sample = pre.voice_sample
+        spoken_line = pre.spoken_line or ""
+        line_warning = pre.line_warning
+        if pre.trimmed_note:
+            note = f"{note}; {pre.trimmed_note}" if note else pre.trimmed_note
+    elif h3_voice:
+        from master_agent.orchestrator.h3_voice import (
+            h3_missing_line_warning,
+            resolve_spoken_line,
+        )
+
+        spoken_line = resolve_spoken_line(spoken_line or None, request, None)
+        line_warning = h3_missing_line_warning(spoken_line, h3_voice=True)
 
     if dry_run:
         from master_agent.orchestrator.pipeline import dry_run_pipeline
@@ -135,6 +185,7 @@ def create_video(
             image_name=image_name,
             audio_name=audio_name,
             video_name=video_name,
+            spoken_line=spoken_line or None,
         )
         return {
             "dry_run": True,
@@ -144,6 +195,8 @@ def create_video(
             "audio_note": note,
             "warning": voice_warn,
             "notes": voice_warn,
+            "line_warning": line_warning,
+            "spoken_line": spoken_line or None,
         }
 
     from master_agent.comfy.client import ComfyClient, ComfyClientError
@@ -169,7 +222,10 @@ def create_video(
         llm_panel=llm_panel,
         image_name=image_name,
         audio_name=audio_name,
+        audio_path=audio_path,
         video_name=video_name,
+        spoken_line=spoken_line or None,
+        voice_sample=voice_sample,
         client=client,
     )
     return {
@@ -186,6 +242,8 @@ def create_video(
         "audio_note": note,
         "warning": voice_warn,
         "notes": voice_warn,
+        "line_warning": line_warning,
+        "spoken_line": spoken_line or None,
     }
 
 
