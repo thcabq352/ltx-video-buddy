@@ -137,7 +137,7 @@ def rank_story_candidates(
     if has_image and has_audio:
         from master_agent.orchestrator.talking import requests_h3
 
-        # Named H3 / Hailuo / ref2va uses the reference graph. Otherwise LTX A2V.
+        # Named H3 / Hailuo / ref2va stays on h3_r2v (voice reference, not a driving track).
         if requests_h3(request):
             return [("h3_r2v", "input")]
         return [("ltx25_a2v", "input")]

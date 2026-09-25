@@ -165,7 +165,11 @@ def test_load_template_does_not_fall_back_to_base_for_h3():
     assert _find_nodes_by_class(raw, "MiniMaxH3ImageToVideo")
     assert _find_nodes_by_class(raw, "LoadImage")
     raw_r2v = load_workflow_template("h3_r2v")
-    assert _find_nodes_by_class(raw_r2v, "MiniMaxH3ReferenceToVideo")
+    refs = _find_nodes_by_class(raw_r2v, "MiniMaxH3ReferenceToVideo")
+    assert refs
+    raw_inputs = refs[0][1]["inputs"]
+    assert "ref_images" not in raw_inputs
+    assert raw_inputs["ref_images.ref_image_0"] == ["13", 0]
 
 
 def test_h3_does_not_use_ltx_frame_law():
@@ -203,10 +207,125 @@ def test_h3_r2v_wires_reference_audio():
     ]
     assert refs
     inputs = refs[0]["inputs"]
+    for bare in ("ref_images", "ref_audios", "ref_videos", "ref_video_audios"):
+        assert bare not in inputs
+    assert inputs["ref_images.ref_image_0"][1] == 0
     assert inputs["ref_audios.ref_audio_0"][1] == 0
+    image_id = str(inputs["ref_images.ref_image_0"][0])
+    assert wf[image_id]["class_type"] == "LoadImage"
+    assert wf[image_id]["inputs"]["image"] == "hero.png"
+    audio_id = str(inputs["ref_audios.ref_audio_0"][0])
+    assert wf[audio_id]["class_type"] == "LoadAudio"
     assert inputs["length"] == meta["frames"] == snap(meta["frames"])
     assert "<audio_1>" in inputs["prompt"]
     assert "slow push into a neon alley" in inputs["prompt"]
+
+
+def _h3_autogrow(slot_type: str, prefix: str) -> list:
+    return [
+        "COMFY_AUTOGROW_V3",
+        {
+            "template": {
+                "input": {"required": {prefix.rstrip("_"): [slot_type, {}]}},
+                "prefix": prefix,
+                "min": 0,
+                "max": 9,
+            }
+        },
+    ]
+
+
+def _object_info_for_graph(workflow: dict) -> dict:
+    """Permissive specs for every class, with a live-shaped H3 ref node."""
+    info: dict = {}
+    for node in workflow.values():
+        if not isinstance(node, dict):
+            continue
+        class_type = node.get("class_type")
+        if not class_type or class_type in info:
+            continue
+        required = {}
+        for key, value in (node.get("inputs") or {}).items():
+            if "." in key:
+                continue
+            if isinstance(value, list) and len(value) == 2 and isinstance(value[1], int):
+                required[key] = ["*", {}]
+            elif isinstance(value, bool):
+                required[key] = ["BOOLEAN", {}]
+            elif isinstance(value, int):
+                required[key] = ["INT", {}]
+            elif isinstance(value, float):
+                required[key] = ["FLOAT", {}]
+            else:
+                required[key] = ["STRING", {}]
+        info[class_type] = {
+            "input": {"required": required},
+            "output": ["*"] * 8,
+        }
+    if "LoadImage" in info:
+        info["LoadImage"]["output"] = ["IMAGE"]
+    if "LoadAudio" in info:
+        info["LoadAudio"]["output"] = ["AUDIO"]
+    info["MiniMaxH3ReferenceToVideo"] = {
+        "input": {
+            "required": {
+                "clip": ["CLIP", {}],
+                "vae": ["VAE", {}],
+                "audio_vae": ["VAE", {}],
+                "prompt": ["STRING", {}],
+                "width": ["INT", {}],
+                "height": ["INT", {}],
+                "length": ["INT", {}],
+                "ref_image_size": ["COMBO", {"options": ["match", "max"]}],
+            },
+            "optional": {
+                "ref_images": _h3_autogrow("IMAGE", "ref_image_"),
+                "ref_audios": _h3_autogrow("AUDIO", "ref_audio_"),
+                "ref_videos": _h3_autogrow("IMAGE", "ref_video_"),
+                "ref_video_audios": _h3_autogrow("AUDIO", "ref_video_audio_"),
+            },
+        },
+        "output": ["CONDITIONING", "LATENT"],
+    }
+    return info
+
+
+def test_h3_r2v_autogrow_validates_dotted_slots_only():
+    """Bare group keys are a COMFY_AUTOGROW_V3 mismatch; dotted slots pass."""
+    import copy
+
+    from master_agent.comfy.validator import validate_workflow
+
+    wf, _meta = load_and_patch_workflow(
+        "h3_r2v",
+        prompt="slow push into a neon alley",
+        seed=1,
+        duration_s=5.0,
+        image_name="hero.png",
+        audio_name="line.wav",
+    )
+    info = _object_info_for_graph(wf)
+    report = validate_workflow(wf, info, file_label="h3_r2v", object_info_source="fixture")
+    assert report.ok, report.errors
+
+    bare = copy.deepcopy(wf)
+    for node in bare.values():
+        if isinstance(node, dict) and node.get("class_type") == "MiniMaxH3ReferenceToVideo":
+            node["inputs"]["ref_images"] = node["inputs"]["ref_images.ref_image_0"]
+            node["inputs"]["ref_audios"] = node["inputs"]["ref_audios.ref_audio_0"]
+    bad = validate_workflow(bare, info, file_label="h3_r2v-bare", object_info_source="fixture")
+    assert any("COMFY_AUTOGROW_V3" in err.message for err in bad.errors)
+    assert any(err.input_name == "ref_images" for err in bad.errors)
+    assert any(err.input_name == "ref_audios" for err in bad.errors)
+
+    combo = copy.deepcopy(wf)
+    for node in combo.values():
+        if isinstance(node, dict) and node.get("class_type") == "MiniMaxH3ReferenceToVideo":
+            node["inputs"]["ref_image_size"] = "nope"
+    combo_report = validate_workflow(
+        combo, info, file_label="h3_r2v-combo", object_info_source="fixture"
+    )
+    assert any("not in combo choices" in err.message for err in combo_report.errors)
 
 
 def test_h3_fl2va_rejects_voice_file():
@@ -222,3 +341,64 @@ def test_h3_fl2va_rejects_voice_file():
     assert preview_media_variant(
         "use hailuo on this photo", has_image=True, has_audio=True
     ) == "h3_r2v"
+
+
+def test_h3_named_photo_voice_warns_and_stays_on_h3_r2v():
+    from master_agent.orchestrator.talking import (
+        H3_R2V_AUDIO_LABEL,
+        h3_r2v_audio_warning,
+        preview_media_variant,
+    )
+
+    brief = "hailuo, she says the line"
+    assert preview_media_variant(brief, has_image=True, has_audio=True) == "h3_r2v"
+    assert (
+        h3_r2v_audio_warning(brief, has_image=True, has_audio=True) == H3_R2V_AUDIO_LABEL
+    )
+    assert (
+        h3_r2v_audio_warning(
+            "she says the line", variant="h3_r2v", has_image=True, has_audio=True
+        )
+        == H3_R2V_AUDIO_LABEL
+    )
+    assert (
+        h3_r2v_audio_warning(
+            "minimax ref2va close-up", variant="ref2va", has_image=True, has_audio=True
+        )
+        == H3_R2V_AUDIO_LABEL
+    )
+    assert preview_media_variant(
+        "she says the line", has_image=True, has_audio=True
+    ) == "ltx25_a2v"
+    assert h3_r2v_audio_warning("she says the line", has_image=True, has_audio=True) is None
+    assert (
+        h3_r2v_audio_warning(
+            brief, variant="ltx25_a2v", has_image=True, has_audio=True
+        )
+        is None
+    )
+    assert h3_r2v_audio_warning(brief, has_image=True, has_audio=True, has_video=True) is None
+
+
+def test_h3_r2v_voice_reference_label_is_on_picker_surfaces():
+    from master_agent.comfy.catalog import load_catalog
+    from master_agent.orchestrator.talking import H3_R2V_AUDIO_LABEL
+
+    entry = next(item for item in load_catalog() if item.id == "h3_r2v")
+    assert H3_R2V_AUDIO_LABEL in entry.description
+    root = Path(__file__).resolve().parents[1]
+    repo = root.parent
+    manifest = (root / "workflows" / "manifests.yaml").read_text(encoding="utf-8")
+    assert H3_R2V_AUDIO_LABEL in manifest
+    for rel in (
+        root / "README.md",
+        root / "workflows" / "minimax-h3" / "README.md",
+        root / "docs" / "QUICKSTART.md",
+        root / "skills" / "video-buddy" / "TOOLS.md",
+        root / "master_agent" / "orchestrator" / "prompts" / "director.md",
+        root / "master_agent" / "web" / "static" / "index.html",
+        root / "AGENTS.md",
+        repo / "README.md",
+    ):
+        text = rel.read_text(encoding="utf-8")
+        assert H3_R2V_AUDIO_LABEL in text, rel

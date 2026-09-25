@@ -114,8 +114,10 @@ python -m master_agent comfy attach --recipe previs.json --json workflow.json --
 python -m master_agent run "cinematic close-up of rain on a window" --quality draft --duration 3
 python -m master_agent run "talking head dub" --video input.mp4 --variant lipsync
 # Photo + voice (no source video). Duration follows the audio (capped at 30s).
+# Default route is ltx25_a2v, which keeps the supplied voice.
 python -m master_agent run "she says the line" --image face.png --audio line.wav --no-interview
-# Same still, MiniMax H3 reference audio (only h3_r2v; fl2va does not take a voice file):
+# Naming Hailuo / MiniMax / H3 still routes to h3_r2v (fl2va does not take a voice file).
+# h3_r2v uses your audio as a voice reference; it doesn't lip-sync to it. Use ltx25_a2v for a supplied voice.
 python -m master_agent run "hailuo, she says the line" --image face.png --audio line.wav --variant h3_r2v --no-interview
 python -m master_agent run "LTX 2.5 alley" --variant ltx25_t2v_i2v --no-interview
 python -m master_agent run "..." --no-judge  # skip the judge loop

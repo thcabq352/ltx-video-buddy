@@ -65,6 +65,15 @@ COMFYUI_OUTPUT_DIR = Path(
 
 # SpaceXAI
 XAI_API_KEY = os.getenv("XAI_API_KEY", "")
+
+
+def ltxv_api_key() -> str:
+    """Lightricks prompt-embedding key (``ltxv_...``).
+
+    Empty unless ``LTXV_API_KEY`` is set. LTX 2.5 graphs then stay on the
+    local Gemma encoder and never queue ``GemmaAPITextEncode``.
+    """
+    return (os.getenv("LTXV_API_KEY") or "").strip()
 SPACEXAI_MODEL = os.getenv("SPACEXAI_MODEL", "grok-4.5")
 XAI_BASE_URL = "https://api.x.ai/v1"
 

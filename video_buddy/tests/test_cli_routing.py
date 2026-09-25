@@ -10,6 +10,7 @@ from pathlib import Path
 
 from master_agent.__main__ import _music_intent, cmd_run
 from master_agent.orchestrator.talking import (
+    H3_R2V_AUDIO_LABEL,
     plan_talking_slices,
     skip_music_autoroute,
 )
@@ -92,6 +93,133 @@ def test_image_skips_music_autoroute(monkeypatch, capsys):
     assert called == {}
     assert rc == 1
     assert "photo + voice" in out
+    assert H3_R2V_AUDIO_LABEL not in out
+
+
+def test_h3_named_route_prints_voice_reference_warning(monkeypatch, capsys):
+    monkeypatch.setattr("master_agent.music.beats.audio_duration", lambda _path: 3.9)
+
+    class _Client:
+        def is_up(self):
+            return True
+
+        def upload_image(self, _path):
+            raise OSError("missing image")
+
+        def upload_audio(self, _path):
+            raise OSError("missing audio")
+
+    monkeypatch.setattr("master_agent.__main__.ComfyClient", lambda *a, **k: _Client())
+
+    rc = cmd_run(
+        _ns(
+            request="hailuo, she says the line",
+            variant=None,
+            image="gator.png",
+            audio="line.wav",
+        )
+    )
+    out = capsys.readouterr().out
+    assert rc == 1
+    assert "photo + voice → h3_r2v" in out
+    assert f"warn: {H3_R2V_AUDIO_LABEL}" in out
+
+    rc = cmd_run(
+        _ns(
+            request="she says the line",
+            variant="h3_r2v",
+            image="gator.png",
+            audio="line.wav",
+        )
+    )
+    forced = capsys.readouterr().out
+    assert rc == 1
+    assert "photo + voice → h3_r2v" in forced
+    assert H3_R2V_AUDIO_LABEL in forced
+
+    rc = cmd_run(
+        _ns(
+            request="she says the line",
+            variant=None,
+            image="gator.png",
+            audio="line.wav",
+        )
+    )
+    default = capsys.readouterr().out
+    assert rc == 1
+    assert "photo + voice → ltx25_a2v" in default
+    assert H3_R2V_AUDIO_LABEL not in default
+
+
+def test_run_help_and_workflows_list_label_h3_r2v(capsys):
+    from master_agent.__main__ import cmd_workflows, main
+
+    try:
+        main(["run", "--help"])
+    except SystemExit as exc:
+        assert exc.code == 0
+    help_out = " ".join(capsys.readouterr().out.split())
+    assert H3_R2V_AUDIO_LABEL in help_out
+
+    assert cmd_workflows(Namespace(json=False, vram=False)) == 0
+    listing = capsys.readouterr().out
+    line = next(row for row in listing.splitlines() if row.strip().startswith("h3_r2v"))
+    assert H3_R2V_AUDIO_LABEL in line
+
+
+def test_mcp_create_video_warns_on_h3_photo_voice(monkeypatch, tmp_path: Path):
+    image = tmp_path / "gator.png"
+    audio = tmp_path / "line.wav"
+    image.write_bytes(b"png")
+    audio.write_bytes(b"wav")
+
+    class _Result:
+        status = "done"
+        video_path = "out.mp4"
+        segment_paths = []
+        segment_scores = []
+        full_judge_score = 0.0
+        full_judge_pass = True
+        full_judge_notes = ""
+        storyboard = []
+        panel_meta = {}
+        error = None
+
+    monkeypatch.setattr(
+        "master_agent.orchestrator.pipeline.run_pipeline",
+        lambda *_a, **_k: _Result(),
+    )
+    monkeypatch.setattr(
+        "master_agent.comfy.client.ComfyClient",
+        lambda *a, **k: type("C", (), {
+            "upload_image": lambda self, path: Path(path).name,
+            "upload_audio": lambda self, path: Path(path).name,
+        })(),
+    )
+    monkeypatch.setattr(
+        "master_agent.orchestrator.talking.duration_following_audio",
+        lambda _path, probe=None: (3.9, None),
+    )
+    from master_agent.mcp_server import create_video
+
+    warned = create_video(
+        "a cartoon gator says the line",
+        variant="h3_r2v",
+        image_path=str(image),
+        audio_path=str(audio),
+    )
+    assert warned["status"] == "done"
+    assert warned["warning"] == H3_R2V_AUDIO_LABEL
+    assert warned["notes"] == H3_R2V_AUDIO_LABEL
+    assert H3_R2V_AUDIO_LABEL in (create_video.__doc__ or "")
+
+    quiet = create_video(
+        "she says the line",
+        image_path=str(image),
+        audio_path=str(audio),
+    )
+    assert quiet["warning"] is None
+    assert quiet["notes"] is None
 
 
 def test_talking_slices_h3_is_one_clip_and_ltx_continues():

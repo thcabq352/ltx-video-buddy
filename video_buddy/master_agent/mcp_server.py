@@ -85,7 +85,11 @@ def create_video(
 ) -> dict:
     """Generate a video end-to-end (director routing, storyboard panel,
     per-segment judge, stitch, full judge). dry_run=True plans and validates
-    without spending GPU. image_path + audio_path (no video) is a talking clip.
+    without spending GPU. image_path + audio_path (no video) is a talking clip
+    and defaults to ltx25_a2v. Naming MiniMax, Hailuo, H3, or ref2va — or
+    passing variant h3_r2v — still routes to h3_r2v.
+    h3_r2v uses your audio as a voice reference; it doesn't lip-sync to it. Use ltx25_a2v for a supplied voice.
+    That warning is returned on the response when the route is h3_r2v.
     Returns paths, scores and judge notes."""
     from pathlib import Path
 
@@ -108,6 +112,15 @@ def create_video(
     image_name = Path(image_path).name if image_path else None
     audio_name = Path(audio_path).name if audio_path else None
     video_name = Path(video_path).name if video_path else None
+    from master_agent.orchestrator.talking import h3_r2v_audio_warning
+
+    voice_warn = h3_r2v_audio_warning(
+        request,
+        variant=variant,
+        has_image=bool(image_path),
+        has_audio=bool(audio_path),
+        has_video=bool(video_path),
+    )
 
     if dry_run:
         from master_agent.orchestrator.pipeline import dry_run_pipeline
@@ -129,6 +142,8 @@ def create_video(
             "status": "dry-run" if code == 0 else "error",
             "error": None if code == 0 else "dry-run failed",
             "audio_note": note,
+            "warning": voice_warn,
+            "notes": voice_warn,
         }
 
     from master_agent.comfy.client import ComfyClient, ComfyClientError
@@ -143,7 +158,7 @@ def create_video(
         if video_path:
             video_name = client.upload_image(Path(video_path))
     except (ComfyClientError, OSError) as exc:
-        return {"status": "error", "error": str(exc)}
+        return {"status": "error", "error": str(exc), "warning": voice_warn, "notes": voice_warn}
 
     result = _quiet(
         run_pipeline,
@@ -169,6 +184,8 @@ def create_video(
         "panel_meta": result.panel_meta,
         "error": result.error,
         "audio_note": note,
+        "warning": voice_warn,
+        "notes": voice_warn,
     }
 
 

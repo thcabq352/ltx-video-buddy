@@ -518,7 +518,7 @@ class Orchestrator:
         )
         try:
             st.variant = self._select_variant(st, variant)
-            from master_agent.orchestrator.talking import media_route_error
+            from master_agent.orchestrator.talking import h3_r2v_audio_warning, media_route_error
 
             route_err = media_route_error(
                 st.variant,
@@ -531,6 +531,15 @@ class Orchestrator:
                 return self._finish(st)
             if st.image_name and st.audio_name and not st.video_name:
                 st.log(f"route: photo + voice → {st.variant}")
+                voice_warn = h3_r2v_audio_warning(
+                    st.request,
+                    variant=st.variant,
+                    has_image=True,
+                    has_audio=True,
+                    has_video=False,
+                )
+                if voice_warn:
+                    st.log(f"warn: {voice_warn}")
             st.log(f"variant={st.variant} duration={duration_s}s quality={quality or 'default'}")
             plan_clip_paths(st)
             persist_clip_provenance(st, revise_notes=latest_revise_notes(st))
