@@ -90,6 +90,102 @@ def test_message_send_defaults_quality_draft_and_duration():
     assert captured["duration_s"] == 5.0
 
 
+def test_message_send_h3_photo_voice_includes_warning(tmp_path):
+    from master_agent.orchestrator.talking import H3_R2V_AUDIO_LABEL
+
+    store = TaskStore()
+    image = tmp_path / "gator.png"
+    audio = tmp_path / "line.wav"
+    image.write_bytes(b"png")
+    audio.write_bytes(b"wav")
+    rpc = handle_rpc(
+        {
+            "jsonrpc": "2.0",
+            "id": 21,
+            "method": "message/send",
+            "params": {
+                "message": {
+                    "parts": [
+                        {"type": "text", "text": "hailuo, the gator says the line"},
+                        {"type": "file", "file": {"uri": str(image), "mimeType": "image/png"}},
+                        {"type": "file", "file": {"uri": str(audio), "mimeType": "audio/wav"}},
+                    ]
+                },
+                "metadata": {"variant": "h3_r2v", "dry_run": True},
+            },
+        },
+        store=store,
+        submit=lambda *_a, **_k: None,
+    )
+    assert rpc["result"]["warning"] == H3_R2V_AUDIO_LABEL
+    assert rpc["result"]["notes"] == H3_R2V_AUDIO_LABEL
+    skill = next(s for s in agent_card()["skills"] if s["id"] == "generate_video")
+    assert H3_R2V_AUDIO_LABEL in skill["description"]
+
+    quiet = handle_rpc(
+        {
+            "jsonrpc": "2.0",
+            "id": 22,
+            "method": "message/send",
+            "params": {
+                "message": {
+                    "parts": [
+                        {"type": "text", "text": "she says the line"},
+                        {"type": "file", "file": {"uri": str(image), "mimeType": "image/png"}},
+                        {"type": "file", "file": {"uri": str(audio), "mimeType": "audio/wav"}},
+                    ]
+                }
+            },
+        },
+        store=store,
+        submit=lambda *_a, **_k: None,
+    )
+    assert "warning" not in quiet["result"]
+    assert "notes" not in quiet["result"]
+
+
+def test_submit_orchestrator_stores_h3_voice_warning(monkeypatch, tmp_path):
+    import time
+
+    from master_agent.a2a.protocol import submit_orchestrator
+    from master_agent.orchestrator.talking import H3_R2V_AUDIO_LABEL
+
+    monkeypatch.setattr(
+        "master_agent.orchestrator.pipeline.dry_run_pipeline",
+        lambda *_a, **_k: 0,
+    )
+    image = tmp_path / "gator.png"
+    audio = tmp_path / "line.wav"
+    image.write_bytes(b"png")
+    audio.write_bytes(b"wav")
+    store = TaskStore()
+    submit_orchestrator(
+        "h3warnh3warn",
+        {
+            "request": "use hailuo on this still",
+            "dry_run": True,
+            "image_path": str(image),
+            "audio_path": str(audio),
+            "duration_s": 3.9,
+        },
+        store,
+    )
+    row = None
+    for _ in range(80):
+        row = store.get("h3warnh3warn")
+        if row and row.get("state") in {"completed", "failed"}:
+            break
+        time.sleep(0.05)
+    assert row and row["state"] == "completed"
+    assert row["result"]["notes"] == H3_R2V_AUDIO_LABEL
+    view = handle_rpc(
+        {"jsonrpc": "2.0", "id": 23, "method": "tasks/get", "params": {"id": "h3warnh3warn"}},
+        store=store,
+        submit=lambda *_a, **_k: None,
+    )
+    assert H3_R2V_AUDIO_LABEL in view["result"]["status"]["message"]["parts"][0]["text"]
+
+
 def test_message_send_forwards_photo_and_audio(tmp_path):
     store = TaskStore()
     captured = {}

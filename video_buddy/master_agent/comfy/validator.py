@@ -520,7 +520,8 @@ def _flag_placeholder_video(report: ValidationReport, workflow: dict[str, Any]) 
                 str(node_id),
                 "LoadVideo",
                 "placeholder source video warehouse_src_30fps.mp4; "
-                "lipsync needs --video. Photo + voice uses ltx25_a2v or h3_r2v.",
+                "lipsync needs --video. Photo + voice uses ltx25_a2v. "
+                "h3_r2v uses your audio as a voice reference; it doesn't lip-sync to it.",
             )
 
 

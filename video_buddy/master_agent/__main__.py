@@ -288,6 +288,7 @@ def cmd_run(args: argparse.Namespace) -> int:
 
     from master_agent.orchestrator.talking import (
         duration_following_audio,
+        h3_r2v_audio_warning,
         is_audio_driven,
         media_route_error,
         preview_media_variant,
@@ -331,6 +332,15 @@ def cmd_run(args: argparse.Namespace) -> int:
             print(f"warn: {note}")
     if has_image and has_audio and not has_video:
         print(f"route: photo + voice → {preview}")
+        voice_warn = h3_r2v_audio_warning(
+            args.request,
+            variant=args.variant,
+            has_image=has_image,
+            has_audio=has_audio,
+            has_video=has_video,
+        )
+        if voice_warn:
+            print(f"warn: {voice_warn}")
 
     if getattr(args, "self_improve_dry", False):
         from master_agent.orchestrator.machine import Orchestrator
@@ -925,7 +935,9 @@ def cmd_workflows(args: argparse.Namespace) -> int:
         return 0
     print(f"{len(variants)} default catalog variant(s):")
     for item in variants:
-        print(f"  {item['id']:<28} {item.get('path', '')}")
+        desc = item.get("description") or ""
+        suffix = f"  {desc}" if desc else ""
+        print(f"  {item['id']:<28} {item.get('path', '')}{suffix}")
     return 0
 
 
@@ -1440,7 +1452,14 @@ def main(argv: list[str] | None = None) -> int:
 
     p = sub.add_parser("run", help="orchestrated generation: patch -> validate -> submit -> judge")
     p.add_argument("request", help="what to generate (natural language)")
-    p.add_argument("--variant", help="force catalog variant (see: python -m master_agent workflows)")
+    p.add_argument(
+        "--variant",
+        help=(
+            "force catalog variant (see: python -m master_agent workflows). "
+            "h3_r2v uses your audio as a voice reference; it doesn't lip-sync to it. "
+            "Use ltx25_a2v for a supplied voice."
+        ),
+    )
     p.add_argument(
         "--duration",
         type=float,

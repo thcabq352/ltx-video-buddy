@@ -290,6 +290,7 @@ def run_pipeline(
     orch = Orchestrator(client=client)
 
     from master_agent.orchestrator.talking import (
+        h3_r2v_audio_warning,
         is_audio_driven,
         media_route_error,
         plan_talking_slices,
@@ -328,6 +329,15 @@ def run_pipeline(
         segs = list(talking.durations)
         audio_starts = list(talking.audio_starts)
         result.log(f"route: photo + voice → {preview}")
+        voice_warn = h3_r2v_audio_warning(
+            request,
+            variant=variant,
+            has_image=bool(image_name),
+            has_audio=bool(audio_name),
+            has_video=bool(video_name),
+        )
+        if voice_warn:
+            result.log(f"warn: {voice_warn}")
         if talking.note:
             result.log(f"warn: {talking.note}")
     else:
@@ -655,6 +665,7 @@ def dry_run_pipeline(
     from master_agent.config import OBJECT_INFO_CACHE
     from master_agent.hands import plan_last_frame_chain
     from master_agent.orchestrator.talking import (
+        h3_r2v_audio_warning,
         is_audio_driven,
         media_route_error,
         plan_talking_slices,
@@ -691,6 +702,15 @@ def dry_run_pipeline(
         segs = list(talking.durations)
         audio_starts = list(talking.audio_starts)
         print(f"route: photo + voice → {preview}")
+        voice_warn = h3_r2v_audio_warning(
+            request,
+            variant=variant,
+            has_image=bool(image_name),
+            has_audio=bool(audio_name),
+            has_video=bool(video_name),
+        )
+        if voice_warn:
+            print(f"warn: {voice_warn}")
         if talking.note:
             print(f"warn: {talking.note}")
     else:

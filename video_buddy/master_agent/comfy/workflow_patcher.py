@@ -238,12 +238,14 @@ def media_wiring_error(
     if image_name and not image_feeds_sampler_latent(workflow, image_name):
         return (
             f"image {image_name!r} was refused: it does not feed the sampler. "
-            "Photo + voice uses --variant ltx25_a2v or --variant h3_r2v."
+            "Photo + voice uses --variant ltx25_a2v. "
+            "h3_r2v uses your audio as a voice reference; it doesn't lip-sync to it."
         )
     if audio_name and not _filename_has_consumer(workflow, audio_name):
         return (
             f"audio {audio_name!r} was refused: no node consumes it. "
-            "Photo + voice uses --variant ltx25_a2v or --variant h3_r2v."
+            "Photo + voice uses --variant ltx25_a2v. "
+            "h3_r2v uses your audio as a voice reference; it doesn't lip-sync to it."
         )
     if video_name and not _filename_has_consumer(workflow, video_name):
         return (

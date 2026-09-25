@@ -145,7 +145,11 @@ class JobManager:
 
     def _guard_media(self, job: Job) -> bool:
         """Fail fast when the chosen graph cannot consume the attached files."""
-        from master_agent.orchestrator.talking import media_route_error, preview_media_variant
+        from master_agent.orchestrator.talking import (
+            h3_r2v_audio_warning,
+            media_route_error,
+            preview_media_variant,
+        )
 
         p = job.params
         preview = preview_media_variant(
@@ -170,6 +174,15 @@ class JobManager:
             print(f"warn: {note}")
         if p.get("image_path") and p.get("audio_path") and not p.get("video_path"):
             print(f"route: photo + voice → {preview}")
+            voice_warn = h3_r2v_audio_warning(
+                job.request,
+                variant=p.get("variant"),
+                has_image=True,
+                has_audio=True,
+                has_video=False,
+            )
+            if voice_warn:
+                print(f"warn: {voice_warn}")
         return True
 
     def _do_run(self, job: Job) -> None:

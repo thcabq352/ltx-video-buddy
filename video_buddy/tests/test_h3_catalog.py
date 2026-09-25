@@ -341,3 +341,64 @@ def test_h3_fl2va_rejects_voice_file():
     assert preview_media_variant(
         "use hailuo on this photo", has_image=True, has_audio=True
     ) == "h3_r2v"
+
+
+def test_h3_named_photo_voice_warns_and_stays_on_h3_r2v():
+    from master_agent.orchestrator.talking import (
+        H3_R2V_AUDIO_LABEL,
+        h3_r2v_audio_warning,
+        preview_media_variant,
+    )
+
+    brief = "hailuo, she says the line"
+    assert preview_media_variant(brief, has_image=True, has_audio=True) == "h3_r2v"
+    assert (
+        h3_r2v_audio_warning(brief, has_image=True, has_audio=True) == H3_R2V_AUDIO_LABEL
+    )
+    assert (
+        h3_r2v_audio_warning(
+            "she says the line", variant="h3_r2v", has_image=True, has_audio=True
+        )
+        == H3_R2V_AUDIO_LABEL
+    )
+    assert (
+        h3_r2v_audio_warning(
+            "minimax ref2va close-up", variant="ref2va", has_image=True, has_audio=True
+        )
+        == H3_R2V_AUDIO_LABEL
+    )
+    assert preview_media_variant(
+        "she says the line", has_image=True, has_audio=True
+    ) == "ltx25_a2v"
+    assert h3_r2v_audio_warning("she says the line", has_image=True, has_audio=True) is None
+    assert (
+        h3_r2v_audio_warning(
+            brief, variant="ltx25_a2v", has_image=True, has_audio=True
+        )
+        is None
+    )
+    assert h3_r2v_audio_warning(brief, has_image=True, has_audio=True, has_video=True) is None
+
+
+def test_h3_r2v_voice_reference_label_is_on_picker_surfaces():
+    from master_agent.comfy.catalog import load_catalog
+    from master_agent.orchestrator.talking import H3_R2V_AUDIO_LABEL
+
+    entry = next(item for item in load_catalog() if item.id == "h3_r2v")
+    assert H3_R2V_AUDIO_LABEL in entry.description
+    root = Path(__file__).resolve().parents[1]
+    repo = root.parent
+    manifest = (root / "workflows" / "manifests.yaml").read_text(encoding="utf-8")
+    assert H3_R2V_AUDIO_LABEL in manifest
+    for rel in (
+        root / "README.md",
+        root / "workflows" / "minimax-h3" / "README.md",
+        root / "docs" / "QUICKSTART.md",
+        root / "skills" / "video-buddy" / "TOOLS.md",
+        root / "master_agent" / "orchestrator" / "prompts" / "director.md",
+        root / "master_agent" / "web" / "static" / "index.html",
+        root / "AGENTS.md",
+        repo / "README.md",
+    ):
+        text = rel.read_text(encoding="utf-8")
+        assert H3_R2V_AUDIO_LABEL in text, rel

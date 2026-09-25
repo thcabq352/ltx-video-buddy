@@ -873,12 +873,18 @@ function updateCreateMediaPills() {
   const aud = $("c-audio")?.files?.length;
   const vid = $("c-video")?.files?.length;
   const variant = ($("c-variant")?.value || "").toLowerCase();
+  const brief = $("c-request")?.value || "";
   const h3NoAudio = ["h3", "h3_t2v", "h3_i2v", "h3_flf", "fl2va", "minimax"].includes(variant);
+  const h3Named = /\b(?:minimax|hailuo|ref2va|h3_r2v|h3)\b/i.test(brief);
+  const h3Voice = ["h3_r2v", "ref2va", "h3_ref2va"].includes(variant) || (!variant && h3Named);
+  const h3VoiceLabel = "h3_r2v uses your audio as a voice reference; it doesn't lip-sync to it. Use ltx25_a2v for a supplied voice.";
   if (hint) {
     if (img && aud && !vid && (variant === "lipsync" || h3NoAudio)) {
-      hint.textContent = "This variant does not take a voice file with a still. Leave variant on auto (ltx25_a2v) or pick h3_r2v for MiniMax reference audio.";
+      hint.textContent = "This variant does not take a voice file with a still. Leave variant on auto (ltx25_a2v). " + h3VoiceLabel;
+    } else if (img && aud && !vid && h3Voice) {
+      hint.textContent = h3VoiceLabel;
     } else if (img && aud && !vid && !variant) {
-      hint.textContent = "Photo + voice routes to ltx25_a2v. Name MiniMax, Hailuo, or H3 in the brief — or pick h3_r2v — for H3 reference audio.";
+      hint.textContent = "Photo + voice routes to ltx25_a2v. " + h3VoiceLabel;
     } else if (!img && aud && !vid && (variant === "lipsync" || !variant)) {
       hint.textContent = "lipsync needs a source video. A still plus this audio uses ltx25_a2v.";
     } else {
@@ -901,6 +907,7 @@ $("c-variant").addEventListener("change", () => {
   $("c-variant").dataset.userSet = "1";
   updateCreateMediaPills();
 });
+$("c-request")?.addEventListener("input", updateCreateMediaPills);
 $("c-duration").addEventListener("input", () => { $("c-duration").dataset.userSet = "1"; });
 
 // create

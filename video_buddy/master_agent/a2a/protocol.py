@@ -81,7 +81,12 @@ def agent_card(*, host: str = "127.0.0.1", port: int = STUDIO_PORT) -> dict[str,
             {
                 "id": "generate_video",
                 "name": "Generate LTX video",
-                "description": "A2A message/send with a video brief, or MCP create_video.",
+                "description": (
+                    "A2A message/send with a video brief, or MCP create_video. "
+                    "Photo + voice defaults to ltx25_a2v. "
+                    "h3_r2v uses your audio as a voice reference; it doesn't lip-sync to it. "
+                    "Use ltx25_a2v for a supplied voice."
+                ),
                 "tags": ["ltx", "comfyui", "video"],
             }
         ],
@@ -105,7 +110,20 @@ def task_view(task: dict[str, Any], tid: str | None = None) -> dict[str, Any]:
         "id": tid or task.get("id"),
         "status": {
             "state": state,
-            "message": {"parts": [{"type": "text", "text": result.get("error") or task.get("error") or state}]},
+            "message": {
+                "parts": [
+                    {
+                        "type": "text",
+                        "text": (
+                            result.get("error")
+                            or task.get("error")
+                            or result.get("warning")
+                            or result.get("notes")
+                            or state
+                        ),
+                    }
+                ]
+            },
         },
         "artifacts": artifacts,
         "metadata": {"result": result},
@@ -202,7 +220,25 @@ def handle_rpc(
         }
         task_id = store.create(text)
         submit(task_id, body)
-        return ok({"id": task_id, "contextId": task_id, "status": {"state": "working"}, "kind": "task"})
+        result: dict[str, Any] = {
+            "id": task_id,
+            "contextId": task_id,
+            "status": {"state": "working"},
+            "kind": "task",
+        }
+        from master_agent.orchestrator.talking import h3_r2v_audio_warning
+
+        voice_warn = h3_r2v_audio_warning(
+            text,
+            variant=body.get("variant"),
+            has_image=bool(body.get("image_path")),
+            has_audio=bool(body.get("audio_path")),
+            has_video=bool(body.get("video_path")),
+        )
+        if voice_warn:
+            result["warning"] = voice_warn
+            result["notes"] = voice_warn
+        return ok(result)
 
     if method == "tasks/get":
         tid = params.get("id") or params.get("task_id")
@@ -241,6 +277,16 @@ def submit_orchestrator(task_id: str, body: dict[str, Any], store: TaskStore) ->
             def _name(path: str | None) -> str | None:
                 return Path(path).name if path else None
 
+            from master_agent.orchestrator.talking import h3_r2v_audio_warning
+
+            voice_warn = h3_r2v_audio_warning(
+                body.get("request"),
+                variant=body.get("variant"),
+                has_image=bool(image_path),
+                has_audio=bool(audio_path),
+                has_video=bool(video_path),
+            )
+
             if body.get("dry_run"):
                 code = dry_run_pipeline(
                     body["request"],
@@ -251,10 +297,14 @@ def submit_orchestrator(task_id: str, body: dict[str, Any], store: TaskStore) ->
                     audio_name=_name(audio_path),
                     video_name=_name(video_path),
                 )
+                dry_result: dict[str, Any] = {"status": "dry-run", "code": code}
+                if voice_warn:
+                    dry_result["warning"] = voice_warn
+                    dry_result["notes"] = voice_warn
                 store.set(
                     task_id,
                     state="completed" if code == 0 else "failed",
-                    result={"status": "dry-run", "code": code},
+                    result=dry_result,
                 )
                 return
             def _uploaded(path: str | None, upload) -> str | None:
@@ -281,6 +331,9 @@ def submit_orchestrator(task_id: str, body: dict[str, Any], store: TaskStore) ->
                 )
             status = result.status if hasattr(result, "status") else (result or {}).get("status")
             payload = result.to_dict() if hasattr(result, "to_dict") else dict(result or {})
+            if voice_warn:
+                payload["warning"] = voice_warn
+                payload["notes"] = voice_warn
             store.set(task_id, state=a2a_task_state(status), result=payload)
         except Exception as exc:
             store.set(task_id, state="failed", error=str(exc), result={"error": str(exc)})

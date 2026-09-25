@@ -843,7 +843,8 @@ h3_flf:
 h3_r2v:
   file: minimax-h3/MiniMax-H3_R2V_REF2VA_api.json
   format: api
-  description: MiniMax H3 ref2va reference-to-AV
+  description: >-
+    MiniMax H3 ref2va reference-to-AV. h3_r2v uses your audio as a voice reference; it doesn't lip-sync to it. Use ltx25_a2v for a supplied voice.
   vram_class: tight
   vram_peak_gb: 13.4
   requires: [ComfyUI >=0.30 MiniMaxH3ReferenceToVideo, ComfyUI-GGUF]

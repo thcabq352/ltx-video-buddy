@@ -8,8 +8,8 @@ Every slug in `allowed_variants` is a real `workflows/manifests.yaml` entry.
 - `directors` — cinematic multi-scene storytelling, director-style shot language.
 - `eros` — adult/erotic content (10eros fine-tune). Only when clearly adult.
 - `lipsync` — talking-head dub over a source video. Only when `--video` is
-  attached. A still plus a voice file is `ltx25_a2v`, or `h3_r2v` when the
-  brief names MiniMax / Hailuo / H3.
+  attached. A still plus a voice file is `ltx25_a2v`. `h3_r2v` when the
+  brief names MiniMax / Hailuo / H3 is a voice reference, not lip-sync.
 - `ltx23_lipsync_v08` — LTX-2.3 3D-rendering lip-sync (clay/depth/mouth guides).
 
 ## Variants — Wan / Flux / Krea / stills
@@ -50,9 +50,7 @@ clean clone. Only pick them if they appear in the payload.
 - `h3_t2v` — fl2va text-to-AV (native stereo). Prefer for MiniMax / H3 / fl2va.
 - `h3_i2v` — fl2va image-to-AV (first frame).
 - `h3_flf` — fl2va first + last frame.
-- `h3_r2v` — ref2va reference-to-AV. The only H3 graph that takes a voice
-  file (`reference_audio`) together with a still. fl2va (`h3_t2v` / `h3_i2v` /
-  `h3_flf`) generates its own soundtrack and must not be given a voice file.
+- `h3_r2v` — ref2va reference-to-AV. The only H3 graph that accepts a still plus an audio file. h3_r2v uses your audio as a voice reference; it doesn't lip-sync to it. Use ltx25_a2v for a supplied voice. fl2va (`h3_t2v` / `h3_i2v` / `h3_flf`) generates its own soundtrack and must not be given a voice file.
 
 ## Story ranking (brain)
 
