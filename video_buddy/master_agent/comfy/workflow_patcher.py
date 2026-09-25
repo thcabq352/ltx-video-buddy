@@ -27,6 +27,7 @@ from master_agent.config import (
     get_variant_gen,
     is_h3_variant,
     is_ltx25_variant,
+    ltxv_api_key,
     resolve_model_path,
     segment_max_s_for_variant,
     snap_h3_frames,
@@ -294,7 +295,161 @@ def _apply_named_fields(
     return applied
 
 
-def _sanitize_ltx_nodes(workflow: dict[str, Any]) -> None:
+def _is_node_link(value: Any) -> bool:
+    return (
+        isinstance(value, list)
+        and len(value) == 2
+        and isinstance(value[0], (str, int))
+        and isinstance(value[1], int)
+    )
+
+
+def _graph_ltxv_api_key(workflow: dict[str, Any]) -> str:
+    """Non-empty key already written on the API encoder or its ltxv_ gate."""
+    for _nid, node in _find_nodes_by_class(workflow, "GemmaAPITextEncode"):
+        raw = (node.get("inputs") or {}).get("api_key")
+        if isinstance(raw, str) and raw.strip():
+            return raw.strip()
+    for _nid, node in _find_nodes_by_class(workflow, "StringContains"):
+        inputs = node.get("inputs") or {}
+        if inputs.get("substring") != "ltxv_":
+            continue
+        raw = inputs.get("string")
+        if isinstance(raw, str) and raw.strip():
+            return raw.strip()
+    return ""
+
+
+def _resolved_ltxv_api_key(workflow: dict[str, Any]) -> str:
+    """Env ``LTXV_API_KEY`` wins; otherwise a key already on the graph."""
+    env = ltxv_api_key()
+    if env:
+        return env
+    return _graph_ltxv_api_key(workflow)
+
+
+def _gemma_api_ckpt_name(
+    workflow: dict[str, Any],
+    object_info: Optional[dict[str, Any]],
+) -> Optional[str]:
+    """A ckpt_name that object_info actually lists for GemmaAPITextEncode."""
+    from master_agent.comfy.loader_names import combo_choices_for, match_combo_name
+
+    choices = combo_choices_for(object_info, "GemmaAPITextEncode", "ckpt_name") or []
+    strings = [c for c in choices if isinstance(c, str) and c]
+    if not strings:
+        return None
+    used: list[str] = []
+    for node in workflow.values():
+        if not isinstance(node, dict):
+            continue
+        ckpt = (node.get("inputs") or {}).get("ckpt_name")
+        if isinstance(ckpt, str) and ckpt:
+            used.append(ckpt)
+    for name in used:
+        matched = match_combo_name(name, strings)
+        if matched:
+            return matched
+    for pred in (
+        lambda s: "2.5" in s.lower() and "ltx" in s.lower(),
+        lambda s: "ltx" in s.lower(),
+    ):
+        for choice in strings:
+            if pred(choice):
+                return choice
+    return strings[0]
+
+
+def _apply_gemma_api_key(
+    workflow: dict[str, Any],
+    api_key: str,
+    *,
+    object_info: Optional[dict[str, Any]],
+) -> None:
+    """Keep the paid branch and fill the required checkpoint combo."""
+    ckpt = _gemma_api_ckpt_name(workflow, object_info)
+    for _nid, node in _find_nodes_by_class(workflow, "GemmaAPITextEncode"):
+        inputs = node.setdefault("inputs", {})
+        if not isinstance(inputs.get("enhance_prompt"), bool):
+            inputs["enhance_prompt"] = False
+        if not _is_node_link(inputs.get("api_key")):
+            inputs["api_key"] = api_key
+        if ckpt:
+            inputs["ckpt_name"] = ckpt
+    for _nid, node in _find_nodes_by_class(workflow, "StringContains"):
+        inputs = node.get("inputs") or {}
+        if inputs.get("substring") != "ltxv_":
+            continue
+        if not _is_node_link(inputs.get("string")):
+            inputs["string"] = api_key
+
+
+def _strip_unconfigured_gemma_api(workflow: dict[str, Any]) -> None:
+    """Drop GemmaAPITextEncode and the switches that select it.
+
+    Consumers of those switches are rewired to the switch ``on_false`` link
+    (local CLIP encoder). The ltxv_ StringContains gate is removed once
+    nothing references it. No paid API node remains in the queued graph.
+    """
+    api_ids = {str(nid) for nid, _node in _find_nodes_by_class(workflow, "GemmaAPITextEncode")}
+    if not api_ids:
+        return
+    switches: dict[str, list[Any]] = {}
+    for nid, node in _find_nodes_by_class(workflow, "ComfySwitchNode"):
+        inputs = node.get("inputs") or {}
+        on_true = inputs.get("on_true")
+        on_false = inputs.get("on_false")
+        if not _is_node_link(on_true) or str(on_true[0]) not in api_ids:
+            continue
+        if not _is_node_link(on_false):
+            continue
+        switches[str(nid)] = [on_false[0], on_false[1]]
+    for node in workflow.values():
+        if not isinstance(node, dict):
+            continue
+        inputs = node.get("inputs")
+        if not isinstance(inputs, dict):
+            continue
+        for name, val in list(inputs.items()):
+            if _is_node_link(val) and str(val[0]) in switches:
+                inputs[name] = list(switches[str(val[0])])
+    for nid in list(api_ids) + list(switches):
+        workflow.pop(nid, None)
+    used: set[str] = set()
+    for node in workflow.values():
+        if not isinstance(node, dict):
+            continue
+        for val in (node.get("inputs") or {}).values():
+            if _is_node_link(val):
+                used.add(str(val[0]))
+    for nid, node in list(workflow.items()):
+        if (
+            isinstance(node, dict)
+            and node.get("class_type") == "StringContains"
+            and str(nid) not in used
+        ):
+            workflow.pop(nid, None)
+
+
+def _resolve_gemma_api_branch(
+    workflow: dict[str, Any],
+    *,
+    object_info: Optional[dict[str, Any]] = None,
+) -> None:
+    if not _find_nodes_by_class(workflow, "GemmaAPITextEncode"):
+        return
+    key = _resolved_ltxv_api_key(workflow)
+    if key:
+        _apply_gemma_api_key(workflow, key, object_info=object_info)
+        return
+    _strip_unconfigured_gemma_api(workflow)
+
+
+def _sanitize_ltx_nodes(
+    workflow: dict[str, Any],
+    *,
+    object_info: Optional[dict[str, Any]] = None,
+) -> None:
     """Ensure LTX custom nodes keep required widget fields after any patching."""
     guider_nodes = _find_nodes_by_class(workflow, "GuiderParameters")
     for i, (_nid, node) in enumerate(guider_nodes):
@@ -350,11 +505,7 @@ def _sanitize_ltx_nodes(workflow: dict[str, Any]) -> None:
             merged.pop(bad, None)
         node["inputs"] = {**merged, **links}
 
-    for _nid, node in _find_nodes_by_class(workflow, "GemmaAPITextEncode"):
-        inputs = node.setdefault("inputs", {})
-        if not isinstance(inputs.get("enhance_prompt"), bool):
-            inputs["enhance_prompt"] = False
-        inputs.pop("ckpt_name", None)
+    _resolve_gemma_api_branch(workflow, object_info=object_info)
 
     for _nid, node in _find_nodes_by_class(workflow, "RandomNoise"):
         inputs = node.setdefault("inputs", {})
@@ -1154,8 +1305,27 @@ def _ensure_load_audio_node(workflow: dict[str, Any], audio_name: str) -> str:
     return nid
 
 
+# Autogrow groups on MiniMaxH3ReferenceToVideo. Live object_info types the
+# bare key as COMFY_AUTOGROW_V3; only the dotted slot accepts IMAGE/AUDIO.
+_H3_REF_PREFIXES = {
+    "ref_images": "ref_image_",
+    "ref_audios": "ref_audio_",
+    "ref_videos": "ref_video_",
+    "ref_video_audios": "ref_video_audio_",
+}
+
+
+def _migrate_h3_autogrow_slots(inputs: dict[str, Any]) -> None:
+    """Move a bare group link onto slot 0 and drop the group key."""
+    for bare, prefix in _H3_REF_PREFIXES.items():
+        slot = f"{bare}.{prefix}0"
+        existing = inputs.pop(bare, None)
+        if existing is not None and slot not in inputs:
+            inputs[slot] = existing
+
+
 def _wire_h3_reference_media(workflow: dict[str, Any], values: dict[str, Any]) -> None:
-    """Dual-write Comfy ref slots. Dotted keys are the current API format."""
+    """Write reference media on dotted autogrow slots only."""
     refs = _find_nodes_by_class(workflow, "MiniMaxH3ReferenceToVideo")
     if not refs:
         return
@@ -1164,15 +1334,12 @@ def _wire_h3_reference_media(workflow: dict[str, Any], values: dict[str, Any]) -
     load_images = _find_nodes_by_class(workflow, "LoadImage")
     for _nid, node in refs:
         inputs = node.setdefault("inputs", {})
+        _migrate_h3_autogrow_slots(inputs)
         if image and load_images:
-            link = [str(load_images[0][0]), 0]
-            inputs["ref_images"] = link
-            inputs["ref_images.ref_image_0"] = link
+            inputs["ref_images.ref_image_0"] = [str(load_images[0][0]), 0]
         if audio:
             audio_id = _ensure_load_audio_node(workflow, str(audio))
-            link = [audio_id, 0]
-            inputs["ref_audios"] = link
-            inputs["ref_audios.ref_audio_0"] = link
+            inputs["ref_audios.ref_audio_0"] = [audio_id, 0]
             prompt = str(inputs.get("prompt") or "")
             extra = ""
             if "<audio_1>" not in prompt:
@@ -1354,7 +1521,7 @@ def load_and_patch_workflow(
     if lora:
         _ensure_lora_node(workflow, lora)
     _bypass_missing_optional_loras(workflow)
-    _sanitize_ltx_nodes(workflow)
+    _sanitize_ltx_nodes(workflow, object_info=object_info)
 
     extras = (manifests.get(variant) or {}).get("extras") or {}
     for key, val in extras.items():
@@ -1364,7 +1531,7 @@ def load_and_patch_workflow(
                 _set_input(workflow[nid], val["input"], values[key])
 
     # Final sanitize after extras
-    _sanitize_ltx_nodes(workflow)
+    _sanitize_ltx_nodes(workflow, object_info=object_info)
 
     from master_agent.comfy.graph_ops import (
         LTX_TEACACHE_VARIANTS,

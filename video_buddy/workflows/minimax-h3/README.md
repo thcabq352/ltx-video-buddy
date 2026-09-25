@@ -36,8 +36,8 @@ python -m master_agent run "BRIEF" --variant h3_r2v --image ref.png --no-intervi
 python -m master_agent run "she says the line" --variant h3_r2v --image face.png --audio line.wav --no-interview
 ```
 
-`h3_r2v` accepts a reference still plus reference audio (Comfy `ref_audios`,
-the same idea as MiniMax video-generation V2 `reference_audio`). fl2va
+`h3_r2v` accepts a reference still plus reference audio on dotted autogrow
+slots (`ref_images.ref_image_0`, `ref_audios.ref_audio_0`). fl2va
 graphs do not take a voice file. One H3 clip, capped at 12s.
 
 Frame counts snap to the H3 **17k+5** grid (124 ≈ 5 s at 24 fps). Do not

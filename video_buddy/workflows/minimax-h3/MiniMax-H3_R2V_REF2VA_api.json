@@ -47,7 +47,7 @@
       "height": 640,
       "length": 124,
       "ref_image_size": "match",
-      "ref_images": ["13", 0]
+      "ref_images.ref_image_0": ["13", 0]
     },
     "_meta": { "title": "H3 R2V / REF2VA" }
   },

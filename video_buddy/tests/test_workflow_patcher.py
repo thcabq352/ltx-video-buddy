@@ -6,6 +6,7 @@ Run: .venv/Scripts/python.exe -m pytest tests/test_workflow_patcher.py -q
 from __future__ import annotations
 
 import json
+import os
 import unittest
 from pathlib import Path
 from unittest.mock import patch
@@ -253,6 +254,149 @@ class TestAudioToVideoClock(unittest.TestCase):
         blob = json.dumps(wf)
         self.assertNotIn("gemma4_e2b", blob)
         self.assertEqual(meta["frames"], 73)
+
+
+_LTX25_VARIANTS = (
+    "ltx25_a2v",
+    "ltx25_t2v_i2v",
+    "ltx25_t2v_i2v_two_stage",
+    "ltx25_flf2v",
+    "ltx25_msr",
+    "ltx25_v2v_ic_lora",
+    "ltx25_t2a",
+)
+
+
+def _api_switch_consumers(workflow):
+    """(node id, input name, on_false link) for switches that select GemmaAPITextEncode."""
+    api_ids = {
+        str(nid)
+        for nid, node in workflow.items()
+        if isinstance(node, dict) and node.get("class_type") == "GemmaAPITextEncode"
+    }
+    switches = {}
+    for nid, node in workflow.items():
+        if not isinstance(node, dict) or node.get("class_type") != "ComfySwitchNode":
+            continue
+        inputs = node.get("inputs") or {}
+        on_true = inputs.get("on_true")
+        on_false = inputs.get("on_false")
+        if (
+            isinstance(on_true, list)
+            and len(on_true) == 2
+            and str(on_true[0]) in api_ids
+            and isinstance(on_false, list)
+            and len(on_false) == 2
+        ):
+            switches[str(nid)] = on_false
+    found = []
+    for nid, node in workflow.items():
+        if not isinstance(node, dict):
+            continue
+        for name, val in (node.get("inputs") or {}).items():
+            if isinstance(val, list) and len(val) == 2 and str(val[0]) in switches:
+                found.append((str(nid), name, switches[str(val[0])]))
+    return found
+
+
+class TestLtxApiBranch(unittest.TestCase):
+    def setUp(self):
+        self._env = patch.dict(os.environ, {}, clear=False)
+        self._env.start()
+        os.environ.pop("LTXV_API_KEY", None)
+        self.addCleanup(self._env.stop)
+        self._enhancer = patch(
+            "master_agent.comfy.workflow_patcher._text_enhancer_filename",
+            return_value=None,
+        )
+        self._enhancer.start()
+        self.addCleanup(self._enhancer.stop)
+
+    def test_default_strips_api_nodes_and_rewires_local_encoder(self):
+        detailed = {"ltx25_a2v", "ltx25_t2v_i2v"}
+        for variant in _LTX25_VARIANTS:
+            with self.subTest(variant=variant):
+                raw = load_workflow_template(variant)
+                consumers = _api_switch_consumers(raw)
+                self.assertTrue(consumers, variant)
+                wf, _meta = load_and_patch_workflow(
+                    variant,
+                    prompt="she speaks to camera",
+                    seed=1,
+                    duration_s=3.0,
+                    image_name="face.png",
+                    audio_name="voice.wav",
+                )
+                for node in wf.values():
+                    if not isinstance(node, dict):
+                        continue
+                    class_type = node.get("class_type") or ""
+                    self.assertNotIn("API", class_type)
+                self.assertFalse(
+                    any(
+                        isinstance(node, dict) and node.get("class_type") == "StringContains"
+                        for node in wf.values()
+                    )
+                )
+                for nid, name, link in consumers:
+                    wired = wf[nid]["inputs"][name]
+                    self.assertEqual(str(wired[0]), str(link[0]))
+                    self.assertEqual(wired[1], link[1])
+                    source = wf[str(link[0])]
+                    self.assertNotIn("API", source.get("class_type") or "")
+                    if variant in detailed:
+                        self.assertEqual(source["class_type"], "LTXVConditioning")
+                        slot = "positive" if wired[1] == 0 else "negative"
+                        encoder = wf[str(source["inputs"][slot][0])]
+                        self.assertEqual(encoder["class_type"], "CLIPTextEncode")
+
+    def test_configured_key_keeps_api_branch_and_sets_ckpt_name(self):
+        info = {
+            "GemmaAPITextEncode": {
+                "input": {
+                    "required": {
+                        "api_key": ["STRING", {}],
+                        "prompt": ["STRING", {}],
+                        "enhance_prompt": ["BOOLEAN", {}],
+                        "ckpt_name": [
+                            ["other.safetensors", "ltx-2.5-22b-distilled.safetensors"],
+                            {},
+                        ],
+                    }
+                },
+                "output": ["CONDITIONING"],
+                "category": "api node/text/Lightricks",
+            }
+        }
+        with patch.dict(os.environ, {"LTXV_API_KEY": "ltxv_test_key"}):
+            wf, _meta = load_and_patch_workflow(
+                "ltx25_a2v",
+                prompt="she speaks",
+                seed=1,
+                duration_s=3.0,
+                image_name="face.png",
+                audio_name="voice.wav",
+                object_info=info,
+            )
+        gemma = [
+            node
+            for node in wf.values()
+            if isinstance(node, dict) and node.get("class_type") == "GemmaAPITextEncode"
+        ]
+        self.assertGreaterEqual(len(gemma), 2)
+        for node in gemma:
+            self.assertEqual(node["inputs"]["api_key"], "ltxv_test_key")
+            self.assertEqual(
+                node["inputs"]["ckpt_name"], "ltx-2.5-22b-distilled.safetensors"
+            )
+            self.assertNotEqual(node["inputs"].get("ckpt_name"), None)
+        gates = [
+            node
+            for node in wf.values()
+            if isinstance(node, dict) and node.get("class_type") == "StringContains"
+        ]
+        self.assertTrue(gates)
+        self.assertTrue(all(node["inputs"]["string"] == "ltxv_test_key" for node in gates))
 
 
 if __name__ == "__main__":

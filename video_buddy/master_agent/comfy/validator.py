@@ -26,6 +26,7 @@ from master_agent.comfy.graph_ops import (
     bypass_optional_accelerators,
     is_optional_node,
 )
+from master_agent.comfy.loader_names import combo_choices_from_spec
 from master_agent.config import is_valid_ltx_frames, snap_ltx_frames
 from master_agent.models.inventory import Inventory, load_inventory
 
@@ -139,20 +140,12 @@ def _is_link(value: Any) -> bool:
 def _combo_choices(spec: Any) -> Optional[list[Any]]:
     """If an input spec is a combo, return its choices list; else None.
 
-    Legacy object_info is ``[[choices], {options}]``. Comfy V3 is
-    ``["COMBO", {"options": [...]}]``.
+    Same rules as ``loader_names.combo_choices_from_spec``: legacy
+    ``[[choices], {options}]`` and Comfy V3 ``["COMBO", {"options": [...]}]``
+    (``choices`` is accepted as an alias of ``options``). Autogrow specs are
+    not combos.
     """
-    if isinstance(spec, (list, tuple)) and spec and isinstance(spec[0], (list, tuple)):
-        return list(spec[0])
-    if (
-        isinstance(spec, (list, tuple))
-        and len(spec) >= 2
-        and spec[0] == "COMBO"
-        and isinstance(spec[1], dict)
-        and isinstance(spec[1].get("options"), list)
-    ):
-        return list(spec[1]["options"])
-    return None
+    return combo_choices_from_spec(spec)
 
 
 def _spec_type(spec: Any) -> Optional[str]:
@@ -186,8 +179,13 @@ def _types_compatible(expected: Optional[str], actual: Optional[str]) -> bool:
     return expected == actual
 
 
-def _autogrow_child_type(spec: Any) -> Optional[str]:
-    """Expected type for a child of a COMFY_AUTOGROW_V3 input ('values.a')."""
+def _autogrow_child_spec(spec: Any) -> Any:
+    """Template input spec for one COMFY_AUTOGROW_V3 slot, or None.
+
+    Prefix slots are ``ref_images.ref_image_0``; the parent key is the group,
+    not an IMAGE/AUDIO socket. The template input may sit under required or
+    optional.
+    """
     if not (
         isinstance(spec, (list, tuple))
         and spec
@@ -196,14 +194,22 @@ def _autogrow_child_type(spec: Any) -> Optional[str]:
         and isinstance(spec[1], dict)
     ):
         return None
-    try:
-        req = spec[1]["template"]["input"]["required"]
-        # Single-child template: 'value' for names-style, e.g. 'image' for
-        # prefix-style (BatchImagesNode's 'images' → 'images.image0').
-        child = next(iter(req.values()))
-        return _spec_type(child)
-    except (KeyError, TypeError, StopIteration):
+    template = spec[1].get("template")
+    if not isinstance(template, dict):
         return None
+    groups = template.get("input")
+    if not isinstance(groups, dict):
+        return None
+    for section in ("required", "optional"):
+        req = groups.get(section)
+        if isinstance(req, dict) and req:
+            return next(iter(req.values()))
+    return None
+
+
+def _autogrow_child_type(spec: Any) -> Optional[str]:
+    """Expected type for a child of a COMFY_AUTOGROW_V3 input ('values.a')."""
+    return _spec_type(_autogrow_child_spec(spec))
 
 
 def _validate_scalar(
@@ -443,11 +449,14 @@ def validate_workflow(
             spec = known.get(name)
             expected: Optional[str] = None
             if spec is None and "." in name:
-                # Child of an autogrow group ('values.a' → 'values')
+                # Child of an autogrow group ('values.a' → 'values').
+                # Validate the slot as the template input (IMAGE, COMBO, …),
+                # not as the COMFY_AUTOGROW_V3 group.
                 base_spec = known.get(name.split(".", 1)[0])
-                child_type = _autogrow_child_type(base_spec)
+                child_spec = _autogrow_child_spec(base_spec)
+                child_type = _spec_type(child_spec)
                 if child_type is not None:
-                    spec = base_spec
+                    spec = child_spec
                     expected = child_type
             if spec is None:
                 report.warn(
