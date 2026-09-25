@@ -137,9 +137,21 @@ def _is_link(value: Any) -> bool:
 
 
 def _combo_choices(spec: Any) -> Optional[list[Any]]:
-    """If an input spec is a combo, return its choices list; else None."""
+    """If an input spec is a combo, return its choices list; else None.
+
+    Legacy object_info is ``[[choices], {options}]``. Comfy V3 is
+    ``["COMBO", {"options": [...]}]``.
+    """
     if isinstance(spec, (list, tuple)) and spec and isinstance(spec[0], (list, tuple)):
         return list(spec[0])
+    if (
+        isinstance(spec, (list, tuple))
+        and len(spec) >= 2
+        and spec[0] == "COMBO"
+        and isinstance(spec[1], dict)
+        and isinstance(spec[1].get("options"), list)
+    ):
+        return list(spec[1]["options"])
     return None
 
 
@@ -481,7 +493,26 @@ def validate_workflow(
             # 3. widget/scalar validation
             _validate_scalar(report, str(node_id), name, value, spec, inventory)
 
+    _flag_placeholder_video(report, workflow)
     return report
+
+
+_PLACEHOLDER_LOAD_VIDEO = frozenset({"warehouse_src_30fps.mp4"})
+
+
+def _flag_placeholder_video(report: ValidationReport, workflow: dict[str, Any]) -> None:
+    """Lipsync ships a sample LoadVideo. Leaving it means the photo was dropped."""
+    for node_id, node in workflow.items():
+        if not isinstance(node, dict) or node.get("class_type") != "LoadVideo":
+            continue
+        file_val = (node.get("inputs") or {}).get("file")
+        if file_val in _PLACEHOLDER_LOAD_VIDEO:
+            report.error(
+                str(node_id),
+                "LoadVideo",
+                "placeholder source video warehouse_src_30fps.mp4; "
+                "lipsync needs --video. Photo + voice uses ltx25_a2v or h3_r2v.",
+            )
 
 
 def validate_workflow_file(

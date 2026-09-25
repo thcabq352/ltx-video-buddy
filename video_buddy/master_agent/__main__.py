@@ -234,6 +234,14 @@ def cmd_power_tune(args: argparse.Namespace) -> int:
     return 0 if result.valid or not result.ops else 2
 
 
+class _DurationSet(argparse.Action):
+    """Record that the user passed --duration (brief parsing must not override it)."""
+
+    def __call__(self, parser, namespace, values, option_string=None):
+        setattr(namespace, self.dest, values)
+        setattr(namespace, "duration_set", True)
+
+
 def cmd_run(args: argparse.Namespace) -> int:
     from master_agent.config import (
         JUDGE_ENABLED,
@@ -246,9 +254,15 @@ def cmd_run(args: argparse.Namespace) -> int:
         run_pipeline,
     )
 
+    brief_applied = False
     parsed_duration = duration_from_request(args.request)
-    if parsed_duration and args.duration == 5.0:
+    if (
+        parsed_duration
+        and args.duration == 5.0
+        and not getattr(args, "duration_set", False)
+    ):
         args.duration = parsed_duration
+        brief_applied = True
 
     if args.variant:
         from master_agent.comfy.catalog import default_variant_ids, is_known_variant
@@ -271,6 +285,52 @@ def cmd_run(args: argparse.Namespace) -> int:
         except AttachError as e:
             print(f"FAIL  attach recipe: {e}")
             return 1
+
+    from master_agent.orchestrator.talking import (
+        duration_following_audio,
+        is_audio_driven,
+        media_route_error,
+        preview_media_variant,
+        skip_music_autoroute,
+    )
+
+    has_image = bool(getattr(args, "image", None))
+    has_audio = bool(getattr(args, "audio", None))
+    has_video = bool(getattr(args, "video", None))
+    preview = preview_media_variant(
+        args.request,
+        variant=args.variant,
+        has_image=has_image,
+        has_audio=has_audio,
+        has_video=has_video,
+    )
+    route_err = media_route_error(
+        preview,
+        has_image=has_image,
+        has_audio=has_audio,
+        has_video=has_video,
+    )
+    if route_err:
+        print(f"FAIL  {route_err}")
+        return 1
+    if (
+        has_audio
+        and not getattr(args, "duration_set", False)
+        and not brief_applied
+        and is_audio_driven(
+            preview,
+            has_image=has_image,
+            has_audio=has_audio,
+            has_video=has_video,
+            request=args.request,
+        )
+    ):
+        seconds, note = duration_following_audio(args.audio)
+        args.duration = seconds
+        if note:
+            print(f"warn: {note}")
+    if has_image and has_audio and not has_video:
+        print(f"route: photo + voice → {preview}")
 
     if getattr(args, "self_improve_dry", False):
         from master_agent.orchestrator.machine import Orchestrator
@@ -339,6 +399,8 @@ def cmd_run(args: argparse.Namespace) -> int:
             client=client,
             kind="run",
             image_name=Path(args.image).name if getattr(args, "image", None) else None,
+            audio_name=Path(args.audio).name if getattr(args, "audio", None) else None,
+            video_name=Path(args.video).name if getattr(args, "video", None) else None,
         )
 
     if not client.is_up():
@@ -348,7 +410,12 @@ def cmd_run(args: argparse.Namespace) -> int:
     args.request = _maybe_interview(args.request, no_interview=args.no_interview)
 
     # Auto-route music videos to the beat-synced pipeline (explicit --variant wins)
-    if args.audio and not args.variant and _music_intent(args.request, args.audio, args.quality):
+    if (
+        args.audio
+        and not args.variant
+        and not skip_music_autoroute(args.request, has_image=has_image)
+        and _music_intent(args.request, args.audio, args.quality)
+    ):
         from master_agent.music.pipeline import run_music_video
 
         print("auto-route: music video detected -> beat-synced music pipeline")
@@ -1374,7 +1441,14 @@ def main(argv: list[str] | None = None) -> int:
     p = sub.add_parser("run", help="orchestrated generation: patch -> validate -> submit -> judge")
     p.add_argument("request", help="what to generate (natural language)")
     p.add_argument("--variant", help="force catalog variant (see: python -m master_agent workflows)")
-    p.add_argument("--duration", type=float, default=5.0, help="seconds (default 5)")
+    p.add_argument(
+        "--duration",
+        type=float,
+        default=5.0,
+        action=_DurationSet,
+        help="seconds (default 5; photo + voice follows the audio unless this is set)",
+    )
+    p.set_defaults(duration_set=False)
     p.add_argument("--quality", choices=["draft", "balanced", "quality"], help="quality profile")
     p.add_argument("--seed", type=int, help="fixed seed (default: random)")
     p.add_argument("--width", type=int, default=768)

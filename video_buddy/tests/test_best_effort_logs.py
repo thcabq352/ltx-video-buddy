@@ -9,8 +9,9 @@ import logging
 from unittest.mock import patch
 
 import httpx
+import pytest
 
-from master_agent.comfy.client import ComfyClient
+from master_agent.comfy.client import ComfyClient, ComfyClientError
 from master_agent.kb.ingest import _workflow_digest, ingest_run_file
 from master_agent.orchestrator.pipeline import PipelineResult, _write_record
 from master_agent.orchestrator.state import LOOP_PASSED, RunState
@@ -86,20 +87,22 @@ def test_audio_upload_fallback_logs(tmp_path, caplog, monkeypatch):
             return {}
 
     class _Client:
-        def __enter__(self):
-            return self
-
-        def __exit__(self, *args):
-            return False
+        is_closed = False
 
         def post(self, *args, **kwargs):
             return _Resp()
 
+        def close(self):
+            self.is_closed = True
+
     monkeypatch.setattr("master_agent.comfy.client.httpx.Client", lambda *a, **k: _Client())
-    with caplog.at_level(logging.DEBUG, logger="master_agent.comfy.client"):
-        name = ComfyClient("http://comfy.test").upload_audio(audio)
-    assert name == "vo.wav"
-    assert any("audio upload failed (500)" in r.message for r in caplog.records)
+    try:
+        with caplog.at_level(logging.DEBUG, logger="master_agent.comfy.client"):
+            with pytest.raises(ComfyClientError, match="audio upload failed \\(500\\)"):
+                ComfyClient("http://comfy.test").upload_audio(audio)
+        assert any("audio upload failed (500)" in r.message for r in caplog.records)
+    finally:
+        ComfyClient.close_pool()
 
 
 def test_free_memory_logs_http_error(caplog, monkeypatch):

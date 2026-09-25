@@ -203,6 +203,55 @@ def image_feeds_sampler_latent(workflow: dict[str, Any], filename: str) -> bool:
     return False
 
 
+def _filename_has_consumer(workflow: dict[str, Any], filename: str) -> bool:
+    """True when ``filename`` sits on a node whose output is linked onward."""
+    if not filename:
+        return False
+    owners: list[str] = []
+    for nid, node in workflow.items():
+        if not isinstance(node, dict):
+            continue
+        for value in (node.get("inputs") or {}).values():
+            if value == filename:
+                owners.append(str(nid))
+    if not owners:
+        return False
+    linked: set[str] = set()
+    for node in workflow.values():
+        if not isinstance(node, dict):
+            continue
+        for value in (node.get("inputs") or {}).values():
+            if isinstance(value, list) and value and isinstance(value[0], (str, int)):
+                linked.add(str(value[0]))
+    return any(owner in linked for owner in owners)
+
+
+def media_wiring_error(
+    workflow: dict[str, Any],
+    *,
+    image_name: Optional[str] = None,
+    audio_name: Optional[str] = None,
+    video_name: Optional[str] = None,
+) -> Optional[str]:
+    """Refuse a run that would silently drop supplied media."""
+    if image_name and not image_feeds_sampler_latent(workflow, image_name):
+        return (
+            f"image {image_name!r} was refused: it does not feed the sampler. "
+            "Photo + voice uses --variant ltx25_a2v or --variant h3_r2v."
+        )
+    if audio_name and not _filename_has_consumer(workflow, audio_name):
+        return (
+            f"audio {audio_name!r} was refused: no node consumes it. "
+            "Photo + voice uses --variant ltx25_a2v or --variant h3_r2v."
+        )
+    if video_name and not _filename_has_consumer(workflow, video_name):
+        return (
+            f"video {video_name!r} was refused: no node consumes it. "
+            "lipsync needs --variant lipsync with a source video."
+        )
+    return None
+
+
 def _set_input(node: dict[str, Any], key: str, value: Any) -> bool:
     if "inputs" not in node or not isinstance(node["inputs"], dict):
         node["inputs"] = {}
@@ -602,6 +651,19 @@ def _apply_local_family_weights(workflow: dict[str, Any], variant: str) -> None:
                     _set_family_unet_loader(node, name, "Qwen-Image-Edit (16GB pick)")
 
 
+def _text_enhancer_filename() -> Optional[str]:
+    """Local Gemma-4 E2B enhancer, or None when that file is not on disk."""
+    try:
+        from master_agent.models.weights import WEIGHT_FILES, resolve_weight
+
+        spec = WEIGHT_FILES.get("text_enhancer")
+        if spec is None:
+            return None
+        return resolve_weight(spec)
+    except Exception:
+        return None
+
+
 def _apply_local_ltx25_weights(workflow: dict[str, Any]) -> None:
     """Prefer a local GGUF / NVFP4 / int8 / heretic TE when one is already present."""
     transformer_name, te_name = _resolved_ltx25_names()
@@ -621,6 +683,10 @@ def _apply_local_ltx25_weights(workflow: dict[str, Any]) -> None:
         inputs = node.get("inputs") or {}
         current = str(inputs.get("clip_name") or "")
         if "enhancer" in title or "e2b" in current.lower():
+            # The official enhancer CLIP is optional. Point it at the resolved
+            # Gemma TE when gemma4_e2b is not on disk so the graph still loads.
+            if not _text_enhancer_filename():
+                _set_input(node, "clip_name", te_name)
             continue
         if any(tok in current.lower() for tok in ("gemma", "ltx-2.5", "ltx25", "ltxv")):
             _set_input(node, "clip_name", te_name)
@@ -1048,6 +1114,80 @@ def _heuristic_patch(workflow: dict[str, Any], values: dict[str, Any]) -> None:
                         _set_input(node, k, filename_prefix)
                         break
 
+    _apply_audio_clock(
+        workflow,
+        duration_s=values.get("duration_s"),
+        audio_start_s=values.get("audio_start_s"),
+    )
+    _wire_h3_reference_media(workflow, values)
+
+
+def _apply_audio_clock(
+    workflow: dict[str, Any],
+    *,
+    duration_s: Any,
+    audio_start_s: Any,
+) -> None:
+    """Write the scalar duration / audio-start primitives. Linked values stay links."""
+    for _nid, node in _find_nodes_by_class(workflow, "PrimitiveFloat"):
+        inputs = node.get("inputs") or {}
+        value = inputs.get("value")
+        if isinstance(value, list):
+            continue
+        title = str((node.get("_meta") or {}).get("title") or "").lower()
+        if audio_start_s is not None and "audio start" in title:
+            _set_input(node, "value", float(audio_start_s))
+        elif duration_s is not None and "duration in seconds" in title:
+            _set_input(node, "value", float(duration_s))
+
+
+def _ensure_load_audio_node(workflow: dict[str, Any], audio_name: str) -> str:
+    for nid, node in _find_nodes_by_class(workflow, "LoadAudio"):
+        _set_input(node, "audio", audio_name)
+        return str(nid)
+    nid = "buddy_load_audio"
+    workflow[nid] = {
+        "class_type": "LoadAudio",
+        "inputs": {"audio": audio_name},
+        "_meta": {"title": "Reference Audio"},
+    }
+    return nid
+
+
+def _wire_h3_reference_media(workflow: dict[str, Any], values: dict[str, Any]) -> None:
+    """Dual-write Comfy ref slots. Dotted keys are the current API format."""
+    refs = _find_nodes_by_class(workflow, "MiniMaxH3ReferenceToVideo")
+    if not refs:
+        return
+    image = values.get("image_name") or values.get("first_image")
+    audio = values.get("audio_name")
+    load_images = _find_nodes_by_class(workflow, "LoadImage")
+    for _nid, node in refs:
+        inputs = node.setdefault("inputs", {})
+        if image and load_images:
+            link = [str(load_images[0][0]), 0]
+            inputs["ref_images"] = link
+            inputs["ref_images.ref_image_0"] = link
+        if audio:
+            audio_id = _ensure_load_audio_node(workflow, str(audio))
+            link = [audio_id, 0]
+            inputs["ref_audios"] = link
+            inputs["ref_audios.ref_audio_0"] = link
+            prompt = str(inputs.get("prompt") or "")
+            extra = ""
+            if "<audio_1>" not in prompt:
+                extra += " Reference: <audio_1>."
+            if "reference audio" not in prompt.lower():
+                extra += " The subject speaks in sync with the reference audio."
+            if image and "<image_1>" not in prompt:
+                extra = " Reference: <image_1> <audio_1>." + (
+                    " The subject speaks in sync with the reference audio."
+                    if "reference audio" not in prompt.lower()
+                    else ""
+                )
+            if extra:
+                inputs["prompt"] = (prompt.rstrip() + extra).strip()
+
 
 def load_and_patch_workflow(
     variant: str,
@@ -1064,6 +1204,7 @@ def load_and_patch_workflow(
     mask_name: Optional[str] = None,
     audio_name: Optional[str] = None,
     video_name: Optional[str] = None,
+    audio_start_s: float = 0.0,
     filename_prefix: str = "ltx_agent",
     global_prompt: Optional[str] = None,
     segment_prompts: Optional[list[str]] = None,
@@ -1178,6 +1319,8 @@ def load_and_patch_workflow(
         "last_image": last_image,
         "audio_name": audio_name,
         "video_name": video_name,
+        "audio_start_s": float(audio_start_s or 0.0),
+        "duration_s": float(duration_s),
         "filename_prefix": filename_prefix,
         "global_prompt": global_prompt or prompt,
         "segment_prompts": segment_prompts,

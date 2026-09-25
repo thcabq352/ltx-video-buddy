@@ -245,9 +245,26 @@ WEIGHT_FILES: dict[str, WeightFile] = {
         repo_id=HF_LTX25,
         repo_filename="model_patches/ltx-2.5-duration-head-bf16.safetensors",
         size_bytes=3_800_000,
-        mandatory=True,
+        mandatory=False,
         gated=True,
-        note="Official duration-head model patch (3.8 MB). Zero-byte placeholders count as missing.",
+        note=(
+            "Optional duration-head model patch (3.8 MB). No shipped LTX 2.5 graph loads it. "
+            "Zero-byte placeholders still count as not present."
+        ),
+    ),
+    "text_enhancer": WeightFile(
+        key="text_enhancer",
+        filename="gemma4_e2b_it_bf16.safetensors",
+        dest_folder="text_encoders",
+        repo_id="Comfy-Org/gemma-4",
+        repo_filename="text_encoders/gemma4_e2b_it_bf16.safetensors",
+        size_bytes=10_300_000_000,
+        mandatory=False,
+        gated=False,
+        note=(
+            "Optional LTX 2.5 text-enhancer CLIP. When absent, the enhancer "
+            "CLIPLoader is retargeted at the resolved Gemma TE."
+        ),
     ),
 }
 
@@ -452,7 +469,8 @@ WEIGHT_FILES["qwen_edit"] = WeightFile(
     accepts=QWEN_EDIT_PREFERENCE,
 )
 
-# Official Hub pack keys (mandatory). IC-LoRA is a separate gated repo.
+# Official Hub pack keys. duration_head and text_enhancer are optional
+# (mandatory=False on the WeightFile). IC-LoRA is a separate gated repo.
 _LTX25_OFFICIAL = (
     "transformer",
     "text_encoder",
@@ -460,6 +478,7 @@ _LTX25_OFFICIAL = (
     "audio_vae",
     "duration_head",
     "spatial_upscaler",
+    "text_enhancer",
 )
 
 _LTX25_ALL = (

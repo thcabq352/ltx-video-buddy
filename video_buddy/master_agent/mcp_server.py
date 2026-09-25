@@ -74,15 +74,41 @@ def health() -> dict:
 @mcp.tool()
 def create_video(
     request: str,
-    duration_s: float = 5.0,
+    duration_s: float | None = None,
     quality: str = "draft",
     variant: str | None = None,
     llm_panel: str | None = None,
     dry_run: bool = False,
+    image_path: str | None = None,
+    audio_path: str | None = None,
+    video_path: str | None = None,
 ) -> dict:
     """Generate a video end-to-end (director routing, storyboard panel,
     per-segment judge, stitch, full judge). dry_run=True plans and validates
-    without spending GPU. Returns paths, scores and judge notes."""
+    without spending GPU. image_path + audio_path (no video) is a talking clip.
+    Returns paths, scores and judge notes."""
+    from pathlib import Path
+
+    for label, raw in (
+        ("image", image_path),
+        ("audio", audio_path),
+        ("video", video_path),
+    ):
+        if raw and not Path(raw).is_file():
+            return {"status": "error", "error": f"{label} not found: {raw}"}
+
+    note = None
+    if duration_s is None:
+        if image_path and audio_path and not video_path:
+            from master_agent.orchestrator.talking import duration_following_audio
+
+            duration_s, note = duration_following_audio(audio_path)
+        else:
+            duration_s = 5.0
+    image_name = Path(image_path).name if image_path else None
+    audio_name = Path(audio_path).name if audio_path else None
+    video_name = Path(video_path).name if video_path else None
+
     if dry_run:
         from master_agent.orchestrator.pipeline import dry_run_pipeline
 
@@ -90,21 +116,46 @@ def create_video(
             dry_run_pipeline,
             request,
             variant=variant,
-            duration_s=duration_s,
+            duration_s=float(duration_s),
             quality=quality,
             llm_panel=llm_panel,
+            image_name=image_name,
+            audio_name=audio_name,
+            video_name=video_name,
         )
-        return {"dry_run": True, "ok": code == 0}
+        return {
+            "dry_run": True,
+            "ok": code == 0,
+            "status": "dry-run" if code == 0 else "error",
+            "error": None if code == 0 else "dry-run failed",
+            "audio_note": note,
+        }
 
+    from master_agent.comfy.client import ComfyClient, ComfyClientError
     from master_agent.orchestrator.pipeline import run_pipeline
+
+    client = ComfyClient()
+    try:
+        if image_path:
+            image_name = client.upload_image(Path(image_path))
+        if audio_path:
+            audio_name = client.upload_audio(Path(audio_path))
+        if video_path:
+            video_name = client.upload_image(Path(video_path))
+    except (ComfyClientError, OSError) as exc:
+        return {"status": "error", "error": str(exc)}
 
     result = _quiet(
         run_pipeline,
         request,
         variant=variant,
-        duration_s=duration_s,
+        duration_s=float(duration_s),
         quality=quality,
         llm_panel=llm_panel,
+        image_name=image_name,
+        audio_name=audio_name,
+        video_name=video_name,
+        client=client,
     )
     return {
         "status": result.status,
@@ -117,6 +168,7 @@ def create_video(
         "storyboard": result.storyboard,
         "panel_meta": result.panel_meta,
         "error": result.error,
+        "audio_note": note,
     }
 
 

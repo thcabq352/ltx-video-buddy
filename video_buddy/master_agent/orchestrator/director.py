@@ -3,8 +3,7 @@
 Decides which workflow variant a request should use. The allowlist is
 every ``workflows/manifests.yaml`` slug whose JSON file exists on disk
 (via ``WORKFLOW_FILES`` / ``load_workflow_files``). Gitignored example
-graphs stay in the YAML as docs but are not advertised. Hard constraints
-(forced variant, source video)
+graphs stay in the YAML as docs but are not advertised. Hard constraints (forced variant, source video, photo + voice)
 always win; otherwise the local LLM / keyword rules **rank stories**.
 Hands (``can_fulfill``) answers possible-right-now after that ranking.
 The brain never sees VRAM / slot / weight-path math and does not pick
@@ -125,6 +124,8 @@ def rank_story_candidates(
     request: str,
     *,
     has_video: bool = False,
+    has_image: bool = False,
+    has_audio: bool = False,
     force: str | None = None,
     attach_recipe: Any = None,
 ) -> list[tuple[str, str]]:
@@ -133,6 +134,13 @@ def rank_story_candidates(
         return [(force, "forced")]
     if has_video:
         return [("lipsync", "input")]
+    if has_image and has_audio:
+        from master_agent.orchestrator.talking import requests_h3
+
+        # Named H3 / Hailuo / ref2va uses the reference graph. Otherwise LTX A2V.
+        if requests_h3(request):
+            return [("h3_r2v", "input")]
+        return [("ltx25_a2v", "input")]
     ranked: list[tuple[str, str]] = []
     seen: set[str] = set()
 
@@ -163,6 +171,8 @@ def choose_variant(
     request: str,
     *,
     has_video: bool = False,
+    has_image: bool = False,
+    has_audio: bool = False,
     force: str | None = None,
     attach_recipe: Any = None,
     hands: Hands | None = None,
@@ -170,7 +180,12 @@ def choose_variant(
 ) -> tuple[str, str]:
     """Rank stories, then ask Hands for fit. Returns (variant, source)."""
     ranked = rank_story_candidates(
-        request, has_video=has_video, force=force, attach_recipe=attach_recipe
+        request,
+        has_video=has_video,
+        has_image=has_image,
+        has_audio=has_audio,
+        force=force,
+        attach_recipe=attach_recipe,
     )
     head_variant, head_source = ranked[0]
     if head_source in ("forced", "input"):

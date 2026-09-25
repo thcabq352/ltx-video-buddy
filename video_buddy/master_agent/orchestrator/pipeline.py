@@ -289,7 +289,50 @@ def run_pipeline(
     base_seed = seed if seed is not None else random.randint(0, 2**32 - 1)
     orch = Orchestrator(client=client)
 
-    segs = plan_story_segments(duration_s, kind=kind, quality=quality)
+    from master_agent.orchestrator.talking import (
+        is_audio_driven,
+        media_route_error,
+        plan_talking_slices,
+        preview_media_variant,
+    )
+
+    preview = preview_media_variant(
+        request,
+        variant=variant,
+        has_image=bool(image_name),
+        has_audio=bool(audio_name),
+        has_video=bool(video_name),
+    )
+    route_err = media_route_error(
+        preview,
+        has_image=bool(image_name),
+        has_audio=bool(audio_name),
+        has_video=bool(video_name),
+    )
+    if route_err:
+        result.status = "error"
+        result.error = route_err
+        result.log(route_err)
+        _write_record(result)
+        return result
+
+    talking = None
+    if is_audio_driven(
+        preview,
+        has_image=bool(image_name),
+        has_audio=bool(audio_name),
+        has_video=bool(video_name),
+        request=request,
+    ):
+        talking = plan_talking_slices(float(duration_s), variant=preview, request=request)
+        segs = list(talking.durations)
+        audio_starts = list(talking.audio_starts)
+        result.log(f"route: photo + voice → {preview}")
+        if talking.note:
+            result.log(f"warn: {talking.note}")
+    else:
+        segs = plan_story_segments(duration_s, kind=kind, quality=quality)
+        audio_starts = [0.0] * len(segs)
     result.segment_durations = segs
     result.log(f"plan: {duration_s}s -> {len(segs)} segment(s) {segs} (judge={j_enabled})")
 
@@ -316,6 +359,7 @@ def run_pipeline(
             video_name=video_name,
             image_name=image_name,
             audio_name=audio_name,
+            audio_start_s=audio_starts[0] if audio_starts else 0.0,
             judge_enabled=j_enabled,
             max_judge_rounds=max_judge_rounds,
             power_mode=power_mode,
@@ -373,7 +417,8 @@ def run_pipeline(
         seg_seed = (base_seed + seed_bump + card.seed_offset) & 0xFFFFFFFF
         seg_image = image_name
         # Clip 2+ stays on the same I2V graph (never FLF — that pins both ends).
-        if i > 0:
+        # Photo + voice reuses the still and continues the audio instead.
+        if talking is None and i > 0:
             from master_agent.hands import extract_last_frame
 
             dest = OUTPUTS_DIR / result.run_id / f"chain_last_{i}.png"
@@ -410,6 +455,7 @@ def run_pipeline(
             video_name=video_name,
             image_name=seg_image,
             audio_name=audio_name,
+            audio_start_s=audio_starts[i] if i < len(audio_starts) else 0.0,
             judge_enabled=j_enabled,
             max_judge_rounds=max_judge_rounds,
             power_mode=power_mode,
@@ -597,23 +643,70 @@ def dry_run_pipeline(
     client: Optional[ComfyClient] = None,
     kind: str = "run",
     image_name: Optional[str] = None,
+    audio_name: Optional[str] = None,
+    video_name: Optional[str] = None,
 ) -> int:
     """Storyboard + patch + validate every segment without queueing. CLI exit code."""
     from master_agent.comfy.validator import format_report, validate_workflow
     from master_agent.comfy.workflow_patcher import (
-        image_feeds_sampler_latent,
         load_and_patch_workflow,
+        media_wiring_error,
     )
     from master_agent.config import OBJECT_INFO_CACHE
     from master_agent.hands import plan_last_frame_chain
+    from master_agent.orchestrator.talking import (
+        is_audio_driven,
+        media_route_error,
+        plan_talking_slices,
+        preview_media_variant,
+    )
+
+    preview = preview_media_variant(
+        request,
+        variant=variant,
+        has_image=bool(image_name),
+        has_audio=bool(audio_name),
+        has_video=bool(video_name),
+    )
+    route_err = media_route_error(
+        preview,
+        has_image=bool(image_name),
+        has_audio=bool(audio_name),
+        has_video=bool(video_name),
+    )
+    if route_err:
+        print(f"FAIL  {route_err}")
+        return 1
 
     sb_mode = (storyboard_mode or STORYBOARD_MODE).strip().lower()
-    segs = plan_story_segments(duration_s, kind=kind, quality=quality)
+    talking = None
+    if is_audio_driven(
+        preview,
+        has_image=bool(image_name),
+        has_audio=bool(audio_name),
+        has_video=bool(video_name),
+        request=request,
+    ):
+        talking = plan_talking_slices(float(duration_s), variant=preview, request=request)
+        segs = list(talking.durations)
+        audio_starts = list(talking.audio_starts)
+        print(f"route: photo + voice → {preview}")
+        if talking.note:
+            print(f"warn: {talking.note}")
+    else:
+        segs = plan_story_segments(duration_s, kind=kind, quality=quality)
+        audio_starts = [0.0] * len(segs)
     print(f"plan: {duration_s}s -> {len(segs)} segment(s) {segs}")
 
     client = client or ComfyClient()
     orch = Orchestrator(client=client)
-    probe_state = RunState(request=request, attach_recipe=attach_recipe)
+    probe_state = RunState(
+        request=request,
+        attach_recipe=attach_recipe,
+        image_name=image_name,
+        audio_name=audio_name,
+        video_name=video_name,
+    )
     try:
         variant_sel = orch._select_variant(probe_state, variant)
     except Exception:
@@ -650,7 +743,11 @@ def dry_run_pipeline(
     else:
         print(f"object_info: {source}")
 
-    chain = plan_last_frame_chain(float(duration_s)) if kind not in _MUSIC_KINDS else None
+    chain = (
+        None
+        if talking is not None or kind in _MUSIC_KINDS
+        else plan_last_frame_chain(float(duration_s))
+    )
     failures = 0
     for i, card in enumerate(cards):
         clip_image = image_name
@@ -665,6 +762,9 @@ def dry_run_pipeline(
                 height=height,
                 seed=card.seed_offset,
                 image_name=clip_image,
+                audio_name=audio_name,
+                video_name=video_name,
+                audio_start_s=audio_starts[i] if i < len(audio_starts) else 0.0,
             )
         except Exception as e:
             print(f"FAIL  segment {i + 1} patch: {e}")
@@ -676,10 +776,14 @@ def dry_run_pipeline(
             f"image_name={clip_image!r} use_last_frame="
             f"{bool(chain and i < len(chain.clips) and chain.clips[i].use_last_frame)}"
         )
-        if clip_image and not image_feeds_sampler_latent(wf, clip_image):
-            print(
-                f"FAIL  segment {i + 1}: image_name={clip_image!r} does not feed sampler latent"
-            )
+        wiring = media_wiring_error(
+            wf,
+            image_name=clip_image,
+            audio_name=audio_name,
+            video_name=video_name,
+        )
+        if wiring:
+            print(f"FAIL  segment {i + 1}: {wiring}")
             failures += 1
         if attach_recipe:
             try:

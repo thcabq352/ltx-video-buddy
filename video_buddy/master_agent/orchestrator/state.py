@@ -55,6 +55,7 @@ class RunState:
     image_name: Optional[str] = None
     audio_name: Optional[str] = None
     audio_path: Optional[str] = None
+    audio_start_s: float = 0.0
     kind: str = ""
     music_bed_attached: bool = False
     has_audio: bool = False

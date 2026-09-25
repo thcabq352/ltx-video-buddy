@@ -44,3 +44,52 @@ def test_prompt_history_and_health_share_one_client(monkeypatch):
         assert first._http() is not other._http()
     finally:
         ComfyClient.close_pool()
+
+
+def test_upload_audio_posts_once_and_raises(tmp_path, monkeypatch):
+    import pytest
+
+    from master_agent.comfy.client import ComfyClientError
+
+    audio = tmp_path / "vo.wav"
+    audio.write_bytes(b"RIFF")
+    posts: list[str] = []
+
+    class _Resp:
+        def __init__(self, status, body="{}"):
+            self.status_code = status
+            self.text = body
+            self._body = body
+
+        def json(self):
+            return {"name": "vo.wav"} if self.status_code < 400 else {}
+
+    class _Client:
+        is_closed = False
+
+        def post(self, url, *args, **kwargs):
+            posts.append(url)
+            return _Resp(200 if len(posts) == 1 else 400, "nope")
+
+        def close(self):
+            self.is_closed = True
+
+    monkeypatch.setattr("master_agent.comfy.client.httpx.Client", lambda *a, **k: _Client())
+    try:
+        client = ComfyClient("http://comfy.test")
+        assert client.upload_audio(audio) == "vo.wav"
+        assert posts == ["http://comfy.test/upload/image"]
+        posts.clear()
+
+        class _Bad(_Client):
+            def post(self, url, *args, **kwargs):
+                posts.append(url)
+                return _Resp(400, "bad audio")
+
+        monkeypatch.setattr("master_agent.comfy.client.httpx.Client", lambda *a, **k: _Bad())
+        ComfyClient.close_pool()
+        with pytest.raises(ComfyClientError, match="audio upload failed \\(400\\)"):
+            ComfyClient("http://comfy.test").upload_audio(audio)
+        assert len(posts) == 1
+    finally:
+        ComfyClient.close_pool()

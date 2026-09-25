@@ -46,6 +46,8 @@ class JobRequest(BaseModel):
     image_path: Optional[str] = None  # start frame for i2v
     audio_path: Optional[str] = None  # lipsync / audio conditioning
     video_path: Optional[str] = None  # source video (lipsync)
+    # When true, photo + voice duration follows the audio file (capped).
+    follow_audio: bool = False
     upscale: Optional[str] = None
     seed: Optional[int] = None
     storyboard: Optional[str] = None
@@ -232,11 +234,18 @@ def api_submit_job(req: JobRequest):
     image_path = _require_upload_path(req.image_path, "image")
     audio_path = _require_upload_path(req.audio_path, "audio")
     video_path = _require_upload_path(req.video_path, "video")
+    duration_s = req.duration_s
+    audio_note = None
+    if req.follow_audio and image_path and audio_path and not video_path:
+        from master_agent.orchestrator.talking import duration_following_audio
+
+        duration_s, audio_note = duration_following_audio(audio_path)
     kind = "dry-run" if req.dry_run else "run"
     job = MANAGER.submit(
         kind,
         req.request.strip(),
-        duration_s=req.duration_s,
+        duration_s=duration_s,
+        audio_duration_note=audio_note,
         quality=req.quality,
         variant=req.variant,
         llm_panel=req.llm_panel,
