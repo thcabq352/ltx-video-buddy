@@ -37,7 +37,13 @@ from pathlib import Path
 
 from master_agent.comfy.client import ComfyClient, ComfyClientError
 from master_agent.comfy.validator import format_report, validate_workflow_file
-from master_agent.config import WORKFLOWS_DIR, ensure_dirs
+from master_agent.config import (
+    LIPDUB_ANCHOR,
+    LIPDUB_REFRAME,
+    LIPDUB_SILENCE_MODE,
+    WORKFLOWS_DIR,
+    ensure_dirs,
+)
 from master_agent.models.inventory import format_summary, scan_inventory
 
 
@@ -242,11 +248,13 @@ class _DurationSet(argparse.Action):
         setattr(namespace, "duration_set", True)
 
 
-def _reframe_flag(args: argparse.Namespace):
-    """None means auto: on for a segmented lipdub, off for a short pass."""
+def _reframe_flag(args: argparse.Namespace) -> bool:
+    """True only for ``--reframe on``. Default is off (experimental opt-in)."""
+    from master_agent.config import LIPDUB_REFRAME
+
     value = getattr(args, "reframe", None)
     if value is None:
-        return None
+        return bool(LIPDUB_REFRAME)
     return str(value).strip().lower() == "on"
 
 
@@ -1605,7 +1613,7 @@ def main(argv: list[str] | None = None) -> int:
     p.add_argument(
         "--silence-mode",
         choices=["idle", "hold", "bridge"],
-        default="idle",
+        default=LIPDUB_SILENCE_MODE if LIPDUB_SILENCE_MODE in ("idle", "hold", "bridge") else "idle",
         help=(
             "how ltx25_a2v treats a pause at least --silence-min-s long: "
             "idle (default, closed-mouth breathing render), "
@@ -1616,22 +1624,24 @@ def main(argv: list[str] | None = None) -> int:
     p.add_argument(
         "--anchor",
         choices=["source", "previous", "hybrid"],
-        default="hybrid",
+        default=LIPDUB_ANCHOR if LIPDUB_ANCHOR in ("source", "previous", "hybrid") else "previous",
         help=(
             "identity/framing anchor for a segmented lipdub. "
-            "hybrid (default) conditions on the source still and crossfades "
+            "previous (default) is the last-frame chain: each piece starts "
+            "from the previous last frame, overlap trimmed on speech-to-speech seams. "
+            "hybrid (experimental) conditions on the source still and crossfades "
             "the previous frame across the overlap. "
-            "source uses the still only, with the same crossfade. "
-            "previous is the #34 last-frame chain"
+            "source (experimental) uses the still only, with the same crossfade"
         ),
     )
     p.add_argument(
         "--reframe",
         choices=["on", "off"],
-        default=None,
+        default="on" if LIPDUB_REFRAME else "off",
         help=(
-            "scale each segmented piece back to the source still. "
-            "Default on for a segmented lipdub, off for a single short pass"
+            "experimental: scale each piece back to the source still after render. "
+            "Default off. Pass --reframe on to enable; the geometric snap-back "
+            "can zoom speech pieces in and then jump back to the still"
         ),
     )
     p.add_argument(

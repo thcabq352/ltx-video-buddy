@@ -14,10 +14,10 @@ Locally, `frames_for_duration` caps every LTX 2.5 latent at 193 frames (~8.04s) 
 |---|---|---|
 | `--lipdub-max-s` | `6.5` (`LIPDUB_SEGMENT_MAX_S`) | Split when audio is longer than this. At or under it, one pass. |
 | `--silence-min-s` | `0.25` (`LIPDUB_SILENCE_MIN_S`) | Pauses at least this long are closed-mouth. |
-| `--silence-mode` | `idle` | `idle` renders a closed-mouth breathing piece for each pause (default). `hold` is the #34 still plate and frozen tail. `bridge` is a 9-frame mouth close; the tail past 9 frames is held. A pause shorter than 9 frames stays a trimmed bridge in `idle`. |
-| `--anchor` | `hybrid` | `hybrid` conditions on the source still and crossfades the previous frame over the overlap. `source` is the still only, with the same crossfade. `previous` is the #34 last-frame chain. |
-| `--reframe` | on when segmented, off for a short pass | After each piece, measure zoom and shift against the source still and scale the frames back. Recorded as `scale_drift`. |
-| `--lipdub-overlap` | `8` (`LIPDUB_OVERLAP_FRAMES`) | Frames of overlap trimmed at a seam. `hybrid` / `source` crossfade those frames instead of dropping them unseen. |
+| `--silence-mode` | `idle` (`LIPDUB_SILENCE_MODE`) | `idle` renders a closed-mouth breathing piece for each pause (default). `hold` is the #34 still plate and frozen tail. `bridge` is a 9-frame mouth close; the tail past 9 frames is held. A pause shorter than 9 frames stays a trimmed bridge in `idle`. |
+| `--anchor` | `previous` (`LIPDUB_ANCHOR`) | `previous` is the last-frame chain (default). `hybrid` (experimental) conditions on the source still and crossfades the previous frame over the overlap. `source` (experimental) is the still only, with the same crossfade. |
+| `--reframe` | `off` (`LIPDUB_REFRAME`) | Default off. `on` is experimental: measure zoom and shift against the source still and scale the frames back. Recorded as `scale_drift`. |
+| `--lipdub-overlap` | `8` (`LIPDUB_OVERLAP_FRAMES`) | Frames of overlap. Default `previous` trims them only on a speech-to-speech seam. Experimental `hybrid` / `source` crossfade those frames instead of dropping them unseen. |
 | `--words` | none | JSON word timestamps (`[{w,s,e}]` or `{"words":[...]}`). Splits prefer pauses and never cut a word. A word longer than the cap is kept whole. |
 | `--tripod` | off | Locked-off talking head. Prompt, negative, and stage-1 `LTXVImgToVideoInplace` strength `0.7 → 0.85`. Stage 2 stays `1.0`. The graph has no camera-motion input. |
 | `--dry-run` | | Prints idle pieces, anchor, reframe, and the segment plan, then validates each Comfy piece. Nothing is queued. |
@@ -28,9 +28,11 @@ H3 (`h3_r2v`) is unchanged: one clip, capped at 12s.
 
 The a2v graph (`LTX-2.5_A2V_Two_Stage_Distilled_api.json`) has one `LoadImage` into both `LTXVImgToVideoInplace` stages. There is no second keyframe and no `LTXVAddGuide` node. A guide node is not added.
 
-Default `--anchor hybrid` puts the **original source still** on that image slot (identity and framing). The previous piece's last frame is only a continuity guide: it is blended into the conditioning image at `hybrid_prev_weight` 0.25 after its zoom is undone, and the overlap frames are crossfaded into the previous piece's tail. Stage 2 strength stays `1.0`, so frame 0 of a render copies the guide; those frames sit in the overlap and are blended away, which is what keeps the head from snapping back to the still. `--anchor source` uses the still with the same crossfade and no previous-frame blend. `--anchor previous` is the #34 chain (each piece starts from the previous last frame, overlap trimmed, no crossfade).
+Default `--anchor previous` is the #34 last-frame chain. Each piece after the first generated piece starts from the previous piece's last frame. Overlap is trimmed only on a speech-to-speech seam, and there is no pixel crossfade. When idle pauses sit between speech pieces, those seams have no overlap drop (`join: none`). Tower seed 42 scored this best on framing and seams: steady framing, smooth joins, natural idle pauses.
 
-`--reframe` (default on only when the clip is segmented) samples frames, estimates zoom and shift against the source still (OpenCV ECC when `cv2` is already installed, otherwise a normalized cross-correlation search), smooths the track, and scales the piece back. Borders uncovered by the shrink come from the source still. The measured zoom is `params.lipdub.scale_drift` (`scale` > 1 is a push-in). No new weights are downloaded.
+`--anchor hybrid` and `--anchor source` are experimental opt-ins. Hybrid puts the **original source still** on the image slot and blends the previous last frame in at `hybrid_prev_weight` 0.25 after its zoom is undone, then crossfades the overlap into the previous piece's tail. Source uses the still with that crossfade and no previous-frame blend. On the same seed-42 tower those joins ghosted and speech pieces zoomed in and then snapped back (4/10 with reframe on). Stage 2 strength stays `1.0`, so frame 0 of a render copies the guide.
+
+`--reframe` defaults **off** for a short pass and for a segmented lipdub. `--reframe on` is experimental: it samples frames, estimates zoom and shift against the source still (OpenCV ECC when `cv2` is already installed, otherwise a normalized cross-correlation search), smooths the track, and scales the piece back. Borders uncovered by the shrink come from the source still. The measured zoom is `params.lipdub.scale_drift` (`scale` > 1 is a push-in). No new weights are downloaded. Leave it off unless you are comparing that snap-back on purpose.
 
 Silence (`--silence-mode`, default `idle`):
 
@@ -40,7 +42,7 @@ Silence (`--silence-mode`, default `idle`):
 - `bridge` makes every pause that 9-frame close, including the lead-in. The tail past 9 frames is held.
 - Frame grid is `round(duration * fps)`. 12.0s at 24 fps is 288 frames. Every render length is `8n+1`. Pieces tile `[0, timeline)`.
 
-`--tripod` is unchanged and still opt-in. With the flag off, a short clip's prompt and strength are unchanged. Passing `--reframe on` on a short clip is the one short-pass post-step; idle and anchor apply only when the audio is split.
+`--tripod` is unchanged and still opt-in. With the flag off, a short clip's prompt and strength are unchanged. Passing `--reframe on` on a short clip is the one short-pass post-step; idle and anchor apply only when the audio is split. Omitting `--anchor` and `--reframe` records `previous` and `reframe: false` on `params.lipdub`.
 
 ## Provenance
 
@@ -59,10 +61,12 @@ python -m master_agent run \
   --words words.json \
   --line "I would like to make this a sound sample of what my voice is, so we could clone my voice, so we could clone whatever we want. Hey, thank you." \
   --width 352 --height 480 --seed 42 \
-  --silence-mode idle --anchor hybrid --reframe on \
+  --silence-mode idle --anchor previous --reframe off \
   --tripod --no-interview --storyboard off --no-judge \
   --llm-panel local --panel-judge ollama \
   --dry-run
 ```
 
-Drop `--dry-run` to render. `--words` should be the faster-whisper timestamps for that wav (pauses near 0–0.9s, 5.7–6.25s, and 10.6–11.15s). Without `--words`, Buddy still splits on energy pauses or, if those cannot be read, on the max length.
+Drop `--dry-run` to render. Those three flags are the defaults; writing them out makes the plan explicit. `--words` should be the faster-whisper timestamps for that wav (pauses near 0–0.9s, 5.7–6.25s, and 10.6–11.15s). Without `--words`, Buddy still splits on energy pauses or, if those cannot be read, on the max length.
+
+With those pauses, `--dry-run` prints 6 pieces, 3 idle renders, `anchor: previous`, `reframe: off`, `join=none`, timeline 288 frames, and **6 ComfyUI jobs**. Render lengths are 25, 121, 17, 105, 25, 25 frames (318 frames total). #34 v2 was 5 jobs and about 28 minutes. This plan adds the leading idle as a real job. Expect on the order of **32–36 minutes** on the same tower. `--anchor hybrid --reframe on` is the experimental plan that scored 4/10 (speech pieces zoomed in and snapped back, joins ghosted); it renders 25, 129, 25, 113, 33, 33 frames (358) because each join crossfades 8 overlap frames.

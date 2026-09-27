@@ -333,9 +333,9 @@ def test_idle_default_replaces_frozen_holds_and_keeps_the_grid():
         seed=42,
     )
     assert plan.silence_mode == "idle"
-    assert plan.anchor == "hybrid"
-    assert plan.reframe is True
-    assert plan.join_method == "overlap_crossfade"
+    assert plan.anchor == "previous"
+    assert plan.reframe is False
+    assert plan.join_method == "none"
     assert plan.timeline_frame_count == 288
     assert alignment_errors(plan) == []
     assert sum(p.keep_frames for p in plan.pieces) == 288
@@ -355,20 +355,21 @@ def test_idle_default_replaces_frozen_holds_and_keeps_the_grid():
     assert plan.pieces[0].continuity == "still"
     speech = plan.speech_pieces()
     assert speech
-    assert all(p.continuity == "hybrid" for p in speech)
-    assert all(p.crossfade_frames > 0 for p in speech)
+    assert all(p.continuity == "previous_last_frame" for p in speech)
+    assert all(p.crossfade_frames == 0 for p in plan.pieces)
+    assert all(p.drop_leading == 0 for p in plan.pieces)
     text = format_lipdub_plan(plan)
     assert "idle pieces:" in text
-    assert "anchor: hybrid" in text
-    assert "reframe: on" in text
+    assert "anchor: previous" in text
+    assert "reframe: off" in text
     assert "comfy_jobs:" in text
     block = lipdub_param_block(plan, audio_sha256="abc")
     assert block["silence_mode"] == "idle"
-    assert block["anchor"] == "hybrid"
-    assert block["reframe"] is True
-    assert block["join"] == "overlap_crossfade"
+    assert block["anchor"] == "previous"
+    assert block["reframe"] is False
+    assert block["join"] == "none"
     assert block["scale_drift"] == []
-    assert block["hybrid_prev_weight"] == HYBRID_PREV_WEIGHT
+    assert block["hybrid_prev_weight"] is None
     assert "silence_handling" in block
     assert block["segments"][0]["kind"] == "silence_idle"
     assert "crossfade_frames" in block["segments"][0]
@@ -421,18 +422,51 @@ def test_anchor_and_reframe_plumb_into_provenance(tmp_path):
 
 
 def test_short_audio_ignores_idle_defaults():
-    plan = plan_lipdub(6.5, max_segment_s=6.5, silences=[], silence_mode="idle", anchor="hybrid")
+    plan = plan_lipdub(6.5, max_segment_s=6.5, silences=[])
     assert plan.segmented is False
     assert plan.pieces == []
+    assert plan.silence_mode == "idle"
+    assert plan.anchor == "previous"
     assert plan.reframe is False
     text = format_lipdub_plan(plan)
     assert "single pass" in text
     assert "idle pieces: 0" in text
-    assert "anchor: hybrid" in text
-    explicit = plan_lipdub(5.0, max_segment_s=6.5, reframe=True, silence_mode="idle")
+    assert "anchor: previous" in text
+    assert "reframe: off" in text
+    explicit = plan_lipdub(5.0, max_segment_s=6.5, reframe=True, silence_mode="idle", anchor="hybrid")
     assert explicit.segmented is False
+    assert explicit.anchor == "hybrid"
     assert explicit.reframe is True
     assert "reframe: on" in format_lipdub_plan(explicit)
+
+
+def test_hybrid_and_reframe_on_stay_opt_in():
+    plan = plan_lipdub(
+        12.0,
+        words=_words(),
+        silences=TOWER_PAUSES,
+        max_segment_s=6.5,
+        fps=24,
+        tripod=True,
+        seed=42,
+        anchor="hybrid",
+        reframe=True,
+    )
+    assert plan.anchor == "hybrid"
+    assert plan.reframe is True
+    assert plan.join_method == "overlap_crossfade"
+    speech = plan.speech_pieces()
+    assert speech
+    assert all(p.continuity == "hybrid" for p in speech)
+    assert all(p.crossfade_frames > 0 for p in speech)
+    text = format_lipdub_plan(plan)
+    assert "anchor: hybrid" in text
+    assert "reframe: on" in text
+    block = lipdub_param_block(plan)
+    assert block["anchor"] == "hybrid"
+    assert block["reframe"] is True
+    assert block["join"] == "overlap_crossfade"
+    assert block["hybrid_prev_weight"] == HYBRID_PREV_WEIGHT
 
 
 def test_reframe_estimate_recovers_a_push_in_and_hybrid_stays_on_the_still():

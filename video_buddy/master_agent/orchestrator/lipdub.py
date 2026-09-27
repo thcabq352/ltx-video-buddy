@@ -23,13 +23,13 @@ about 7.4s), checked against the graph and the LTX-2.5 architecture:
   render stays at or under 169 frames (7.04s), under the observed cliff.
 
 Continuity: the a2v graph has one ``LoadImage`` and no guide / keyframe
-input, so a second conditioning node is not added. Default ``--anchor hybrid``
-puts the original still on that image slot (identity and framing). The
-previous piece's last frame is only a continuity guide: a low-weight blend
-into the conditioning image, and a crossfade over the trimmed overlap so
-the head does not snap back to the still. ``--anchor previous`` is the #34
-chain (each piece starts from the previous last frame). ``--anchor source``
-is the still alone, with the same overlap crossfade.
+input, so a second conditioning node is not added. Default ``--anchor
+previous`` is the #34 chain: each piece starts from the previous last
+frame, and overlap is trimmed only on a speech-to-speech seam. Tower seed
+42 preferred that chain (steady framing, smooth joins). ``--anchor hybrid``
+and ``--anchor source`` are experimental opt-ins: they put the original
+still on the image slot and crossfade the overlap. Hybrid also blends the
+previous frame in at a low weight.
 
 Silence (≥ ``silence_min_s``, default 250ms), ``--silence-mode``:
 
@@ -42,11 +42,11 @@ Silence (≥ ``silence_min_s``, default 250ms), ``--silence-mode``:
 * ``bridge``: every pause is that 9-frame bridge (leading included). The
   tail past 9 frames is still a hold.
 
-``--reframe`` (default on for a segmented lipdub, off for a single short
-pass) measures zoom and shift against the source still and scales the
-piece back. ``--tripod`` is unchanged: prompt, negative, and stage-1
-``LTXVImgToVideoInplace`` strength ``0.85``. The graph has no camera-motion
-input. Stage 2 stays pinned at 1.0.
+``--reframe`` defaults off. ``--reframe on`` is experimental: it measures
+zoom and shift against the source still and scales the piece back. On the
+tower that snap-back fought the speech pieces. ``--tripod`` is unchanged:
+prompt, negative, and stage-1 ``LTXVImgToVideoInplace`` strength ``0.85``.
+The graph has no camera-motion input. Stage 2 stays pinned at 1.0.
 """
 
 from __future__ import annotations
@@ -57,9 +57,12 @@ from typing import Optional, Sequence
 
 from master_agent.config import (
     DEFAULT_FPS,
+    LIPDUB_ANCHOR,
     LIPDUB_OVERLAP_FRAMES,
+    LIPDUB_REFRAME,
     LIPDUB_SEGMENT_MAX_S,
     LIPDUB_SILENCE_MIN_S,
+    LIPDUB_SILENCE_MODE,
 )
 
 # 7.4s at 24 fps sits on this legal count. Renders above the safe cap warn.
@@ -225,7 +228,7 @@ class LipdubPlan:
     continuity_method: str = "none"
     silence_handling: str = "none"
     silence_mode: str = SILENCE_IDLE
-    anchor: str = ANCHOR_HYBRID
+    anchor: str = ANCHOR_PREVIOUS
     reframe: bool = False
     join_method: str = JOIN_NONE
     scale_drift: list = field(default_factory=list)
@@ -317,7 +320,7 @@ def _idle_negative(*, tripod: bool) -> str:
 
 def _norm_silence_mode(value: Optional[str]) -> str:
     if value is None or str(value).strip() == "":
-        return SILENCE_IDLE
+        value = LIPDUB_SILENCE_MODE
     mode = str(value).strip().lower()
     if mode not in (SILENCE_IDLE, SILENCE_HOLD, SILENCE_BRIDGE):
         raise ValueError("silence_mode must be idle, hold, or bridge")
@@ -326,7 +329,7 @@ def _norm_silence_mode(value: Optional[str]) -> str:
 
 def _norm_anchor(value: Optional[str]) -> str:
     if value is None or str(value).strip() == "":
-        return ANCHOR_HYBRID
+        value = LIPDUB_ANCHOR
     anchor = str(value).strip().lower()
     if anchor not in (ANCHOR_SOURCE, ANCHOR_PREVIOUS, ANCHOR_HYBRID):
         raise ValueError("anchor must be source, previous, or hybrid")
@@ -679,8 +682,9 @@ def plan_lipdub(
     fps_i = max(int(fps), 1)
     mode = _norm_silence_mode(silence_mode)
     anc = _norm_anchor(anchor)
-    will_segment = duration > max_s + 1e-3
-    do_reframe = will_segment if reframe is None else bool(reframe)
+    # Omitted reframe stays off for short and segmented clips. ``--reframe on``
+    # is the experimental opt-in (config LIPDUB_REFRAME).
+    do_reframe = bool(LIPDUB_REFRAME) if reframe is None else bool(reframe)
     warning: Optional[str] = None
     plan = LipdubPlan(
         segmented=False,

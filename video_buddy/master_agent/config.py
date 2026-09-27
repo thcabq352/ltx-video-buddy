@@ -169,6 +169,13 @@ LTX25_SEGMENT_MAX_S = float(os.getenv("LTX25_SEGMENT_MAX_S", str(LTX25_LEGAL_FRA
 LIPDUB_SEGMENT_MAX_S = float(os.getenv("LIPDUB_SEGMENT_MAX_S", "6.5"))
 LIPDUB_SILENCE_MIN_S = float(os.getenv("LIPDUB_SILENCE_MIN_S", "0.25"))
 LIPDUB_OVERLAP_FRAMES = int(os.getenv("LIPDUB_OVERLAP_FRAMES", "8"))
+# Tower seed 42 (2026-09-27) preferred idle pauses, the previous-frame chain,
+# and reframe off: steady framing, smooth joins, natural idle pauses.
+# hybrid and reframe-on stay opt-in and are labelled experimental.
+# Override with LIPDUB_SILENCE_MODE, LIPDUB_ANCHOR, LIPDUB_REFRAME (on/off).
+LIPDUB_SILENCE_MODE = os.getenv("LIPDUB_SILENCE_MODE", "idle").strip().lower() or "idle"
+LIPDUB_ANCHOR = os.getenv("LIPDUB_ANCHOR", "previous").strip().lower() or "previous"
+LIPDUB_REFRAME = os.getenv("LIPDUB_REFRAME", "off").strip().lower() in ("1", "on", "true", "yes")
 DEFAULT_QUALITY = os.getenv("DEFAULT_QUALITY", "balanced")  # draft | balanced | quality
 # LTX frame law: valid counts are 8n+1 with a hard minimum of 9 (never 8, never 121-by-default).
 DEFAULT_FRAMES = 9

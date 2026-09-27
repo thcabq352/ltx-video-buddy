@@ -315,8 +315,8 @@ def _plan_a2v_lipdub(
 def _reframe_short_a2v(result, plan, image_path: str) -> None:
     """Post-step for a single short a2v pass when ``--reframe on`` was set.
 
-    The default short pass leaves reframe off, so this does not run unless
-    the flag is passed.
+    Reframe defaults off for short and segmented clips. This runs only when
+    the experimental flag is passed on a one-pass clip.
     """
     from pathlib import Path
 
