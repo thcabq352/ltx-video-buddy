@@ -211,6 +211,10 @@ def per_clip_cap_s(variant: str | None, *, request: str = "") -> float:
         return float(H3_MAX_DURATION_S)
     if not canon and requests_h3(request):
         return float(H3_MAX_DURATION_S)
+    if canon in A2V_VARIANTS:
+        from master_agent.orchestrator.lipdub import lipdub_segment_max_s
+
+        return float(lipdub_segment_max_s())
     return float(LTX25_SEGMENT_MAX_S)
 
 

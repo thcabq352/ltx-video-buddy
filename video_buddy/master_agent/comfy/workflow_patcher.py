@@ -1005,7 +1005,10 @@ def _heuristic_patch(workflow: dict[str, Any], values: dict[str, Any]) -> None:
     for _nid, node in _find_nodes_by_class(workflow, "CLIPTextEncode"):
         title = (node.get("_meta") or {}).get("title", "").lower()
         if negative is not None and "neg" in title:
-            _set_input(node, "text", negative)
+            # Linked negatives (LTX 2.5 a2v CLIP text ← Prompt primitive) stay links.
+            text = (node.get("inputs") or {}).get("text")
+            if not isinstance(text, list):
+                _set_input(node, "text", negative)
         elif prompt is not None and "neg" not in title:
             _set_input(node, "text", prompt)
     if prompt is not None:
@@ -1021,6 +1024,21 @@ def _heuristic_patch(workflow: dict[str, Any], values: dict[str, Any]) -> None:
                 for key in ("text", "prompt", "string", "positive", "value"):
                     if key in inputs and not isinstance(inputs[key], list):
                         inputs[key] = prompt
+    # LTX 2.5 a2v stores the negative on PrimitiveStringMultiline "Prompt (negative)".
+    # The CLIP encode node is a link to that primitive; write the primitive, not the link.
+    if negative is not None:
+        for node in workflow.values():
+            if not isinstance(node, dict):
+                continue
+            if node.get("class_type") != "PrimitiveStringMultiline":
+                continue
+            title = str((node.get("_meta") or {}).get("title") or "").lower()
+            if "neg" not in title:
+                continue
+            current = (node.get("inputs") or {}).get("value")
+            if isinstance(current, list):
+                continue
+            _set_input(node, "value", negative)
 
     # Empty latent / size nodes — keep video length and audio frames_number in sync
     ltx_frames = snap_ltx_frames(int(frames)) if frames is not None else None
@@ -1086,6 +1104,15 @@ def _heuristic_patch(workflow: dict[str, Any], values: dict[str, Any]) -> None:
                         # Official 2.5 graphs: bypass=True means unused T2V.
                         # An image must actually condition the sampler latent.
                         _set_input(node, "bypass", False)
+        # Tripod / mouth-bridge: raise only the stage that is not already pinned near 1.0.
+        i2v_strength = values.get("i2v_strength")
+        if isinstance(i2v_strength, (int, float)) and not isinstance(i2v_strength, bool):
+            for _nid, node in _find_nodes_by_class(workflow, "LTXVImgToVideoInplace"):
+                current = (node.get("inputs") or {}).get("strength")
+                if isinstance(current, bool) or isinstance(current, list):
+                    continue
+                if isinstance(current, (int, float)) and float(current) < 0.95:
+                    _set_input(node, "strength", float(i2v_strength))
         for _nid, node in _find_nodes_by_class(workflow, "CreateVideo"):
             if values.get("fps"):
                 _set_input(node, "fps", float(values.get("fps") or 24))
@@ -1388,6 +1415,7 @@ def load_and_patch_workflow(
     stg_blocks: Optional[list[int]] = None,
     sampler_name: Optional[str] = None,
     frames: Optional[int] = None,
+    i2v_strength: Optional[float] = None,
     object_info: Optional[dict[str, Any]] = None,
     first_image: Optional[str] = None,
     last_image: Optional[str] = None,
@@ -1505,6 +1533,7 @@ def load_and_patch_workflow(
         "stg_scale": stg_scale,
         "stg_blocks": stg_blocks,
         "sampler_name": sampler_name,
+        "i2v_strength": i2v_strength,
     }
 
     if variant == "directors" and segment_prompts:

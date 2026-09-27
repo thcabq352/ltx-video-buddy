@@ -163,6 +163,12 @@ DEFAULT_CFG = float(os.getenv("DEFAULT_CFG", "1.0"))
 DEFAULT_FPS = 24
 LTX25_LEGAL_FRAMES = 193  # 8 * 24 + 1
 LTX25_SEGMENT_MAX_S = float(os.getenv("LTX25_SEGMENT_MAX_S", str(LTX25_LEGAL_FRAMES / DEFAULT_FPS)))
+# Lipdub (ltx25_a2v) safe slice. The 193-frame Hands cap is too long: a live
+# 12s tower pass lost mouth motion near 7.4s. Default stays in the 6–7s band.
+# Override with LIPDUB_SEGMENT_MAX_S or --lipdub-max-s. Not used for H3 / t2v.
+LIPDUB_SEGMENT_MAX_S = float(os.getenv("LIPDUB_SEGMENT_MAX_S", "6.5"))
+LIPDUB_SILENCE_MIN_S = float(os.getenv("LIPDUB_SILENCE_MIN_S", "0.25"))
+LIPDUB_OVERLAP_FRAMES = int(os.getenv("LIPDUB_OVERLAP_FRAMES", "8"))
 DEFAULT_QUALITY = os.getenv("DEFAULT_QUALITY", "balanced")  # draft | balanced | quality
 # LTX frame law: valid counts are 8n+1 with a hard minimum of 9 (never 8, never 121-by-default).
 DEFAULT_FRAMES = 9
