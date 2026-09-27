@@ -33,4 +33,5 @@ jobs:
             video_buddy/tests/test_h3_catalog.py \
             video_buddy/tests/test_cli_routing.py \
             video_buddy/tests/test_lipdub_segments.py \
+            video_buddy/tests/test_lipdub_likeness.py \
             video_buddy/tests/test_a2a.py

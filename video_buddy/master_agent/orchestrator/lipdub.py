@@ -527,6 +527,12 @@ def _merge_runs(atoms: Sequence[WordSpan], min_silence_s: float) -> list[list[Wo
     return runs
 
 
+def _nearest_frame_time(t: float, fps: int) -> float:
+    """``frame / fps`` nearest to ``t``. Piece joins stay on the audio grid."""
+    fps_i = max(int(fps), 1)
+    return int(round(float(t) * fps_i)) / float(fps_i)
+
+
 def _split_run(atoms: Sequence[WordSpan], max_s: float) -> list[list[WordSpan]]:
     """Split a speech run on word edges. Never inside an atom.
 
@@ -730,8 +736,8 @@ def quietest_cut(
     """Frame time of the lowest-energy cut that leaves both sides a real piece.
 
     The cut is ``frame / fps`` so the join stays on the audio grid. When word
-    timestamps exist, a frame inside a word is used only if the window has no
-    word-edge frame.
+    timestamps exist, a frame inside a word is skipped. If the window has no
+    such frame, the span stays whole.
     """
     fps_i = max(int(fps), 1)
     min_keep = max(0.5, 8.0 / float(fps_i))
@@ -746,8 +752,9 @@ def quietest_cut(
     candidates = list(range(first, last + 1))
     if words:
         legal = [frame for frame in candidates if not _word_interior(frame / float(fps_i), words)]
-        if legal:
-            candidates = legal
+        if not legal:
+            return None
+        candidates = legal
     best = min(candidates, key=lambda frame: (_energy_at(times, values, frame / float(fps_i)), -frame))
     return best / float(fps_i)
 
@@ -910,11 +917,22 @@ def plan_lipdub(
             zipped = list(zip(pieces_of_run, texts))
         else:
             zipped = []
-            for chunk in _split_run(run, speech_cap):
-                a = float(chunk[0].start)
+            chunks = _split_run(run, speech_cap)
+            if not chunks:
+                continue
+            cursor_t = float(chunks[0][0].start)
+            for i, chunk in enumerate(chunks):
                 b = float(chunk[-1].end)
+                # Snap an interior word edge onto the frame that holds it.
+                # The tail of the run stays on the atom so the following pause
+                # is still the silence splitter's job.
+                if i < len(chunks) - 1:
+                    b = _nearest_frame_time(b, fps_i)
+                    if b <= cursor_t + 1e-6:
+                        b = float(chunk[-1].end)
                 text = " ".join(atom.text for atom in chunk if atom.text).strip()
-                zipped.append(((a, b), text))
+                zipped.append(((cursor_t, b), text))
+                cursor_t = b
         for (a, b), text in zipped:
             if b - a > speech_cap + 0.05:
                 overflow = True
@@ -1237,14 +1255,19 @@ def cuts_inside_words(
     *,
     allowed_silences: Sequence[tuple[float, float]] = (),
 ) -> list[str]:
-    """Speech boundaries that land inside a word and not inside a known pause."""
+    """Speech boundaries that land inside a word and not inside a known pause.
+
+    A cut on the frame that contains a word edge is the frame-grid join: at
+    24 fps that frame is at most half a frame (about 21ms) from the timestamp.
+    """
     bad: list[str] = []
     if not plan.segmented:
         return bad
+    tol = max(1e-3, 0.5 / float(max(int(plan.fps), 1)))
     boundaries = [p.end_s for p in plan.pieces[:-1]]
     for edge in boundaries:
         for word in words:
-            if word.start + 1e-3 < edge < word.end - 1e-3:
+            if word.start + tol < edge < word.end - tol:
                 if any(s0 - 1e-3 <= edge <= s1 + 1e-3 for s0, s1 in allowed_silences):
                     continue
                 bad.append(
