@@ -373,6 +373,20 @@ def cmd_run(args: argparse.Namespace) -> int:
         if voice_warn:
             print(f"warn: {voice_warn}")
 
+    words = None
+    if getattr(args, "words", None):
+        from master_agent.orchestrator.lipdub import load_words
+
+        words_path = Path(args.words)
+        if not words_path.is_file():
+            print(f"FAIL  --words file not found: {args.words}")
+            return 1
+        try:
+            words = load_words(str(words_path))
+        except Exception as exc:
+            print(f"FAIL  --words: {exc}")
+            return 1
+
     if getattr(args, "self_improve_dry", False):
         from master_agent.orchestrator.machine import Orchestrator
 
@@ -446,7 +460,14 @@ def cmd_run(args: argparse.Namespace) -> int:
             image_name=Path(args.image).name if getattr(args, "image", None) else None,
             audio_name=Path(args.audio).name if getattr(args, "audio", None) else None,
             video_name=Path(args.video).name if getattr(args, "video", None) else None,
+            audio_path=args.audio if getattr(args, "audio", None) else None,
             spoken_line=spoken_line or None,
+            seed=args.seed,
+            tripod=bool(getattr(args, "tripod", False)),
+            words=words,
+            lipdub_max_s=getattr(args, "lipdub_max_s", None),
+            silence_min_s=getattr(args, "silence_min_s", None),
+            lipdub_overlap=getattr(args, "lipdub_overlap", None),
         )
 
     if not client.is_up():
@@ -514,8 +535,14 @@ def cmd_run(args: argparse.Namespace) -> int:
         height=args.height,
         video_name=video_name,
         image_name=image_name,
+        image_path=args.image if getattr(args, "image", None) else None,
         audio_name=audio_name,
         audio_path=args.audio if getattr(args, "audio", None) else None,
+        tripod=bool(getattr(args, "tripod", False)),
+        words=words,
+        lipdub_max_s=getattr(args, "lipdub_max_s", None),
+        silence_min_s=getattr(args, "silence_min_s", None),
+        lipdub_overlap=getattr(args, "lipdub_overlap", None),
         storyboard_mode=args.storyboard,
         judge_enabled=False if args.no_judge else JUDGE_ENABLED,
         revise_enabled=not args.no_judge,
@@ -1542,7 +1569,35 @@ def main(argv: list[str] | None = None) -> int:
     p.add_argument("--max-full-judge-rounds", type=int, default=None,
                    help="full-video judge re-gen budget (multi-segment)")
     p.add_argument("--dry-run", action="store_true",
-                   help="storyboard + patch + validate all segments, no GPU queue")
+                   help="storyboard + patch + validate all segments, no GPU queue. "
+                        "Long ltx25_a2v prints the lipdub segment plan.")
+    p.add_argument(
+        "--tripod",
+        action="store_true",
+        help="locked-off camera for ltx25_a2v talking heads (no push-in, no drift)",
+    )
+    p.add_argument(
+        "--lipdub-max-s",
+        type=float,
+        default=None,
+        help="split ltx25_a2v audio longer than this many seconds (default 6.5, env LIPDUB_SEGMENT_MAX_S)",
+    )
+    p.add_argument(
+        "--silence-min-s",
+        type=float,
+        default=None,
+        help="pauses at least this long are closed-mouth holds (default 0.25)",
+    )
+    p.add_argument(
+        "--lipdub-overlap",
+        type=int,
+        default=None,
+        help="overlap frames trimmed at speech-to-speech seams (default 8)",
+    )
+    p.add_argument(
+        "--words",
+        help="JSON word timestamps so long lipdub splits on pauses and never mid-word",
+    )
     p.add_argument(
         "--self-improve-dry",
         action="store_true",

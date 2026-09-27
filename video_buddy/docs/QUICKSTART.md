@@ -69,6 +69,9 @@ python -m master_agent run "talking head dub" --video input.mp4 --variant lipsyn
 # (transformer, Gemma TE, video VAE, audio VAE, spatial upscaler).
 # The duration head is optional. gemma4_e2b is optional (retargeted if missing).
 python -m master_agent run "she says the line" --image face.png --audio line.wav --no-interview
+# Audio longer than ~6.5s is segmented (see docs/LIPDUB.md). Short audio is unchanged.
+python -m master_agent run "she says the line" --image face.png --audio long.wav \
+  --words words.json --tripod --dry-run --no-interview --storyboard off --no-judge
 # MiniMax H3 reference audio is h3_r2v (still + wav/mp3), not fl2va.
 # H3 speaks your line in the voice of your 2-12 s sample and animates the mouth to it (coarse sync). For tight lip-sync to an exact recording, use ltx25_a2v.
 python -m master_agent run "The ringmaster clown speaks directly to camera, lips synced to the voice" --image face.png --audio sample.wav --variant h3_r2v --line "Hey there, Keep Local AI runs on your own machine." --no-interview

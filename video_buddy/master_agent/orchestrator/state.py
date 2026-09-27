@@ -107,6 +107,10 @@ class RunState:
 
     # Closed loop without Comfy / GPU (tests + --self-improve-dry)
     dry_run: bool = False
+    # Explicit latent length (lipdub slices). None keeps frames_for_duration.
+    frames: Optional[int] = None
+    # Stage-1 LTXVImgToVideoInplace strength. None leaves the graph default.
+    i2v_strength: Optional[float] = None
 
     # Control flow
     state: str = "SELECT_VARIANT"

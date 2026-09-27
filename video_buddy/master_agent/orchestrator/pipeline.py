@@ -256,6 +256,65 @@ def _synthetic_cards(request: str, segs: list[float]) -> list[ShotCard]:
     ]
 
 
+def _plan_a2v_lipdub(
+    *,
+    preview: Optional[str],
+    request: str,
+    duration_s: float,
+    image_name: Optional[str],
+    audio_name: Optional[str],
+    video_name: Optional[str],
+    audio_path: Optional[str],
+    words,
+    tripod: bool,
+    lipdub_max_s: Optional[float],
+    silence_min_s: Optional[float],
+    lipdub_overlap: Optional[int],
+    seed: Optional[int],
+):
+    """Silence-aware a2v plan, or None when this route is not ltx25_a2v lipdub."""
+    from master_agent.orchestrator.talking import (
+        A2V_VARIANTS,
+        canonical_variant,
+        is_audio_driven,
+    )
+
+    if video_name or not image_name or not audio_name:
+        return None
+    if canonical_variant(preview) not in A2V_VARIANTS:
+        return None
+    if not is_audio_driven(
+        preview,
+        has_image=True,
+        has_audio=True,
+        has_video=False,
+        request=request,
+    ):
+        return None
+    from master_agent.orchestrator.lipdub import plan_lipdub
+
+    return plan_lipdub(
+        float(duration_s),
+        words=words,
+        audio_path=audio_path,
+        max_segment_s=lipdub_max_s,
+        silence_min_s=silence_min_s,
+        overlap_frames=lipdub_overlap,
+        tripod=bool(tripod),
+        base_prompt=request,
+        seed=seed,
+    )
+
+
+def _short_talking_schedule(duration_s: float):
+    """One clip of the full duration. Used when lipdub stays a single pass."""
+    from master_agent.config import MAX_DURATION_S
+    from master_agent.orchestrator.talking import TalkingSchedule
+
+    used = round(min(max(float(duration_s), 0.5), float(MAX_DURATION_S)), 4)
+    return TalkingSchedule(durations=[used], audio_starts=[0.0])
+
+
 def run_pipeline(
     request: str,
     *,
@@ -267,6 +326,7 @@ def run_pipeline(
     height: int = 512,
     video_name: Optional[str] = None,
     image_name: Optional[str] = None,
+    image_path: Optional[str] = None,
     audio_name: Optional[str] = None,
     audio_path: Optional[str] = None,
     storyboard_mode: Optional[str] = None,
@@ -285,6 +345,11 @@ def run_pipeline(
     dry_run: bool = False,
     kind: str = "",
     music_bed_attached: bool = False,
+    tripod: bool = False,
+    words=None,
+    lipdub_max_s: Optional[float] = None,
+    silence_min_s: Optional[float] = None,
+    lipdub_overlap: Optional[int] = None,
 ) -> PipelineResult:
     run_id = uuid.uuid4().hex[:12]
     result = PipelineResult(run_id, request=request)
@@ -321,8 +386,55 @@ def run_pipeline(
         _write_record(result)
         return result
 
+    lip_plan = _plan_a2v_lipdub(
+        preview=preview,
+        request=request,
+        duration_s=float(duration_s),
+        image_name=image_name,
+        audio_name=audio_name,
+        video_name=video_name,
+        audio_path=audio_path,
+        words=words,
+        tripod=bool(tripod),
+        lipdub_max_s=lipdub_max_s,
+        silence_min_s=silence_min_s,
+        lipdub_overlap=lipdub_overlap,
+        seed=base_seed,
+    )
+    if lip_plan is not None and lip_plan.segmented:
+        from master_agent.orchestrator.lipdub_run import run_segmented_lipdub
+
+        return run_segmented_lipdub(
+            result,
+            lip_plan,
+            orch=orch,
+            request=request,
+            variant=variant or preview,
+            seed=base_seed,
+            width=width,
+            height=height,
+            image_name=image_name,
+            image_path=image_path,
+            audio_name=audio_name,
+            audio_path=audio_path,
+            spoken_line=spoken_line,
+            quality=quality,
+            judge_enabled=bool(j_enabled),
+            revise_enabled=revise_enabled,
+            max_judge_rounds=max_judge_rounds,
+            dry_run=dry_run,
+            tripod=bool(tripod),
+        )
+
     talking = None
-    if is_audio_driven(
+    if lip_plan is not None:
+        talking = _short_talking_schedule(duration_s)
+        segs = list(talking.durations)
+        audio_starts = list(talking.audio_starts)
+        result.log(f"route: photo + voice → {preview}")
+        if lip_plan.warning:
+            result.log(f"warn: {lip_plan.warning}")
+    elif is_audio_driven(
         preview,
         has_image=bool(image_name),
         has_audio=bool(audio_name),
@@ -362,8 +474,18 @@ def run_pipeline(
             )
             _write_record(result)
             return result
+        short_prompt = None
+        short_negative = None
+        short_i2v = None
+        if tripod and lip_plan is not None and not lip_plan.segmented:
+            from master_agent.orchestrator.lipdub import tripod_conditioning
+
+            short_prompt, short_negative, short_i2v = tripod_conditioning(request)
         st = orch.run(
             request,
+            prompt=short_prompt,
+            negative_prompt=short_negative,
+            i2v_strength=short_i2v,
             variant=variant,
             duration_s=segs[0],
             quality=quality,
@@ -667,7 +789,14 @@ def dry_run_pipeline(
     image_name: Optional[str] = None,
     audio_name: Optional[str] = None,
     video_name: Optional[str] = None,
+    audio_path: Optional[str] = None,
     spoken_line: Optional[str] = None,
+    seed: Optional[int] = None,
+    tripod: bool = False,
+    words=None,
+    lipdub_max_s: Optional[float] = None,
+    silence_min_s: Optional[float] = None,
+    lipdub_overlap: Optional[int] = None,
 ) -> int:
     """Storyboard + patch + validate every segment without queueing. CLI exit code."""
     from master_agent.comfy.validator import format_report, validate_workflow
@@ -702,9 +831,52 @@ def dry_run_pipeline(
         print(f"FAIL  {route_err}")
         return 1
 
+    lip_plan = _plan_a2v_lipdub(
+        preview=preview,
+        request=request,
+        duration_s=float(duration_s),
+        image_name=image_name,
+        audio_name=audio_name,
+        video_name=video_name,
+        audio_path=audio_path,
+        words=words,
+        tripod=bool(tripod),
+        lipdub_max_s=lipdub_max_s,
+        silence_min_s=silence_min_s,
+        lipdub_overlap=lipdub_overlap,
+        seed=seed,
+    )
+    client = client or ComfyClient()
+    if lip_plan is not None and lip_plan.segmented:
+        from master_agent.orchestrator.lipdub_run import dry_run_lipdub_validate
+
+        return dry_run_lipdub_validate(
+            lip_plan,
+            request=request,
+            variant=variant or preview or "ltx25_a2v",
+            width=width,
+            height=height,
+            image_name=image_name,
+            audio_name=audio_name,
+            video_name=video_name,
+            seed=seed,
+            client=client,
+        )
+    if lip_plan is not None:
+        from master_agent.orchestrator.lipdub import format_lipdub_plan
+
+        print(format_lipdub_plan(lip_plan))
+
     sb_mode = (storyboard_mode or STORYBOARD_MODE).strip().lower()
     talking = None
-    if is_audio_driven(
+    if lip_plan is not None:
+        talking = _short_talking_schedule(duration_s)
+        segs = list(talking.durations)
+        audio_starts = list(talking.audio_starts)
+        print(f"route: photo + voice → {preview}")
+        if lip_plan.warning:
+            print(f"warn: {lip_plan.warning}")
+    elif is_audio_driven(
         preview,
         has_image=bool(image_name),
         has_audio=bool(audio_name),
@@ -748,7 +920,6 @@ def dry_run_pipeline(
         audio_starts = [0.0] * len(segs)
     print(f"plan: {duration_s}s -> {len(segs)} segment(s) {segs}")
 
-    client = client or ComfyClient()
     orch = Orchestrator(client=client)
     probe_state = RunState(
         request=request,
@@ -803,19 +974,28 @@ def dry_run_pipeline(
         clip_image = image_name
         if chain is not None and i < len(chain.clips) and chain.clips[i].use_last_frame:
             clip_image = f"chain_last_{i}.png"
+        clip_prompt = card.ltx_prompt or request
+        clip_negative = ""
+        clip_i2v = None
+        if tripod and lip_plan is not None and not lip_plan.segmented:
+            from master_agent.orchestrator.lipdub import tripod_conditioning
+
+            clip_prompt, clip_negative, clip_i2v = tripod_conditioning(clip_prompt)
         try:
             wf, meta = load_and_patch_workflow(
                 variant_sel,
-                prompt=card.ltx_prompt or request,
+                prompt=clip_prompt,
+                negative_prompt=clip_negative,
                 duration_s=segs[i],
                 width=width,
                 height=height,
-                seed=card.seed_offset,
+                seed=seed if seed is not None else card.seed_offset,
                 image_name=clip_image,
                 audio_name=audio_name,
                 video_name=video_name,
                 audio_start_s=audio_starts[i] if i < len(audio_starts) else 0.0,
                 spoken_line=spoken_line,
+                i2v_strength=clip_i2v,
             )
         except Exception as e:
             print(f"FAIL  segment {i + 1} patch: {e}")

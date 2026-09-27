@@ -125,6 +125,8 @@ class Orchestrator:
                 stg_blocks=st.stg_blocks,
                 sampler_name=st.sampler_name,
                 spoken_line=st.spoken_line or None,
+                frames=st.frames,
+                i2v_strength=st.i2v_strength,
             )
         except Exception as e:
             st.fail(f"patch failed: {e}")
@@ -530,6 +532,9 @@ class Orchestrator:
         control_pack_used: Optional[dict[str, bool]] = None,
         previs_source: str = "",
         shot_index: int = 1,
+        negative_prompt: Optional[str] = None,
+        frames: Optional[int] = None,
+        i2v_strength: Optional[float] = None,
     ) -> RunState:
         run_id = uuid.uuid4().hex[:12]
         st = RunState(
@@ -563,6 +568,9 @@ class Orchestrator:
             control_pack_present=control_pack_present,
             control_pack_used=dict(control_pack_used or {}),
             previs_source=previs_source,
+            negative_prompt=negative_prompt or "",
+            frames=int(frames) if frames is not None else None,
+            i2v_strength=float(i2v_strength) if i2v_strength is not None else None,
         )
         try:
             st.variant = self._select_variant(st, variant)
