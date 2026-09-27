@@ -111,6 +111,8 @@ class RunState:
     frames: Optional[int] = None
     # Stage-1 LTXVImgToVideoInplace strength. None leaves the graph default.
     i2v_strength: Optional[float] = None
+    # Comfy filename of the source still pinned as a last-frame LTXVAddGuide.
+    end_guide_image: Optional[str] = None
 
     # Control flow
     state: str = "SELECT_VARIANT"
