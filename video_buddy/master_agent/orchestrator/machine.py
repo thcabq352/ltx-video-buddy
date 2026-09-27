@@ -148,6 +148,8 @@ class Orchestrator:
                 workflow,
                 image_name=st.end_guide_image,
                 object_info=object_info,
+                frame_idx=-1 if st.end_guide_frame_idx is None else int(st.end_guide_frame_idx),
+                strength=1.0 if st.end_guide_strength is None else float(st.end_guide_strength),
             )
             meta = dict(meta)
             meta["end_guide"] = guide_patch.status
@@ -563,6 +565,8 @@ class Orchestrator:
         frames: Optional[int] = None,
         i2v_strength: Optional[float] = None,
         end_guide_image: Optional[str] = None,
+        end_guide_frame_idx: Optional[int] = None,
+        end_guide_strength: Optional[float] = None,
     ) -> RunState:
         run_id = uuid.uuid4().hex[:12]
         st = RunState(
@@ -600,6 +604,12 @@ class Orchestrator:
             frames=int(frames) if frames is not None else None,
             i2v_strength=float(i2v_strength) if i2v_strength is not None else None,
             end_guide_image=end_guide_image or None,
+            end_guide_frame_idx=(
+                int(end_guide_frame_idx) if end_guide_frame_idx is not None else None
+            ),
+            end_guide_strength=(
+                float(end_guide_strength) if end_guide_strength is not None else None
+            ),
         )
         try:
             st.variant = self._select_variant(st, variant)

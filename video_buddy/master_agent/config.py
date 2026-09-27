@@ -182,6 +182,11 @@ LIPDUB_REFRAME = os.getenv("LIPDUB_REFRAME", "off").strip().lower() in ("1", "on
 # Inside an already-segmented lipdub, split a speech run that runs longer than
 # this so chained pieces have less time to drift. Not the segmentation threshold.
 LIPDUB_MAX_PIECE_S = float(os.getenv("LIPDUB_MAX_PIECE_S", "3.0"))
+# pause-reset guide. Strength 1.0 snapped the head in about 0.2s on the tower.
+# 0.65 pulls identity back without that peak. Pauses shorter than 0.5s stay
+# plain idle (no keyframe). Override with LIPDUB_PAUSE_RESET_STRENGTH / _MIN_S.
+LIPDUB_PAUSE_RESET_STRENGTH = float(os.getenv("LIPDUB_PAUSE_RESET_STRENGTH", "0.65"))
+LIPDUB_PAUSE_RESET_MIN_S = float(os.getenv("LIPDUB_PAUSE_RESET_MIN_S", "0.5"))
 DEFAULT_QUALITY = os.getenv("DEFAULT_QUALITY", "balanced")  # draft | balanced | quality
 # LTX frame law: valid counts are 8n+1 with a hard minimum of 9 (never 8, never 121-by-default).
 DEFAULT_FRAMES = 9

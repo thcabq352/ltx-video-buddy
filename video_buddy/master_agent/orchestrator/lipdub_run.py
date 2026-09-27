@@ -142,7 +142,8 @@ def run_segmented_lipdub(
         if piece.end_keyframe == "source_still" and image_name:
             end_guide = image_name
             record["guide_node"] = "LTXVAddGuide"
-            record["guide_frame_idx"] = -1
+            record["guide_frame_idx"] = piece.guide_frame_idx
+            record["guide_strength"] = piece.guide_strength
         scene_id = f"{result.run_id}:lip{piece.index}"
         gate = _budget_admit(result, scene_id, variant, max(piece.audio_duration_s, 0.5))
         if gate["decision"] == "hold":
@@ -178,6 +179,8 @@ def run_segmented_lipdub(
             frames=piece.render_frames,
             i2v_strength=piece.i2v_strength,
             end_guide_image=end_guide,
+            end_guide_frame_idx=piece.guide_frame_idx,
+            end_guide_strength=piece.guide_strength,
             judge_enabled=judge_enabled,
             revise_enabled=revise_enabled,
             spoken_line=piece.spoken_line or None,
@@ -495,6 +498,8 @@ def dry_run_lipdub_validate(
                     wf,
                     image_name=image_name or "still.png",
                     object_info=object_info,
+                    frame_idx=-1 if piece.guide_frame_idx is None else int(piece.guide_frame_idx),
+                    strength=1.0 if piece.guide_strength is None else float(piece.guide_strength),
                 )
                 print(
                     f"  end_keyframe={piece.end_keyframe} guide={guide_patch.status} "

@@ -20,8 +20,10 @@ from master_agent.orchestrator.lipdub import (
     cuts_inside_words,
     lipdub_param_block,
     plan_lipdub,
+    _word_interior,
     quietest_cut,
     resolve_pause_reset,
+    snap_words_to_frames,
     split_span_at_lowest_energy,
 )
 from master_agent.orchestrator.lipdub_guide import (
@@ -152,6 +154,93 @@ def test_quietest_cut_prefers_a_word_edge_over_a_louder_interior():
     assert spans[0][1] == cut
 
 
+def test_whisper_20ms_grid_splits_on_snapped_frames_at_24fps():
+    """Faster-whisper edges are 0.02s. At 24fps those match a frame only every 0.5s.
+
+    Before the snap, the opening speech run has no legal cut, so the piece cap
+    warns and keeps the run whole. After the snap the quietest edge is a real
+    frame and the ringmaster line becomes 9 pieces.
+    """
+    words = _words()
+    for word in words:
+        assert abs(word.start / 0.02 - round(word.start / 0.02)) < 1e-6
+        assert abs(word.end / 0.02 - round(word.end / 0.02)) < 1e-6
+    # 2.625s is the frame that holds the 2.62s edge between "a" and "sound".
+    assert _word_interior(2.625, words)
+    snapped = snap_words_to_frames(words, 24)
+    assert not _word_interior(2.625, snapped)
+    sr = 16000
+    pcm = np.full(int(sr * 12), 0.30, dtype=np.float32)
+    for word in snapped:
+        for edge in (word.start, word.end):
+            i0 = int(round(edge * sr))
+            pcm[max(0, i0 - int(0.02 * sr)) : i0 + int(0.02 * sr)] = 0.08
+    # The long "a" (2.08–2.62) is the quietest snapped edge in the first speech run.
+    dip = int(round(2.625 * sr))
+    pcm[max(0, dip - int(0.03 * sr)) : dip + int(0.03 * sr)] = 0.001
+    plan = plan_lipdub(
+        12.0,
+        words=words,
+        silences=PAUSES,
+        pcm=pcm,
+        sample_rate=sr,
+        max_segment_s=6.5,
+        max_piece_s=3.0,
+        fps=24,
+        overlap_frames=8,
+        silence_mode="idle",
+        anchor="pause-reset",
+        reframe=False,
+        seed=42,
+    )
+    assert plan.warning is None or "kept whole" not in plan.warning
+    assert len(plan.pieces) == 9
+    assert len(plan.speech_pieces()) == 6
+    assert len(plan.idle_pieces()) == 3
+    # Deep dip at the snapped end of "a" (2.625s); shallower dips on the other
+    # snapped edges. Neighboring 20ms dips overlap, so the second-run cut is
+    # 8.542s rather than the later 8.917s boundary.
+    ends = [round(p.end_s, 3) for p in plan.pieces]
+    assert ends == [0.875, 2.625, 4.875, 5.708, 6.250, 8.542, 10.500, 11.250, 12.000]
+    assert [p.render_frames for p in plan.pieces] == [25, 49, 65, 33, 17, 57, 57, 25, 25]
+    assert alignment_errors(plan) == []
+    assert cuts_inside_words(plan, words, allowed_silences=PAUSES) == []
+    assert sum(p.keep_frames for p in plan.pieces) == 288
+    speech_ends = [p.end_s for p in plan.speech_pieces()[:-1]]
+    assert any(abs(end - 2.625) < 1e-6 for end in speech_ends)
+    for piece in plan.speech_pieces():
+        assert piece.end_s - piece.start_s <= 3.0 + (1.0 / 24) + 1e-6
+    guided = [p for p in plan.pieces if p.end_keyframe == "source_still"]
+    assert guided
+    assert all(p.end_s - p.start_s + 1e-9 >= plan.pause_reset_min_s for p in guided)
+    assert all(p.guide_strength == plan.pause_reset_strength for p in guided)
+    assert plan.pieces[0].end_keyframe == ""
+
+
+def test_pause_shorter_than_half_a_second_is_plain_idle():
+    words = [WordSpan("hello", 0.0, 1.2), WordSpan("there", 1.55, 3.2)]
+    plan = plan_lipdub(
+        4.0,
+        words=words,
+        silences=[(1.2, 1.55)],
+        max_segment_s=2.0,
+        max_piece_s=6.5,
+        fps=24,
+        silence_mode="idle",
+        anchor="pause-reset",
+        reframe=False,
+    )
+    bridge = [p for p in plan.pieces if p.kind == "mouth_bridge"]
+    assert bridge
+    assert all(p.end_s - p.start_s < 0.5 for p in bridge)
+    assert all(p.end_keyframe == "" for p in bridge)
+    assert all(p.guide_frame_idx is None for p in bridge)
+    assert all(p.continuity == CONTINUITY_PREV for p in bridge)
+    pinned = [p for p in plan.pieces if p.end_keyframe == "source_still"]
+    assert pinned
+    assert all(p.end_s - p.start_s + 1e-9 >= 0.5 for p in pinned)
+
+
 def test_pause_reset_anchor_plan_per_piece():
     plan = _pause_plan()
     assert plan.anchor == ANCHOR_PAUSE_RESET
@@ -167,7 +256,9 @@ def test_pause_reset_anchor_plan_per_piece():
     assert guided
     assert all(p.kind in ("silence_idle", "mouth_bridge") for p in guided)
     assert all(p.continuity == CONTINUITY_PREV for p in guided)
-    assert all(p.guide_frame_idx == -1 for p in guided)
+    assert all(p.end_s - p.start_s + 1e-9 >= 0.5 for p in guided)
+    assert all(p.guide_frame_idx == p.keep_frames - 1 - 4 for p in guided)
+    assert all(p.guide_strength == 0.65 for p in guided)
     assert all(p.silence_crossfade_frames == 0 for p in guided)
     assert all(p.crossfade_frames == 0 for p in plan.speech_pieces())
     speech = plan.speech_pieces()
@@ -184,6 +275,8 @@ def test_pause_reset_anchor_plan_per_piece():
     assert block["anchor"] == "pause-reset"
     assert block["max_piece_s"] == 6.5
     assert block["pause_reset"] is None
+    assert block["pause_reset_strength"] == 0.65
+    assert block["pause_reset_min_s"] == 0.5
     assert any(seg["end_keyframe"] == "source_still" for seg in block["segments"])
     assert "settles back" in guided[0].prompt
 
@@ -226,8 +319,12 @@ def test_pause_reset_guide_path_records_optional_provenance_fields():
         "guide_node",
         "guide_available",
         "pause_reset",
+        "pause_reset_strength",
+        "pause_reset_min_s",
         "segments",
     }
+    assert block["pause_reset_strength"] == 0.65
+    assert block["pause_reset_min_s"] == 0.5
 
 
 def test_workflow_patch_inserts_guide_on_both_stages():
@@ -277,6 +374,20 @@ def test_workflow_patch_inserts_guide_on_both_stages():
         if isinstance(node, dict) and node.get("class_type") in ("LTXVLatentUpsampler", "VAEDecodeTiled"):
             src = node["inputs"]["samples"][0]
             assert patched[src]["class_type"] == CROP_CLASS
+    softened, soft_patch = apply_last_frame_guide(
+        base,
+        image_name="source_still.png",
+        object_info=info,
+        frame_idx=8,
+        strength=0.65,
+    )
+    assert soft_patch.applied
+    soft_guides = [
+        n for n in softened.values() if isinstance(n, dict) and n.get("class_type") == GUIDE_CLASS
+    ]
+    assert soft_guides
+    assert all(node["inputs"]["frame_idx"] == 8 for node in soft_guides)
+    assert all(node["inputs"]["strength"] == 0.65 for node in soft_guides)
 
 
 def test_workflow_patch_without_guide_node_leaves_the_graph_and_says_why():

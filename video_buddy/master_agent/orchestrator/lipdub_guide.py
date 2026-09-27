@@ -40,9 +40,9 @@ GUIDE_INFEASIBLE_MESSAGE = (
 )
 GUIDE_READY_MESSAGE = (
     "pause-reset: LTXVAddGuide and LTXVCropGuides are registered. "
-    "Each silence piece keeps the previous frame as frame 0 and pins the source "
-    "still on the last frame (LTXVAddGuide frame_idx -1, then LTXVCropGuides). "
-    "No new nodes are downloaded."
+    "Each long enough silence keeps the previous frame as frame 0 and pins the "
+    "source still a few frames before the last kept frame (LTXVAddGuide, then "
+    "LTXVCropGuides). Shorter breaths stay plain idle. No new nodes are downloaded."
 )
 
 

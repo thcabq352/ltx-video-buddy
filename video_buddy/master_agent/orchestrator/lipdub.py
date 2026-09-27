@@ -64,6 +64,8 @@ from master_agent.config import (
     LIPDUB_ANCHOR,
     LIPDUB_MAX_PIECE_S,
     LIPDUB_OVERLAP_FRAMES,
+    LIPDUB_PAUSE_RESET_MIN_S,
+    LIPDUB_PAUSE_RESET_STRENGTH,
     LIPDUB_REFRAME,
     LIPDUB_SEGMENT_MAX_S,
     LIPDUB_SILENCE_MIN_S,
@@ -91,6 +93,10 @@ ANCHOR_PAUSE_RESET = "pause-reset"
 # Blend inside a silence piece when the last-frame guide cannot be wired.
 # Never applied to a speech piece.
 SILENCE_XFADE_FRAMES = 8
+# Frames before the last kept frame. frame_idx -1 landed on the latent tail and
+# the visible head turn bunched into ~0.2s. Four frames (~0.17s at 24fps) lets
+# the guide sit inside the pause instead of on the join.
+PAUSE_RESET_GUIDE_LEAD = 4
 PAUSE_RESET_GLIDE = (
     "This slice begins on the incoming frame and settles back onto the source still "
     "by the last frame. Face paint, costume, background, and framing match the still "
@@ -191,10 +197,11 @@ class LipdubPiece:
     dx: Optional[float] = None
     dy: Optional[float] = None
     audio_feed: str = "source_wav_slice"
-    # pause-reset: "source_still" pins LTXVAddGuide on the last frame.
+    # pause-reset: "source_still" pins LTXVAddGuide inside the pause.
     end_keyframe: str = ""
     silence_crossfade_frames: int = 0
     guide_frame_idx: Optional[int] = None
+    guide_strength: Optional[float] = None
 
     @property
     def keep_frames(self) -> int:
@@ -228,6 +235,7 @@ class LipdubPiece:
             "end_keyframe": self.end_keyframe or None,
             "silence_crossfade_frames": int(self.silence_crossfade_frames),
             "guide_frame_idx": self.guide_frame_idx,
+            "guide_strength": self.guide_strength,
             "prompt_id": None,
             "output_path": None,
             "hash": None,
@@ -256,6 +264,9 @@ class LipdubPlan:
     guide_node: Optional[str] = None
     guide_available: Optional[bool] = None
     pause_reset: Optional[str] = None
+    pause_reset_strength: float = 0.65
+    pause_reset_min_s: float = 0.5
+    pause_reset_guide_lead: int = PAUSE_RESET_GUIDE_LEAD
     scale_drift: list = field(default_factory=list)
     warning: Optional[str] = None
     full_audio_mux: bool = True
@@ -533,6 +544,27 @@ def _nearest_frame_time(t: float, fps: int) -> float:
     return int(round(float(t) * fps_i)) / float(fps_i)
 
 
+def snap_words_to_frames(words: Sequence[WordSpan], fps: int) -> list[WordSpan]:
+    """Round each word start and end onto the frame grid.
+
+    Faster-whisper edges sit on a 0.02s grid. At 24fps a frame is 1/24s, so
+    an edge equals a frame time only every 0.5s. Until the edges are snapped,
+    every frame in a contiguous run is strictly inside a word and no cut is legal.
+    """
+    fps_i = max(int(fps), 1)
+    snapped: list[WordSpan] = []
+    for word in words:
+        if not (word.text or "").strip():
+            snapped.append(word)
+            continue
+        start_t = _nearest_frame_time(word.start, fps_i)
+        end_t = _nearest_frame_time(word.end, fps_i)
+        if end_t <= start_t:
+            end_t = start_t + (1.0 / float(fps_i))
+        snapped.append(WordSpan(word.text, start_t, end_t))
+    return snapped
+
+
 def _split_run(atoms: Sequence[WordSpan], max_s: float) -> list[list[WordSpan]]:
     """Split a speech run on word edges. Never inside an atom.
 
@@ -735,11 +767,12 @@ def quietest_cut(
 ) -> Optional[float]:
     """Frame time of the lowest-energy cut that leaves both sides a real piece.
 
-    The cut is ``frame / fps`` so the join stays on the audio grid. When word
-    timestamps exist, a frame inside a word is skipped. If the window has no
-    such frame, the span stays whole.
+    The cut is ``frame / fps`` so the join stays on the audio grid. Word edges
+    are snapped onto that grid first. A frame inside a snapped word is skipped.
+    If the window has no snapped edge, the span stays whole.
     """
     fps_i = max(int(fps), 1)
+    snapped = snap_words_to_frames(words, fps_i) if words else []
     min_keep = max(0.5, 8.0 / float(fps_i))
     lo = float(start) + min_keep
     hi = min(float(start) + float(max_s), float(end) - min_keep)
@@ -750,8 +783,8 @@ def quietest_cut(
     if last < first:
         return None
     candidates = list(range(first, last + 1))
-    if words:
-        legal = [frame for frame in candidates if not _word_interior(frame / float(fps_i), words)]
+    if snapped:
+        legal = [frame for frame in candidates if not _word_interior(frame / float(fps_i), snapped)]
         if not legal:
             return None
         candidates = legal
@@ -807,12 +840,19 @@ def plan_lipdub(
     anchor: Optional[str] = None,
     reframe: Optional[bool] = None,
     max_piece_s: Optional[float] = None,
+    pause_reset_strength: Optional[float] = None,
+    pause_reset_min_s: Optional[float] = None,
 ) -> LipdubPlan:
     """Plan slices. ``segmented`` is false when audio is within the threshold."""
     duration = max(float(duration_s), 0.0)
     max_s = float(lipdub_segment_max_s() if max_segment_s is None else max_segment_s)
     piece_cap = float(lipdub_max_piece_s() if max_piece_s is None else max_piece_s)
     piece_cap = max(0.5, piece_cap)
+    guide_strength = float(
+        LIPDUB_PAUSE_RESET_STRENGTH if pause_reset_strength is None else pause_reset_strength
+    )
+    guide_min_s = float(LIPDUB_PAUSE_RESET_MIN_S if pause_reset_min_s is None else pause_reset_min_s)
+    guide_min_s = max(0.0, guide_min_s)
     min_sil = float(LIPDUB_SILENCE_MIN_S if silence_min_s is None else silence_min_s)
     overlap = int(LIPDUB_OVERLAP_FRAMES if overlap_frames is None else overlap_frames)
     overlap = max(0, overlap)
@@ -838,6 +878,9 @@ def plan_lipdub(
         reframe=do_reframe,
         join_method=JOIN_NONE,
         max_piece_s=piece_cap,
+        pause_reset_strength=guide_strength,
+        pause_reset_min_s=guide_min_s,
+        pause_reset_guide_lead=PAUSE_RESET_GUIDE_LEAD,
     )
     if duration <= max_s + 1e-3:
         if duration > (OBSERVED_CLIFF_FRAMES / float(fps_i)) + 0.02:
@@ -893,46 +936,26 @@ def plan_lipdub(
 
     runs = _merge_runs(atoms, min_sil)
     speech_cap = min(max_s, piece_cap)
+    # Whisper edges are on a 0.02s grid. Snap them before any legal-frame test
+    # so a 24fps cut can land on the frame that holds the boundary.
+    cut_words = snap_words_to_frames(word_list, fps_i)
     speech_chunks: list[tuple[float, float, str]] = []
     overflow = False
+    track = rms if (rms is not None and rms[0]) else ([], [])
     for run in runs:
         c0 = float(run[0].start)
         c1 = float(run[-1].end)
-        energy_spans: Optional[list[tuple[float, float]]] = None
-        if rms is not None and rms[0]:
-            energy_spans = split_span_at_lowest_energy(
-                c0, c1, speech_cap, fps=fps_i, track=rms, words=word_list
-            )
-        if energy_spans:
-            pieces_of_run = energy_spans
-            texts = []
-            for a, b in pieces_of_run:
-                texts.append(
-                    " ".join(
-                        atom.text
-                        for atom in run
-                        if atom.text and a - 1e-3 <= ((atom.start + atom.end) / 2.0) < b - 1e-6
-                    ).strip()
-                )
-            zipped = list(zip(pieces_of_run, texts))
-        else:
-            zipped = []
-            chunks = _split_run(run, speech_cap)
-            if not chunks:
-                continue
-            cursor_t = float(chunks[0][0].start)
-            for i, chunk in enumerate(chunks):
-                b = float(chunk[-1].end)
-                # Snap an interior word edge onto the frame that holds it.
-                # The tail of the run stays on the atom so the following pause
-                # is still the silence splitter's job.
-                if i < len(chunks) - 1:
-                    b = _nearest_frame_time(b, fps_i)
-                    if b <= cursor_t + 1e-6:
-                        b = float(chunk[-1].end)
-                text = " ".join(atom.text for atom in chunk if atom.text).strip()
-                zipped.append(((cursor_t, b), text))
-                cursor_t = b
+        pieces_of_run = split_span_at_lowest_energy(
+            c0, c1, speech_cap, fps=fps_i, track=track, words=cut_words
+        )
+        zipped = []
+        for a, b in pieces_of_run:
+            text = " ".join(
+                atom.text
+                for atom in run
+                if atom.text and a - 1e-3 <= ((atom.start + atom.end) / 2.0) < b - 1e-6
+            ).strip()
+            zipped.append(((a, b), text))
         for (a, b), text in zipped:
             if b - a > speech_cap + 0.05:
                 overflow = True
@@ -970,7 +993,7 @@ def plan_lipdub(
     if not timed:
         timed = [(pause_kind(duration, leading=True), 0.0, duration, "")]
 
-    total, spans = _allocate_frames(timed, duration, fps_i, word_list, sil_all)
+    total, spans = _allocate_frames(timed, duration, fps_i, cut_words, sil_all)
     pieces: list[LipdubPiece] = []
     for (kind, _s, _e, text), (f0, f1) in zip(timed, spans):
         if f1 <= f0:
@@ -1008,7 +1031,13 @@ def plan_lipdub(
     for piece in pieces:
         piece.seed = seed
         before = _generated_before(prev_kind)
-        _assign_continuity(piece, before=before, anchor=anc)
+        _assign_continuity(
+            piece,
+            before=before,
+            anchor=anc,
+            guide_strength=guide_strength,
+            guide_min_s=guide_min_s,
+        )
         drop = _overlap_drop(piece, prev_kind, anchor=anc, overlap=overlap)
         piece.drop_leading = drop
         piece.crossfade_frames = (
@@ -1074,13 +1103,38 @@ def plan_lipdub(
     return plan
 
 
-def _assign_continuity(piece: LipdubPiece, *, before: bool, anchor: str) -> None:
+def _pause_long_enough(piece: LipdubPiece, min_s: float) -> bool:
+    return (float(piece.end_s) - float(piece.start_s)) + 1e-9 >= float(min_s)
+
+
+def _guide_frame_index(piece: LipdubPiece, *, lead: int) -> Optional[int]:
+    """Index of the source keyframe, a few frames before the last kept frame.
+
+    Frame 0 stays the previous-frame condition. The index is into the kept
+    frames (the latent may be longer after the 8n+1 snap; those extra frames
+    are trimmed and must not be the only place the still is pinned).
+    """
+    last = int(piece.keep_frames) - 1
+    if last < 1:
+        return None
+    return max(1, last - max(int(lead), 0))
+
+
+def _assign_continuity(
+    piece: LipdubPiece,
+    *,
+    before: bool,
+    anchor: str,
+    guide_strength: float,
+    guide_min_s: float,
+) -> None:
     if piece.kind == KIND_PLATE or not before:
         piece.continuity = CONTINUITY_STILL
         if (
             anchor == ANCHOR_PAUSE_RESET
             and piece.kind == KIND_PLATE
             and before
+            and _pause_long_enough(piece, guide_min_s)
         ):
             # A hold plate is not sampled, so the glide is a blend inside the plate.
             piece.silence_crossfade_frames = min(SILENCE_XFADE_FRAMES, piece.keep_frames)
@@ -1091,8 +1145,13 @@ def _assign_continuity(piece: LipdubPiece, *, before: bool, anchor: str) -> None
         piece.continuity = CONTINUITY_HYBRID
     elif anchor == ANCHOR_PAUSE_RESET and piece.kind in (KIND_IDLE, KIND_BRIDGE):
         piece.continuity = CONTINUITY_PREV
-        piece.end_keyframe = "source_still"
-        piece.guide_frame_idx = -1
+        # Short breaths stay plain idle. A keyframe there is a snap, not a glide.
+        if _pause_long_enough(piece, guide_min_s):
+            idx = _guide_frame_index(piece, lead=PAUSE_RESET_GUIDE_LEAD)
+            if idx is not None:
+                piece.end_keyframe = "source_still"
+                piece.guide_frame_idx = idx
+                piece.guide_strength = float(guide_strength)
     else:
         piece.continuity = CONTINUITY_PREV
 
@@ -1161,7 +1220,10 @@ def _finalize_idle(
     piece.audio_duration_s = piece.render_frames / float(fps)
     # The graph trims the original wav. A pause slice is silence or room tone.
     piece.audio_feed = "source_pause_slice"
-    piece.prompt = _idle_prompt(tripod=tripod, anchor=anchor)
+    piece.prompt = _idle_prompt(
+        tripod=tripod,
+        anchor=anchor if piece.end_keyframe == "source_still" else ANCHOR_PREVIOUS,
+    )
     piece.negative = _idle_negative(tripod=tripod)
     piece.i2v_strength = IDLE_I2V_STRENGTH
     if piece.render_frames > SAFE_RENDER_FRAMES:
@@ -1304,6 +1366,7 @@ def resolve_pause_reset(plan: LipdubPlan, *, guide_available: bool) -> LipdubPla
         piece.silence_crossfade_frames = min(SILENCE_XFADE_FRAMES, piece.keep_frames)
         piece.end_keyframe = ""
         piece.guide_frame_idx = None
+        piece.guide_strength = None
         piece.crossfade_frames = 0
         if piece.drop_leading:
             piece.drop_leading = 0
@@ -1356,12 +1419,17 @@ def format_lipdub_plan(plan: LipdubPlan) -> str:
             f"render={piece.render_frames} keep={piece.keep_frames} "
             f"drop_lead={piece.drop_leading} hold={piece.hold_frames} "
             f"source={piece.continuity} end={piece.end_keyframe or '-'} "
+            f"guide={piece.guide_frame_idx if piece.guide_frame_idx is not None else '-'} "
+            f"strength={piece.guide_strength if piece.guide_strength is not None else '-'} "
             f"silence_xfade={piece.silence_crossfade_frames} line={piece.spoken_line!r}"
         )
     if plan.anchor == ANCHOR_PAUSE_RESET:
         lines.append(
             f"pause_reset: {plan.pause_reset or 'end_keyframe (not probed)'} "
-            f"guide_node={plan.guide_node or '-'}"
+            f"guide_node={plan.guide_node or '-'} "
+            f"strength={plan.pause_reset_strength:.2f} "
+            f"min_pause={plan.pause_reset_min_s:.2f}s "
+            f"guide_lead={plan.pause_reset_guide_lead}"
         )
     if plan.warning:
         lines.append(f"warn: {plan.warning}")
@@ -1406,6 +1474,9 @@ def lipdub_param_block(
         "guide_node": plan.guide_node,
         "guide_available": plan.guide_available,
         "pause_reset": plan.pause_reset,
+        "pause_reset_strength": plan.pause_reset_strength,
+        "pause_reset_min_s": plan.pause_reset_min_s,
+        "pause_reset_guide_lead": plan.pause_reset_guide_lead,
         "scale_drift": list(plan.scale_drift),
         "hybrid_prev_weight": _hybrid_weight(plan),
         "tripod": bool(plan.tripod),
