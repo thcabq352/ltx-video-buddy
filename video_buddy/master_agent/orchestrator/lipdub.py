@@ -22,22 +22,31 @@ about 7.4s), checked against the graph and the LTX-2.5 architecture:
 * The safe default is 6.5s. With an 8-frame overlap and ``8n+1`` snap the
   render stays at or under 169 frames (7.04s), under the observed cliff.
 
-Continuity: speech after speech is conditioned on the previous slice's last
-kept frame, with a short overlap that is trimmed off so the timeline does
-not duplicate frames. Speech after a silence bridge is conditioned on that
-bridge's last frame, not on the original still.
+Continuity: the a2v graph has one ``LoadImage`` and no guide / keyframe
+input, so a second conditioning node is not added. Default ``--anchor hybrid``
+puts the original still on that image slot (identity and framing). The
+previous piece's last frame is only a continuity guide: a low-weight blend
+into the conditioning image, and a crossfade over the trimmed overlap so
+the head does not snap back to the still. ``--anchor previous`` is the #34
+chain (each piece starts from the previous last frame). ``--anchor source``
+is the still alone, with the same overlap crossfade.
 
-Silence (≥ ``silence_min_s``, default 250ms):
+Silence (≥ ``silence_min_s``, default 250ms), ``--silence-mode``:
 
-* Leading silence is a hold of the source still (the rest mouth).
-* Internal and trailing silence is a 9-frame a2v "close the mouth" bridge
-  from the previous frame, using the real pause audio, then a hold of that
-  bridge's last frame for the rest of the pause. The next speech slice
-  starts from that frame.
+* ``idle`` (default): the pause is an a2v closed-mouth idle (breathing,
+  blink, micro head motion) fed the real pause slice of the wav. Holds
+  longer than a few frames are not used. A pause shorter than 9 frames
+  stays a trimmed mouth bridge.
+* ``hold``: #34 behaviour. Leading silence is a still plate. A longer pause
+  is a 9-frame close-mouth bridge plus a hold of that frame.
+* ``bridge``: every pause is that 9-frame bridge (leading included). The
+  tail past 9 frames is still a hold.
 
-The a2v graph has no ``camera_motion`` input. ``--tripod`` is prompt text,
-negative prompt, and a higher first-frame ``LTXVImgToVideoInplace`` strength
-on the stage that is not already pinned at 1.0.
+``--reframe`` (default on for a segmented lipdub, off for a single short
+pass) measures zoom and shift against the source still and scales the
+piece back. ``--tripod`` is unchanged: prompt, negative, and stage-1
+``LTXVImgToVideoInplace`` strength ``0.85``. The graph has no camera-motion
+input. Stage 2 stays pinned at 1.0.
 """
 
 from __future__ import annotations
@@ -57,8 +66,19 @@ from master_agent.config import (
 OBSERVED_CLIFF_FRAMES = 177
 SAFE_RENDER_FRAMES = 169
 BRIDGE_FRAMES = 9
+# Idle mode never leaves a frozen plate longer than this. Snap leftovers
+# are trimmed from the render, not held.
+MAX_FROZEN_HOLD = 3
 TRIPOD_I2V_STRENGTH = 0.85
 BRIDGE_I2V_STRENGTH = 0.80
+IDLE_I2V_STRENGTH = 0.85
+
+SILENCE_IDLE = "idle"
+SILENCE_HOLD = "hold"
+SILENCE_BRIDGE = "bridge"
+ANCHOR_SOURCE = "source"
+ANCHOR_PREVIOUS = "previous"
+ANCHOR_HYBRID = "hybrid"
 
 CLOSED_MOUTH_CLAUSE = (
     "Lips tightly synced to this audio. Lips press fully closed on every m, b, and p. "
@@ -77,13 +97,32 @@ BRIDGE_PROMPT = (
     "The same person holds this exact pose. The mouth closes and rests fully closed, "
     "lips together, no speech, no head turn, no camera move."
 )
+IDLE_PROMPT = (
+    "The same person as the source still. Mouth fully closed, lips together, no speech. "
+    "Subtle breathing in the chest and shoulders, one slow blink, and tiny natural "
+    "head micro-motion. Face paint, costume, and portrait framing stay locked to the still."
+)
+IDLE_NEGATIVE = (
+    "talking, speaking, open mouth, parted lips, teeth, jaw moving, lip sync, "
+    "camera push-in, zoom in, dolly in, camera drift, handheld, head turn, morphing face paint"
+)
+ANCHOR_CLAUSE = (
+    "Same face, face paint, costume, and portrait framing as the source still. "
+    "No push-in, no zoom, no change in the face paint."
+)
 DEFAULT_NEGATIVE = "blurry, low quality, distorted face, watermark, text overlay"
 
 CONTINUITY_STILL = "still"
 CONTINUITY_PREV = "previous_last_frame"
+CONTINUITY_SOURCE = "source_still"
+CONTINUITY_HYBRID = "hybrid"
 KIND_SPEECH = "speech"
 KIND_PLATE = "silence_plate"
 KIND_BRIDGE = "mouth_bridge"
+KIND_IDLE = "silence_idle"
+JOIN_CROSSFADE = "overlap_crossfade"
+JOIN_TRIM = "trim_overlap"
+JOIN_NONE = "none"
 
 
 def lipdub_segment_max_s() -> float:
@@ -130,6 +169,11 @@ class LipdubPiece:
     audio_duration_s: float = 0.0
     i2v_strength: Optional[float] = None
     seed: Optional[int] = None
+    crossfade_frames: int = 0
+    scale: Optional[float] = None
+    dx: Optional[float] = None
+    dy: Optional[float] = None
+    audio_feed: str = "source_wav_slice"
 
     @property
     def keep_frames(self) -> int:
@@ -155,6 +199,11 @@ class LipdubPiece:
             "source_frame": self.continuity,
             "continuity": self.continuity,
             "spoken_line": self.spoken_line,
+            "crossfade_frames": int(self.crossfade_frames),
+            "scale": self.scale,
+            "dx": self.dx,
+            "dy": self.dy,
+            "audio_feed": self.audio_feed,
             "prompt_id": None,
             "output_path": None,
             "hash": None,
@@ -175,11 +224,19 @@ class LipdubPlan:
     split_points_s: list[float] = field(default_factory=list)
     continuity_method: str = "none"
     silence_handling: str = "none"
+    silence_mode: str = SILENCE_IDLE
+    anchor: str = ANCHOR_HYBRID
+    reframe: bool = False
+    join_method: str = JOIN_NONE
+    scale_drift: list = field(default_factory=list)
     warning: Optional[str] = None
     full_audio_mux: bool = True
 
     def comfy_pieces(self) -> list[LipdubPiece]:
-        return [p for p in self.pieces if p.kind in (KIND_SPEECH, KIND_BRIDGE)]
+        return [p for p in self.pieces if p.kind in (KIND_SPEECH, KIND_BRIDGE, KIND_IDLE)]
+
+    def idle_pieces(self) -> list[LipdubPiece]:
+        return [p for p in self.pieces if p.kind == KIND_IDLE]
 
     def speech_pieces(self) -> list[LipdubPiece]:
         return [p for p in self.pieces if p.kind == KIND_SPEECH]
@@ -224,11 +281,13 @@ def _segment_negative(*, tripod: bool) -> str:
     return ", ".join(parts)
 
 
-def _speech_prompt(base: str, spoken: str, *, tripod: bool) -> str:
+def _speech_prompt(base: str, spoken: str, *, tripod: bool, anchor: str = ANCHOR_PREVIOUS) -> str:
     parts = [(base or "").strip()]
     if spoken:
         parts.append(f"This slice says: {spoken}")
     parts.append(CLOSED_MOUTH_CLAUSE)
+    if anchor in (ANCHOR_SOURCE, ANCHOR_HYBRID):
+        parts.append(ANCHOR_CLAUSE)
     if tripod:
         parts.append(TRIPOD_POSITIVE)
     return " ".join(p for p in parts if p)
@@ -238,6 +297,40 @@ def _bridge_prompt(*, tripod: bool) -> str:
     if tripod:
         return f"{BRIDGE_PROMPT} {TRIPOD_POSITIVE}"
     return BRIDGE_PROMPT
+
+
+def _idle_prompt(*, tripod: bool, anchor: str) -> str:
+    parts = [IDLE_PROMPT]
+    if anchor in (ANCHOR_SOURCE, ANCHOR_HYBRID):
+        parts.append(ANCHOR_CLAUSE)
+    if tripod:
+        parts.append(TRIPOD_POSITIVE)
+    return " ".join(parts)
+
+
+def _idle_negative(*, tripod: bool) -> str:
+    parts = [DEFAULT_NEGATIVE, IDLE_NEGATIVE]
+    if tripod:
+        parts.append(TRIPOD_NEGATIVE)
+    return ", ".join(parts)
+
+
+def _norm_silence_mode(value: Optional[str]) -> str:
+    if value is None or str(value).strip() == "":
+        return SILENCE_IDLE
+    mode = str(value).strip().lower()
+    if mode not in (SILENCE_IDLE, SILENCE_HOLD, SILENCE_BRIDGE):
+        raise ValueError("silence_mode must be idle, hold, or bridge")
+    return mode
+
+
+def _norm_anchor(value: Optional[str]) -> str:
+    if value is None or str(value).strip() == "":
+        return ANCHOR_HYBRID
+    anchor = str(value).strip().lower()
+    if anchor not in (ANCHOR_SOURCE, ANCHOR_PREVIOUS, ANCHOR_HYBRID):
+        raise ValueError("anchor must be source, previous, or hybrid")
+    return anchor
 
 
 def energy_silence_spans(
@@ -501,7 +594,7 @@ def _allocate_frames(
         return total, []
     edges = [0]
     for kind, _start, end, _text in chunks[:-1]:
-        prefer = "floor" if kind in (KIND_PLATE, KIND_BRIDGE) else "ceil"
+        prefer = "floor" if kind in (KIND_PLATE, KIND_BRIDGE, KIND_IDLE) else "ceil"
         edges.append(
             _edge_frame(float(end), fps, total, words, prefer=prefer, silences=silences)
         )
@@ -520,8 +613,17 @@ def _allocate_frames(
     return total, spans
 
 
-def _silence_handling(pieces: Sequence[LipdubPiece], *, segmented: bool) -> str:
+def _silence_handling(pieces: Sequence[LipdubPiece], *, segmented: bool, silence_mode: str) -> str:
     kinds = {p.kind for p in pieces}
+    if silence_mode == SILENCE_IDLE:
+        if KIND_IDLE in kinds and KIND_BRIDGE in kinds:
+            return "idle_breath+short_bridge"
+        if KIND_IDLE in kinds:
+            return "idle_breath"
+        if KIND_BRIDGE in kinds:
+            return "mouth_bridge"
+    if KIND_BRIDGE in kinds and (KIND_PLATE in kinds or any(p.hold_frames > MAX_FROZEN_HOLD for p in pieces)):
+        return "mouth_bridge+still_hold"
     if KIND_BRIDGE in kinds and KIND_PLATE in kinds:
         return "mouth_bridge+still_hold"
     if KIND_BRIDGE in kinds:
@@ -533,12 +635,20 @@ def _silence_handling(pieces: Sequence[LipdubPiece], *, segmented: bool) -> str:
     return "none"
 
 
-def _continuity_method(pieces: Sequence[LipdubPiece], *, segmented: bool) -> str:
+def _continuity_method(pieces: Sequence[LipdubPiece], *, segmented: bool, anchor: str) -> str:
     if not segmented:
         return "none"
+    if anchor == ANCHOR_HYBRID:
+        return "hybrid_source_still"
+    if anchor == ANCHOR_SOURCE:
+        return "source_still"
     if any(p.continuity == CONTINUITY_PREV for p in pieces):
         return CONTINUITY_PREV
     return CONTINUITY_STILL
+
+
+def _generated_before(prev_kind: Optional[str]) -> bool:
+    return prev_kind in (KIND_SPEECH, KIND_BRIDGE, KIND_IDLE)
 
 
 def plan_lipdub(
@@ -556,6 +666,9 @@ def plan_lipdub(
     tripod: bool = False,
     base_prompt: str = "",
     seed: Optional[int] = None,
+    silence_mode: Optional[str] = None,
+    anchor: Optional[str] = None,
+    reframe: Optional[bool] = None,
 ) -> LipdubPlan:
     """Plan slices. ``segmented`` is false when audio is within the threshold."""
     duration = max(float(duration_s), 0.0)
@@ -564,6 +677,10 @@ def plan_lipdub(
     overlap = int(LIPDUB_OVERLAP_FRAMES if overlap_frames is None else overlap_frames)
     overlap = max(0, overlap)
     fps_i = max(int(fps), 1)
+    mode = _norm_silence_mode(silence_mode)
+    anc = _norm_anchor(anchor)
+    will_segment = duration > max_s + 1e-3
+    do_reframe = will_segment if reframe is None else bool(reframe)
     warning: Optional[str] = None
     plan = LipdubPlan(
         segmented=False,
@@ -575,6 +692,10 @@ def plan_lipdub(
         tripod=bool(tripod),
         timeline_frame_count=timeline_frames(duration, fps_i) if duration > 0 else 0,
         full_audio_mux=True,
+        silence_mode=mode,
+        anchor=anc,
+        reframe=do_reframe,
+        join_method=JOIN_NONE,
     )
     if duration <= max_s + 1e-3:
         if duration > (OBSERVED_CLIFF_FRAMES / float(fps_i)) + 0.02:
@@ -637,31 +758,36 @@ def plan_lipdub(
             speech_chunks.append((c0, c1, text))
 
     # Absorb sub-threshold gaps into the following speech so frames are not dropped.
-    # Real pauses stay plates / bridges.
+    # Real pauses stay plates, bridges, or idle renders.
+    def pause_kind(span_s: float, *, leading: bool) -> str:
+        if mode == SILENCE_HOLD:
+            return KIND_PLATE if leading else KIND_BRIDGE
+        if mode == SILENCE_BRIDGE:
+            return KIND_BRIDGE
+        frames = int(round(float(span_s) * fps_i))
+        if frames >= BRIDGE_FRAMES:
+            return KIND_IDLE
+        return KIND_BRIDGE
+
     timed: list[tuple[str, float, float, str]] = []
     cursor = 0.0
     for c0, c1, text in speech_chunks:
         if c0 - cursor >= min_sil - 1e-6:
-            kind = KIND_PLATE if cursor <= 1e-6 and not timed else KIND_BRIDGE
-            # Leading is a still hold. Anything after speech has a pose to close.
-            if timed and any(item[0] in (KIND_SPEECH, KIND_BRIDGE) for item in timed):
-                kind = KIND_BRIDGE
-            elif not any(item[0] == KIND_SPEECH for item in timed):
-                kind = KIND_PLATE
-            timed.append((kind, cursor, c0, ""))
+            leading = not any(item[0] == KIND_SPEECH for item in timed)
+            timed.append((pause_kind(c0 - cursor, leading=leading), cursor, c0, ""))
         elif c0 > cursor:
             c0 = cursor
         timed.append((KIND_SPEECH, c0, c1, text))
         cursor = c1
     if duration - cursor >= min_sil - 1e-6:
-        kind = KIND_BRIDGE if any(item[0] == KIND_SPEECH for item in timed) else KIND_PLATE
-        timed.append((kind, cursor, duration, ""))
+        leading = not any(item[0] == KIND_SPEECH for item in timed)
+        timed.append((pause_kind(duration - cursor, leading=leading), cursor, duration, ""))
     elif cursor < duration and timed:
         kind, s0, _e, text = timed[-1]
         timed[-1] = (kind, s0, duration, text)
 
     if not timed:
-        timed = [(KIND_PLATE, 0.0, duration, "")]
+        timed = [(pause_kind(duration, leading=True), 0.0, duration, "")]
 
     total, spans = _allocate_frames(timed, duration, fps_i, word_list, sil_all)
     pieces: list[LipdubPiece] = []
@@ -680,6 +806,15 @@ def plan_lipdub(
             )
         )
 
+    if mode == SILENCE_IDLE:
+        for piece in pieces:
+            if piece.kind == KIND_BRIDGE and piece.keep_frames >= BRIDGE_FRAMES:
+                piece.kind = KIND_IDLE
+            elif piece.kind == KIND_PLATE and piece.keep_frames >= BRIDGE_FRAMES:
+                piece.kind = KIND_IDLE
+            elif piece.kind == KIND_PLATE:
+                piece.kind = KIND_BRIDGE
+
     prev_kind: Optional[str] = None
     negative = _segment_negative(tripod=tripod)
     warnings: list[str] = []
@@ -691,54 +826,51 @@ def plan_lipdub(
         )
     for piece in pieces:
         piece.seed = seed
+        before = _generated_before(prev_kind)
+        _assign_continuity(piece, before=before, anchor=anc)
+        drop = _overlap_drop(piece, prev_kind, anchor=anc, overlap=overlap)
+        piece.drop_leading = drop
+        piece.crossfade_frames = drop if anc != ANCHOR_PREVIOUS and before else 0
         if piece.kind == KIND_SPEECH:
-            if prev_kind in (KIND_SPEECH, KIND_BRIDGE):
-                piece.continuity = CONTINUITY_PREV
-            else:
-                piece.continuity = CONTINUITY_STILL
-            drop = 0
-            if piece.continuity == CONTINUITY_PREV and prev_kind == KIND_SPEECH:
-                drop = min(overlap, piece.place_start)
-            piece.drop_leading = drop
-            piece.generated_keep = piece.keep_frames
-            piece.hold_frames = 0
-            piece.render_frames = snap_ltx_frames_at_least(piece.keep_frames + drop)
-            piece.audio_start_s = (piece.place_start - drop) / float(fps_i)
-            piece.audio_duration_s = piece.render_frames / float(fps_i)
-            spoken = piece.spoken_line or _line_for(word_list, piece.start_s, piece.end_s)
-            piece.spoken_line = spoken
-            piece.prompt = _speech_prompt(base_prompt, spoken, tripod=tripod)
-            piece.negative = negative
-            piece.i2v_strength = TRIPOD_I2V_STRENGTH if tripod else None
-            if piece.render_frames > SAFE_RENDER_FRAMES:
-                warnings.append(
-                    f"speech slice {piece.index} renders {piece.render_frames} frames, "
-                    f"past the safe cap {SAFE_RENDER_FRAMES} (cliff {OBSERVED_CLIFF_FRAMES})"
-                )
+            _finalize_speech(
+                piece,
+                drop=drop,
+                fps=fps_i,
+                words=word_list,
+                base_prompt=base_prompt,
+                negative=negative,
+                tripod=tripod,
+                anchor=anc,
+                warnings=warnings,
+            )
+        elif piece.kind == KIND_IDLE:
+            _finalize_idle(
+                piece,
+                drop=drop,
+                fps=fps_i,
+                tripod=tripod,
+                anchor=anc,
+                warnings=warnings,
+            )
         elif piece.kind == KIND_BRIDGE:
-            piece.continuity = CONTINUITY_PREV
-            piece.drop_leading = 0
-            piece.i2v_strength = BRIDGE_I2V_STRENGTH
-            piece.prompt = _bridge_prompt(tripod=tripod)
-            piece.negative = negative
-            keep = piece.keep_frames
-            if keep <= BRIDGE_FRAMES:
-                piece.render_frames = snap_ltx_frames_at_least(keep)
-                piece.generated_keep = keep
-                piece.hold_frames = 0
-            else:
-                piece.render_frames = BRIDGE_FRAMES
-                piece.generated_keep = BRIDGE_FRAMES
-                piece.hold_frames = keep - BRIDGE_FRAMES
-            piece.audio_start_s = piece.place_start / float(fps_i)
-            piece.audio_duration_s = piece.render_frames / float(fps_i)
+            _finalize_bridge(
+                piece,
+                drop=drop,
+                fps=fps_i,
+                tripod=tripod,
+                negative=negative,
+                allow_hold=mode != SILENCE_IDLE,
+            )
         else:
             piece.continuity = CONTINUITY_STILL
             piece.hold_frames = piece.keep_frames
             piece.generated_keep = 0
             piece.render_frames = 0
+            piece.drop_leading = 0
+            piece.crossfade_frames = 0
             piece.prompt = ""
             piece.negative = ""
+            piece.audio_feed = "none"
         prev_kind = piece.kind
 
     for i, piece in enumerate(pieces):
@@ -747,10 +879,130 @@ def plan_lipdub(
     plan.timeline_frame_count = total
     plan.pieces = pieces
     plan.split_points_s = [round(p.end_s, 4) for p in pieces[:-1]]
-    plan.continuity_method = _continuity_method(pieces, segmented=True)
-    plan.silence_handling = _silence_handling(pieces, segmented=True)
+    plan.continuity_method = _continuity_method(pieces, segmented=True, anchor=anc)
+    plan.silence_handling = _silence_handling(pieces, segmented=True, silence_mode=mode)
+    if anc == ANCHOR_PREVIOUS:
+        plan.join_method = JOIN_TRIM if any(p.drop_leading for p in pieces) else JOIN_NONE
+    elif any(p.crossfade_frames for p in pieces):
+        plan.join_method = JOIN_CROSSFADE
+    else:
+        plan.join_method = JOIN_NONE
     plan.warning = "; ".join(warnings) if warnings else None
     return plan
+
+
+def _assign_continuity(piece: LipdubPiece, *, before: bool, anchor: str) -> None:
+    if piece.kind == KIND_PLATE or not before:
+        piece.continuity = CONTINUITY_STILL
+        return
+    if anchor == ANCHOR_SOURCE:
+        piece.continuity = CONTINUITY_SOURCE
+    elif anchor == ANCHOR_HYBRID:
+        piece.continuity = CONTINUITY_HYBRID
+    else:
+        piece.continuity = CONTINUITY_PREV
+
+
+def _overlap_drop(
+    piece: LipdubPiece,
+    prev_kind: Optional[str],
+    *,
+    anchor: str,
+    overlap: int,
+) -> int:
+    if piece.kind == KIND_PLATE or not _generated_before(prev_kind):
+        return 0
+    if anchor == ANCHOR_PREVIOUS:
+        # #34: overlap context only on a speech-to-speech seam. A bridge already
+        # starts on the previous frame, so it is not rendered twice.
+        if piece.kind == KIND_SPEECH and prev_kind == KIND_SPEECH:
+            return min(overlap, piece.place_start)
+        return 0
+    return min(int(overlap), piece.place_start)
+
+
+def _finalize_speech(
+    piece: LipdubPiece,
+    *,
+    drop: int,
+    fps: int,
+    words: Sequence[WordSpan],
+    base_prompt: str,
+    negative: str,
+    tripod: bool,
+    anchor: str,
+    warnings: list[str],
+) -> None:
+    piece.generated_keep = piece.keep_frames
+    piece.hold_frames = 0
+    piece.render_frames = snap_ltx_frames_at_least(piece.keep_frames + drop)
+    piece.audio_start_s = (piece.place_start - drop) / float(fps)
+    piece.audio_duration_s = piece.render_frames / float(fps)
+    piece.audio_feed = "source_wav_slice"
+    spoken = piece.spoken_line or _line_for(words, piece.start_s, piece.end_s)
+    piece.spoken_line = spoken
+    piece.prompt = _speech_prompt(base_prompt, spoken, tripod=tripod, anchor=anchor)
+    piece.negative = negative
+    piece.i2v_strength = TRIPOD_I2V_STRENGTH if tripod else None
+    if piece.render_frames > SAFE_RENDER_FRAMES:
+        warnings.append(
+            f"speech slice {piece.index} renders {piece.render_frames} frames, "
+            f"past the safe cap {SAFE_RENDER_FRAMES} (cliff {OBSERVED_CLIFF_FRAMES})"
+        )
+
+
+def _finalize_idle(
+    piece: LipdubPiece,
+    *,
+    drop: int,
+    fps: int,
+    tripod: bool,
+    anchor: str,
+    warnings: list[str],
+) -> None:
+    piece.generated_keep = piece.keep_frames
+    piece.hold_frames = 0
+    piece.render_frames = snap_ltx_frames_at_least(piece.keep_frames + drop)
+    piece.audio_start_s = (piece.place_start - drop) / float(fps)
+    piece.audio_duration_s = piece.render_frames / float(fps)
+    # The graph trims the original wav. A pause slice is silence or room tone.
+    piece.audio_feed = "source_pause_slice"
+    piece.prompt = _idle_prompt(tripod=tripod, anchor=anchor)
+    piece.negative = _idle_negative(tripod=tripod)
+    piece.i2v_strength = IDLE_I2V_STRENGTH
+    if piece.render_frames > SAFE_RENDER_FRAMES:
+        warnings.append(
+            f"idle slice {piece.index} renders {piece.render_frames} frames, "
+            f"past the safe cap {SAFE_RENDER_FRAMES}"
+        )
+
+
+def _finalize_bridge(
+    piece: LipdubPiece,
+    *,
+    drop: int,
+    fps: int,
+    tripod: bool,
+    negative: str,
+    allow_hold: bool,
+) -> None:
+    piece.i2v_strength = BRIDGE_I2V_STRENGTH
+    piece.prompt = _bridge_prompt(tripod=tripod)
+    piece.negative = negative
+    piece.audio_feed = "source_pause_slice"
+    keep = piece.keep_frames
+    if allow_hold and keep > BRIDGE_FRAMES:
+        piece.generated_keep = BRIDGE_FRAMES
+        piece.hold_frames = keep - BRIDGE_FRAMES
+        piece.render_frames = snap_ltx_frames_at_least(BRIDGE_FRAMES + drop)
+        if piece.render_frames < drop + piece.generated_keep:
+            piece.render_frames = snap_ltx_frames_at_least(drop + piece.generated_keep)
+    else:
+        piece.generated_keep = keep
+        piece.hold_frames = 0
+        piece.render_frames = snap_ltx_frames_at_least(keep + drop)
+    piece.audio_start_s = (piece.place_start - drop) / float(fps)
+    piece.audio_duration_s = piece.render_frames / float(fps)
 
 
 def alignment_errors(plan: LipdubPlan) -> list[str]:
@@ -771,7 +1023,12 @@ def alignment_errors(plan: LipdubPlan) -> list[str]:
                 f"piece {piece.index} keep {piece.keep_frames} != "
                 f"generated {piece.generated_keep} + hold {piece.hold_frames}"
             )
-        if piece.kind == KIND_SPEECH:
+        if plan.silence_mode == SILENCE_IDLE and piece.hold_frames > MAX_FROZEN_HOLD:
+            errors.append(
+                f"piece {piece.index} holds {piece.hold_frames} frames; "
+                f"idle mode allows at most {MAX_FROZEN_HOLD}"
+            )
+        if piece.kind in (KIND_SPEECH, KIND_IDLE):
             if piece.render_frames < piece.drop_leading + piece.generated_keep:
                 errors.append(f"piece {piece.index} render is shorter than the frames it keeps")
             if (piece.render_frames - 1) % 8 != 0 or piece.render_frames < 9:
@@ -780,8 +1037,13 @@ def alignment_errors(plan: LipdubPlan) -> list[str]:
             if abs(piece.audio_start_s - expect_start) > 1e-6:
                 errors.append(f"piece {piece.index} audio_start drifted from the frame grid")
         if piece.kind == KIND_BRIDGE and piece.render_frames:
+            if piece.render_frames < piece.drop_leading + piece.generated_keep:
+                errors.append(f"bridge {piece.index} render is shorter than the frames it keeps")
             if (piece.render_frames - 1) % 8 != 0 or piece.render_frames < 9:
                 errors.append(f"bridge {piece.index} render_frames {piece.render_frames} is not 8n+1")
+            expect_start = (piece.place_start - piece.drop_leading) / float(plan.fps)
+            if abs(piece.audio_start_s - expect_start) > 1e-6:
+                errors.append(f"bridge {piece.index} audio_start drifted from the frame grid")
         cursor = piece.place_end
     if cursor != plan.timeline_frame_count:
         errors.append(
@@ -825,16 +1087,26 @@ def format_lipdub_plan(plan: LipdubPlan) -> str:
             lines.append("tripod: on (prompt, negative, first-frame strength)")
         else:
             lines.append("tripod: off")
+        lines.append(
+            f"silence_mode: {plan.silence_mode} (single pass, idle pieces not used)"
+        )
+        lines.append(f"anchor: {plan.anchor} (single pass, not applied)")
+        lines.append(f"reframe: {'on' if plan.reframe else 'off'}")
+        lines.append("idle pieces: 0")
         if plan.warning:
             lines.append(f"warn: {plan.warning}")
         return "\n".join(lines)
     lines = [
         f"lipdub: {plan.duration_s:.3f}s -> {len(plan.pieces)} piece(s), "
         f"{len(plan.speech_pieces())} speech render(s), "
+        f"{len(plan.idle_pieces())} idle render(s), "
         f"timeline {plan.timeline_frame_count} frames @ {plan.fps}fps, "
         f"max {plan.max_segment_s:.3f}s",
         f"continuity: {plan.continuity_method} overlap_frames={plan.overlap_frames}",
-        f"silence: {plan.silence_handling} min={plan.silence_min_s:.3f}s",
+        f"silence: {plan.silence_handling} mode={plan.silence_mode} min={plan.silence_min_s:.3f}s",
+        f"anchor: {plan.anchor} join={plan.join_method}",
+        f"reframe: {'on' if plan.reframe else 'off'}",
+        f"idle pieces: {len(plan.idle_pieces())} comfy_jobs: {len(plan.comfy_pieces())}",
         f"tripod: {'on' if plan.tripod else 'off'}",
         "mux: original full audio (untouched wav, aac 192k)",
     ]
@@ -851,6 +1123,14 @@ def format_lipdub_plan(plan: LipdubPlan) -> str:
     if plan.warning:
         lines.append(f"warn: {plan.warning}")
     return "\n".join(lines)
+
+
+def _hybrid_weight(plan: LipdubPlan) -> Optional[float]:
+    if plan.anchor != ANCHOR_HYBRID or not plan.segmented:
+        return None
+    from master_agent.orchestrator.lipdub_reframe import HYBRID_PREV_WEIGHT
+
+    return float(HYBRID_PREV_WEIGHT)
 
 
 def lipdub_param_block(
@@ -875,6 +1155,12 @@ def lipdub_param_block(
         "continuity": plan.continuity_method,
         "overlap_frames": plan.overlap_frames,
         "silence_handling": plan.silence_handling,
+        "silence_mode": plan.silence_mode,
+        "anchor": plan.anchor,
+        "reframe": bool(plan.reframe),
+        "join": plan.join_method,
+        "scale_drift": list(plan.scale_drift),
+        "hybrid_prev_weight": _hybrid_weight(plan),
         "tripod": bool(plan.tripod),
         "tripod_i2v_strength": TRIPOD_I2V_STRENGTH if plan.tripod else None,
         "full_audio_mux": True,

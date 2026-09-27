@@ -271,6 +271,9 @@ def _plan_a2v_lipdub(
     silence_min_s: Optional[float],
     lipdub_overlap: Optional[int],
     seed: Optional[int],
+    silence_mode: Optional[str] = None,
+    anchor: Optional[str] = None,
+    reframe: Optional[bool] = None,
 ):
     """Silence-aware a2v plan, or None when this route is not ltx25_a2v lipdub."""
     from master_agent.orchestrator.talking import (
@@ -303,7 +306,47 @@ def _plan_a2v_lipdub(
         tripod=bool(tripod),
         base_prompt=request,
         seed=seed,
+        silence_mode=silence_mode,
+        anchor=anchor,
+        reframe=reframe,
     )
+
+
+def _reframe_short_a2v(result, plan, image_path: str) -> None:
+    """Post-step for a single short a2v pass when ``--reframe on`` was set.
+
+    The default short pass leaves reframe off, so this does not run unless
+    the flag is passed.
+    """
+    from pathlib import Path
+
+    from master_agent.orchestrator.lipdub import attach_lipdub_params, lipdub_param_block
+    from master_agent.orchestrator.lipdub_reframe import reframe_video
+    from master_agent.provenance import write_clip_provenance
+
+    src = Path(result.video_path)
+    dest = src.with_name(src.stem + "-reframed.mp4")
+    try:
+        out, summary = reframe_video(src, Path(image_path), dest, fps=plan.fps, method="auto")
+    except Exception as exc:
+        result.log(f"reframe skipped: {exc}")
+        return
+    result.video_path = str(out)
+    result.segment_paths = [str(out)]
+    plan.scale_drift = [
+        {"index": 0, **summary.as_dict(), "applied": bool(summary.worth_applying)}
+    ]
+    payload = result.provenance if isinstance(result.provenance, dict) else None
+    if payload is None:
+        result.log(f"reframe: {out}")
+        return
+    block = lipdub_param_block(plan)
+    attach_lipdub_params(payload, block)
+    try:
+        write_clip_provenance(out, payload)
+    except OSError as exc:
+        result.log(f"reframe provenance skipped: {exc}")
+    result.log(f"reframe: {out} scale={summary.zoom:.3f}")
 
 
 def _short_talking_schedule(duration_s: float):
@@ -350,6 +393,9 @@ def run_pipeline(
     lipdub_max_s: Optional[float] = None,
     silence_min_s: Optional[float] = None,
     lipdub_overlap: Optional[int] = None,
+    silence_mode: Optional[str] = None,
+    anchor: Optional[str] = None,
+    reframe: Optional[bool] = None,
 ) -> PipelineResult:
     run_id = uuid.uuid4().hex[:12]
     result = PipelineResult(run_id, request=request)
@@ -400,6 +446,9 @@ def run_pipeline(
         silence_min_s=silence_min_s,
         lipdub_overlap=lipdub_overlap,
         seed=base_seed,
+        silence_mode=silence_mode,
+        anchor=anchor,
+        reframe=reframe,
     )
     if lip_plan is not None and lip_plan.segmented:
         from master_agent.orchestrator.lipdub_run import run_segmented_lipdub
@@ -528,6 +577,16 @@ def run_pipeline(
             result.segment_scores = [st.judge_score]
         result.full_judge_score = st.judge_score
         result.full_judge_pass = st.loop_status == "passed" or st.judge_decision == "accept"
+        if (
+            lip_plan is not None
+            and not lip_plan.segmented
+            and lip_plan.reframe
+            and not dry_run
+            and st.state == "DONE"
+            and st.video_path
+            and image_path
+        ):
+            _reframe_short_a2v(result, lip_plan, image_path)
         _write_record(result)
         return result
 
@@ -797,6 +856,9 @@ def dry_run_pipeline(
     lipdub_max_s: Optional[float] = None,
     silence_min_s: Optional[float] = None,
     lipdub_overlap: Optional[int] = None,
+    silence_mode: Optional[str] = None,
+    anchor: Optional[str] = None,
+    reframe: Optional[bool] = None,
 ) -> int:
     """Storyboard + patch + validate every segment without queueing. CLI exit code."""
     from master_agent.comfy.validator import format_report, validate_workflow
@@ -845,6 +907,9 @@ def dry_run_pipeline(
         silence_min_s=silence_min_s,
         lipdub_overlap=lipdub_overlap,
         seed=seed,
+        silence_mode=silence_mode,
+        anchor=anchor,
+        reframe=reframe,
     )
     client = client or ComfyClient()
     if lip_plan is not None and lip_plan.segmented:

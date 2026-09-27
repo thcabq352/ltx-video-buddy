@@ -8,9 +8,15 @@ from typing import Any, Optional
 
 from master_agent.config import OUTPUTS_DIR
 from master_agent.orchestrator.lipdub import (
-    KIND_BRIDGE,
+    ANCHOR_HYBRID,
+    ANCHOR_PREVIOUS,
+    ANCHOR_SOURCE,
+    CONTINUITY_HYBRID,
+    CONTINUITY_PREV,
+    CONTINUITY_SOURCE,
+    CONTINUITY_STILL,
     KIND_PLATE,
-    KIND_SPEECH,
+    LipdubPiece,
     LipdubPlan,
     attach_lipdub_params,
     format_lipdub_plan,
@@ -61,7 +67,7 @@ def run_segmented_lipdub(
     dry_run: bool,
     tripod: bool,
 ) -> Any:
-    """Render each Comfy piece, hold silences, mux the original wav."""
+    """Render each Comfy piece, idle the pauses, mux the original wav."""
     from master_agent.orchestrator.pipeline import _budget_admit, _write_record
 
     result.log(format_lipdub_plan(plan))
@@ -76,6 +82,16 @@ def run_segmented_lipdub(
     out_dir = OUTPUTS_DIR / result.run_id
     out_dir.mkdir(parents=True, exist_ok=True)
     still_path = Path(image_path) if image_path else None
+    needs_still = (
+        plan.reframe
+        or plan.anchor in (ANCHOR_SOURCE, ANCHOR_HYBRID)
+        or any(p.kind == KIND_PLATE or p.continuity == CONTINUITY_STILL for p in plan.pieces)
+    )
+    if needs_still and (still_path is None or not still_path.is_file()):
+        result.status = "error"
+        result.error = "lipdub anchor/reframe needs the source still path (--image)"
+        _write_record(result)
+        return result
     records: list[dict] = []
     clip_paths: list[Optional[Path]] = [None] * len(plan.pieces)
     last_frame: Optional[Path] = None
@@ -88,6 +104,23 @@ def run_segmented_lipdub(
         if piece.kind == KIND_PLATE:
             records.append(record)
             continue
+        seg_image, source_note = _conditioning_image(
+            piece,
+            plan,
+            orch=orch,
+            image_name=image_name,
+            still_path=still_path,
+            last_frame=last_frame,
+            out_dir=out_dir,
+        )
+        if seg_image is None:
+            result.status = "error"
+            result.error = source_note or f"lipdub piece {piece.index} has no conditioning frame"
+            _write_record(result)
+            return result
+        record["source_frame"] = source_note
+        if plan.anchor in (ANCHOR_SOURCE, ANCHOR_HYBRID) and still_path is not None:
+            record["identity_frame"] = str(still_path)
         scene_id = f"{result.run_id}:lip{piece.index}"
         gate = _budget_admit(result, scene_id, variant, max(piece.audio_duration_s, 0.5))
         if gate["decision"] == "hold":
@@ -100,28 +133,11 @@ def run_segmented_lipdub(
             _write_record(result)
             return result
 
-        if piece.continuity == "still":
-            seg_image = image_name
-            record["source_frame"] = image_name or "still"
-        else:
-            if last_frame is None:
-                result.status = "error"
-                result.error = f"lipdub piece {piece.index} has no previous frame to continue from"
-                _write_record(result)
-                return result
-            try:
-                seg_image = _upload_image(orch.client, last_frame, dry_run=False)
-            except Exception as exc:
-                result.status = "error"
-                result.error = f"lipdub continuity upload failed: {exc}"
-                _write_record(result)
-                return result
-            record["source_frame"] = str(last_frame)
-
         result.log(
             f"--- lipdub {piece.index + 1}/{len(plan.pieces)} {piece.kind} "
             f"{piece.start_s:.3f}-{piece.end_s:.3f}s "
-            f"frames={piece.render_frames} source={piece.continuity} ---"
+            f"frames={piece.render_frames} source={piece.continuity} "
+            f"anchor={plan.anchor} reframe={'on' if plan.reframe else 'off'} ---"
         )
         st = orch.run(
             request,
@@ -157,12 +173,13 @@ def run_segmented_lipdub(
             return result
         src = Path(st.video_path)
         try:
-            trimmed = trim_span(
+            trimmed, overlap_path = _fit_piece(
                 src,
-                out_dir / f"piece_{piece.index:02d}_gen.mp4",
-                piece.drop_leading,
-                piece.generated_keep,
-                fps=plan.fps,
+                piece,
+                plan,
+                out_dir=out_dir,
+                still_path=still_path,
+                record=record,
             )
             if size is None:
                 size = video_size(trimmed)
@@ -184,11 +201,20 @@ def run_segmented_lipdub(
                     out_dir / f"piece_{piece.index:02d}.mp4",
                     fps=plan.fps,
                 )
-            else:
-                final_piece = out_dir / f"piece_{piece.index:02d}.mp4"
-                if trimmed != final_piece:
-                    trimmed.replace(final_piece)
-                    trimmed = final_piece
+            faded = _crossfade_previous(
+                piece,
+                plan,
+                overlap_path=overlap_path,
+                clip_paths=clip_paths,
+                records=records,
+                out_dir=out_dir,
+            )
+            if faded is not None:
+                old_path, new_path = faded
+                for i, stored in enumerate(result.segment_paths):
+                    if stored == str(old_path):
+                        result.segment_paths[i] = str(new_path)
+                        break
             last_frame = extract_frame(
                 trimmed,
                 out_dir / f"piece_{piece.index:02d}_last.png",
@@ -222,7 +248,9 @@ def run_segmented_lipdub(
         result.error = "lipdub stitch has no pixel size (no render and no still)"
         _write_record(result)
         return result
-    if still_path is None or not still_path.is_file():
+    if any(p.kind == KIND_PLATE for p in plan.pieces) and (
+        still_path is None or not still_path.is_file()
+    ):
         result.status = "error"
         result.error = "lipdub silence plate needs the source still path (--image)"
         _write_record(result)
@@ -313,7 +341,9 @@ def run_segmented_lipdub(
         path=final,
         revise_notes=(
             f"lipdub stitch continuity={plan.continuity_method} "
-            f"silence={plan.silence_handling} tripod={bool(tripod)} "
+            f"silence={plan.silence_handling} mode={plan.silence_mode} "
+            f"anchor={plan.anchor} reframe={bool(plan.reframe)} "
+            f"join={plan.join_method} tripod={bool(tripod)} "
             f"full_audio_mux overlap_frames={plan.overlap_frames}"
         ),
     )
@@ -385,10 +415,11 @@ def dry_run_lipdub_validate(
         if piece.kind == KIND_PLATE:
             print(
                 f"segment {piece.index + 1}/{len(plan.pieces)} silence_plate "
-                f"hold={piece.hold_frames} frames source=still (no Comfy)"
+                f"hold={piece.hold_frames} frames source=still (no Comfy) "
+                f"anchor={plan.anchor} reframe={'on' if plan.reframe else 'off'}"
             )
             continue
-        image = image_name if piece.continuity == "still" else f"lipdub_last_{piece.index}.png"
+        image = _dry_image_name(piece, plan, image_name)
         try:
             wf, meta = load_and_patch_workflow(
                 variant,
@@ -413,7 +444,9 @@ def dry_run_lipdub_validate(
             f"segment {piece.index + 1}/{len(plan.pieces)} {piece.kind} "
             f"duration={piece.audio_duration_s:.3f}s frames={meta.get('frames')} "
             f"audio_start={piece.audio_start_s:.3f} image_name={image!r} "
-            f"continuity={piece.continuity} i2v_strength={piece.i2v_strength}"
+            f"continuity={piece.continuity} anchor={plan.anchor} "
+            f"reframe={'on' if plan.reframe else 'off'} "
+            f"crossfade={piece.crossfade_frames} i2v_strength={piece.i2v_strength}"
         )
         wiring = media_wiring_error(
             wf, image_name=image, audio_name=audio_name, video_name=video_name
@@ -436,3 +469,135 @@ def dry_run_lipdub_validate(
             )
     print(f"\ndry-run {'OK' if not failures else f'FAILED ({failures})'} — nothing queued")
     return 0 if not failures else 1
+
+
+def _dry_image_name(piece: LipdubPiece, plan: LipdubPlan, image_name: Optional[str]) -> str:
+    if piece.continuity in (CONTINUITY_STILL, CONTINUITY_SOURCE) or plan.anchor == ANCHOR_SOURCE:
+        return image_name or "still.png"
+    if piece.continuity == CONTINUITY_HYBRID:
+        return f"lipdub_hybrid_{piece.index}.png"
+    if piece.continuity == CONTINUITY_PREV or plan.anchor == ANCHOR_PREVIOUS:
+        return f"lipdub_last_{piece.index}.png"
+    return image_name or "still.png"
+
+
+def _conditioning_image(
+    piece: LipdubPiece,
+    plan: LipdubPlan,
+    *,
+    orch,
+    image_name: Optional[str],
+    still_path: Optional[Path],
+    last_frame: Optional[Path],
+    out_dir: Path,
+) -> tuple[Optional[str], str]:
+    """Comfy image name plus the provenance source_frame note."""
+    use_still = piece.continuity in (CONTINUITY_STILL, CONTINUITY_SOURCE) or (
+        plan.anchor == ANCHOR_SOURCE and piece.continuity != CONTINUITY_PREV
+    )
+    if plan.anchor == ANCHOR_HYBRID and piece.continuity == CONTINUITY_HYBRID:
+        if last_frame is None or still_path is None:
+            return None, f"lipdub piece {piece.index} hybrid guide needs the still and the previous frame"
+        from master_agent.orchestrator.lipdub_reframe import compose_hybrid_guide_file
+
+        guide = out_dir / f"piece_{piece.index:02d}_guide.png"
+        try:
+            compose_hybrid_guide_file(still_path, last_frame, guide)
+            name = _upload_image(orch.client, guide, dry_run=False)
+        except Exception as exc:
+            return None, f"lipdub hybrid guide failed: {exc}"
+        return name, str(guide)
+    if use_still or plan.anchor == ANCHOR_SOURCE:
+        return image_name, image_name or (str(still_path) if still_path else "still")
+    if last_frame is None:
+        return None, f"lipdub piece {piece.index} has no previous frame to continue from"
+    try:
+        name = _upload_image(orch.client, last_frame, dry_run=False)
+    except Exception as exc:
+        return None, f"lipdub continuity upload failed: {exc}"
+    return name, str(last_frame)
+
+
+def _fit_piece(
+    src: Path,
+    piece: LipdubPiece,
+    plan: LipdubPlan,
+    *,
+    out_dir: Path,
+    still_path: Optional[Path],
+    record: dict,
+) -> tuple[Path, Optional[Path]]:
+    """Trim onto the grid, optionally reframe, and split off the overlap head."""
+    from master_agent.orchestrator.lipdub_reframe import reframe_video
+
+    span = piece.drop_leading + piece.generated_keep
+    full = trim_span(src, out_dir / f"piece_{piece.index:02d}_span.mp4", 0, span, fps=plan.fps)
+    if plan.reframe and still_path is not None and still_path.is_file():
+        reframed, summary = reframe_video(
+            full,
+            still_path,
+            out_dir / f"piece_{piece.index:02d}_reframe.mp4",
+            fps=plan.fps,
+            method="auto",
+        )
+        full = reframed
+        drift = {"index": piece.index, **summary.as_dict(), "applied": bool(summary.worth_applying)}
+        plan.scale_drift.append(drift)
+        record["scale"] = drift["scale"]
+        record["dx"] = drift["dx"]
+        record["dy"] = drift["dy"]
+    overlap_path = None
+    if piece.drop_leading:
+        overlap_path = trim_span(
+            full,
+            out_dir / f"piece_{piece.index:02d}_overlap.mp4",
+            0,
+            piece.drop_leading,
+            fps=plan.fps,
+        )
+        body = trim_span(
+            full,
+            out_dir / f"piece_{piece.index:02d}_gen.mp4",
+            piece.drop_leading,
+            piece.generated_keep,
+            fps=plan.fps,
+        )
+    else:
+        body = out_dir / f"piece_{piece.index:02d}_gen.mp4"
+        if full != body:
+            full.replace(body)
+    return body, overlap_path
+
+
+def _crossfade_previous(
+    piece: LipdubPiece,
+    plan: LipdubPlan,
+    *,
+    overlap_path: Optional[Path],
+    clip_paths: list,
+    records: list,
+    out_dir: Path,
+) -> Optional[tuple[Path, Path]]:
+    if piece.crossfade_frames <= 0 or overlap_path is None:
+        return None
+    prev_index = piece.index - 1
+    while prev_index >= 0 and clip_paths[prev_index] is None:
+        prev_index -= 1
+    if prev_index < 0:
+        return None
+    from master_agent.orchestrator.lipdub_reframe import crossfade_tail
+
+    faded = crossfade_tail(
+        clip_paths[prev_index],
+        overlap_path,
+        out_dir / f"piece_{prev_index:02d}_xfade.mp4",
+        piece.crossfade_frames,
+        fps=plan.fps,
+    )
+    old = clip_paths[prev_index]
+    clip_paths[prev_index] = faded
+    if 0 <= prev_index < len(records):
+        records[prev_index]["output_path"] = str(faded)
+        records[prev_index]["hash"] = sha256_file(faded)
+        records[prev_index]["crossfaded_frames"] = int(piece.crossfade_frames)
+    return old, faded

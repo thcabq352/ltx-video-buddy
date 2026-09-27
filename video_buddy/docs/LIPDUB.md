@@ -14,30 +14,37 @@ Locally, `frames_for_duration` caps every LTX 2.5 latent at 193 frames (~8.04s) 
 |---|---|---|
 | `--lipdub-max-s` | `6.5` (`LIPDUB_SEGMENT_MAX_S`) | Split when audio is longer than this. At or under it, one pass. |
 | `--silence-min-s` | `0.25` (`LIPDUB_SILENCE_MIN_S`) | Pauses at least this long are closed-mouth. |
-| `--lipdub-overlap` | `8` (`LIPDUB_OVERLAP_FRAMES`) | Frames of overlap trimmed at a speech-to-speech seam. |
+| `--silence-mode` | `idle` | `idle` renders a closed-mouth breathing piece for each pause (default). `hold` is the #34 still plate and frozen tail. `bridge` is a 9-frame mouth close; the tail past 9 frames is held. A pause shorter than 9 frames stays a trimmed bridge in `idle`. |
+| `--anchor` | `hybrid` | `hybrid` conditions on the source still and crossfades the previous frame over the overlap. `source` is the still only, with the same crossfade. `previous` is the #34 last-frame chain. |
+| `--reframe` | on when segmented, off for a short pass | After each piece, measure zoom and shift against the source still and scale the frames back. Recorded as `scale_drift`. |
+| `--lipdub-overlap` | `8` (`LIPDUB_OVERLAP_FRAMES`) | Frames of overlap trimmed at a seam. `hybrid` / `source` crossfade those frames instead of dropping them unseen. |
 | `--words` | none | JSON word timestamps (`[{w,s,e}]` or `{"words":[...]}`). Splits prefer pauses and never cut a word. A word longer than the cap is kept whole. |
 | `--tripod` | off | Locked-off talking head. Prompt, negative, and stage-1 `LTXVImgToVideoInplace` strength `0.7 → 0.85`. Stage 2 stays `1.0`. The graph has no camera-motion input. |
-| `--dry-run` | | Prints the segment plan and validates each Comfy piece. Nothing is queued. |
+| `--dry-run` | | Prints idle pieces, anchor, reframe, and the segment plan, then validates each Comfy piece. Nothing is queued. |
 
 H3 (`h3_r2v`) is unchanged: one clip, capped at 12s.
 
 ## Continuity and silence
 
-- Speech after speech is conditioned on the previous slice's last kept frame. The overlap frames are rendered, then dropped, so the timeline does not duplicate frames and the muxed audio stays the original file.
-- Speech after a pause is conditioned on the pause bridge's last frame, not the original still.
-- Leading silence (≥ 250ms) is a hold of the source still (the rest mouth).
-- An internal or trailing pause is a 9-frame a2v bridge from the previous frame ("close the mouth"), using the real pause audio, then a hold of that bridge's last frame for the rest of the pause.
+The a2v graph (`LTX-2.5_A2V_Two_Stage_Distilled_api.json`) has one `LoadImage` into both `LTXVImgToVideoInplace` stages. There is no second keyframe and no `LTXVAddGuide` node. A guide node is not added.
+
+Default `--anchor hybrid` puts the **original source still** on that image slot (identity and framing). The previous piece's last frame is only a continuity guide: it is blended into the conditioning image at `hybrid_prev_weight` 0.25 after its zoom is undone, and the overlap frames are crossfaded into the previous piece's tail. Stage 2 strength stays `1.0`, so frame 0 of a render copies the guide; those frames sit in the overlap and are blended away, which is what keeps the head from snapping back to the still. `--anchor source` uses the still with the same crossfade and no previous-frame blend. `--anchor previous` is the #34 chain (each piece starts from the previous last frame, overlap trimmed, no crossfade).
+
+`--reframe` (default on only when the clip is segmented) samples frames, estimates zoom and shift against the source still (OpenCV ECC when `cv2` is already installed, otherwise a normalized cross-correlation search), smooths the track, and scales the piece back. Borders uncovered by the shrink come from the source still. The measured zoom is `params.lipdub.scale_drift` (`scale` > 1 is a push-in). No new weights are downloaded.
+
+Silence (`--silence-mode`, default `idle`):
+
+- A pause at least `--silence-min-s` and at least 9 frames is an a2v idle: closed mouth, a breath, a blink, micro head motion, and a negative for talking, an open mouth, and camera motion. The graph is fed the real pause slice of the wav (silence or room tone). The original wav is still muxed at the end.
+- A shorter pause stays a trimmed mouth bridge. Idle mode does not hold a frozen frame for more than 3 frames.
+- `hold` is the #34 behaviour: leading still plate, 9-frame bridge, frozen tail.
+- `bridge` makes every pause that 9-frame close, including the lead-in. The tail past 9 frames is held.
 - Frame grid is `round(duration * fps)`. 12.0s at 24 fps is 288 frames. Every render length is `8n+1`. Pieces tile `[0, timeline)`.
 
-Prompt-only "mouth closed during pauses" did not hold on the 12s tower pass, so silence is structural (plate or bridge), not a prompt sentence.
-
-`--tripod` is what keeps the head and coat from drifting so a still-hold or bridge does not pop. It is opt-in. With the flag off, a short clip's prompt and strength are unchanged.
+`--tripod` is unchanged and still opt-in. With the flag off, a short clip's prompt and strength are unchanged. Passing `--reframe on` on a short clip is the one short-pass post-step; idle and anchor apply only when the audio is split.
 
 ## Provenance
 
-`outputs/<run>/shot-1.buddy.json` is still `buddy.clip.provenance/v1`. `params.lipdub` records `split_points_s`, `continuity`, `silence_handling`, `tripod`, `full_audio_mux`, and one record per segment (seed, attempt, time range, source frame, place frames). There is no second schema.
-
-The Rust `ClipProvenance` struct in `your-video-buddy` does not list `params.lipdub` yet. If that struct denies unknown fields, it needs `lipdub: Option<...>` the same way it already allows `voice_sample`. This repo does not fork the schema id.
+`outputs/<run>/shot-1.buddy.json` is still `buddy.clip.provenance/v1`. `params.lipdub` keeps the #34 keys and adds optional fields (no second schema): `silence_mode`, `anchor`, `reframe`, `join`, `scale_drift`, `hybrid_prev_weight`. Each segment may also carry `crossfade_frames`, `scale`, `dx`, `dy`, `audio_feed`, and `identity_frame`. All of these are optional. The Rust `ClipProvenance` in `your-video-buddy` should mirror them as optional fields on the existing lipdub object. If that struct denies unknown fields, add the new `Option`s the same way it allows `voice_sample`. This repo does not fork the schema id.
 
 ## Tower: rerender the 12s ringmaster test
 
@@ -51,7 +58,8 @@ python -m master_agent run \
   --audio scott_voice_sample_12s.wav \
   --words words.json \
   --line "I would like to make this a sound sample of what my voice is, so we could clone my voice, so we could clone whatever we want. Hey, thank you." \
-  --width 352 --height 480 --seed 7 \
+  --width 352 --height 480 --seed 42 \
+  --silence-mode idle --anchor hybrid --reframe on \
   --tripod --no-interview --storyboard off --no-judge \
   --llm-panel local --panel-judge ollama \
   --dry-run

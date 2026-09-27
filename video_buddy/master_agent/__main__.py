@@ -242,6 +242,14 @@ class _DurationSet(argparse.Action):
         setattr(namespace, "duration_set", True)
 
 
+def _reframe_flag(args: argparse.Namespace):
+    """None means auto: on for a segmented lipdub, off for a short pass."""
+    value = getattr(args, "reframe", None)
+    if value is None:
+        return None
+    return str(value).strip().lower() == "on"
+
+
 def cmd_run(args: argparse.Namespace) -> int:
     from master_agent.config import (
         JUDGE_ENABLED,
@@ -468,6 +476,9 @@ def cmd_run(args: argparse.Namespace) -> int:
             lipdub_max_s=getattr(args, "lipdub_max_s", None),
             silence_min_s=getattr(args, "silence_min_s", None),
             lipdub_overlap=getattr(args, "lipdub_overlap", None),
+            silence_mode=getattr(args, "silence_mode", None),
+            anchor=getattr(args, "anchor", None),
+            reframe=_reframe_flag(args),
         )
 
     if not client.is_up():
@@ -543,6 +554,9 @@ def cmd_run(args: argparse.Namespace) -> int:
         lipdub_max_s=getattr(args, "lipdub_max_s", None),
         silence_min_s=getattr(args, "silence_min_s", None),
         lipdub_overlap=getattr(args, "lipdub_overlap", None),
+        silence_mode=getattr(args, "silence_mode", None),
+        anchor=getattr(args, "anchor", None),
+        reframe=_reframe_flag(args),
         storyboard_mode=args.storyboard,
         judge_enabled=False if args.no_judge else JUDGE_ENABLED,
         revise_enabled=not args.no_judge,
@@ -1586,7 +1600,39 @@ def main(argv: list[str] | None = None) -> int:
         "--silence-min-s",
         type=float,
         default=None,
-        help="pauses at least this long are closed-mouth holds (default 0.25)",
+        help="pauses at least this long are closed-mouth idle or bridge pieces (default 0.25)",
+    )
+    p.add_argument(
+        "--silence-mode",
+        choices=["idle", "hold", "bridge"],
+        default="idle",
+        help=(
+            "how ltx25_a2v treats a pause at least --silence-min-s long: "
+            "idle (default, closed-mouth breathing render), "
+            "hold (#34 still plate plus frozen tail), "
+            "or bridge (9-frame mouth close, tail held)"
+        ),
+    )
+    p.add_argument(
+        "--anchor",
+        choices=["source", "previous", "hybrid"],
+        default="hybrid",
+        help=(
+            "identity/framing anchor for a segmented lipdub. "
+            "hybrid (default) conditions on the source still and crossfades "
+            "the previous frame across the overlap. "
+            "source uses the still only, with the same crossfade. "
+            "previous is the #34 last-frame chain"
+        ),
+    )
+    p.add_argument(
+        "--reframe",
+        choices=["on", "off"],
+        default=None,
+        help=(
+            "scale each segmented piece back to the source still. "
+            "Default on for a segmented lipdub, off for a single short pass"
+        ),
     )
     p.add_argument(
         "--lipdub-overlap",
