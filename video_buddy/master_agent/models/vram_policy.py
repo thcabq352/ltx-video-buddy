@@ -534,6 +534,21 @@ def _build_rows() -> dict[str, WorkflowVramRow]:
 
     add(
         WorkflowVramRow(
+            slug="ltx23_inoutpaint",
+            family="ltx23",
+            default_pack="ltx-2.3-22b-dev-fp8.safetensors",
+            expected_vram_gb=13.5,
+            vram_class="tight",
+            notes=(
+                "Two-stage in/outpaint IC-LoRA on dev fp8 + distilled LoRA 0.5. "
+                "Default 768x448 x 25 frames, CFG 1, tiled encode. "
+                "Official 121-frame ~960px pass does not fit 16GB."
+            ),
+        )
+    )
+
+    add(
+        WorkflowVramRow(
             slug="vb_movie_builder",
             family="movie_builder",
             default_pack="flux-2-klein-9b-fp8.safetensors",

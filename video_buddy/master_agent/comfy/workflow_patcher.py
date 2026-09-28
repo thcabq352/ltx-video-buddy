@@ -1558,18 +1558,46 @@ def load_and_patch_workflow(
     last_image: Optional[str] = None,
     loras: Optional[list[dict[str, Any]]] = None,
     multi_ref: Optional[dict[str, Any]] = None,
+    inoutpaint: Optional[dict[str, Any]] = None,
 ) -> tuple[dict[str, Any], dict[str, Any]]:
     """
     Returns (workflow_api_dict, meta) where meta has resolved generation params.
     """
+    from master_agent.comfy.inoutpaint import (
+        DEFAULT_FRAMES as INOUTPAINT_DEFAULT_FRAMES,
+        DEFAULT_HEIGHT as INOUTPAINT_DEFAULT_HEIGHT,
+        DEFAULT_WIDTH as INOUTPAINT_DEFAULT_WIDTH,
+        OFFICIAL_NEGATIVE,
+        VARIANT as INOUTPAINT_VARIANT,
+        fit_working_size,
+    )
+
+    inout_mode = str((inoutpaint or {}).get("mode") or "inpaint")
     h3 = is_h3_variant(variant)
-    if h3:
+    if variant == INOUTPAINT_VARIANT:
+        if inout_mode != "outpaint" and width == 768 and height == 512:
+            width, height = INOUTPAINT_DEFAULT_WIDTH, INOUTPAINT_DEFAULT_HEIGHT
+        width, height = fit_working_size(width, height)
+        if not (negative_prompt or "").strip():
+            negative_prompt = OFFICIAL_NEGATIVE
+        if filename_prefix == "ltx_agent":
+            filename_prefix = "ltx23_inoutpaint"
+    elif h3:
         if width == 768 and height == 512:
             width, height = H3_DEFAULT_WIDTH, H3_DEFAULT_HEIGHT
         width, height = clamp_h3_resolution(width, height)
     else:
         width, height = clamp_resolution(width, height, quality="flux" if variant == "flux" else None)
     gen = get_variant_gen(variant)
+    defaulted_length = False
+    if (
+        variant == INOUTPAINT_VARIANT
+        and frames is None
+        and abs(float(duration_s) - 5.0) < 1e-9
+    ):
+        frames = INOUTPAINT_DEFAULT_FRAMES
+        defaulted_length = True
+        duration_s = frames / float(gen["fps"])
     if frames is None:
         if h3:
             cap_s = H3_MAX_DURATION_S
@@ -1742,6 +1770,18 @@ def load_and_patch_workflow(
 
         normalize_loader_widgets(workflow, object_info=object_info)
 
+    if variant == INOUTPAINT_VARIANT:
+        from master_agent.comfy.inoutpaint import finalize_inoutpaint_graph
+
+        finalize_inoutpaint_graph(
+            workflow,
+            width=width,
+            height=height,
+            mode=inout_mode,
+            pad=(inoutpaint or {}).get("pad"),
+            mask_png=(inoutpaint or {}).get("mask_png"),
+        )
+
     meta = {
         "variant": variant,
         "width": width,
@@ -1759,6 +1799,7 @@ def load_and_patch_workflow(
         "checkpoint_fallback": preferred != checkpoint,
         "lora": lora,
         "filename_prefix": filename_prefix,
+        "inoutpaint_default_length": defaulted_length,
     }
     try:
         from master_agent.models.vram_policy import prepare_warning, workflow_row

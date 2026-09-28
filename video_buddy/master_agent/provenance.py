@@ -130,7 +130,14 @@ def sha256_file(path: str | Path | None) -> Optional[str]:
 
 def _refs_from_state(st: Any) -> list[str]:
     refs: list[str] = []
-    for attr in ("image_name", "video_name", "audio_name", "audio_path", "previs_source"):
+    for attr in (
+        "image_name",
+        "video_name",
+        "mask_name",
+        "audio_name",
+        "audio_path",
+        "previs_source",
+    ):
         value = getattr(st, attr, None)
         if value:
             refs.append(str(value))

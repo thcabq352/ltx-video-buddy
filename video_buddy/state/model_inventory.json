@@ -354,6 +354,16 @@
    "partial": false
   },
   {
+   "name": "ltx-2.3-22b-ic-lora-in-outpainting-0.9.safetensors",
+   "rel_path": "loras/ltx-2.3-22b-ic-lora-in-outpainting-0.9.safetensors",
+   "folder": "loras",
+   "role": "lora",
+   "size_bytes": 1308778338,
+   "mtime": "2026-09-28T00:00:00.000000Z",
+   "root": "project",
+   "partial": false
+  },
+  {
    "name": "ltx-2.3-22b-ic-lora-lipdub-0.9.safetensors",
    "rel_path": "loras/ltx-2.3-22b-ic-lora-lipdub-0.9.safetensors",
    "folder": "loras",

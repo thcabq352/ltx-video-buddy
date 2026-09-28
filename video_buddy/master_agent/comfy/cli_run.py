@@ -138,6 +138,9 @@ def prepare_run(
     frames: int | None = None,
     filename_prefix: str | None = None,
     negative_prompt: str | None = None,
+    video_name: str | None = None,
+    mask_name: str | None = None,
+    inoutpaint: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
     from master_agent.comfy.graph_ops import (
         LTX_TEACACHE_VARIANTS,
@@ -177,6 +180,12 @@ def prepare_run(
             gen_kwargs["filename_prefix"] = filename_prefix
         if negative_prompt is not None:
             gen_kwargs["negative_prompt"] = negative_prompt
+        if video_name is not None:
+            gen_kwargs["video_name"] = video_name
+        if mask_name is not None:
+            gen_kwargs["mask_name"] = mask_name
+        if inoutpaint is not None:
+            gen_kwargs["inoutpaint"] = inoutpaint
         wf, meta = load_and_patch_workflow(variant or "base", **gen_kwargs)
         warn = (meta or {}).get("prepare_warning")
         if warn:
@@ -244,6 +253,7 @@ def execute_prepared(
         require_weights(str(variant))
     client = ComfyClient()
     from master_agent.comfy.fun_inpaint import ensure_fun_inpaint_mask
+    from master_agent.comfy.inoutpaint import prepare_queue_inputs, record_comfy_provenance
 
     try:
         uploaded = ensure_fun_inpaint_mask(wf, client.upload_image)
@@ -252,6 +262,13 @@ def execute_prepared(
     else:
         if uploaded:
             print(f"uploaded mask: {uploaded}")
+    try:
+        uploaded_io = prepare_queue_inputs(wf, client.upload_image)
+    except Exception as exc:
+        print(f"WARN  ltx in/outpaint mask: {exc}")
+    else:
+        if uploaded_io:
+            print(f"uploaded mask: {uploaded_io}")
     object_info, source = client.load_object_info(prefer_live=True)
     print(f"object_info: {source}")
     lint_or_raise(wf, object_info)
@@ -293,10 +310,22 @@ def execute_prepared(
         print(f"output: {dest}")
     if not video_path:
         raise RuntimeError(f"output files missing on disk: {files}")
+    provenance_sidecar = ""
+    try:
+        payload = record_comfy_provenance(wf, video_path, variant=variant)
+    except Exception as exc:
+        print(f"WARN  clip provenance: {exc}")
+    else:
+        if payload:
+            from master_agent.provenance import sidecar_path
+
+            provenance_sidecar = str(sidecar_path(video_path))
+            print(f"provenance: {provenance_sidecar}")
     return {
         "status": "done",
         "prompt_id": prompt_id,
         "video_path": video_path,
         "outputs": copied,
         "nodes": len(wf),
+        "provenance_sidecar": provenance_sidecar,
     }

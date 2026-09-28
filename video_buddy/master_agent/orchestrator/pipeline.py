@@ -406,6 +406,7 @@ def run_pipeline(
     max_piece_s: Optional[float] = None,
     pause_reset_strength: Optional[float] = None,
     pause_reset_min_s: Optional[float] = None,
+    inoutpaint: Optional[dict[str, Any]] = None,
 ) -> PipelineResult:
     run_id = uuid.uuid4().hex[:12]
     result = PipelineResult(run_id, request=request)
@@ -572,6 +573,7 @@ def run_pipeline(
             kind=kind,
             music_bed_attached=music_bed_attached,
             shot_index=1,
+            inoutpaint=inoutpaint,
         )
         result.messages.extend(st.messages)
         result.status = "done" if st.state == "DONE" else "error"
@@ -684,6 +686,7 @@ def run_pipeline(
             kind=kind,
             music_bed_attached=music_bed_attached,
             shot_index=i + 1,
+            inoutpaint=inoutpaint,
         )
 
     # Per-segment generation (budget can pause the remaining queue)
@@ -880,6 +883,7 @@ def dry_run_pipeline(
     max_piece_s: Optional[float] = None,
     pause_reset_strength: Optional[float] = None,
     pause_reset_min_s: Optional[float] = None,
+    inoutpaint: Optional[dict[str, Any]] = None,
 ) -> int:
     """Storyboard + patch + validate every segment without queueing. CLI exit code."""
     from master_agent.comfy.validator import format_report, validate_workflow
@@ -1086,6 +1090,7 @@ def dry_run_pipeline(
                 audio_start_s=audio_starts[i] if i < len(audio_starts) else 0.0,
                 spoken_line=spoken_line,
                 i2v_strength=clip_i2v,
+                inoutpaint=inoutpaint,
             )
         except Exception as e:
             print(f"FAIL  segment {i + 1} patch: {e}")
