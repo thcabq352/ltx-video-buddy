@@ -17,7 +17,6 @@ import json
 import logging
 import re
 import shutil
-import subprocess
 import tempfile
 from pathlib import Path
 from typing import Any, Optional
@@ -44,32 +43,33 @@ def vision_available() -> bool:
         return False
 
 
-def extract_frames(video_path: str | Path, n: int | None = None) -> list[Path]:
-    """Up to n evenly-spaced JPEG frames (small, for VL context). [] on failure."""
-    ffmpeg = shutil.which("ffmpeg")
+def extract_frames(
+    video_path: str | Path,
+    n: int | None = None,
+) -> list[Path]:
+    """Up to n JPEGs spread across the whole clip (earliest first). [] on failure."""
+    return [path for path, _t in extract_frames_timed(video_path, n)]
+
+
+def extract_frames_timed(
+    video_path: str | Path,
+    n: int | None = None,
+) -> list[tuple[Path, float]]:
+    """``(jpeg, time_s)`` pairs, earliest first. [] on failure.
+
+    Samples by frame index across the full duration. A 1 fps cap on the
+    first N seconds misreads a held opening as a frozen clip and hands the
+    vision model frames that are not the ones it describes.
+    """
+    from master_agent.judge.probe import extract_sampled_jpegs
+
     p = Path(video_path)
-    if not ffmpeg or not p.is_file():
+    if not p.is_file():
         return []
     count = int(n or VISION_FRAMES or 4)
     try:
-        td = tempfile.mkdtemp(prefix="ma_vision_")
-        pattern = str(Path(td) / "f_%03d.jpg")
-        subprocess.run(
-            [
-                ffmpeg,
-                "-y",
-                "-i",
-                str(p),
-                "-vf",
-                f"fps=1,scale=384:-1",
-                "-frames:v",
-                str(count),
-                pattern,
-            ],
-            capture_output=True,
-            timeout=60,
-        )
-        return sorted(Path(td).glob("f_*.jpg"))
+        td = Path(tempfile.mkdtemp(prefix="ma_vision_"))
+        return extract_sampled_jpegs(p, count, scale_width=384, dest_dir=td)
     except Exception:
         return []
 
@@ -185,10 +185,12 @@ def vision_review(
         return None
     if p.suffix.lower() in _IMAGE_SUFFIXES:
         frames = [p] if p.is_file() else []
+        timed = [(path, 0.0) for path in frames]
     else:
         if not vision_available():
             return None
-        frames = extract_frames(p)
+        timed = extract_frames_timed(p)
+        frames = [path for path, _t in timed]
     if not frames:
         return None
 
@@ -200,6 +202,10 @@ def vision_review(
         "user_request": user_request,
         "ltx_prompt": ltx_prompt,
         "frame_count": len(frames),
+        "frame_order": "temporal, earliest first",
+        "frames": [
+            {"index": i + 1, "time_s": t} for i, (_path, t) in enumerate(timed)
+        ],
         "full_stitched_video": full_video,
     }
     images: list[tuple[str, str]] = []

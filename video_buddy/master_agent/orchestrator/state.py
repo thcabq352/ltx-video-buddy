@@ -105,6 +105,10 @@ class RunState:
     parent_shot_id: str = ""
     parent_attempt_id: str = ""
     fps: Optional[int] = None
+    # Audio-driven revise ceiling (piece length). None means "probe the file".
+    duration_cap_s: Optional[float] = None
+    # Lipdub max-piece split (PR #36). None when that split does not apply.
+    max_piece_s: Optional[float] = None
 
     # Closed loop without Comfy / GPU (tests + --self-improve-dry)
     dry_run: bool = False

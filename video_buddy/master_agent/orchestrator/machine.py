@@ -51,13 +51,20 @@ from master_agent.orchestrator.state import (
     LOOP_STARTED,
     RunState,
 )
+from master_agent.orchestrator.talking import (
+    clip_duration_cap,
+    enforce_audio_duration,
+    scrub_overlong_duration,
+)
 from master_agent.provenance import (
     apply_sidecar_to_state,
+    attempt_id_of,
     latest_revise_notes,
     persist_clip_provenance,
     plan_clip_paths,
     planned_clip_path,
     read_sidecar_for_state,
+    shot_id_of,
 )
 
 log = logging.getLogger(__name__)
@@ -105,6 +112,7 @@ class Orchestrator:
     def _patch(self, st: RunState) -> bool:
         """(Re)build the workflow from current params. Returns success."""
         self._inject_spoken_line(st)
+        enforce_audio_duration(st)
         try:
             workflow, meta = load_and_patch_workflow(
                 st.variant or "base",
@@ -422,8 +430,12 @@ class Orchestrator:
             if st.dry_run and not (st.video_path and Path(st.video_path).is_file()):
                 heuristic, issues = 1.0, []
             else:
+                expected = st.duration_s
+                cap = clip_duration_cap(st)
+                if cap is not None:
+                    expected = min(float(expected or cap), float(cap))
                 heuristic, issues = analyze(
-                    st.video_path, expected_duration_s=st.duration_s
+                    st.video_path, expected_duration_s=expected
                 )
                 try:
                     from master_agent.judge.probe import probe_video
@@ -475,6 +487,8 @@ class Orchestrator:
                 st.transition("DONE")
                 return
 
+            judged_attempt = int(st.attempt or 1)
+            judged_shot = st.shot_id or shot_id_of(st)
             prior = read_sidecar_for_state(st)
             if prior:
                 apply_sidecar_to_state(st, prior)
@@ -482,6 +496,10 @@ class Orchestrator:
                     f"provenance source-of-truth "
                     f"{(prior.get('lineage') or {}).get('attempt_id')}"
                 )
+            # Parent link is the attempt just judged, not whatever the sidecar
+            # already says (that record can be the child shell).
+            st.parent_shot_id = judged_shot
+            st.parent_attempt_id = attempt_id_of(judged_shot, judged_attempt)
             plan = self._revise_plan(st, result)
             if not plan.actionable:
                 st.loop_status = LOOP_EXHAUSTED
@@ -492,11 +510,19 @@ class Orchestrator:
 
             self._apply_full_revise(st, plan, result)
             st.revise_history.append(
-                {"attempt": st.attempt, **plan.to_dict()}
+                {"attempt": judged_attempt, **plan.to_dict()}
             )
-            st.attempt += 1
+            # The child has not been judged and does not own the parent file yet.
+            st.judge_score = 0.0
+            st.judge_issues = []
+            st.judge_reason = ""
+            st.judge_decision = ""
+            st.quality_bar = {}
+            st.attempt = judged_attempt + 1
             st.judge_round = st.attempt - 1
-            persist_clip_provenance(st, revise_notes=latest_revise_notes(st))
+            persist_clip_provenance(
+                st, revise_notes=latest_revise_notes(st), omit_hash=True
+            )
 
             if st.dry_run:
                 st.transition("JUDGE")
@@ -559,6 +585,9 @@ class Orchestrator:
             hints.update(plan.param_deltas)
             self._apply_retune(st, hints)
             st.log(f"revise params: {hints}")
+        cap = enforce_audio_duration(st)
+        if cap and st.prompt:
+            st.prompt = scrub_overlong_duration(st.prompt, cap)
         if applied:
             st.log(f"revise applied: {applied} ({plan.reason})")
 
@@ -622,6 +651,8 @@ class Orchestrator:
         end_guide_frame_idx: Optional[int] = None,
         end_guide_strength: Optional[float] = None,
         inoutpaint: Optional[dict[str, Any]] = None,
+        duration_cap_s: Optional[float] = None,
+        max_piece_s: Optional[float] = None,
     ) -> RunState:
         run_id = uuid.uuid4().hex[:12]
         st = RunState(
@@ -667,6 +698,10 @@ class Orchestrator:
                 float(end_guide_strength) if end_guide_strength is not None else None
             ),
             inoutpaint=inoutpaint,
+            duration_cap_s=(
+                float(duration_cap_s) if duration_cap_s is not None else None
+            ),
+            max_piece_s=float(max_piece_s) if max_piece_s is not None else None,
         )
         try:
             st.variant = self._select_variant(st, variant)
@@ -694,6 +729,12 @@ class Orchestrator:
                     st.log(f"warn: {voice_warn}")
                 self._resolve_h3_line(st)
             st.log(f"variant={st.variant} duration={duration_s}s quality={quality or 'default'}")
+            enforce_audio_duration(st)
+            if st.duration_s != duration_s:
+                st.log(
+                    f"audio cap: duration {duration_s}s -> {st.duration_s}s "
+                    f"frames={st.frames}"
+                )
             plan_clip_paths(st)
             persist_clip_provenance(st, revise_notes=latest_revise_notes(st))
 

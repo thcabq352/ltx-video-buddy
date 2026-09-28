@@ -111,6 +111,82 @@ def _probe_has_audio(ffprobe: str, path: Path) -> bool:
         return False
 
 
+def media_frame_count(path: str | Path) -> int:
+    """Decoded frame count, or duration×24 when the container omits nb_frames."""
+    info = probe_video(path)
+    frames = info.get("frames")
+    if isinstance(frames, int) and frames > 0:
+        return frames
+    duration = info.get("duration_s")
+    if duration:
+        return max(int(round(float(duration) * 24)), 1)
+    return 0
+
+
+def even_frame_indices(n_frames: int, count: int) -> list[int]:
+    """``count`` indices spread across the whole clip, earliest first."""
+    n = int(n_frames)
+    if n <= 0:
+        return []
+    want = max(1, min(int(count), n))
+    if want == 1:
+        return [n // 2]
+    return [int(round(i * (n - 1) / (want - 1))) for i in range(want)]
+
+
+def extract_sampled_jpegs(
+    path: str | Path,
+    count: int,
+    *,
+    scale_width: int = 384,
+    dest_dir: Path,
+) -> list[tuple[Path, float]]:
+    """Evenly spaced JPEGs across the whole clip, earliest first.
+
+    ``fps=N, -frames:v count`` only decodes the first ``count/N`` seconds.
+    Image-conditioned clips often hold the still at the head, so that sample
+    is frozen and the vision model describes the wrong frames. Index select
+    covers the full timeline, and ``-fps_mode vfr`` stops the image muxer
+    from repeating frame 0.
+    """
+    ffmpeg = _which("ffmpeg")
+    p = Path(path)
+    if not ffmpeg or not p.is_file():
+        return []
+    n_frames = media_frame_count(p)
+    indices = even_frame_indices(n_frames, count)
+    if not indices:
+        return []
+    info = probe_video(p)
+    duration = float(info.get("duration_s") or 0.0)
+    fps = (n_frames / duration) if duration > 0 else 24.0
+    expr = "+".join(f"eq(n,{i})" for i in indices)
+    width = max(int(scale_width), 16)
+    pattern = str(Path(dest_dir) / "f_%03d.jpg")
+    cmd = [
+        ffmpeg,
+        "-y",
+        "-i",
+        str(p),
+        "-vf",
+        f"select='{expr}',scale={width}:-2",
+        "-fps_mode",
+        "vfr",
+        "-frames:v",
+        str(len(indices)),
+        pattern,
+    ]
+    try:
+        subprocess.run(cmd, capture_output=True, timeout=60)
+    except Exception:
+        return []
+    frames = sorted(Path(dest_dir).glob("f_*.jpg"))
+    timed: list[tuple[Path, float]] = []
+    for path_i, index in zip(frames, indices):
+        timed.append((path_i, round(index / fps, 4)))
+    return timed
+
+
 def frame_motion_score(path: str | Path, samples: int = 6) -> Optional[float]:
     """
     Cheap temporal activity score via ffmpeg frame extracts + pixel diffs.
@@ -128,23 +204,10 @@ def frame_motion_score(path: str | Path, samples: int = 6) -> Optional[float]:
 
     try:
         with tempfile.TemporaryDirectory() as td:
-            pattern = str(Path(td) / "f_%03d.jpg")
-            subprocess.run(
-                [
-                    ffmpeg,
-                    "-y",
-                    "-i",
-                    str(p),
-                    "-vf",
-                    "fps=2,scale=160:-1",
-                    "-frames:v",
-                    str(samples),
-                    pattern,
-                ],
-                capture_output=True,
-                timeout=60,
+            sampled = extract_sampled_jpegs(
+                p, samples, scale_width=160, dest_dir=Path(td)
             )
-            frames = sorted(Path(td).glob("f_*.jpg"))
+            frames = [fp for fp, _t in sampled]
             if len(frames) < 2:
                 return 0.0
             diffs = []

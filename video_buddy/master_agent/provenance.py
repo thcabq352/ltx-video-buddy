@@ -162,6 +162,8 @@ def _additives_from_state(st: Any) -> list[str]:
 
 def judge_fail_reasons(st: Any) -> list[dict[str, Any]]:
     """Honest fail reasons. Quality-bar items use kind ``cpu_fail_rules``."""
+    if str(getattr(st, "judge_decision", "") or "") == "skipped":
+        return [{"kind": "judge", "detail": "skipped"}]
     reasons: list[dict[str, Any]] = []
     seen: set[str] = set()
     for fail in (getattr(st, "quality_bar", None) or {}).get("fails") or []:
@@ -199,12 +201,16 @@ def build_clip_provenance(
     created_at: Optional[str] = None,
     parent_shot_id: Optional[str] = None,
     parent_attempt_id: Optional[str] = None,
+    omit_hash: bool = False,
 ) -> dict[str, Any]:
     clip = path if path is not None else (
         getattr(st, "video_path", None) or planned_clip_path(st)
     )
     clip_str = str(clip) if clip else ""
-    digest = hash_value if hash_value is not None else sha256_file(clip_str or None)
+    if omit_hash:
+        digest = None
+    else:
+        digest = hash_value if hash_value is not None else sha256_file(clip_str or None)
     attempt = int(getattr(st, "attempt", 1) or 1)
     sid = getattr(st, "shot_id", None) or shot_id_of(st)
     variant = str(getattr(st, "variant", None) or "")
@@ -390,18 +396,27 @@ def persist_clip_provenance(
     *,
     revise_notes: str = "",
     path: str | Path | None = None,
+    omit_hash: bool = False,
 ) -> dict[str, Any]:
-    """Write sidecar (planned shot path) and record the object on ``st``."""
+    """Write sidecar (planned shot path) and record the object on ``st``.
+
+    ``omit_hash`` writes the next attempt before its own file exists, so the
+    child record does not inherit the parent clip's sha256.
+    """
     plan_clip_paths(st)
     clip = path if path is not None else planned_clip_path(st)
     prior = read_clip_provenance(clip)
     created_at = None
-    if prior:
+    if prior and not omit_hash:
         prior_attempt = (prior.get("lineage") or {}).get("iteration")
         if prior_attempt == int(getattr(st, "attempt", 1) or 1):
             created_at = prior.get("created_at")
     payload = build_clip_provenance(
-        st, path=clip, revise_notes=revise_notes, created_at=created_at
+        st,
+        path=clip,
+        revise_notes=revise_notes,
+        created_at=created_at,
+        omit_hash=omit_hash,
     )
     st.provenance = payload
     history = getattr(st, "provenance_history", None)
@@ -495,6 +510,9 @@ def latest_revise_notes(st: Any) -> str:
     if last.get("revise_notes"):
         return str(last["revise_notes"])
     bits: list[str] = []
+    parent = getattr(st, "parent_attempt_id", None) or last.get("parent_attempt_id")
+    if parent:
+        bits.append(f"parent {parent}")
     if last.get("reason"):
         bits.append(str(last["reason"]))
     deltas = last.get("prompt_deltas") or []
