@@ -30,6 +30,7 @@ from master_agent.models.weights import (
     ic_ingredients_placement,
     ltx23_latent_upscaler_placement,
     safetensors_declared_size,
+    safetensors_trailer,
     scan_bundle,
 )
 from master_agent.orchestrator.talking import H3_R2V_AUDIO_LABEL
@@ -259,14 +260,29 @@ def test_dev_fp8_trailer_warns_without_rewriting_the_file(tmp_path):
     path.write_bytes(blob)
     before = path.read_bytes()
 
+    declared = len(blob) - len(junk)
     warned = dev_fp8_trailing_bytes([tmp_path])
     assert warned["ok"] is False
-    assert "larger than its safetensors header" in warned["detail"]
-    assert "trailing junk" in warned["detail"]
-    assert f"{len(junk)} bytes" in warned["detail"]
-    assert "do not truncate" in warned["detail"]
+    assert f"actual size {len(blob)} bytes" in warned["detail"]
+    assert f"header-declared size {declared} bytes" in warned["detail"]
+    assert f"{len(junk)} extra bytes" in warned["detail"]
+    assert warned["fix"].startswith("Back up the file, then truncate it")
+    assert f"({declared} bytes)" in warned["fix"]
+    assert "do not truncate" not in warned["detail"]
+    assert "do not truncate" not in warned["fix"]
     assert path.read_bytes() == before
-    assert safetensors_declared_size(path) == len(blob) - len(junk)
+    assert safetensors_declared_size(path) == declared
+
+    other = tmp_path / "loras" / "any-weights.safetensors"
+    other.parent.mkdir()
+    other.write_bytes(blob)
+    generic = safetensors_trailer(other)
+    assert generic["ok"] is False
+    assert generic["actual"] == len(blob)
+    assert generic["declared"] == declared
+    assert generic["extra"] == len(junk)
+    assert "any-weights.safetensors" in generic["detail"]
+    assert other.read_bytes() == blob
 
     exact = _safetensors_blob(payload)
     path.write_bytes(exact)

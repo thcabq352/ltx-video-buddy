@@ -1188,22 +1188,14 @@ def safetensors_declared_size(path: Path) -> int | None:
     return 8 + header_len + end
 
 
-def dev_fp8_trailing_bytes(roots: Iterable[Path] | None = None) -> dict[str, Any]:
-    """Warn when ``ltx-2.3-22b-dev-fp8.safetensors`` is longer than its header.
+def safetensors_trailer(path: Path) -> dict[str, Any]:
+    """Compare any safetensors file with the size its header declares.
 
-    The tower copy has trailing junk. Report it. Do not truncate or rewrite
-    the file.
+    A longer file is a warning: detail has the actual size, the declared
+    size, and the extra byte count. The fix is a backup, then a truncate to
+    the declared size. This function does not rewrite the file.
     """
-    name = DEV_FP8_CKPT
-    copies = find_weight_copies(name, roots)
-    if not copies:
-        return {
-            "ok": True,
-            "path": "",
-            "detail": f"{name} is not on disk",
-            "fix": "",
-        }
-    path = copies[0]
+    name = path.name
     try:
         size = path.stat().st_size
     except OSError as exc:
@@ -1218,16 +1210,20 @@ def dev_fp8_trailing_bytes(roots: Iterable[Path] | None = None) -> dict[str, Any
         }
     extra = size - declared
     if extra > 0:
-        meb = extra / (1024 * 1024)
         return {
             "ok": False,
             "path": str(path),
+            "declared": declared,
+            "actual": size,
+            "extra": extra,
             "detail": (
-                f"{name} is {extra} bytes larger than its safetensors header "
-                f"({meb:.1f} MiB of trailing junk). Leave the file in place; "
-                "do not truncate it."
+                f"{name} actual size {size} bytes, header-declared size {declared} bytes, "
+                f"{extra} extra bytes."
             ),
-            "fix": "Leave the file. Trailing bytes are not removed by Buddy.",
+            "fix": (
+                "Back up the file, then truncate it to the header-declared size "
+                f"({declared} bytes)."
+            ),
         }
     return {
         "ok": True,
@@ -1235,6 +1231,20 @@ def dev_fp8_trailing_bytes(roots: Iterable[Path] | None = None) -> dict[str, Any
         "detail": f"{name} matches its safetensors header ({size} bytes)",
         "fix": "",
     }
+
+
+def dev_fp8_trailing_bytes(roots: Iterable[Path] | None = None) -> dict[str, Any]:
+    """Warn when ``ltx-2.3-22b-dev-fp8.safetensors`` is longer than its header."""
+    name = DEV_FP8_CKPT
+    copies = find_weight_copies(name, roots)
+    if not copies:
+        return {
+            "ok": True,
+            "path": "",
+            "detail": f"{name} is not on disk",
+            "fix": "",
+        }
+    return safetensors_trailer(copies[0])
 
 
 def scan_bundle(bundle: str, *, roots: Iterable[Path] | None = None) -> WeightStatus:

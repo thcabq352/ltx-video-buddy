@@ -289,7 +289,12 @@ def check_ltx23_latent_upscaler() -> dict[str, Any]:
 
 
 def check_dev_fp8_trailer() -> dict[str, Any]:
-    """Warn when the dev fp8 checkpoint is bigger than its safetensors header."""
+    """Warn when the dev fp8 checkpoint is bigger than its safetensors header.
+
+    The detail reports actual size, header-declared size, and extra bytes.
+    The fix is to back up the file and truncate it to the declared size.
+    The check does not rewrite the file.
+    """
     try:
         from master_agent.models.weights import dev_fp8_trailing_bytes
 
