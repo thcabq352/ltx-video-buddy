@@ -22,6 +22,14 @@ from master_agent.config import H3_MAX_DURATION_S, LTX25_SEGMENT_MAX_S, MAX_DURA
 # ltx23_lipsync_v08 is image + audio (optional guide video). Its manifest
 # inputs decide the route; it is not this video-in set.
 LIPSYNC_VARIANTS = frozenset({"lipsync"})
+# Image + voice LTX 2.3 graphs. Length follows the driving audio, including
+# when an optional layout/depth guide video is also attached.
+LTX23_TALKING_VARIANTS = frozenset({
+    "ltx23_lipsync_v08",
+    "air_render_030",
+    "air_render_050",
+    "air_render_businesswoman",
+})
 # Reference-to-AV: still and/or video plus optional standalone reference audio.
 H3_AUDIO_VARIANTS = frozenset({"h3_r2v", "ref2va", "h3_ref2va"})
 # fl2va generates native stereo. It does not consume a voice file.
@@ -221,9 +229,11 @@ def is_audio_driven(
     request: str = "",
 ) -> bool:
     """True when clip length and trim should follow the voice file."""
+    canon = canonical_variant(variant)
+    if canon in LTX23_TALKING_VARIANTS and has_audio:
+        return True
     if has_video or not has_audio:
         return False
-    canon = canonical_variant(variant)
     if canon in LIPSYNC_VARIANTS or canon in H3_NO_INPUT_AUDIO:
         return False
     if canon in A2V_VARIANTS or canon in H3_AUDIO_VARIANTS:
@@ -241,7 +251,7 @@ def per_clip_cap_s(variant: str | None, *, request: str = "") -> float:
         return float(H3_MAX_DURATION_S)
     if not canon and requests_h3(request):
         return float(H3_MAX_DURATION_S)
-    if canon in A2V_VARIANTS:
+    if canon in A2V_VARIANTS or canon in LTX23_TALKING_VARIANTS:
         from master_agent.orchestrator.lipdub import lipdub_segment_max_s
 
         return float(lipdub_segment_max_s())
@@ -267,6 +277,142 @@ def duration_following_audio(path: str, *, probe=None) -> tuple[float, str | Non
             f"audio is {raw:.1f}s; talking clip is capped at {MAX_DURATION_S:.0f}s"
         )
     return raw, None
+
+
+def probed_audio_seconds(path: str | None) -> float | None:
+    """Seconds of a voice file. None when the file cannot be read.
+
+    Unlike ``duration_following_audio``, a missing probe does not invent 5s.
+    """
+    if not path:
+        return None
+    try:
+        from master_agent.music.beats import audio_duration
+
+        raw = float(audio_duration(path) or 0.0)
+    except (OSError, TypeError, ValueError):
+        return None
+    if raw <= 0:
+        return None
+    return raw
+
+
+def frames_not_exceeding(
+    seconds: float,
+    *,
+    fps: int,
+    snap: int,
+    h3: bool = False,
+) -> int:
+    """Largest legal frame count whose runtime does not exceed ``seconds``."""
+    import math
+
+    from master_agent.config import (
+        H3_FRAME_STEP,
+        H3_MIN_FRAMES,
+        snap_h3_frames,
+        snap_ltx_frames,
+    )
+
+    raw = int(math.floor(float(seconds) * int(fps) + 1e-6))
+    raw = max(raw, 1)
+    if h3 or int(snap) == 17:
+        frames = snap_h3_frames(raw)
+        while frames > raw and frames - H3_FRAME_STEP >= H3_MIN_FRAMES:
+            frames -= H3_FRAME_STEP
+        return frames if frames <= raw else raw
+    if int(snap) == 8:
+        frames = snap_ltx_frames(raw)
+        while frames > raw and frames - 8 >= 9:
+            frames -= 8
+        if frames > raw:
+            return raw
+        return frames
+    return raw
+
+
+def clip_duration_cap(st: object) -> float | None:
+    """Seconds a revise may ask for: driving audio, and max-piece when set."""
+    caps: list[float] = []
+    for attr in ("duration_cap_s", "max_piece_s"):
+        raw = getattr(st, attr, None)
+        if raw is None or raw == "":
+            continue
+        try:
+            value = float(raw)
+        except (TypeError, ValueError):
+            continue
+        if value > 0:
+            caps.append(value)
+    variant = getattr(st, "variant", None)
+    if is_audio_driven(
+        variant,
+        has_image=bool(getattr(st, "image_name", None)),
+        has_audio=bool(getattr(st, "audio_name", None) or getattr(st, "audio_path", None)),
+        has_video=bool(getattr(st, "video_name", None)),
+        request=str(getattr(st, "request", "") or ""),
+    ):
+        total = probed_audio_seconds(getattr(st, "audio_path", None))
+        if total is not None:
+            start = float(getattr(st, "audio_start_s", 0.0) or 0.0)
+            remain = max(0.0, total - start)
+            if remain > 0:
+                caps.append(remain)
+    if not caps:
+        return None
+    return min(caps)
+
+
+def enforce_audio_duration(st: object) -> float | None:
+    """Keep ``duration_s`` and ``frames`` inside the driving-audio cap.
+
+    Nearest-frame snapping can round 3.86s up to a 5s default (121 frames).
+    Audio-driven revises snap down so the request cannot outrun the voice
+    file or a lipdub max-piece cap stored on the state.
+    """
+    cap = clip_duration_cap(st)
+    if cap is None or cap <= 0:
+        return None
+    from master_agent.config import get_variant_gen, is_h3_variant
+
+    gen = get_variant_gen(getattr(st, "variant", None))
+    fps = int(getattr(st, "fps", None) or gen.get("fps") or 24)
+    fps = max(fps, 1)
+    snap = int(gen.get("frame_snap") or 8)
+    h3 = is_h3_variant(getattr(st, "variant", None))
+    legal = frames_not_exceeding(cap, fps=fps, snap=snap, h3=h3)
+    legal_s = legal / float(fps)
+    current = float(getattr(st, "duration_s", 0.0) or 0.0)
+    if current <= 0 or current > min(cap, legal_s) + 1e-3:
+        st.duration_s = round(min(cap, legal_s), 4)
+    frames = getattr(st, "frames", None)
+    if frames is None or int(frames) > legal:
+        st.frames = legal
+    return cap
+
+
+_DURATION_IN_TEXT = re.compile(
+    r"(\d+(?:\.\d+)?)\s*(?:seconds?|secs?)\b",
+    re.IGNORECASE,
+)
+
+
+def scrub_overlong_duration(text: str, cap: float) -> str:
+    """Rewrite '5 second' asks that are longer than the driving audio."""
+    if not text or cap <= 0:
+        return text
+
+    def _repl(match: re.Match) -> str:
+        try:
+            val = float(match.group(1))
+        except ValueError:
+            return match.group(0)
+        if val <= cap + 0.05:
+            return match.group(0)
+        shown = f"{cap:.2f}".rstrip("0").rstrip(".")
+        return f"{shown} seconds"
+
+    return _DURATION_IN_TEXT.sub(_repl, text)
 
 
 def plan_audio_slices(total_s: float, cap_s: float) -> list[tuple[float, float]]:

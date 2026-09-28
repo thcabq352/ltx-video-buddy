@@ -27,6 +27,120 @@ from master_agent.judge.quality_bar import (
 HUMAN_VETO = "human_veto"
 BRIEF_ADHERENCE_LOW = 0.45
 
+_BRAND_ASK = re.compile(
+    r"\b(logo|logos|emblem|emblems|trademark|wordmark|brand(?:ing|ed)?|"
+    r"product[- ]?shot|product[- ]?placement|commercial|advertisement|"
+    r"packaging)\b",
+    re.IGNORECASE,
+)
+_BRAND_ISSUE = re.compile(
+    r"\b(logos?|emblems?|trademarks?|wordmark|product[- ]?read|"
+    r"brand(?:ing|ed)?|missing logo|no emblem)\b",
+    re.IGNORECASE,
+)
+_BRAND_RUBRIC = (
+    "\n- Brand/commercial: emblem/product read, clean look, no NSFW. "
+    "The brief asked for branding, so a missing logo or emblem is a real miss."
+)
+_NO_BRAND_RUBRIC = (
+    "\n- This brief does not ask for a logo, emblem, product, or brand mark. "
+    "Do not fail the clip, lower brief_adherence, or list an issue because "
+    "branding is absent."
+)
+
+
+def brand_required(*texts: object) -> bool:
+    """True only when the run or brief actually asks for branding."""
+    blob = " ".join(str(t or "") for t in texts)
+    return bool(_BRAND_ASK.search(blob))
+
+
+def _brand_texts(
+    user_request: str,
+    ltx_prompt: str = "",
+    shot: dict[str, Any] | None = None,
+) -> tuple[str, ...]:
+    parts = [user_request or "", ltx_prompt or ""]
+    if isinstance(shot, dict):
+        for key in ("title", "action", "visuals", "ltx_prompt", "prompt"):
+            if shot.get(key):
+                parts.append(str(shot.get(key)))
+    return tuple(parts)
+
+
+def judge_system_prompt(
+    *,
+    user_request: str = "",
+    ltx_prompt: str = "",
+    shot: dict[str, Any] | None = None,
+    full_video: bool = False,
+    context: dict[str, Any] | None = None,
+) -> str:
+    """System prompt for one judge call, with brand rules gated on the brief."""
+    path = Path(__file__).resolve().parent / "prompts" / "judge.md"
+    system = path.read_text(encoding="utf-8") if path.is_file() else (
+        "Judge video quality. Return JSON pass/score/issues/prompt_rewrite/param_hints/reason."
+    )
+    if brand_required(*_brand_texts(user_request, ltx_prompt, shot)):
+        system += _BRAND_RUBRIC
+    else:
+        system += _NO_BRAND_RUBRIC
+    cap = None
+    if isinstance(context, dict):
+        cap = context.get("duration_cap_s")
+    if cap:
+        try:
+            cap_s = float(cap)
+        except (TypeError, ValueError):
+            cap_s = 0.0
+        if cap_s > 0:
+            system += (
+                f"\n- Driving audio limits this clip to {cap_s:.2f}s. "
+                "Do not ask for a longer clip. Stay on a legal frame count "
+                "(LTX 8n+1, or the variant's own snap) that fits that audio "
+                "and the lipdub max-piece cap when one is set."
+            )
+    if full_video:
+        system += (
+            "\nThis is a FULL stitched video review. "
+            "Mention weak shot indices as shot:N if needed."
+        )
+    return system
+
+
+def drop_unrequested_brand(
+    data: dict[str, Any] | None,
+    *,
+    user_request: str,
+    ltx_prompt: str = "",
+    shot: dict[str, Any] | None = None,
+) -> dict[str, Any] | None:
+    """Ignore logo/emblem penalties when the brief never asked for branding."""
+    if not isinstance(data, dict) or brand_required(*_brand_texts(user_request, ltx_prompt, shot)):
+        return data
+    issues = [str(item) for item in (data.get("issues") or [])]
+    kept = [item for item in issues if not _BRAND_ISSUE.search(item)]
+    if len(kept) == len(issues):
+        return data
+    cleaned = dict(data)
+    cleaned["issues"] = kept
+    if kept:
+        return cleaned
+    cleaned["reason"] = "Brand and emblem rules do not apply; the brief did not ask for them."
+    try:
+        score = float(cleaned.get("score") or 0.0)
+    except (TypeError, ValueError):
+        score = 0.0
+    if score >= 0.75:
+        cleaned["pass"] = True
+        if cleaned.get("brief_adherence") is not None:
+            try:
+                if float(cleaned["brief_adherence"]) < 0.75:
+                    cleaned["brief_adherence"] = 0.9
+            except (TypeError, ValueError):
+                cleaned["brief_adherence"] = 0.9
+    return cleaned
+
 
 def _effective_threshold(threshold: float | None) -> float:
     if threshold is not None:
@@ -326,6 +440,10 @@ def judge_segment(
         heuristic_score=heuristic_score,
         heuristic_issues=heuristic_issues or [],
         frame_notes=notes,
+        context=context,
+    )
+    llm = drop_unrequested_brand(
+        llm, user_request=user_request, ltx_prompt=ltx_prompt, shot=shot
     )
 
     llm_score = float(llm.get("score", heuristic_score)) if llm else float(heuristic_score)
@@ -473,6 +591,13 @@ def judge_full_video(
         heuristic_issues=[],
         frame_notes=notes + f", segment_avg={seg_avg:.2f}",
         full_video=True,
+        context=context,
+    )
+    llm = drop_unrequested_brand(
+        llm,
+        user_request=user_request,
+        ltx_prompt=f"FULL VIDEO storyboard=[{board_summary}]",
+        shot={"title": "full_video"},
     )
     llm_score = float(llm.get("score", h)) if llm else h
     combined = merge_legs(h, llm_score if llm else None, vision_score)
@@ -572,6 +697,7 @@ def _llm_judge(
     heuristic_issues: list[dict[str, Any]],
     frame_notes: str,
     full_video: bool = False,
+    context: dict[str, Any] | None = None,
 ) -> Optional[dict[str, Any]]:
     try:
         from langchain_core.messages import HumanMessage, SystemMessage
@@ -580,12 +706,13 @@ def _llm_judge(
     except Exception:
         return None
 
-    path = Path(__file__).resolve().parent / "prompts" / "judge.md"
-    system = path.read_text(encoding="utf-8") if path.is_file() else (
-        "Judge video quality. Return JSON pass/score/issues/prompt_rewrite/param_hints/reason."
+    system = judge_system_prompt(
+        user_request=user_request,
+        ltx_prompt=ltx_prompt,
+        shot=shot,
+        full_video=full_video,
+        context=context,
     )
-    if full_video:
-        system += "\nThis is a FULL stitched video review. Mention weak shot indices as shot:N if needed."
 
     payload = {
         "user_request": user_request,
@@ -594,7 +721,11 @@ def _llm_judge(
         "heuristic_score": heuristic_score,
         "heuristic_issues": heuristic_issues[:10],
         "frame_notes": frame_notes,
+        "brand_required": brand_required(*_brand_texts(user_request, ltx_prompt, shot)),
     }
+    if isinstance(context, dict) and context.get("duration_cap_s"):
+        payload["duration_cap_s"] = context.get("duration_cap_s")
+        payload["duration_s"] = context.get("duration_s")
     try:
         llm = get_llm(temperature=0.2)
         resp = llm.invoke(

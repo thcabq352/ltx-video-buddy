@@ -7,12 +7,16 @@ You do **not** see pixels directly; you receive:
 - heuristic quality score and issue codes
 - optional frame-sample motion/activity notes
 
-## Rubric (pass ≈ commercial usable)
+## Rubric (pass ≈ usable for the brief)
 - Subject matches brief
 - Motion appropriate (not frozen if action asked)
 - No critical failures (missing/tiny file, severe short duration)
-- Brand/commercial: emblem/product read, clean look, no NSFW
 - Continuity language respected when multi-shot
+- NSFW only when the brief did not ask for it
+
+Brand, logo, emblem, and product-read rules are not part of this rubric.
+They are added only when the brief actually asks for branding. Do not
+penalize a plain lip-sync or talking-head clip for a missing logo.
 
 ## Accept threshold
 - Prefer pass when combined quality is strong; score 0–1.

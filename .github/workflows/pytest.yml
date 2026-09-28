@@ -14,6 +14,8 @@ jobs:
           python-version: "3.12"
       - name: Unit tests (no Comfy, no GPU)
         run: |
+          sudo apt-get update
+          sudo apt-get install -y ffmpeg
           pip install -r video_buddy/requirements.txt
           # Catalog/loader/frame law (existing) plus the suites README and
           # AUDIT already treat as the no-GPU bar: director, upscale,
@@ -29,6 +31,7 @@ jobs:
             video_buddy/tests/test_accelerator_bypass.py \
             video_buddy/tests/test_music_video.py \
             video_buddy/tests/test_clip_provenance.py \
+            video_buddy/tests/test_judge_revise_fixes.py \
             video_buddy/tests/test_h3_voice_sample.py \
             video_buddy/tests/test_h3_catalog.py \
             video_buddy/tests/test_cli_routing.py \

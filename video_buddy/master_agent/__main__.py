@@ -423,7 +423,7 @@ def cmd_run(args: argparse.Namespace) -> int:
             video_name=Path(args.video).name if getattr(args, "video", None) else None,
             audio_path=args.audio if getattr(args, "audio", None) else None,
             judge_enabled=False if args.no_judge else JUDGE_ENABLED,
-            revise_enabled=True,
+            revise_enabled=not args.no_judge,
             spoken_line=spoken_line or None,
             voice_sample=voice_sample,
             max_judge_rounds=args.max_judge_rounds or MAX_JUDGE_ROUNDS,

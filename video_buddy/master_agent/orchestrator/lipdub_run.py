@@ -182,7 +182,18 @@ def run_segmented_lipdub(
             end_guide_frame_idx=piece.guide_frame_idx,
             end_guide_strength=piece.guide_strength,
             judge_enabled=judge_enabled,
-            revise_enabled=revise_enabled,
+            revise_enabled=False if not judge_enabled else revise_enabled,
+            duration_cap_s=float(piece.audio_duration_s),
+            # max-piece bounds a revise only when this piece already fits it.
+            # An unsplittable word is longer than max_piece on purpose; snapping
+            # that piece down would cut the word. A one-pass clip never reaches
+            # this function, so a 3.86s take is not forced to 3.0s.
+            max_piece_s=(
+                float(plan.max_piece_s)
+                if plan.segmented
+                and float(piece.audio_duration_s) <= float(plan.max_piece_s) + 0.05
+                else None
+            ),
             spoken_line=piece.spoken_line or None,
             max_judge_rounds=max_judge_rounds,
             dry_run=False,
@@ -380,6 +391,7 @@ def run_segmented_lipdub(
         spoken_line=(spoken_line or "").strip(),
         judge_score=judge_score,
         judge_reason=judge_reason,
+        judge_decision="skipped" if not judge_enabled else "",
         video_path=str(final),
         planned_clip=str(final),
         output_dir=str(out_dir),
