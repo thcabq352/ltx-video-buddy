@@ -355,4 +355,11 @@ def context_from_state(st: Any) -> dict[str, Any]:
         "control_pack_used": getattr(st, "control_pack_used", None) or {},
         "prompt": getattr(st, "prompt", "") or "",
         "steps": getattr(st, "steps", None),
+        "duration_s": getattr(st, "duration_s", None),
     }
+    try:
+        from master_agent.orchestrator.talking import clip_duration_cap
+
+        ctx["duration_cap_s"] = clip_duration_cap(st)
+    except Exception:
+        ctx["duration_cap_s"] = getattr(st, "duration_cap_s", None)
