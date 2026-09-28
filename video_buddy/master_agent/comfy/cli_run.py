@@ -262,6 +262,21 @@ def execute_prepared(
     files = ComfyClient.extract_video_files(entry)
     if not files:
         raise RuntimeError("job completed but produced no output files")
+    from master_agent.comfy.workflow_patcher import variant_final_node_id
+
+    def _probe(info: dict[str, Any]) -> dict[str, Any]:
+        try:
+            from master_agent.judge.probe import probe_video
+
+            return probe_video(ComfyClient.resolve_output_path(info))
+        except Exception:
+            return {}
+
+    files = ComfyClient.choose_final_output(
+        files,
+        final_node_id=variant_final_node_id(variant or ""),
+        probe=_probe,
+    )
     OUTPUTS_DIR.mkdir(parents=True, exist_ok=True)
     prefix = run_id or prompt_id[:12]
     video_path = None

@@ -293,7 +293,7 @@ class Orchestrator:
         if not files:
             st.fail("job completed but produced no video files")
             return False
-        self._output_files = files
+        self._output_files = self._order_final_output(st, files)
         return True
 
     def _handle_job_error(self, st: RunState, exc: Exception, *, phase: str) -> bool:
@@ -317,10 +317,31 @@ class Orchestrator:
         st.fail(f"{phase} failed: {exc}")
         return False
 
+    def _order_final_output(self, st: RunState, files: list[dict]) -> list[dict]:
+        """Prefer the manifest's final node, else the clip with audio at this length."""
+        from master_agent.comfy.workflow_patcher import variant_final_node_id
+
+        def _probe(info: dict) -> dict:
+            try:
+                from master_agent.judge.probe import probe_video
+
+                return probe_video(ComfyClient.resolve_output_path(info))
+            except Exception:
+                return {}
+
+        return ComfyClient.choose_final_output(
+            files,
+            final_node_id=variant_final_node_id(st.variant or ""),
+            duration_s=st.duration_s,
+            frames=st.frames,
+            probe=_probe,
+        )
+
     def _resolve(self, st: RunState) -> bool:
         dst = planned_clip_path(st)
         dst.parent.mkdir(parents=True, exist_ok=True)
-        for info in self._output_files:
+        ordered = self._order_final_output(st, self._output_files)
+        for info in ordered:
             src = ComfyClient.resolve_output_path(info)
             if not src.is_file():
                 continue

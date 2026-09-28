@@ -85,6 +85,29 @@ def _load_manifests() -> dict[str, Any]:
         return yaml.safe_load(f) or {}
 
 
+def variant_manifest(variant: str) -> dict[str, Any]:
+    meta = (_load_manifests() or {}).get(variant) or {}
+    return meta if isinstance(meta, dict) else {}
+
+
+def variant_input_specs(variant: str) -> dict[str, Any]:
+    """Manifest ``inputs:`` for image / audio / video. Empty when undeclared."""
+    raw = variant_manifest(variant).get("inputs") or {}
+    return raw if isinstance(raw, dict) else {}
+
+
+def variant_final_node_id(variant: str) -> str | None:
+    """SaveVideo / VHS node the manifest marks as the real render."""
+    outputs = variant_manifest(variant).get("outputs") or {}
+    if not isinstance(outputs, dict):
+        return None
+    final = outputs.get("final") or {}
+    if not isinstance(final, dict):
+        return None
+    node_id = final.get("node_id")
+    return str(node_id) if node_id else None
+
+
 def _expected_template_path(variant: str) -> Path:
     """Best-known on-disk path for ``variant`` (may not exist)."""
     manifests = _load_manifests()
@@ -1625,7 +1648,12 @@ def load_and_patch_workflow(
 
     workflow = copy.deepcopy(load_workflow_template(variant))
     manifests = _load_manifests()
-    field_map = (manifests.get(variant) or {}).get("fields") or {}
+    manifest = manifests.get(variant) or {}
+    field_map = dict(manifest.get("fields") or {})
+    # inputs: image / audio / optional guide video. Same writer as fields.
+    for key, spec in (manifest.get("inputs") or {}).items():
+        if isinstance(spec, dict) and key not in field_map:
+            field_map[key] = spec
 
     values = {
         "prompt": prompt,
@@ -1652,7 +1680,9 @@ def load_and_patch_workflow(
         "first_image": first_image or image_name,
         "last_image": last_image,
         "audio_name": audio_name,
+        "audio": audio_name,
         "video_name": video_name,
+        "video": video_name,
         "spoken_line": (spoken_line or "").strip() or None,
         "audio_start_s": float(audio_start_s or 0.0),
         "duration_s": float(duration_s),

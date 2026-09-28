@@ -563,6 +563,25 @@ ltx23_lipsync_v08:
       class_type: RandomNoise
       index: 0
       input: noise_seed
+    # PrimitiveInt that feeds frame_load_cap on the clay/mask/depth loaders.
+    frames:
+      node_id: "6214"
+      input: value
+  inputs:
+    image:
+      node_id: ["6108", "6102", "6139"]
+      input: image
+    audio:
+      node_id: "5883"
+      input: audio
+    # Optional. Replaces the clay/layout guide. Mask and depth stay authored.
+    video:
+      node_id: "6094"
+      input: video
+      optional: true
+  outputs:
+    final:
+      node_id: "6109"
 
 vb_ccc41_krea2:
   file: 260729_VIDEO-BUDDY_CCC_4-1_KREA2-EDIT_BETA_PUBLISH_api.json
@@ -597,6 +616,23 @@ air_render_030:
       node_id: "6202:5834"
       input: text
       overwrite: false
+    frames:
+      node_id: "6214"
+      input: value
+  inputs:
+    image:
+      node_id: ["6108", "6102", "6139"]
+      input: image
+    audio:
+      node_id: "5883"
+      input: audio
+    video:
+      node_id: "6094"
+      input: video
+      optional: true
+  outputs:
+    final:
+      node_id: "6109"
   # director: baked_defaults — example project; JSON often gitignored. Prefer --template.
 
 air_render_050:
@@ -613,6 +649,23 @@ air_render_050:
       node_id: "6202:5834"
       input: text
       overwrite: false
+    frames:
+      node_id: "6214"
+      input: value
+  inputs:
+    image:
+      node_id: ["6108", "6102", "6139"]
+      input: image
+    audio:
+      node_id: "5883"
+      input: audio
+    video:
+      node_id: "6094"
+      input: video
+      optional: true
+  outputs:
+    final:
+      node_id: "6109"
   # director: baked_defaults — example project; JSON often gitignored. Prefer --template.
 
 air_render_businesswoman:
@@ -629,6 +682,23 @@ air_render_businesswoman:
       node_id: "6202:5834"
       input: text
       overwrite: false
+    frames:
+      node_id: "6214"
+      input: value
+  inputs:
+    image:
+      node_id: ["6108", "6102", "6139"]
+      input: image
+    audio:
+      node_id: "5883"
+      input: audio
+    video:
+      node_id: "6094"
+      input: video
+      optional: true
+  outputs:
+    final:
+      node_id: "6109"
   # director: baked_defaults — example project; JSON often gitignored. Prefer --template.
 
 # --- batch 3 (converted 2026-08-04) ---

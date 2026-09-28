@@ -234,7 +234,7 @@ class ComfyClient:
         """Pull video/gifs/files from history outputs."""
         results: list[dict[str, str]] = []
         outputs = history_entry.get("outputs") or {}
-        for _node_id, node_out in outputs.items():
+        for node_id, node_out in outputs.items():
             for key in ("gifs", "videos", "images", "files"):
                 items = node_out.get(key) or []
                 for item in items:
@@ -253,6 +253,7 @@ class ComfyClient:
                                 "filename": filename,
                                 "subfolder": item.get("subfolder") or "",
                                 "type": item.get("type") or "output",
+                                "node_id": str(node_id),
                             }
                         )
         # If only images returned (frame sequence), still surface last image
@@ -268,6 +269,63 @@ class ComfyClient:
                             }
                         )
         return results
+
+    @staticmethod
+    def choose_final_output(
+        files: list[dict[str, Any]],
+        *,
+        final_node_id: str | None = None,
+        duration_s: float | None = None,
+        frames: int | None = None,
+        probe: Any = None,
+    ) -> list[dict[str, Any]]:
+        """Put the real render first.
+
+        The manifest's final SaveVideo/VHS node wins. Otherwise prefer a file
+        that has audio at the requested length, then any file with audio.
+        Guide previews stay in the list after that file. Nothing is rewritten.
+        """
+        ordered = [item for item in files if isinstance(item, dict)]
+        if not ordered:
+            return []
+        if final_node_id:
+            hit = [item for item in ordered if str(item.get("node_id") or "") == str(final_node_id)]
+            if hit:
+                return hit + [item for item in ordered if item not in hit]
+        if probe is None:
+            return ordered
+
+        def _info(item: dict[str, Any]) -> dict[str, Any]:
+            try:
+                probed = probe(item) or {}
+            except Exception:
+                return {}
+            return probed if isinstance(probed, dict) else {}
+
+        def _score(info: dict[str, Any]) -> tuple[int, int]:
+            has_audio = bool(info.get("has_audio"))
+            if not has_audio:
+                return (0, 0)
+            length_ok = False
+            probed_frames = info.get("frames")
+            if frames and isinstance(probed_frames, int) and int(probed_frames) == int(frames):
+                length_ok = True
+            probed_duration = info.get("duration_s")
+            if (
+                not length_ok
+                and duration_s
+                and isinstance(probed_duration, (int, float))
+                and abs(float(probed_duration) - float(duration_s)) <= 0.75
+            ):
+                length_ok = True
+            return (1 if length_ok else 0, 1)
+
+        ranked = [(item, _score(_info(item))) for item in ordered]
+        best = max(score for _item, score in ranked)
+        if best == (0, 0):
+            return ordered
+        chosen = [item for item, score in ranked if score == best]
+        return chosen + [item for item in ordered if item not in chosen]
 
     @staticmethod
     def resolve_output_path(
