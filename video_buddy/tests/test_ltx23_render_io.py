@@ -23,6 +23,7 @@ from master_agent.comfy.workflow_patcher import (
     load_workflow_template,
     media_wiring_error,
     variant_final_node_id,
+    variant_manifest,
 )
 from master_agent.orchestrator.state import RunState
 from master_agent.orchestrator.talking import media_route_error
@@ -67,6 +68,25 @@ def _patched(variant: str, **kwargs):
         ),
     ):
         return load_and_patch_workflow(variant, **kwargs)
+
+
+@pytest.mark.parametrize("variant", RENDER_VARIANTS)
+def test_run_prompt_is_written_into_linked_source(variant: str):
+    """5834 stays the link to 6203, and 6203 carries the run prompt."""
+    raw = load_workflow_template("ltx23_lipsync_v08")
+    authored = raw["6203"]["inputs"]["value"]
+    spec = (variant_manifest(variant).get("fields") or {}).get("prompt") or {}
+    assert spec.get("node_id") == "6203"
+    assert spec.get("input") == "value"
+
+    run_prompt = "a gator in a swamp, speaking to camera"
+    workflow, _meta = _patched(variant, prompt=run_prompt, seed=42, duration_s=3.0)
+    assert workflow["6203"]["inputs"]["value"] == run_prompt
+    assert workflow["6202:5834"]["inputs"]["text"] == ["6203", 0]
+
+    blank, _meta = _patched(variant, prompt="   ", seed=42, duration_s=3.0)
+    assert blank["6203"]["inputs"]["value"] == authored
+    assert blank["6202:5834"]["inputs"]["text"] == ["6203", 0]
 
 
 @pytest.mark.parametrize("variant", RENDER_VARIANTS)

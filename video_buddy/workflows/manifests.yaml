@@ -551,11 +551,12 @@ ltx23_lipsync_v08:
   requires: [ComfyUI-LTXVideo, ComfyUI-Mickmumpitz-Nodes, KJNodes, VideoHelperSuite,
              comfyui_controlnet_aux, ComfyUI_essentials, ComfyUI-Easy-Use, rgthree-comfy]
   fields:
-    # Positive CLIP text is a graph link to the authored prompt (node 6203).
+    # Positive CLIP (6202:5834) stays linked to PrimitiveStringMultiline 6203.
+    # The run prompt is written into that source widget. A blank prompt leaves
+    # the authored string.
     prompt:
-      node_id: "6202:5834"
-      input: text
-      overwrite: false
+      node_id: "6203"
+      input: value
     negative_prompt:
       node_id: "6202:5835"
       input: text
@@ -612,10 +613,10 @@ air_render_030:
   safer_alternate: base
   requires: [same as ltx23_lipsync_v08]
   fields:
+    # Same wiring as ltx23_lipsync_v08: write the run prompt into node 6203.
     prompt:
-      node_id: "6202:5834"
-      input: text
-      overwrite: false
+      node_id: "6203"
+      input: value
     frames:
       node_id: "6214"
       input: value
@@ -646,9 +647,8 @@ air_render_050:
   requires: [same as ltx23_lipsync_v08]
   fields:
     prompt:
-      node_id: "6202:5834"
-      input: text
-      overwrite: false
+      node_id: "6203"
+      input: value
     frames:
       node_id: "6214"
       input: value
@@ -679,9 +679,8 @@ air_render_businesswoman:
   requires: [same as ltx23_lipsync_v08]
   fields:
     prompt:
-      node_id: "6202:5834"
-      input: text
-      overwrite: false
+      node_id: "6203"
+      input: value
     frames:
       node_id: "6214"
       input: value
