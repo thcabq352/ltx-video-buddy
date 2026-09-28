@@ -3,7 +3,8 @@
 Node 4826 is LTXAVTextEncoderLoader. These variants used to miss MODEL_FILES
 and fall back to base, which sprayed the 10Eros bake (and overwrote a JSON
 edit of the truncated distilled fp8 name). The same graphs must keep their
-authored sampler and positive-prompt link, and must not gain a TeaCache node.
+authored sampler and positive-prompt link, write the run prompt into node
+6203, and must not gain a TeaCache node.
 No GPU.
 
 Run: python -m pytest tests/test_ltx23_dev_checkpoint.py -q
@@ -182,7 +183,7 @@ def test_render_variants_keep_authored_sampler_prompt_link_and_skip_teacache(var
     assert raw["6202:5834"]["inputs"]["text"] == ["6203", 0]
     assert raw["6202:5831"]["inputs"]["sampler_name"] == "euler_ancestral_cfg_pp"
 
-    caller = "CALLER_PROMPT_SHOULD_NOT_REPLACE_THE_LINK"
+    caller = "a gator in a swamp, speaking to camera"
     workflow, meta = _patched_render(
         variant,
         prompt=caller,
@@ -200,8 +201,8 @@ def test_render_variants_keep_authored_sampler_prompt_link_and_skip_teacache(var
     assert teas == []
     assert workflow["6202:5831"]["inputs"]["sampler_name"] == "euler_ancestral_cfg_pp"
     assert workflow["6202:5834"]["inputs"]["text"] == ["6203", 0]
-    assert workflow["6203"]["inputs"]["value"] == authored
-    assert caller not in workflow["6203"]["inputs"]["value"]
+    assert workflow["6203"]["inputs"]["value"] == caller
+    assert authored not in workflow["6203"]["inputs"]["value"]
 
 
 def test_render_variant_sampler_changes_only_when_config_asks():

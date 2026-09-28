@@ -1062,12 +1062,13 @@ def _same_weight_family(current: str, new: str) -> bool:
     return left == right
 
 
-def _prompt_locks(workflow: dict[str, Any], field_map: dict[str, Any]) -> set[tuple[str, str]]:
-    """Inputs the manifest marks ``overwrite: false``, plus the node a link targets.
+def _prompt_locks(_workflow: dict[str, Any], field_map: dict[str, Any]) -> set[tuple[str, str]]:
+    """Widgets the manifest marks ``overwrite: false``.
 
-    ltx23_lipsync_v08 (and the air_render copies) keep the positive CLIP text
-    as a link to the authored prompt primitive. Writing a string there, or
-    into that primitive, drops the baked line.
+    The lock covers only that widget, so a linked CLIP text stays a link.
+    The source node is not locked. ltx23_lipsync_v08 and the air_render
+    copies name PrimitiveStringMultiline 6203 as the prompt target, and the
+    run text is written there.
     """
     locked: set[tuple[str, str]] = set()
     for spec in (field_map or {}).values():
@@ -1080,16 +1081,7 @@ def _prompt_locks(workflow: dict[str, Any], field_map: dict[str, Any]) -> set[tu
         if not isinstance(nids, list):
             nids = [nids]
         for nid in nids:
-            sid = str(nid)
-            locked.add((sid, key))
-            node = workflow.get(sid)
-            if not isinstance(node, dict):
-                continue
-            current = (node.get("inputs") or {}).get(key)
-            if _is_node_link(current):
-                src = str(current[0])
-                for src_key in ("value", "text", "string", "prompt"):
-                    locked.add((src, src_key))
+            locked.add((str(nid), key))
     return locked
 
 
@@ -1120,8 +1112,8 @@ def _heuristic_patch(
     # quality-correction fields also live on values
 
     # CLIP / text encode (research graphs also title nodes "Positive Prompt").
-    # A list value is a graph link. Leave it. The manifest can also lock a
-    # node with overwrite: false (ltx23 lipsync positive CLIP → node 6203).
+    # A list value is a graph link. Leave it. The source primitive is where
+    # the run prompt goes (manifest prompt target, or the scalar loop below).
     for nid, node in _find_nodes_by_class(workflow, "CLIPTextEncode"):
         if (str(nid), "text") in locked:
             continue
@@ -1655,8 +1647,12 @@ def load_and_patch_workflow(
         if isinstance(spec, dict) and key not in field_map:
             field_map[key] = spec
 
+    # A blank prompt leaves authored prompt widgets alone. A real prompt,
+    # including surrounding spaces, is written as given.
+    run_prompt = prompt if isinstance(prompt, str) and prompt.strip() else None
+
     values = {
-        "prompt": prompt,
+        "prompt": run_prompt,
         "negative_prompt": negative_prompt
         or "blurry, low quality, distorted face, watermark, text overlay",
         "seed": seed,
@@ -1687,7 +1683,7 @@ def load_and_patch_workflow(
         "audio_start_s": float(audio_start_s or 0.0),
         "duration_s": float(duration_s),
         "filename_prefix": filename_prefix,
-        "global_prompt": global_prompt or prompt,
+        "global_prompt": global_prompt or run_prompt,
         "segment_prompts": segment_prompts,
         "fps": gen["fps"],
         "stg_scale": stg_scale,
