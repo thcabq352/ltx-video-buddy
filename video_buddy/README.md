@@ -116,8 +116,10 @@ python -m master_agent run "talking head dub" --video input.mp4 --variant lipsyn
 # Photo + voice (no source video). Duration follows the audio (capped at 30s).
 # Default route is ltx25_a2v, which keeps the supplied voice.
 python -m master_agent run "she says the line" --image face.png --audio line.wav --no-interview
-# Long lipdub (audio over ~6.5s) splits on pauses, continues from the last
-# frame, and muxes the original wav. --dry-run prints the plan. See docs/LIPDUB.md.
+# Long lipdub (audio over ~6.5s) splits on pauses. Defaults: closed-mouth
+# idle silences, --anchor previous (last-frame chain), --reframe off,
+# --max-piece-seconds 3. --anchor pause-reset, hybrid, and --reframe on
+# are opt-in. --dry-run prints the plan. See docs/LIPDUB.md.
 python -m master_agent run "she says the line" --image face.png --audio line.wav \
   --variant ltx25_a2v --words words.json --tripod --dry-run --no-interview --storyboard off --no-judge
 # Naming Hailuo / MiniMax / H3 still routes to h3_r2v (fl2va does not take a voice file).

@@ -8,6 +8,7 @@ from unittest.mock import patch
 from master_agent.comfy.workflow_patcher import load_and_patch_workflow
 from master_agent.orchestrator.lipdub import (
     CLOSED_MOUTH_CLAUSE,
+    MAX_FROZEN_HOLD,
     TRIPOD_I2V_STRENGTH,
     TRIPOD_NEGATIVE,
     TRIPOD_POSITIVE,
@@ -20,6 +21,18 @@ from master_agent.orchestrator.lipdub import (
     lipdub_param_block,
     load_words,
     plan_lipdub,
+)
+from master_agent.orchestrator.lipdub_reframe import (
+    HYBRID_PREV_WEIGHT,
+    Similarity,
+    _gray,
+    _ncc,
+    compose_hybrid_guide,
+    crossfade_alphas,
+    estimate_similarity,
+    push_in,
+    smooth_track,
+    undo_push_in,
 )
 from master_agent.orchestrator.state import RunState
 from master_agent.orchestrator.talking import per_clip_cap_s, plan_talking_slices
@@ -148,6 +161,9 @@ def test_ringmaster_pauses_close_the_mouth_and_continue():
         tripod=True,
         base_prompt="ringmaster",
         seed=7,
+        silence_mode="hold",
+        anchor="previous",
+        reframe=False,
     )
     assert plan.segmented is True
     assert plan.timeline_frame_count == 288
@@ -300,6 +316,211 @@ def test_tripod_flag_reaches_a2v_workflow_and_default_strength_stays():
     ]
     assert 0.7 in plain_strengths
     assert plain_strengths[-1] == 1 or plain_strengths[-1] == 1.0
+
+
+def test_idle_default_replaces_frozen_holds_and_keeps_the_grid():
+    words = _words()
+    plan = plan_lipdub(
+        12.0,
+        words=words,
+        silences=TOWER_PAUSES,
+        max_segment_s=6.5,
+        silence_min_s=0.25,
+        overlap_frames=8,
+        fps=24,
+        tripod=True,
+        base_prompt="ringmaster",
+        seed=42,
+    )
+    assert plan.silence_mode == "idle"
+    assert plan.anchor == "previous"
+    assert plan.reframe is False
+    assert plan.max_piece_s == 3.0
+    # Default piece cap splits the long speech runs, so those joins trim overlap.
+    assert plan.join_method == "trim_overlap"
+    assert plan.timeline_frame_count == 288
+    assert alignment_errors(plan) == []
+    assert sum(p.keep_frames for p in plan.pieces) == 288
+    assert cuts_inside_words(plan, words, allowed_silences=TOWER_PAUSES) == []
+    assert all(p.end_s - p.start_s <= 3.0 + (1.0 / 24) for p in plan.speech_pieces())
+    assert plan.pieces[0].kind == "silence_idle"
+    assert plan.pieces[0].hold_frames == 0
+    assert plan.pieces[0].render_frames >= 9
+    assert (plan.pieces[0].render_frames - 1) % 8 == 0
+    assert not any(p.kind == "silence_plate" for p in plan.pieces)
+    assert all(p.hold_frames <= MAX_FROZEN_HOLD for p in plan.pieces)
+    assert plan.idle_pieces()
+    for idle in plan.idle_pieces():
+        assert idle.audio_feed == "source_pause_slice"
+        assert "closed" in idle.prompt.lower() or "Closed" in idle.prompt or "mouth fully closed" in idle.prompt
+        assert "open mouth" in idle.negative
+        assert idle.i2v_strength == TRIPOD_I2V_STRENGTH
+    assert plan.pieces[0].continuity == "still"
+    speech = plan.speech_pieces()
+    assert speech
+    assert all(p.continuity == "previous_last_frame" for p in speech)
+    assert all(p.crossfade_frames == 0 for p in plan.pieces)
+    assert all(p.drop_leading == 0 for p in plan.pieces if p.kind != "speech")
+    speech_after_speech = [
+        piece
+        for prev, piece in zip(plan.pieces, plan.pieces[1:])
+        if piece.kind == "speech" and prev.kind == "speech"
+    ]
+    assert speech_after_speech
+    assert all(p.drop_leading == 8 for p in speech_after_speech)
+    speech_after_pause = [
+        piece
+        for prev, piece in zip(plan.pieces, plan.pieces[1:])
+        if piece.kind == "speech" and prev.kind != "speech"
+    ]
+    assert speech_after_pause
+    assert all(p.drop_leading == 0 for p in speech_after_pause)
+    text = format_lipdub_plan(plan)
+    assert "idle pieces:" in text
+    assert "anchor: previous" in text
+    assert "reframe: off" in text
+    assert "comfy_jobs:" in text
+    block = lipdub_param_block(plan, audio_sha256="abc")
+    assert block["silence_mode"] == "idle"
+    assert block["anchor"] == "previous"
+    assert block["reframe"] is False
+    assert block["join"] == "trim_overlap"
+    assert block["max_piece_s"] == 3.0
+    assert block["scale_drift"] == []
+    assert block["hybrid_prev_weight"] is None
+    assert "silence_handling" in block
+    assert block["segments"][0]["kind"] == "silence_idle"
+    assert "crossfade_frames" in block["segments"][0]
+    assert block["segments"][0]["scale"] is None
+
+
+def test_anchor_and_reframe_plumb_into_provenance(tmp_path):
+    plan = plan_lipdub(
+        12.0,
+        words=_words(),
+        silences=TOWER_PAUSES,
+        max_segment_s=6.5,
+        fps=24,
+        silence_mode="bridge",
+        anchor="source",
+        reframe=False,
+        seed=42,
+    )
+    assert plan.anchor == "source"
+    assert plan.reframe is False
+    assert plan.silence_mode == "bridge"
+    assert plan.pieces[0].kind == "mouth_bridge"
+    assert alignment_errors(plan) == []
+    assert sum(p.keep_frames for p in plan.pieces) == 288
+    st = RunState(
+        request="ringmaster",
+        prompt="ringmaster",
+        variant="ltx25_a2v",
+        duration_s=12.0,
+        seed=42,
+        width=352,
+        height=480,
+        shot_id="shot-1",
+    )
+    payload = build_clip_provenance(st, path=str(tmp_path / "shot-1.mp4"))
+    block = lipdub_param_block(plan)
+    attach_lipdub_params(payload, block)
+    assert payload["schema"] == CLIP_PROVENANCE_SCHEMA
+    lip = payload["params"]["lipdub"]
+    assert lip["anchor"] == "source"
+    assert lip["reframe"] is False
+    assert lip["silence_mode"] == "bridge"
+    assert lip["hybrid_prev_weight"] is None
+    assert "scale_drift" in lip
+    assert missing_required(payload) == []
+    text = format_lipdub_plan(plan)
+    assert "anchor: source" in text
+    assert "reframe: off" in text
+    assert "mode=bridge" in text
+
+
+def test_short_audio_ignores_idle_defaults():
+    plan = plan_lipdub(6.5, max_segment_s=6.5, silences=[])
+    assert plan.segmented is False
+    assert plan.pieces == []
+    assert plan.silence_mode == "idle"
+    assert plan.anchor == "previous"
+    assert plan.reframe is False
+    text = format_lipdub_plan(plan)
+    assert "single pass" in text
+    assert "idle pieces: 0" in text
+    assert "anchor: previous" in text
+    assert "reframe: off" in text
+    explicit = plan_lipdub(5.0, max_segment_s=6.5, reframe=True, silence_mode="idle", anchor="hybrid")
+    assert explicit.segmented is False
+    assert explicit.anchor == "hybrid"
+    assert explicit.reframe is True
+    assert "reframe: on" in format_lipdub_plan(explicit)
+
+
+def test_hybrid_and_reframe_on_stay_opt_in():
+    plan = plan_lipdub(
+        12.0,
+        words=_words(),
+        silences=TOWER_PAUSES,
+        max_segment_s=6.5,
+        fps=24,
+        tripod=True,
+        seed=42,
+        anchor="hybrid",
+        reframe=True,
+    )
+    assert plan.anchor == "hybrid"
+    assert plan.reframe is True
+    assert plan.join_method == "overlap_crossfade"
+    speech = plan.speech_pieces()
+    assert speech
+    assert all(p.continuity == "hybrid" for p in speech)
+    assert all(p.crossfade_frames > 0 for p in speech)
+    text = format_lipdub_plan(plan)
+    assert "anchor: hybrid" in text
+    assert "reframe: on" in text
+    block = lipdub_param_block(plan)
+    assert block["anchor"] == "hybrid"
+    assert block["reframe"] is True
+    assert block["join"] == "overlap_crossfade"
+    assert block["hybrid_prev_weight"] == HYBRID_PREV_WEIGHT
+
+
+def test_reframe_estimate_recovers_a_push_in_and_hybrid_stays_on_the_still():
+    import numpy as np
+    from PIL import Image
+
+    rng = np.random.default_rng(4)
+    source = rng.integers(0, 255, size=(80, 96, 3), dtype=np.uint8)
+    source[18:44, 28:60] = np.array([210, 40, 40], dtype=np.uint8)
+    frame = push_in(source, 1.12, 4.0, -2.0)
+    sim = estimate_similarity(frame, source, method="ncc")
+    assert abs(sim.zoom - 1.12) <= 0.05
+    assert abs(sim.dx - 4.0) <= 8.0
+    assert abs(sim.dy - (-2.0)) <= 8.0
+    assert sim.score > 0.5
+    fixed = undo_push_in(frame, source, sim.zoom, sim.dx, sim.dy)
+    assert _ncc(_gray(fixed), _gray(source)) > _ncc(_gray(frame), _gray(source)) + 0.4
+
+    flat_src = np.zeros((24, 24, 3), dtype=np.uint8)
+    flat_prev = np.full((24, 24, 3), 255, dtype=np.uint8)
+    guide = compose_hybrid_guide(
+        Image.fromarray(flat_src, "RGB"),
+        Image.fromarray(flat_prev, "RGB"),
+        weight=HYBRID_PREV_WEIGHT,
+        method="ncc",
+    )
+    # 25% previous white on a black still → nearer the still than the previous frame.
+    assert guide.mean() < 90
+    assert guide.mean() > 40
+    alphas = crossfade_alphas(8)
+    assert alphas[0] == 0.0
+    assert alphas[-1] == 1.0
+    assert len(alphas) == 8
+    track = smooth_track([(0, Similarity(1.0, 0.0, 0.0, 1.0)), (4, Similarity(1.2, 2.0, -1.0, 0.8))], 5)
+    assert len(track) == 5
+    assert track[0].zoom < track[-1].zoom
 
 
 def test_h3_cap_unchanged_and_a2v_cap_is_the_lipdub_threshold():

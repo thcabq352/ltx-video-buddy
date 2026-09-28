@@ -132,6 +132,35 @@ class Orchestrator:
         except Exception as e:
             st.fail(f"patch failed: {e}")
             return False
+        if st.end_guide_image:
+            from master_agent.orchestrator.lipdub_guide import apply_last_frame_guide
+
+            object_info = None
+            try:
+                object_info, _src = self.client.load_object_info(prefer_live=True)
+            except Exception:
+                object_info = None
+            if not isinstance(object_info, dict):
+                from master_agent.config import OBJECT_INFO_CACHE
+
+                if OBJECT_INFO_CACHE.is_file():
+                    object_info = json.loads(OBJECT_INFO_CACHE.read_text(encoding="utf-8"))
+            workflow, guide_patch = apply_last_frame_guide(
+                workflow,
+                image_name=st.end_guide_image,
+                object_info=object_info,
+                frame_idx=-1 if st.end_guide_frame_idx is None else int(st.end_guide_frame_idx),
+                strength=1.0 if st.end_guide_strength is None else float(st.end_guide_strength),
+            )
+            meta = dict(meta)
+            meta["end_guide"] = guide_patch.status
+            st.log(guide_patch.message)
+            if not guide_patch.applied:
+                st.fail(
+                    "pause-reset last-frame guide was not patched "
+                    f"({guide_patch.status}). {guide_patch.message}"
+                )
+                return False
         st.workflow_meta = meta
         st.seed = meta.get("seed")
         self._workflow = workflow
@@ -572,6 +601,9 @@ class Orchestrator:
         negative_prompt: Optional[str] = None,
         frames: Optional[int] = None,
         i2v_strength: Optional[float] = None,
+        end_guide_image: Optional[str] = None,
+        end_guide_frame_idx: Optional[int] = None,
+        end_guide_strength: Optional[float] = None,
     ) -> RunState:
         run_id = uuid.uuid4().hex[:12]
         st = RunState(
@@ -609,6 +641,13 @@ class Orchestrator:
             negative_prompt=negative_prompt or "",
             frames=int(frames) if frames is not None else None,
             i2v_strength=float(i2v_strength) if i2v_strength is not None else None,
+            end_guide_image=end_guide_image or None,
+            end_guide_frame_idx=(
+                int(end_guide_frame_idx) if end_guide_frame_idx is not None else None
+            ),
+            end_guide_strength=(
+                float(end_guide_strength) if end_guide_strength is not None else None
+            ),
         )
         try:
             st.variant = self._select_variant(st, variant)

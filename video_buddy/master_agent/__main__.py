@@ -37,7 +37,13 @@ from pathlib import Path
 
 from master_agent.comfy.client import ComfyClient, ComfyClientError
 from master_agent.comfy.validator import format_report, validate_workflow_file
-from master_agent.config import WORKFLOWS_DIR, ensure_dirs
+from master_agent.config import (
+    LIPDUB_ANCHOR,
+    LIPDUB_REFRAME,
+    LIPDUB_SILENCE_MODE,
+    WORKFLOWS_DIR,
+    ensure_dirs,
+)
 from master_agent.models.inventory import format_summary, scan_inventory
 
 
@@ -240,6 +246,16 @@ class _DurationSet(argparse.Action):
     def __call__(self, parser, namespace, values, option_string=None):
         setattr(namespace, self.dest, values)
         setattr(namespace, "duration_set", True)
+
+
+def _reframe_flag(args: argparse.Namespace) -> bool:
+    """True only for ``--reframe on``. Default is off (experimental opt-in)."""
+    from master_agent.config import LIPDUB_REFRAME
+
+    value = getattr(args, "reframe", None)
+    if value is None:
+        return bool(LIPDUB_REFRAME)
+    return str(value).strip().lower() == "on"
 
 
 def cmd_run(args: argparse.Namespace) -> int:
@@ -470,6 +486,12 @@ def cmd_run(args: argparse.Namespace) -> int:
             lipdub_max_s=getattr(args, "lipdub_max_s", None),
             silence_min_s=getattr(args, "silence_min_s", None),
             lipdub_overlap=getattr(args, "lipdub_overlap", None),
+            silence_mode=getattr(args, "silence_mode", None),
+            anchor=getattr(args, "anchor", None),
+            reframe=_reframe_flag(args),
+            max_piece_s=getattr(args, "max_piece_seconds", None),
+            pause_reset_strength=getattr(args, "pause_reset_strength", None),
+            pause_reset_min_s=getattr(args, "pause_reset_min_s", None),
         )
 
     if not client.is_up():
@@ -549,6 +571,12 @@ def cmd_run(args: argparse.Namespace) -> int:
         lipdub_max_s=getattr(args, "lipdub_max_s", None),
         silence_min_s=getattr(args, "silence_min_s", None),
         lipdub_overlap=getattr(args, "lipdub_overlap", None),
+        silence_mode=getattr(args, "silence_mode", None),
+        anchor=getattr(args, "anchor", None),
+        reframe=_reframe_flag(args),
+        max_piece_s=getattr(args, "max_piece_seconds", None),
+        pause_reset_strength=getattr(args, "pause_reset_strength", None),
+        pause_reset_min_s=getattr(args, "pause_reset_min_s", None),
         storyboard_mode=args.storyboard,
         judge_enabled=False if args.no_judge else JUDGE_ENABLED,
         revise_enabled=not args.no_judge,
@@ -1621,7 +1649,80 @@ def main(argv: list[str] | None = None) -> int:
         "--silence-min-s",
         type=float,
         default=None,
-        help="pauses at least this long are closed-mouth holds (default 0.25)",
+        help="pauses at least this long are closed-mouth idle or bridge pieces (default 0.25)",
+    )
+    p.add_argument(
+        "--silence-mode",
+        choices=["idle", "hold", "bridge"],
+        default=LIPDUB_SILENCE_MODE if LIPDUB_SILENCE_MODE in ("idle", "hold", "bridge") else "idle",
+        help=(
+            "how ltx25_a2v treats a pause at least --silence-min-s long: "
+            "idle (default, closed-mouth breathing render), "
+            "hold (#34 still plate plus frozen tail), "
+            "or bridge (9-frame mouth close, tail held)"
+        ),
+    )
+    p.add_argument(
+        "--anchor",
+        choices=["source", "previous", "hybrid", "pause-reset"],
+        default=(
+            LIPDUB_ANCHOR
+            if LIPDUB_ANCHOR in ("source", "previous", "hybrid", "pause-reset")
+            else "previous"
+        ),
+        help=(
+            "identity/framing anchor for a segmented lipdub. "
+            "previous (default) is the last-frame chain: each piece starts "
+            "from the previous last frame, overlap trimmed on speech-to-speech seams. "
+            "hybrid (experimental) conditions on the source still and crossfades "
+            "the previous frame across the overlap. "
+            "source (experimental) uses the still only, with the same crossfade. "
+            "pause-reset (opt-in) chains speech from the previous frame and, on each "
+            "silence, pins the source still as a last-frame LTXVAddGuide so the "
+            "look glides back during the pause"
+        ),
+    )
+    p.add_argument(
+        "--max-piece-seconds",
+        type=float,
+        default=None,
+        help=(
+            "split a speech run longer than this many seconds at the quietest "
+            "audio frame (default 3.0, env LIPDUB_MAX_PIECE_S). "
+            "Joins stay on the frame grid with the wav. "
+            "Does not change the 6.5s threshold that decides whether to segment. "
+            "Word edges are snapped onto the frame grid before the quietest legal frame is chosen."
+        ),
+    )
+    p.add_argument(
+        "--pause-reset-strength",
+        type=float,
+        default=None,
+        help=(
+            "LTXVAddGuide strength for --anchor pause-reset "
+            "(default 0.65, env LIPDUB_PAUSE_RESET_STRENGTH). "
+            "1.0 pinned the still so hard the head turned in about 0.2s"
+        ),
+    )
+    p.add_argument(
+        "--pause-reset-min-s",
+        type=float,
+        default=None,
+        help=(
+            "only pin the source still on a pause at least this long "
+            "(default 0.5, env LIPDUB_PAUSE_RESET_MIN_S). "
+            "Shorter breaths stay plain idle"
+        ),
+    )
+    p.add_argument(
+        "--reframe",
+        choices=["on", "off"],
+        default="on" if LIPDUB_REFRAME else "off",
+        help=(
+            "experimental: scale each piece back to the source still after render. "
+            "Default off. Pass --reframe on to enable; the geometric snap-back "
+            "can zoom speech pieces in and then jump back to the still"
+        ),
     )
     p.add_argument(
         "--lipdub-overlap",

@@ -309,6 +309,45 @@ def check_dev_fp8_trailer() -> dict[str, Any]:
     )
 
 
+def check_ltx_guide() -> dict[str, Any]:
+    """Report whether pause-reset can pin a last-frame keyframe. Never downloads."""
+    try:
+        from master_agent.config import OBJECT_INFO_CACHE
+        from master_agent.orchestrator.lipdub_guide import (
+            GUIDE_INFEASIBLE_MESSAGE,
+            GUIDE_MISSING_MESSAGE,
+            GUIDE_READY_MESSAGE,
+            probe_pause_reset_guide,
+        )
+
+        if not OBJECT_INFO_CACHE.is_file():
+            return _row(
+                "ltx-guide",
+                False,
+                GUIDE_MISSING_MESSAGE + " No cached object_info.",
+                fix="python -m master_agent fetch-object-info",
+            )
+        import json
+
+        info = json.loads(OBJECT_INFO_CACHE.read_text(encoding="utf-8"))
+        available, message = probe_pause_reset_guide(info if isinstance(info, dict) else {})
+        if available:
+            return _row("ltx-guide", True, message or GUIDE_READY_MESSAGE)
+        fix = "python -m master_agent fetch-object-info"
+        if message.startswith("LTXVAddGuide is registered"):
+            fix = ""
+            message = message or GUIDE_INFEASIBLE_MESSAGE
+        return _row("ltx-guide", False, message or GUIDE_MISSING_MESSAGE, fix=fix)
+    except Exception as exc:
+        return _row(
+            "ltx-guide",
+            False,
+            f"pause-reset guide probe failed: {exc}. "
+            "LTXVAddGuide is a core LTX node, not a new download. "
+            "Without it, pauses re-anchor on the source still with a crossfade inside the silence.",
+        )
+
+
 def check_vram_policy() -> dict[str, Any]:
     """Shared 16GB-class pack policy (does not fetch)."""
     try:
@@ -330,6 +369,7 @@ def snapshot() -> list[dict[str, Any]]:
         check_ollama(),
         check_comfy(),
         check_vram_policy(),
+        check_ltx_guide(),
         check_ltx25_weights(),
         check_ltx25_ic_lora(),
         check_ltx23_latent_upscaler(),
