@@ -335,11 +335,14 @@ def test_idle_default_replaces_frozen_holds_and_keeps_the_grid():
     assert plan.silence_mode == "idle"
     assert plan.anchor == "previous"
     assert plan.reframe is False
-    assert plan.join_method == "none"
+    assert plan.max_piece_s == 3.0
+    # Default piece cap splits the long speech runs, so those joins trim overlap.
+    assert plan.join_method == "trim_overlap"
     assert plan.timeline_frame_count == 288
     assert alignment_errors(plan) == []
     assert sum(p.keep_frames for p in plan.pieces) == 288
     assert cuts_inside_words(plan, words, allowed_silences=TOWER_PAUSES) == []
+    assert all(p.end_s - p.start_s <= 3.0 + (1.0 / 24) for p in plan.speech_pieces())
     assert plan.pieces[0].kind == "silence_idle"
     assert plan.pieces[0].hold_frames == 0
     assert plan.pieces[0].render_frames >= 9
@@ -357,7 +360,21 @@ def test_idle_default_replaces_frozen_holds_and_keeps_the_grid():
     assert speech
     assert all(p.continuity == "previous_last_frame" for p in speech)
     assert all(p.crossfade_frames == 0 for p in plan.pieces)
-    assert all(p.drop_leading == 0 for p in plan.pieces)
+    assert all(p.drop_leading == 0 for p in plan.pieces if p.kind != "speech")
+    speech_after_speech = [
+        piece
+        for prev, piece in zip(plan.pieces, plan.pieces[1:])
+        if piece.kind == "speech" and prev.kind == "speech"
+    ]
+    assert speech_after_speech
+    assert all(p.drop_leading == 8 for p in speech_after_speech)
+    speech_after_pause = [
+        piece
+        for prev, piece in zip(plan.pieces, plan.pieces[1:])
+        if piece.kind == "speech" and prev.kind != "speech"
+    ]
+    assert speech_after_pause
+    assert all(p.drop_leading == 0 for p in speech_after_pause)
     text = format_lipdub_plan(plan)
     assert "idle pieces:" in text
     assert "anchor: previous" in text
@@ -367,7 +384,8 @@ def test_idle_default_replaces_frozen_holds_and_keeps_the_grid():
     assert block["silence_mode"] == "idle"
     assert block["anchor"] == "previous"
     assert block["reframe"] is False
-    assert block["join"] == "none"
+    assert block["join"] == "trim_overlap"
+    assert block["max_piece_s"] == 3.0
     assert block["scale_drift"] == []
     assert block["hybrid_prev_weight"] is None
     assert "silence_handling" in block

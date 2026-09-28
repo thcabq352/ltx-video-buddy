@@ -274,6 +274,9 @@ def _plan_a2v_lipdub(
     silence_mode: Optional[str] = None,
     anchor: Optional[str] = None,
     reframe: Optional[bool] = None,
+    max_piece_s: Optional[float] = None,
+    pause_reset_strength: Optional[float] = None,
+    pause_reset_min_s: Optional[float] = None,
 ):
     """Silence-aware a2v plan, or None when this route is not ltx25_a2v lipdub."""
     from master_agent.orchestrator.talking import (
@@ -309,6 +312,9 @@ def _plan_a2v_lipdub(
         silence_mode=silence_mode,
         anchor=anchor,
         reframe=reframe,
+        max_piece_s=max_piece_s,
+        pause_reset_strength=pause_reset_strength,
+        pause_reset_min_s=pause_reset_min_s,
     )
 
 
@@ -396,6 +402,9 @@ def run_pipeline(
     silence_mode: Optional[str] = None,
     anchor: Optional[str] = None,
     reframe: Optional[bool] = None,
+    max_piece_s: Optional[float] = None,
+    pause_reset_strength: Optional[float] = None,
+    pause_reset_min_s: Optional[float] = None,
 ) -> PipelineResult:
     run_id = uuid.uuid4().hex[:12]
     result = PipelineResult(run_id, request=request)
@@ -449,6 +458,9 @@ def run_pipeline(
         silence_mode=silence_mode,
         anchor=anchor,
         reframe=reframe,
+        max_piece_s=max_piece_s,
+        pause_reset_strength=pause_reset_strength,
+        pause_reset_min_s=pause_reset_min_s,
     )
     if lip_plan is not None and lip_plan.segmented:
         from master_agent.orchestrator.lipdub_run import run_segmented_lipdub
@@ -859,6 +871,9 @@ def dry_run_pipeline(
     silence_mode: Optional[str] = None,
     anchor: Optional[str] = None,
     reframe: Optional[bool] = None,
+    max_piece_s: Optional[float] = None,
+    pause_reset_strength: Optional[float] = None,
+    pause_reset_min_s: Optional[float] = None,
 ) -> int:
     """Storyboard + patch + validate every segment without queueing. CLI exit code."""
     from master_agent.comfy.validator import format_report, validate_workflow
@@ -910,6 +925,9 @@ def dry_run_pipeline(
         silence_mode=silence_mode,
         anchor=anchor,
         reframe=reframe,
+        max_piece_s=max_piece_s,
+        pause_reset_strength=pause_reset_strength,
+        pause_reset_min_s=pause_reset_min_s,
     )
     client = client or ComfyClient()
     if lip_plan is not None and lip_plan.segmented:

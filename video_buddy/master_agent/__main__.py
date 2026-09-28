@@ -487,6 +487,9 @@ def cmd_run(args: argparse.Namespace) -> int:
             silence_mode=getattr(args, "silence_mode", None),
             anchor=getattr(args, "anchor", None),
             reframe=_reframe_flag(args),
+            max_piece_s=getattr(args, "max_piece_seconds", None),
+            pause_reset_strength=getattr(args, "pause_reset_strength", None),
+            pause_reset_min_s=getattr(args, "pause_reset_min_s", None),
         )
 
     if not client.is_up():
@@ -565,6 +568,9 @@ def cmd_run(args: argparse.Namespace) -> int:
         silence_mode=getattr(args, "silence_mode", None),
         anchor=getattr(args, "anchor", None),
         reframe=_reframe_flag(args),
+        max_piece_s=getattr(args, "max_piece_seconds", None),
+        pause_reset_strength=getattr(args, "pause_reset_strength", None),
+        pause_reset_min_s=getattr(args, "pause_reset_min_s", None),
         storyboard_mode=args.storyboard,
         judge_enabled=False if args.no_judge else JUDGE_ENABLED,
         revise_enabled=not args.no_judge,
@@ -1623,15 +1629,54 @@ def main(argv: list[str] | None = None) -> int:
     )
     p.add_argument(
         "--anchor",
-        choices=["source", "previous", "hybrid"],
-        default=LIPDUB_ANCHOR if LIPDUB_ANCHOR in ("source", "previous", "hybrid") else "previous",
+        choices=["source", "previous", "hybrid", "pause-reset"],
+        default=(
+            LIPDUB_ANCHOR
+            if LIPDUB_ANCHOR in ("source", "previous", "hybrid", "pause-reset")
+            else "previous"
+        ),
         help=(
             "identity/framing anchor for a segmented lipdub. "
             "previous (default) is the last-frame chain: each piece starts "
             "from the previous last frame, overlap trimmed on speech-to-speech seams. "
             "hybrid (experimental) conditions on the source still and crossfades "
             "the previous frame across the overlap. "
-            "source (experimental) uses the still only, with the same crossfade"
+            "source (experimental) uses the still only, with the same crossfade. "
+            "pause-reset (opt-in) chains speech from the previous frame and, on each "
+            "silence, pins the source still as a last-frame LTXVAddGuide so the "
+            "look glides back during the pause"
+        ),
+    )
+    p.add_argument(
+        "--max-piece-seconds",
+        type=float,
+        default=None,
+        help=(
+            "split a speech run longer than this many seconds at the quietest "
+            "audio frame (default 3.0, env LIPDUB_MAX_PIECE_S). "
+            "Joins stay on the frame grid with the wav. "
+            "Does not change the 6.5s threshold that decides whether to segment. "
+            "Word edges are snapped onto the frame grid before the quietest legal frame is chosen."
+        ),
+    )
+    p.add_argument(
+        "--pause-reset-strength",
+        type=float,
+        default=None,
+        help=(
+            "LTXVAddGuide strength for --anchor pause-reset "
+            "(default 0.65, env LIPDUB_PAUSE_RESET_STRENGTH). "
+            "1.0 pinned the still so hard the head turned in about 0.2s"
+        ),
+    )
+    p.add_argument(
+        "--pause-reset-min-s",
+        type=float,
+        default=None,
+        help=(
+            "only pin the source still on a pause at least this long "
+            "(default 0.5, env LIPDUB_PAUSE_RESET_MIN_S). "
+            "Shorter breaths stay plain idle"
         ),
     )
     p.add_argument(

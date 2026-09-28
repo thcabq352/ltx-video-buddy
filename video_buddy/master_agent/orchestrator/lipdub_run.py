@@ -9,6 +9,7 @@ from typing import Any, Optional
 from master_agent.config import OUTPUTS_DIR
 from master_agent.orchestrator.lipdub import (
     ANCHOR_HYBRID,
+    ANCHOR_PAUSE_RESET,
     ANCHOR_PREVIOUS,
     ANCHOR_SOURCE,
     CONTINUITY_HYBRID,
@@ -21,7 +22,9 @@ from master_agent.orchestrator.lipdub import (
     attach_lipdub_params,
     format_lipdub_plan,
     lipdub_param_block,
+    resolve_pause_reset,
 )
+from master_agent.orchestrator.lipdub_guide import probe_pause_reset_guide
 from master_agent.orchestrator.lipdub_media import (
     concat_silent,
     extract_frame,
@@ -84,7 +87,7 @@ def run_segmented_lipdub(
     still_path = Path(image_path) if image_path else None
     needs_still = (
         plan.reframe
-        or plan.anchor in (ANCHOR_SOURCE, ANCHOR_HYBRID)
+        or plan.anchor in (ANCHOR_SOURCE, ANCHOR_HYBRID, ANCHOR_PAUSE_RESET)
         or any(p.kind == KIND_PLATE or p.continuity == CONTINUITY_STILL for p in plan.pieces)
     )
     if needs_still and (still_path is None or not still_path.is_file()):
@@ -92,9 +95,11 @@ def run_segmented_lipdub(
         result.error = "lipdub anchor/reframe needs the source still path (--image)"
         _write_record(result)
         return result
+    _probe_pause_reset(plan, orch.client, log=result.log)
     records: list[dict] = []
     clip_paths: list[Optional[Path]] = [None] * len(plan.pieces)
     last_frame: Optional[Path] = None
+    plate_blend_from: dict[int, Path] = {}
     size: Optional[tuple[int, int]] = None
     base_seed = seed if seed is not None else 0
 
@@ -102,6 +107,14 @@ def run_segmented_lipdub(
         record = piece.to_record()
         record["seed"] = base_seed
         if piece.kind == KIND_PLATE:
+            if (
+                plan.anchor == ANCHOR_PAUSE_RESET
+                and piece.silence_crossfade_frames
+                and last_frame is not None
+            ):
+                plate_blend_from[piece.index] = last_frame
+                if still_path is not None:
+                    last_frame = still_path
             records.append(record)
             continue
         seg_image, source_note = _conditioning_image(
@@ -119,8 +132,18 @@ def run_segmented_lipdub(
             _write_record(result)
             return result
         record["source_frame"] = source_note
-        if plan.anchor in (ANCHOR_SOURCE, ANCHOR_HYBRID) and still_path is not None:
+        if still_path is not None and (
+            plan.anchor in (ANCHOR_SOURCE, ANCHOR_HYBRID, ANCHOR_PAUSE_RESET)
+            or piece.end_keyframe
+            or piece.silence_crossfade_frames
+        ):
             record["identity_frame"] = str(still_path)
+        end_guide = None
+        if piece.end_keyframe == "source_still" and image_name:
+            end_guide = image_name
+            record["guide_node"] = "LTXVAddGuide"
+            record["guide_frame_idx"] = piece.guide_frame_idx
+            record["guide_strength"] = piece.guide_strength
         scene_id = f"{result.run_id}:lip{piece.index}"
         gate = _budget_admit(result, scene_id, variant, max(piece.audio_duration_s, 0.5))
         if gate["decision"] == "hold":
@@ -155,6 +178,9 @@ def run_segmented_lipdub(
             negative_prompt=piece.negative,
             frames=piece.render_frames,
             i2v_strength=piece.i2v_strength,
+            end_guide_image=end_guide,
+            end_guide_frame_idx=piece.guide_frame_idx,
+            end_guide_strength=piece.guide_strength,
             judge_enabled=judge_enabled,
             revise_enabled=revise_enabled,
             spoken_line=piece.spoken_line or None,
@@ -181,6 +207,18 @@ def run_segmented_lipdub(
                 still_path=still_path,
                 record=record,
             )
+            if piece.silence_crossfade_frames and last_frame is not None:
+                from master_agent.orchestrator.lipdub_reframe import crossfade_head
+
+                blended = crossfade_head(
+                    trimmed,
+                    last_frame,
+                    out_dir / f"piece_{piece.index:02d}_sxfade.mp4",
+                    piece.silence_crossfade_frames,
+                    fps=plan.fps,
+                )
+                trimmed = blended
+                record["silence_crossfade_frames"] = int(piece.silence_crossfade_frames)
             if size is None:
                 size = video_size(trimmed)
             if piece.hold_frames:
@@ -275,6 +313,18 @@ def run_segmented_lipdub(
                 fps=plan.fps,
                 size=size,
             )
+            blend_from = plate_blend_from.get(piece.index)
+            if blend_from is not None and piece.silence_crossfade_frames:
+                from master_agent.orchestrator.lipdub_reframe import crossfade_head
+
+                plate = crossfade_head(
+                    plate,
+                    blend_from,
+                    out_dir / f"piece_{piece.index:02d}_sxfade.mp4",
+                    piece.silence_crossfade_frames,
+                    fps=plan.fps,
+                )
+                record["silence_crossfade_frames"] = int(piece.silence_crossfade_frames)
         except Exception as exc:
             result.status = "error"
             result.error = f"lipdub plate {piece.index} failed: {exc}"
@@ -393,8 +443,8 @@ def dry_run_lipdub_validate(
     from master_agent.config import OBJECT_INFO_CACHE
     from master_agent.orchestrator.pipeline import _is_topology_error
 
-    print(format_lipdub_plan(plan))
     if not plan.segmented:
+        print(format_lipdub_plan(plan))
         return 0
     try:
         object_info, source = client.load_object_info(prefer_live=True)
@@ -404,11 +454,16 @@ def dry_run_lipdub_validate(
             source = f"cache:{OBJECT_INFO_CACHE}"
             print(f"object_info: {source} (live unavailable: {exc})")
         else:
+            print(format_lipdub_plan(plan))
             print(f"FAIL  cannot load /object_info: {exc}")
             print("dry-run plan printed above; workflow validate skipped")
             return 1
     else:
         print(f"object_info: {source}")
+
+    if plan.anchor == ANCHOR_PAUSE_RESET:
+        _probe_pause_reset(plan, client, log=print, object_info=object_info)
+    print(format_lipdub_plan(plan))
 
     failures = 0
     for piece in plan.pieces:
@@ -436,6 +491,28 @@ def dry_run_lipdub_validate(
                 frames=piece.render_frames,
                 i2v_strength=piece.i2v_strength,
             )
+            if piece.end_keyframe == "source_still":
+                from master_agent.orchestrator.lipdub_guide import apply_last_frame_guide
+
+                wf, guide_patch = apply_last_frame_guide(
+                    wf,
+                    image_name=image_name or "still.png",
+                    object_info=object_info,
+                    frame_idx=-1 if piece.guide_frame_idx is None else int(piece.guide_frame_idx),
+                    strength=1.0 if piece.guide_strength is None else float(piece.guide_strength),
+                )
+                print(
+                    f"  end_keyframe={piece.end_keyframe} guide={guide_patch.status} "
+                    f"{guide_patch.message}"
+                )
+                if not guide_patch.applied:
+                    print(f"FAIL  segment {piece.index + 1}: last-frame guide was not patched")
+                    failures += 1
+            elif piece.silence_crossfade_frames:
+                print(
+                    f"  silence crossfade {piece.silence_crossfade_frames} frames "
+                    "inside this pause (no LTXVAddGuide)"
+                )
         except Exception as exc:
             print(f"FAIL  segment {piece.index + 1} patch: {exc}")
             failures += 1
@@ -601,3 +678,23 @@ def _crossfade_previous(
         records[prev_index]["hash"] = sha256_file(faded)
         records[prev_index]["crossfaded_frames"] = int(piece.crossfade_frames)
     return old, faded
+
+
+def _probe_pause_reset(plan: LipdubPlan, client, *, log, object_info=None) -> None:
+    """Ask object_info whether the last-frame keyframe can be wired, then lock the plan."""
+    if plan.anchor != ANCHOR_PAUSE_RESET:
+        return
+    info = object_info
+    if info is None:
+        from master_agent.config import OBJECT_INFO_CACHE
+
+        try:
+            info, _source = client.load_object_info(prefer_live=True)
+        except Exception:
+            if OBJECT_INFO_CACHE.is_file():
+                info = json.loads(OBJECT_INFO_CACHE.read_text(encoding="utf-8"))
+            else:
+                info = {}
+    available, message = probe_pause_reset_guide(info if isinstance(info, dict) else {})
+    resolve_pause_reset(plan, guide_available=available)
+    log(message)

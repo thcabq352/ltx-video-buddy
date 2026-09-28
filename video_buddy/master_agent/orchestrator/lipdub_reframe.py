@@ -564,3 +564,40 @@ def crossfade_tail(
         Image.fromarray(mixed, "RGB").save(out)
         blended_paths.append(out)
     return _encode_frames([*head, *blended_paths], dest, fps=fps)
+
+
+def crossfade_head(
+    clip: Path,
+    still: Path,
+    dest: Path,
+    n: int,
+    *,
+    fps: int,
+) -> Path:
+    """Blend ``still`` into the first ``n`` frames of ``clip``.
+
+    Frame count stays the same, and every blended frame stays inside ``clip``.
+    Alpha 0 is the still (the look arriving from the previous piece). Alpha 1
+    is the rendered frame. Used when pause-reset cannot pin a last-frame keyframe.
+    """
+    count = int(n)
+    if count <= 0:
+        raise RuntimeError("silence crossfade length must be positive")
+    clip_dir = Path(dest).parent / f"{Path(dest).stem}_clip"
+    frames = _decode_frames(Path(clip), clip_dir)
+    count = min(count, len(frames))
+    if count <= 0:
+        raise RuntimeError("silence crossfade has no frames")
+    with Image.open(still) as still_im:
+        anchor = np.asarray(still_im.convert("RGB"))
+    alphas = crossfade_alphas(count)
+    mix_dir = Path(dest).parent / f"{Path(dest).stem}_head"
+    mix_dir.mkdir(parents=True, exist_ok=True)
+    blended: list[Path] = []
+    for i, (alpha, frame_path) in enumerate(zip(alphas, frames[:count])):
+        with Image.open(frame_path) as fr_im:
+            mixed = blend_rgb(anchor, np.asarray(fr_im.convert("RGB")), alpha)
+        out = mix_dir / f"h_{i:04d}.png"
+        Image.fromarray(mixed, "RGB").save(out)
+        blended.append(out)
+    return _encode_frames([*blended, *frames[count:]], dest, fps=fps)
