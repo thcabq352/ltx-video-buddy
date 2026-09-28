@@ -104,17 +104,26 @@ H3_FILES: dict[str, str] = {
 
 H3_META: dict[str, dict[str, Any]] = {
     "h3_t2v": {
-        "description": "MiniMax H3 fl2va text-to-AV (native stereo, GGUF-first)",
+        "description": (
+            "MiniMax H3 fl2va text-to-AV (native stereo, GGUF-first). "
+            "Unavailable in the US (MiniMax H3 license)."
+        ),
         "modes": ["t2v", "fl2va"],
         "weight_bundle": "h3_fl2va",
     },
     "h3_i2v": {
-        "description": "MiniMax H3 fl2va image-to-AV (first-frame)",
+        "description": (
+            "MiniMax H3 fl2va image-to-AV (first-frame). "
+            "Unavailable in the US (MiniMax H3 license)."
+        ),
         "modes": ["i2v", "fl2va"],
         "weight_bundle": "h3_fl2va",
     },
     "h3_flf": {
-        "description": "MiniMax H3 fl2va first-last-frame to AV",
+        "description": (
+            "MiniMax H3 fl2va first-last-frame to AV. "
+            "Unavailable in the US (MiniMax H3 license)."
+        ),
         "modes": ["flf", "fl2va"],
         "weight_bundle": "h3_fl2va",
     },
@@ -122,7 +131,8 @@ H3_META: dict[str, dict[str, Any]] = {
         "description": (
             "MiniMax H3 ref2va reference-to-AV (images / video / audio). "
             "H3 speaks your line in the voice of your 2-12 s sample and animates the mouth to it (coarse sync). "
-            "For tight lip-sync to an exact recording, use ltx25_a2v."
+            "For tight lip-sync to an exact recording, use ltx25_a2v. "
+            "Unavailable in the US (MiniMax H3 license)."
         ),
         "modes": ["r2v", "ref2va"],
         "weight_bundle": "h3_ref2va",

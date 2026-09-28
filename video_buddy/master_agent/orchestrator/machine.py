@@ -117,6 +117,7 @@ class Orchestrator:
                 steps=st.steps,
                 cfg=st.cfg,
                 image_name=st.image_name,
+                mask_name=st.mask_name,
                 audio_name=st.audio_name,
                 video_name=st.video_name,
                 audio_start_s=st.audio_start_s,
@@ -168,7 +169,21 @@ class Orchestrator:
         if wiring:
             st.fail(wiring)
             return False
+        if not st.dry_run:
+            self._ensure_fun_inpaint_mask(st)
         return True
+
+    def _ensure_fun_inpaint_mask(self, st: RunState) -> None:
+        """Upload fun_inpaint_mask.png before live /object_info validation."""
+        from master_agent.comfy.fun_inpaint import ensure_fun_inpaint_mask
+
+        try:
+            uploaded = ensure_fun_inpaint_mask(self._workflow, self.client.upload_image)
+        except Exception as exc:
+            st.log(f"warn: fun inpaint mask upload failed: {exc}")
+            return
+        if uploaded:
+            st.log(f"fun inpaint mask uploaded: {uploaded}")
 
     @staticmethod
     def _resolve_h3_line(st: RunState) -> None:
@@ -515,6 +530,7 @@ class Orchestrator:
         height: int = 512,
         video_name: Optional[str] = None,
         image_name: Optional[str] = None,
+        mask_name: Optional[str] = None,
         audio_name: Optional[str] = None,
         judge_enabled: Optional[bool] = None,
         revise_enabled: Optional[bool] = None,
@@ -550,6 +566,7 @@ class Orchestrator:
             height=height,
             video_name=video_name,
             image_name=image_name,
+            mask_name=mask_name,
             audio_name=audio_name,
             audio_path=audio_path,
             audio_start_s=float(audio_start_s or 0.0),

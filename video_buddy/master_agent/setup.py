@@ -209,6 +209,18 @@ def check_ltx25_weights() -> dict[str, Any]:
     )
 
 
+_H3_US_NOTE = (
+    "US is an excluded territory under the MiniMax H3 license; "
+    "leave these workflows unused there."
+)
+
+
+def _with_h3_us(detail: str) -> str:
+    if _H3_US_NOTE in detail:
+        return detail
+    return f"{detail} {_H3_US_NOTE}"
+
+
 def check_h3_weights() -> dict[str, Any]:
     """Scan-only MiniMax H3 inventory. Never downloads."""
     try:
@@ -216,7 +228,12 @@ def check_h3_weights() -> dict[str, Any]:
 
         status = scan_bundle("h3_fl2va")
     except Exception as exc:
-        return _row("h3-weights", False, f"scan failed: {exc}", fix="python -m master_agent download-models --h3")
+        return _row(
+            "h3-weights",
+            False,
+            _with_h3_us(f"scan failed: {exc}"),
+            fix="python -m master_agent download-models --h3",
+        )
     from master_agent.models.weights import describe_h3_transformer_pick
 
     pick = describe_h3_transformer_pick(
@@ -224,14 +241,51 @@ def check_h3_weights() -> dict[str, Any]:
     )
     if status.ok:
         found = ", ".join(Path(p).name for p in status.found_paths.values()) or "accepted local names"
-        return _row("h3-weights", True, f"{pick}; present ({found})")
+        return _row("h3-weights", True, _with_h3_us(f"{pick}; present ({found})"))
     names = ", ".join(w.filename for w in status.missing_mandatory[:4])
     more = f" (+{len(status.missing_mandatory) - 4} more)" if len(status.missing_mandatory) > 4 else ""
     hint = "python -m master_agent download-models --h3   # review confirmed-missing only, then --yes"
     detail = f"missing {names}{more}"
     if status.found_paths.get("h3_fl2va"):
         detail = f"{pick}; {detail}"
-    return _row("h3-weights", False, detail, fix=hint)
+    return _row("h3-weights", False, _with_h3_us(detail), fix=hint)
+
+
+def check_ltx25_ic_lora() -> dict[str, Any]:
+    """Exact Ingredients LoRA for ltx25_msr / ltx25_v2v. Scan only."""
+    try:
+        from master_agent.models.weights import ic_ingredients_placement
+
+        place = ic_ingredients_placement()
+    except Exception as exc:
+        return _row(
+            "ltx25-ic-lora",
+            False,
+            f"scan failed: {exc}",
+            fix="python -m master_agent download-models --ltx25",
+        )
+    return _row(
+        "ltx25-ic-lora",
+        bool(place.get("ok")),
+        str(place.get("detail") or ""),
+        fix=str(place.get("fix") or ""),
+    )
+
+
+def check_ltx23_latent_upscaler() -> dict[str, Any]:
+    """LatentUpscaleModelLoader only sees models/latent_upscale_models/."""
+    try:
+        from master_agent.models.weights import ltx23_latent_upscaler_placement
+
+        place = ltx23_latent_upscaler_placement()
+    except Exception as exc:
+        return _row("ltx23-upscaler", False, f"scan failed: {exc}")
+    return _row(
+        "ltx23-upscaler",
+        bool(place.get("ok")),
+        str(place.get("detail") or ""),
+        fix=str(place.get("fix") or ""),
+    )
 
 
 def check_vram_policy() -> dict[str, Any]:
@@ -256,6 +310,8 @@ def snapshot() -> list[dict[str, Any]]:
         check_comfy(),
         check_vram_policy(),
         check_ltx25_weights(),
+        check_ltx25_ic_lora(),
+        check_ltx23_latent_upscaler(),
         check_h3_weights(),
     ]
 

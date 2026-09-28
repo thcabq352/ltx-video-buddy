@@ -233,6 +233,15 @@ def execute_prepared(
     if variant:
         require_weights(str(variant))
     client = ComfyClient()
+    from master_agent.comfy.fun_inpaint import ensure_fun_inpaint_mask
+
+    try:
+        uploaded = ensure_fun_inpaint_mask(wf, client.upload_image)
+    except Exception as exc:
+        print(f"WARN  fun inpaint mask: {exc}")
+    else:
+        if uploaded:
+            print(f"uploaded mask: {uploaded}")
     object_info, source = client.load_object_info(prefer_live=True)
     print(f"object_info: {source}")
     lint_or_raise(wf, object_info)

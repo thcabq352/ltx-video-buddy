@@ -807,16 +807,28 @@ def _apply_local_family_weights(workflow: dict[str, Any], variant: str) -> None:
 
 
 def _text_enhancer_filename() -> Optional[str]:
-    """Local Gemma-4 E2B enhancer, or None when that file is not on disk."""
+    """Local Gemma-4 E2B enhancer path, or None when that file is not on disk."""
     try:
         from master_agent.models.weights import WEIGHT_FILES, resolve_weight
 
         spec = WEIGHT_FILES.get("text_enhancer")
         if spec is None:
             return None
-        return resolve_weight(spec)
+        found = resolve_weight(spec)
+        return str(found) if found is not None else None
     except Exception:
         return None
+
+
+def _text_enhancer_clip_name() -> Optional[str]:
+    """Combo-style name for the on-disk Gemma-4 E2B enhancer."""
+    raw = _text_enhancer_filename()
+    if not raw:
+        return None
+    path = Path(raw)
+    from master_agent.comfy.loader_names import name_from_local_path
+
+    return name_from_local_path(path) or path.name
 
 
 def _apply_local_ltx25_weights(workflow: dict[str, Any]) -> None:
@@ -833,14 +845,18 @@ def _apply_local_ltx25_weights(workflow: dict[str, Any]) -> None:
         if "ckpt_name" in inputs and isinstance(inputs.get("ckpt_name"), str):
             if "ltx-2.5" in str(inputs.get("ckpt_name")).lower():
                 _set_input(node, "ckpt_name", transformer_name)
+    enhancer_name = _text_enhancer_clip_name()
     for _nid, node in _find_nodes_by_class(workflow, "CLIPLoader"):
         title = str((node.get("_meta") or {}).get("title") or "").lower()
         inputs = node.get("inputs") or {}
         current = str(inputs.get("clip_name") or "")
         if "enhancer" in title or "e2b" in current.lower():
-            # The official enhancer CLIP is optional. Point it at the resolved
-            # Gemma TE when gemma4_e2b is not on disk so the graph still loads.
-            if not _text_enhancer_filename():
+            # Other LTX 2.5 graphs load gemma4_e2b on the enhancer CLIP.
+            # t2a ships the with-proj TE name on that node; retarget it at the
+            # on-disk E2B file, or at the resolved Gemma TE when E2B is absent.
+            if enhancer_name:
+                _set_input(node, "clip_name", enhancer_name)
+            else:
                 _set_input(node, "clip_name", te_name)
             continue
         if any(tok in current.lower() for tok in ("gemma", "ltx-2.5", "ltx25", "ltxv")):
@@ -979,6 +995,46 @@ def _ensure_lora_node(workflow: dict[str, Any], lora_name: str) -> Optional[str]
             ):
                 inputs[key] = [new_id, 0]
     return new_id
+
+
+def _weight_family(name: str) -> str:
+    """Coarse family of a weight filename. Empty when it is not recognizable."""
+    base = str(name or "").lower().replace("\\", "/").rsplit("/", 1)[-1]
+    if not base:
+        return ""
+    if any(tok in base for tok in ("ltx", "10eros", "taeltx", "gemma", "eros")):
+        return "ltx"
+    if any(tok in base for tok in ("wan", "umt5", "lightx2v", "fusionx")):
+        return "wan"
+    if any(tok in base for tok in ("flux", "clip_l", "t5xxl")) or base == "ae.safetensors":
+        return "flux"
+    if "krea" in base:
+        return "krea"
+    if "qwen" in base:
+        return "qwen"
+    if "ideogram" in base:
+        return "ideogram"
+    if "minimax" in base or "h3" in base:
+        return "h3"
+    if "z_image" in base or "z-image" in base:
+        return "zimage"
+    return ""
+
+
+def _same_weight_family(current: str, new: str) -> bool:
+    """True when ``new`` may replace ``current`` on a loader.
+
+    An empty current value can be filled. A named weight is only replaced by
+    another weight from the same family, so an LTX checkpoint cannot land on
+    a Wan, Flux, Qwen, or Krea loader.
+    """
+    if not current or not new:
+        return True
+    left = _weight_family(current)
+    right = _weight_family(new)
+    if not left or not right:
+        return False
+    return left == right
 
 
 def _heuristic_patch(workflow: dict[str, Any], values: dict[str, Any]) -> None:
@@ -1176,7 +1232,9 @@ def _heuristic_patch(workflow: dict[str, Any], values: dict[str, Any]) -> None:
                 if existing in (None, "", "28") or stg is not None:
                     _set_input(node, "skip_blocks", block_str if float(stg or 0) > 0 else "")
 
-    # All checkpoint-consuming loaders used by LTX graphs
+    # Checkpoint / LoRA / VAE names come only from this variant's MODEL_FILES.
+    # Write them onto loaders of the same family. A dedicated audio-VAE file
+    # (LTX23_audio_vae_*) is not an all-in-one checkpoint slot.
     if ckpt:
         ckpt_l = str(ckpt).lower()
         spray_unet = "ltx-2.5" in ckpt_l or "ltx2.5" in ckpt_l
@@ -1191,6 +1249,9 @@ def _heuristic_patch(workflow: dict[str, Any], values: dict[str, Any]) -> None:
         ):
             for _nid, node in _find_nodes_by_class(workflow, class_type):
                 inputs = node.get("inputs") or {}
+                current_ckpt = inputs.get("ckpt_name") if isinstance(inputs.get("ckpt_name"), str) else ""
+                if class_type == "LTXVAudioVAELoader" and "audio_vae" in current_ckpt.lower():
+                    continue
                 if "ckpt_name" in inputs or class_type in (
                     "CheckpointLoaderSimple",
                     "LTXVAudioVAELoader",
@@ -1198,21 +1259,27 @@ def _heuristic_patch(workflow: dict[str, Any], values: dict[str, Any]) -> None:
                     "LowVRAMCheckpointLoader",
                     "LowVRAMAudioVAELoader",
                 ):
-                    _set_input(node, "ckpt_name", ckpt)
+                    if _same_weight_family(current_ckpt, str(ckpt)):
+                        _set_input(node, "ckpt_name", ckpt)
                 if "unet_name" in inputs:
                     # Do not write a 2.3 all-in-one onto official 2.5 UNET loaders.
                     if class_type in ("UNETLoader", "DiffusionModelLoader") and not spray_unet:
                         continue
-                    _set_input(node, "unet_name", ckpt)
+                    current_unet = inputs.get("unet_name") if isinstance(inputs.get("unet_name"), str) else ""
+                    if _same_weight_family(current_unet, str(ckpt)):
+                        _set_input(node, "unet_name", ckpt)
         if text_encoder:
             for _nid, node in _find_nodes_by_class(workflow, "LTXAVTextEncoderLoader"):
                 _set_input(node, "text_encoder", text_encoder)
 
     if clip_l or t5xxl:
         for _nid, node in _find_nodes_by_class(workflow, "DualCLIPLoader"):
-            if clip_l:
+            inputs = node.get("inputs") or {}
+            current_1 = inputs.get("clip_name1") if isinstance(inputs.get("clip_name1"), str) else ""
+            current_2 = inputs.get("clip_name2") if isinstance(inputs.get("clip_name2"), str) else ""
+            if clip_l and _same_weight_family(current_1, clip_l):
                 _set_input(node, "clip_name1", clip_l)
-            if t5xxl:
+            if t5xxl and _same_weight_family(current_2, t5xxl):
                 _set_input(node, "clip_name2", t5xxl)
 
     if vae_name:
@@ -1220,6 +1287,8 @@ def _heuristic_patch(workflow: dict[str, Any], values: dict[str, Any]) -> None:
             title = str((node.get("_meta") or {}).get("title") or "").lower()
             current = str((node.get("inputs") or {}).get("vae_name") or "")
             if "audio" in title or "audio_vae" in current.lower():
+                continue
+            if not _same_weight_family(current, vae_name):
                 continue
             _set_input(node, "vae_name", vae_name)
 
@@ -1233,8 +1302,17 @@ def _heuristic_patch(workflow: dict[str, Any], values: dict[str, Any]) -> None:
             "LTXVLoraLoader",
         ):
             for _nid, node in _find_nodes_by_class(workflow, class_type):
+                inputs = node.get("inputs") or {}
+                current = ""
+                for key in ("lora_name", "lora"):
+                    val = inputs.get(key)
+                    if isinstance(val, str) and val:
+                        current = val
+                        break
+                if current and not _same_weight_family(current, str(lora)):
+                    continue
                 for k in ("lora_name", "lora"):
-                    if k in (node.get("inputs") or {}) or k == "lora_name":
+                    if k in inputs or k == "lora_name":
                         _set_input(node, k, lora)
                         break
 
@@ -1468,7 +1546,15 @@ def load_and_patch_workflow(
         resolved_id = H3_ALIASES.get(variant, RESEARCH_ALIASES.get(variant, variant))
     except Exception:
         resolved_id = variant
-    models = MODEL_FILES.get(resolved_id) or MODEL_FILES.get(variant) or MODEL_FILES["base"]
+    # Only a variant's own MODEL_FILES may substitute weights. Missing entries
+    # used to inherit the LTX 2.3 base bundle, which sprayed the 10Eros bake,
+    # the rank-111 distilled LoRA, and taeltx2_3 onto Wan/Flux/Qwen/Krea/CCC
+    # graphs. base / eros / directors / lipsync and the dev-fp8 render
+    # variants declare their own entries. Unknown variants keep the JSON.
+    own = MODEL_FILES.get(resolved_id)
+    if own is None:
+        own = MODEL_FILES.get(variant)
+    models = dict(own) if own is not None else {}
     preferred = models.get("checkpoint") or models.get("diffusion")
     # Variants with no single all-in-one checkpoint (e.g. wan22's dual UNETs)
     # must not get a fallback LTX ckpt sprayed onto their loaders.

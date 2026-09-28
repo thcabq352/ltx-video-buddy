@@ -73,6 +73,58 @@ def test_patcher_sets_prompt_image_mask_and_length():
     assert meta["seed"] == 7
 
 
+def test_default_mask_png_is_rgb_with_a_white_center():
+    from master_agent.comfy.fun_inpaint import default_inpaint_mask_png
+
+    png = default_inpaint_mask_png(16)
+    assert png.startswith(b"\x89PNG\r\n\x1a\n")
+    assert b"IHDR" in png and b"IEND" in png
+    # 8-bit RGB (color type 2) is the 10th IHDR byte after width/height.
+    ihdr = png.split(b"IHDR", 1)[1][:13]
+    assert ihdr[8] == 8
+    assert ihdr[9] == 2
+
+
+def test_ensure_uploads_placeholder_and_keeps_a_supplied_mask():
+    from master_agent.comfy.fun_inpaint import (
+        FUN_INPAINT_MASK_NAME,
+        ensure_fun_inpaint_mask,
+    )
+
+    wf, _meta = load_and_patch_workflow(
+        "wan_fun_inpaint",
+        prompt="repair the torn poster",
+        image_name="fun_inpaint_start.png",
+        seed=1,
+        frames=17,
+    )
+    seen: list[str] = []
+
+    def _upload(path):
+        seen.append(path.name)
+        assert path.read_bytes().startswith(b"\x89PNG")
+        return path.name
+
+    uploaded = ensure_fun_inpaint_mask(wf, _upload)
+    assert uploaded == FUN_INPAINT_MASK_NAME
+    assert seen == [FUN_INPAINT_MASK_NAME]
+    _mid, mask = _node(wf, "LoadImageMask")
+    assert mask["inputs"]["image"] == FUN_INPAINT_MASK_NAME
+
+    supplied, _meta = load_and_patch_workflow(
+        "wan_fun_inpaint",
+        prompt="repair the torn poster",
+        image_name="plate.png",
+        mask_name="hole.png",
+        seed=1,
+        frames=17,
+    )
+    assert ensure_fun_inpaint_mask(supplied, _upload) is None
+    assert seen == [FUN_INPAINT_MASK_NAME]
+    _mid, mask = _node(supplied, "LoadImageMask")
+    assert mask["inputs"]["image"] == "hole.png"
+
+
 def test_director_routes_inpaint_and_leaves_wan22():
     assert rule_based_variant("fun inpaint the torn poster") == "wan_fun_inpaint"
     assert rule_based_variant("please inpaint this plate") == "wan_fun_inpaint"
