@@ -315,6 +315,25 @@ MODEL_FILES: dict[str, dict[str, str]] = {
         "audio_vae": "LTX23_audio_vae_bf16.safetensors",
         "text_encoder": "gemma_3_12B_it_fp4_mixed.safetensors",
     },
+    # ltx23_lipsync_v08 and the three AI-render copies share node 4826
+    # (LTXAVTextEncoderLoader). That node reads text-projection weights out of
+    # a full checkpoint. The graph's diffusion path is already dev-fp8 plus
+    # the distilled LoRA (lora-384-1.1 @ 0.65) and an 8-step CFG-1 schedule,
+    # so the on-disk dev fp8 checkpoint is the drop-in for the truncated
+    # distilled fp8 file. Checkpoint only: a lora/vae key would be sprayed
+    # onto every loader by _heuristic_patch. Do not fall back to base.
+    "ltx23_lipsync_v08": {
+        "checkpoint": "ltx-2.3-22b-dev-fp8.safetensors",
+    },
+    "air_render_030": {
+        "checkpoint": "ltx-2.3-22b-dev-fp8.safetensors",
+    },
+    "air_render_050": {
+        "checkpoint": "ltx-2.3-22b-dev-fp8.safetensors",
+    },
+    "air_render_businesswoman": {
+        "checkpoint": "ltx-2.3-22b-dev-fp8.safetensors",
+    },
     "flux": {
         # CCC character sheets + Flux LoRA validation renders (fp8, 16GB-friendly)
         "diffusion": "flux1-dev-fp8.safetensors",
