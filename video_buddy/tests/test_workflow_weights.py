@@ -22,11 +22,14 @@ from master_agent.comfy.workflow_patcher import (
     load_workflow_template,
 )
 from master_agent.models.weights import (
+    DEV_FP8_CKPT,
     LTX23_LATENT_UPSCALER,
     STUB_ALIASES,
     WEIGHT_FILES,
+    dev_fp8_trailing_bytes,
     ic_ingredients_placement,
     ltx23_latent_upscaler_placement,
+    safetensors_declared_size,
     scan_bundle,
 )
 from master_agent.orchestrator.talking import H3_R2V_AUDIO_LABEL
@@ -224,6 +227,58 @@ def test_doctor_lists_ic_lora_and_latent_upscaler():
     assert "ltx25-ic-lora" in names
     assert "ltx23-upscaler" in names
     assert "h3-weights" in names
+    assert "dev-fp8-trailer" in names
+
+
+def _safetensors_blob(payload: bytes, junk: bytes = b"") -> bytes:
+    import json
+    import struct
+
+    header = json.dumps(
+        {
+            "tensor": {
+                "dtype": "U8",
+                "shape": [len(payload)],
+                "data_offsets": [0, len(payload)],
+            }
+        }
+    ).encode("utf-8")
+    return struct.pack("<Q", len(header)) + header + payload + junk
+
+
+def test_dev_fp8_trailer_warns_without_rewriting_the_file(tmp_path):
+    missing = dev_fp8_trailing_bytes([tmp_path])
+    assert missing["ok"] is True
+    assert "not on disk" in missing["detail"]
+
+    path = tmp_path / "checkpoints" / DEV_FP8_CKPT
+    path.parent.mkdir()
+    payload = b"weights"
+    junk = b"J" * 64
+    blob = _safetensors_blob(payload, junk)
+    path.write_bytes(blob)
+    before = path.read_bytes()
+
+    warned = dev_fp8_trailing_bytes([tmp_path])
+    assert warned["ok"] is False
+    assert "larger than its safetensors header" in warned["detail"]
+    assert "trailing junk" in warned["detail"]
+    assert f"{len(junk)} bytes" in warned["detail"]
+    assert "do not truncate" in warned["detail"]
+    assert path.read_bytes() == before
+    assert safetensors_declared_size(path) == len(blob) - len(junk)
+
+    exact = _safetensors_blob(payload)
+    path.write_bytes(exact)
+    clean = dev_fp8_trailing_bytes([tmp_path])
+    assert clean["ok"] is True
+    assert "matches its safetensors header" in clean["detail"]
+    assert path.read_bytes() == exact
+
+    path.write_bytes(b"not-a-safetensors-file")
+    unreadable = dev_fp8_trailing_bytes([tmp_path])
+    assert unreadable["ok"] is True
+    assert path.read_bytes() == b"not-a-safetensors-file"
 
 
 def test_ic_ingredients_placement_messages(tmp_path, monkeypatch):

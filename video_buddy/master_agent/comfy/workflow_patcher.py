@@ -276,6 +276,8 @@ def _apply_named_fields(
         value = values[logical]
         if not isinstance(spec, dict):
             continue
+        if spec.get("overwrite") is False:
+            continue
         if "node_id" in spec:
             nids = spec["node_id"]
             if not isinstance(nids, list):
@@ -1037,8 +1039,45 @@ def _same_weight_family(current: str, new: str) -> bool:
     return left == right
 
 
-def _heuristic_patch(workflow: dict[str, Any], values: dict[str, Any]) -> None:
+def _prompt_locks(workflow: dict[str, Any], field_map: dict[str, Any]) -> set[tuple[str, str]]:
+    """Inputs the manifest marks ``overwrite: false``, plus the node a link targets.
+
+    ltx23_lipsync_v08 (and the air_render copies) keep the positive CLIP text
+    as a link to the authored prompt primitive. Writing a string there, or
+    into that primitive, drops the baked line.
+    """
+    locked: set[tuple[str, str]] = set()
+    for spec in (field_map or {}).values():
+        if not isinstance(spec, dict) or spec.get("overwrite") is not False:
+            continue
+        key = str(spec.get("input") or spec.get("key") or "")
+        nids = spec.get("node_id")
+        if not key or nids is None:
+            continue
+        if not isinstance(nids, list):
+            nids = [nids]
+        for nid in nids:
+            sid = str(nid)
+            locked.add((sid, key))
+            node = workflow.get(sid)
+            if not isinstance(node, dict):
+                continue
+            current = (node.get("inputs") or {}).get(key)
+            if _is_node_link(current):
+                src = str(current[0])
+                for src_key in ("value", "text", "string", "prompt"):
+                    locked.add((src, src_key))
+    return locked
+
+
+def _heuristic_patch(
+    workflow: dict[str, Any],
+    values: dict[str, Any],
+    *,
+    locks: set[tuple[str, str]] | None = None,
+) -> None:
     """Best-effort patching by common ComfyUI / LTX class types."""
+    locked = locks or set()
     prompt = values.get("prompt")
     negative = values.get("negative_prompt")
     seed = values.get("seed")
@@ -1057,18 +1096,24 @@ def _heuristic_patch(workflow: dict[str, Any], values: dict[str, Any]) -> None:
     text_encoder = values.get("text_encoder")
     # quality-correction fields also live on values
 
-    # CLIP / text encode (research graphs also title nodes "Positive Prompt")
-    for _nid, node in _find_nodes_by_class(workflow, "CLIPTextEncode"):
+    # CLIP / text encode (research graphs also title nodes "Positive Prompt").
+    # A list value is a graph link. Leave it. The manifest can also lock a
+    # node with overwrite: false (ltx23 lipsync positive CLIP → node 6203).
+    for nid, node in _find_nodes_by_class(workflow, "CLIPTextEncode"):
+        if (str(nid), "text") in locked:
+            continue
         title = (node.get("_meta") or {}).get("title", "").lower()
+        text = (node.get("inputs") or {}).get("text")
         if negative is not None and "neg" in title:
             # Linked negatives (LTX 2.5 a2v CLIP text ← Prompt primitive) stay links.
-            text = (node.get("inputs") or {}).get("text")
-            if not isinstance(text, list):
+            if not _is_node_link(text):
                 _set_input(node, "text", negative)
         elif prompt is not None and "neg" not in title:
+            if _is_node_link(text):
+                continue
             _set_input(node, "text", prompt)
     if prompt is not None:
-        for node in workflow.values():
+        for nid, node in workflow.items():
             if not isinstance(node, dict):
                 continue
             ctype = (node.get("class_type") or "").lower()
@@ -1078,6 +1123,8 @@ def _heuristic_patch(workflow: dict[str, Any], values: dict[str, Any]) -> None:
             if any(tok in ctype for tok in ("clip", "gemma", "textencode", "prompt", "primitivestring")) or "prompt" in title:
                 inputs = node.get("inputs") or {}
                 for key in ("text", "prompt", "string", "positive", "value"):
+                    if (str(nid), key) in locked:
+                        continue
                     if key in inputs and not isinstance(inputs[key], list):
                         inputs[key] = prompt
     # LTX 2.5 a2v stores the negative on PrimitiveStringMultiline "Prompt (negative)".
@@ -1172,15 +1219,12 @@ def _heuristic_patch(workflow: dict[str, Any], values: dict[str, Any]) -> None:
         for _nid, node in _find_nodes_by_class(workflow, "CreateVideo"):
             if values.get("fps"):
                 _set_input(node, "fps", float(values.get("fps") or 24))
-        # Sampler selection (quality correction may request euler_ancestral_cfg_pp)
+        # Sampler selection only when the caller or the variant config asks.
+        # Authored names such as euler_ancestral_cfg_pp stay put.
         sampler_name = values.get("sampler_name")
-        for _nid, node in _find_nodes_by_class(workflow, "KSamplerSelect"):
-            if sampler_name:
+        if sampler_name:
+            for _nid, node in _find_nodes_by_class(workflow, "KSamplerSelect"):
                 _set_input(node, "sampler_name", str(sampler_name))
-            else:
-                name = str((node.get("inputs") or {}).get("sampler_name") or "")
-                if "cfg_pp" in name or not name:
-                    _set_input(node, "sampler_name", "euler")
 
     # Seeds only on noise / sampler seed fields (never spray cfg onto RandomNoise)
     for class_type in ("RandomNoise",):
@@ -1626,6 +1670,7 @@ def load_and_patch_workflow(
         for i, seg in enumerate(segment_prompts):
             values[f"segment_{i}"] = seg
 
+    locks = _prompt_locks(workflow, field_map)
     _apply_named_fields(workflow, field_map, values)
     _remap_stub_filenames(workflow)
     from master_agent.models.weights import bundle_for_variant, is_h3_bundle, is_ltx25_bundle
@@ -1633,7 +1678,7 @@ def load_and_patch_workflow(
     bundle = bundle_for_variant(variant)
     if is_ltx25_bundle(bundle):
         _rewrite_ltx25_checkpoint_loader(workflow)
-    _heuristic_patch(workflow, values)
+    _heuristic_patch(workflow, values, locks=locks)
     if is_ltx25_bundle(bundle):
         _apply_local_ltx25_weights(workflow)
     if is_h3_bundle(bundle):
@@ -1658,13 +1703,12 @@ def load_and_patch_workflow(
     # Final sanitize after extras
     _sanitize_ltx_nodes(workflow, object_info=object_info)
 
-    from master_agent.comfy.graph_ops import (
-        LTX_TEACACHE_VARIANTS,
-        ensure_teacache,
-        looks_like_ltx_graph,
-    )
+    from master_agent.comfy.graph_ops import LTX_TEACACHE_VARIANTS, ensure_teacache
 
-    if variant in LTX_TEACACHE_VARIANTS or looks_like_ltx_graph(workflow):
+    # TeaCache model_type "ltxv" is the older LTX-Video pack. LTX 2.3 / 2.5
+    # AV graphs (lipsync v08, air_render, ltx25) do not opt in. base, eros,
+    # directors, and lipsync still do, via LTX_TEACACHE_VARIANTS.
+    if variant in LTX_TEACACHE_VARIANTS:
         ensure_teacache(workflow, object_info)
 
     if object_info:

@@ -139,7 +139,11 @@ def prepare_run(
     filename_prefix: str | None = None,
     negative_prompt: str | None = None,
 ) -> dict[str, Any]:
-    from master_agent.comfy.graph_ops import ensure_teacache, looks_like_ltx_graph
+    from master_agent.comfy.graph_ops import (
+        LTX_TEACACHE_VARIANTS,
+        ensure_teacache,
+        looks_like_ltx_graph,
+    )
 
     if mode == "raw":
         if not isinstance(workflow, dict):
@@ -180,7 +184,13 @@ def prepare_run(
         wf = apply_overrides(wf, overrides)
     else:
         raise ValueError(f"unknown mode {mode!r}")
-    if looks_like_ltx_graph(wf):
+    # Generate mode follows the variant opt-in. Raw and template graphs that
+    # look like older LTX-Video still get TeaCache. LTX 2.3/2.5 AV variants
+    # are not in LTX_TEACACHE_VARIANTS, so they are left alone.
+    wants_tea = looks_like_ltx_graph(wf)
+    if mode == "generate" and (variant or "base") not in LTX_TEACACHE_VARIANTS:
+        wants_tea = False
+    if wants_tea:
         ensure_teacache(wf, object_info)
     return wf
 

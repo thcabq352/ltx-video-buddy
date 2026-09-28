@@ -288,6 +288,22 @@ def check_ltx23_latent_upscaler() -> dict[str, Any]:
     )
 
 
+def check_dev_fp8_trailer() -> dict[str, Any]:
+    """Warn when the dev fp8 checkpoint is bigger than its safetensors header."""
+    try:
+        from master_agent.models.weights import dev_fp8_trailing_bytes
+
+        place = dev_fp8_trailing_bytes()
+    except Exception as exc:
+        return _row("dev-fp8-trailer", True, f"scan skipped: {exc}")
+    return _row(
+        "dev-fp8-trailer",
+        bool(place.get("ok")),
+        str(place.get("detail") or ""),
+        fix=str(place.get("fix") or ""),
+    )
+
+
 def check_vram_policy() -> dict[str, Any]:
     """Shared 16GB-class pack policy (does not fetch)."""
     try:
@@ -312,6 +328,7 @@ def snapshot() -> list[dict[str, Any]]:
         check_ltx25_weights(),
         check_ltx25_ic_lora(),
         check_ltx23_latent_upscaler(),
+        check_dev_fp8_trailer(),
         check_h3_weights(),
     ]
 

@@ -1144,6 +1144,99 @@ def ltx23_latent_upscaler_placement(roots: Iterable[Path] | None = None) -> dict
     }
 
 
+DEV_FP8_CKPT = "ltx-2.3-22b-dev-fp8.safetensors"
+
+
+def safetensors_declared_size(path: Path) -> int | None:
+    """Byte length implied by the safetensors header, or None if it cannot be read.
+
+    Layout is an 8-byte little-endian header length, that many JSON bytes,
+    then tensor bytes. ``data_offsets`` are relative to the tensor section.
+    """
+    import json
+    import struct
+
+    try:
+        with path.open("rb") as handle:
+            prefix = handle.read(8)
+            if len(prefix) < 8:
+                return None
+            header_len = struct.unpack("<Q", prefix)[0]
+            if header_len <= 1 or header_len > 100_000_000:
+                return None
+            raw = handle.read(header_len)
+    except OSError:
+        return None
+    if len(raw) < header_len:
+        return None
+    try:
+        meta = json.loads(raw)
+    except (UnicodeDecodeError, json.JSONDecodeError):
+        return None
+    if not isinstance(meta, dict):
+        return None
+    end = 0
+    for key, val in meta.items():
+        if key == "__metadata__" or not isinstance(val, dict):
+            continue
+        offsets = val.get("data_offsets")
+        if isinstance(offsets, list) and len(offsets) == 2:
+            try:
+                end = max(end, int(offsets[1]))
+            except (TypeError, ValueError):
+                return None
+    return 8 + header_len + end
+
+
+def dev_fp8_trailing_bytes(roots: Iterable[Path] | None = None) -> dict[str, Any]:
+    """Warn when ``ltx-2.3-22b-dev-fp8.safetensors`` is longer than its header.
+
+    The tower copy has trailing junk. Report it. Do not truncate or rewrite
+    the file.
+    """
+    name = DEV_FP8_CKPT
+    copies = find_weight_copies(name, roots)
+    if not copies:
+        return {
+            "ok": True,
+            "path": "",
+            "detail": f"{name} is not on disk",
+            "fix": "",
+        }
+    path = copies[0]
+    try:
+        size = path.stat().st_size
+    except OSError as exc:
+        return {"ok": True, "path": str(path), "detail": f"{name} could not be stat'd ({exc})", "fix": ""}
+    declared = safetensors_declared_size(path)
+    if declared is None:
+        return {
+            "ok": True,
+            "path": str(path),
+            "detail": f"{name} safetensors header could not be read",
+            "fix": "",
+        }
+    extra = size - declared
+    if extra > 0:
+        meb = extra / (1024 * 1024)
+        return {
+            "ok": False,
+            "path": str(path),
+            "detail": (
+                f"{name} is {extra} bytes larger than its safetensors header "
+                f"({meb:.1f} MiB of trailing junk). Leave the file in place; "
+                "do not truncate it."
+            ),
+            "fix": "Leave the file. Trailing bytes are not removed by Buddy.",
+        }
+    return {
+        "ok": True,
+        "path": str(path),
+        "detail": f"{name} matches its safetensors header ({size} bytes)",
+        "fix": "",
+    }
+
+
 def scan_bundle(bundle: str, *, roots: Iterable[Path] | None = None) -> WeightStatus:
     search = list(roots) if roots is not None else model_search_roots()
     status = WeightStatus(roots=[str(p) for p in search], bundle=bundle)
