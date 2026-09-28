@@ -53,6 +53,7 @@ class RunState:
     # Input media (ComfyUI input-dir filenames, post-upload)
     video_name: Optional[str] = None
     image_name: Optional[str] = None
+    mask_name: Optional[str] = None
     audio_name: Optional[str] = None
     audio_path: Optional[str] = None
     audio_start_s: float = 0.0

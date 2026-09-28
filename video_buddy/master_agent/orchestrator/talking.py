@@ -19,7 +19,9 @@ from typing import Optional
 from master_agent.config import H3_MAX_DURATION_S, LTX25_SEGMENT_MAX_S, MAX_DURATION_S
 
 # Video-in LipDub. A still is not a source video.
-LIPSYNC_VARIANTS = frozenset({"lipsync", "ltx23_lipsync_v08"})
+# ltx23_lipsync_v08 is image + audio (optional guide video). Its manifest
+# inputs decide the route; it is not this video-in set.
+LIPSYNC_VARIANTS = frozenset({"lipsync"})
 # Reference-to-AV: still and/or video plus optional standalone reference audio.
 H3_AUDIO_VARIANTS = frozenset({"h3_r2v", "ref2va", "h3_ref2va"})
 # fl2va generates native stereo. It does not consume a voice file.
@@ -51,6 +53,19 @@ _TALKING_WORDS = (
     "talking clip",
     "talking photo",
 )
+
+
+def _declared_inputs(variant: str) -> dict:
+    """Manifest media slots. Empty means the generic route rules apply."""
+    if not variant:
+        return {}
+    try:
+        from master_agent.comfy.workflow_patcher import variant_input_specs
+
+        specs = variant_input_specs(variant)
+    except Exception:
+        return {}
+    return specs if isinstance(specs, dict) else {}
 
 
 def canonical_variant(variant: str | None) -> str:
@@ -153,6 +168,21 @@ def media_route_error(
 ) -> str | None:
     """Fail before queue when the chosen graph cannot consume the media."""
     canon = canonical_variant(variant)
+    declared = _declared_inputs(canon)
+    if declared:
+        present = {"image": has_image, "audio": has_audio, "video": has_video}
+        labels = {"image": "--image", "audio": "--audio", "video": "--video"}
+        missing = [
+            labels[key]
+            for key, spec in declared.items()
+            if key in labels
+            and isinstance(spec, dict)
+            and spec.get("optional") is not True
+            and not present[key]
+        ]
+        if missing:
+            return f"{canon} needs {', '.join(missing)}."
+        return None
     if canon in LIPSYNC_VARIANTS and not has_video:
         return (
             "lipsync needs a source video (--video). "

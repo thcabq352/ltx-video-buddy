@@ -117,6 +117,7 @@ class Orchestrator:
                 steps=st.steps,
                 cfg=st.cfg,
                 image_name=st.image_name,
+                mask_name=st.mask_name,
                 audio_name=st.audio_name,
                 video_name=st.video_name,
                 audio_start_s=st.audio_start_s,
@@ -168,7 +169,21 @@ class Orchestrator:
         if wiring:
             st.fail(wiring)
             return False
+        if not st.dry_run:
+            self._ensure_fun_inpaint_mask(st)
         return True
+
+    def _ensure_fun_inpaint_mask(self, st: RunState) -> None:
+        """Upload fun_inpaint_mask.png before live /object_info validation."""
+        from master_agent.comfy.fun_inpaint import ensure_fun_inpaint_mask
+
+        try:
+            uploaded = ensure_fun_inpaint_mask(self._workflow, self.client.upload_image)
+        except Exception as exc:
+            st.log(f"warn: fun inpaint mask upload failed: {exc}")
+            return
+        if uploaded:
+            st.log(f"fun inpaint mask uploaded: {uploaded}")
 
     @staticmethod
     def _resolve_h3_line(st: RunState) -> None:
@@ -278,7 +293,7 @@ class Orchestrator:
         if not files:
             st.fail("job completed but produced no video files")
             return False
-        self._output_files = files
+        self._output_files = self._order_final_output(st, files)
         return True
 
     def _handle_job_error(self, st: RunState, exc: Exception, *, phase: str) -> bool:
@@ -302,10 +317,31 @@ class Orchestrator:
         st.fail(f"{phase} failed: {exc}")
         return False
 
+    def _order_final_output(self, st: RunState, files: list[dict]) -> list[dict]:
+        """Prefer the manifest's final node, else the clip with audio at this length."""
+        from master_agent.comfy.workflow_patcher import variant_final_node_id
+
+        def _probe(info: dict) -> dict:
+            try:
+                from master_agent.judge.probe import probe_video
+
+                return probe_video(ComfyClient.resolve_output_path(info))
+            except Exception:
+                return {}
+
+        return ComfyClient.choose_final_output(
+            files,
+            final_node_id=variant_final_node_id(st.variant or ""),
+            duration_s=st.duration_s,
+            frames=st.frames,
+            probe=_probe,
+        )
+
     def _resolve(self, st: RunState) -> bool:
         dst = planned_clip_path(st)
         dst.parent.mkdir(parents=True, exist_ok=True)
-        for info in self._output_files:
+        ordered = self._order_final_output(st, self._output_files)
+        for info in ordered:
             src = ComfyClient.resolve_output_path(info)
             if not src.is_file():
                 continue
@@ -515,6 +551,7 @@ class Orchestrator:
         height: int = 512,
         video_name: Optional[str] = None,
         image_name: Optional[str] = None,
+        mask_name: Optional[str] = None,
         audio_name: Optional[str] = None,
         judge_enabled: Optional[bool] = None,
         revise_enabled: Optional[bool] = None,
@@ -550,6 +587,7 @@ class Orchestrator:
             height=height,
             video_name=video_name,
             image_name=image_name,
+            mask_name=mask_name,
             audio_name=audio_name,
             audio_path=audio_path,
             audio_start_s=float(audio_start_s or 0.0),

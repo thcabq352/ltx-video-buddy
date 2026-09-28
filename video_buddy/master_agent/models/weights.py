@@ -31,6 +31,14 @@ STUB_ALIASES: dict[str, str] = {
     # official adapter the MSR loader can consume. Users may drop a real MSR
     # LoRA in models/loras/ and the patcher will prefer a file that exists.
     "ltx-2.5-msr.safetensors": "ltx-2.5-22b-ic-lora-ingredients-0.9.safetensors",
+    # Shipped MSR / V2V graphs still name the 2.3 Ingredients and Deblur files.
+    # Both loaders need the 2.5 Ingredients LoRA (models/loras/).
+    "ltx-2.3-22b-ic-lora-ingredients-0.9.safetensors": (
+        "ltx-2.5-22b-ic-lora-ingredients-0.9.safetensors"
+    ),
+    "ltx-2.3-22b-ic-lora-deblur-0.9.safetensors": (
+        "ltx-2.5-22b-ic-lora-ingredients-0.9.safetensors"
+    ),
 }
 
 # Optional placeholders in the research templates — never mandatory.
@@ -206,11 +214,16 @@ WEIGHT_FILES: dict[str, WeightFile] = {
         dest_folder="loras",
         repo_id=HF_ICLORA,
         repo_filename="ltx-2.5-22b-ic-lora-ingredients-0.9.safetensors",
-        size_bytes=1_300_000_000,
+        size_bytes=1_310_000_000,
         mandatory=True,
         gated=True,
         license_url=HF_ICLORA_LICENSE,
-        note="Official IC-LoRA Ingredients. Pixel-spatial IC-LoRA and research stubs also count.",
+        note=(
+            "Official IC-LoRA Ingredients (~1.31 GB) for ltx25_msr and ltx25_v2v_ic_lora. "
+            "Comfy's LTXICLoRALoaderModelOnly reads models/loras/. "
+            "A pixel-spatial IC-LoRA in that folder also satisfies the slot scan, "
+            "but those two graphs still name the Ingredients file."
+        ),
         accepts=(
             "ltx-2.5-22b-ic-lora-ingredients-0.9.safetensors",
             "ltx-2.5-22b-ic-lora-pixel-spatial-upscaler-x2-1.0.safetensors",
@@ -996,6 +1009,244 @@ def is_ltx25_bundle(bundle: str | None) -> bool:
     return bool(bundle) and str(bundle).startswith("ltx25")
 
 
+LTX23_LATENT_UPSCALER = "ltx-2.3-spatial-upscaler-x2-1.1.safetensors"
+# Ingredients file is ~1.31 GB. Anything under 1 GB in loras/ is the wrong object.
+_IC_INGREDIENTS_MIN_BYTES = 1_000_000_000
+
+
+def find_weight_copies(filename: str, roots: Iterable[Path] | None = None) -> list[Path]:
+    """Every usable copy of ``filename`` under the model search roots."""
+    name = str(filename or "").replace("\\", "/").rsplit("/", 1)[-1]
+    if not name:
+        return []
+    search = list(roots) if roots is not None else model_search_roots()
+    found: list[Path] = []
+    seen: set[Path] = set()
+    for root in search:
+        if not root.is_dir():
+            continue
+        try:
+            hits = root.rglob(name)
+        except OSError:
+            continue
+        for hit in hits:
+            try:
+                key = hit.resolve()
+            except OSError:
+                key = hit
+            if key in seen or not _is_usable_file(hit):
+                continue
+            seen.add(key)
+            found.append(hit)
+    return found
+
+
+def _copies_in_role(copies: Iterable[Path], role: str) -> list[Path]:
+    return [path for path in copies if role in path.parts]
+
+
+def ic_ingredients_placement(roots: Iterable[Path] | None = None) -> dict[str, Any]:
+    """Exact Ingredients LoRA for ltx25_msr / ltx25_v2v_ic_lora.
+
+    A pixel-spatial IC-LoRA does not satisfy this check. The loader combo is
+    ``models/loras/``.
+    """
+    name = WEIGHT_FILES["ic_lora"].filename
+    copies = find_weight_copies(name, roots)
+    in_role = _copies_in_role(copies, "loras")
+    elsewhere = [path for path in copies if path not in in_role]
+    if in_role:
+        path = in_role[0]
+        size = path.stat().st_size
+        if size < _IC_INGREDIENTS_MIN_BYTES:
+            return {
+                "ok": False,
+                "path": str(path),
+                "detail": (
+                    f"{name} is in models/loras/ but only {size / 1e9:.2f} GB. "
+                    "The Ingredients LoRA is about 1.31 GB. Re-download into "
+                    "models/loras/. python -m master_agent download-models --ltx25 "
+                    "lists it; --yes fetches after you agree."
+                ),
+                "fix": "python -m master_agent download-models --ltx25",
+            }
+        return {
+            "ok": True,
+            "path": str(path),
+            "detail": f"{name} in models/loras/ ({size / 1e9:.2f} GB)",
+            "fix": "",
+        }
+    if elsewhere:
+        src = elsewhere[0]
+        return {
+            "ok": False,
+            "path": str(src),
+            "detail": (
+                f"{name} is at {src}, outside models/loras/. "
+                "LTXICLoRALoaderModelOnly will not list it. "
+                "Move it (Buddy will not move files): "
+                f'mv "{src}" "<ComfyUI>/models/loras/{name}"'
+            ),
+            "fix": f'mv "{src}" "<ComfyUI>/models/loras/{name}"',
+        }
+    return {
+        "ok": False,
+        "path": "",
+        "detail": (
+            f"missing {name} → models/loras/ (~1.31 GB, {HF_ICLORA}). "
+            "Required by ltx25_msr and ltx25_v2v_ic_lora. "
+            "python -m master_agent download-models --ltx25 lists it; "
+            "--yes fetches after you agree."
+        ),
+        "fix": "python -m master_agent download-models --ltx25",
+    }
+
+
+def ltx23_latent_upscaler_placement(roots: Iterable[Path] | None = None) -> dict[str, Any]:
+    """LatentUpscaleModelLoader reads models/latent_upscale_models/ only."""
+    name = LTX23_LATENT_UPSCALER
+    role = "latent_upscale_models"
+    copies = find_weight_copies(name, roots)
+    in_role = _copies_in_role(copies, role)
+    elsewhere = [path for path in copies if path not in in_role]
+    if in_role:
+        return {
+            "ok": True,
+            "path": str(in_role[0]),
+            "detail": (
+                f"{name} is in models/{role}/. "
+                "LatentUpscaleModelLoader reads that folder. "
+                "Restart Comfy if the combo is still stale."
+            ),
+            "fix": "",
+        }
+    if elsewhere:
+        src = elsewhere[0]
+        return {
+            "ok": False,
+            "path": str(src),
+            "detail": (
+                f"{name} is at {src}, not in models/{role}/. "
+                "LatentUpscaleModelLoader (lipsync, ltx23_i2v, vb_movie_builder) "
+                "will not list it. Move it (Buddy will not move files): "
+                f'mv "{src}" "<ComfyUI>/models/{role}/{name}"'
+            ),
+            "fix": f'mv "{src}" "<ComfyUI>/models/{role}/{name}"',
+        }
+    return {
+        "ok": False,
+        "path": "",
+        "detail": (
+            f"missing {name} → models/{role}/. "
+            "lipsync, ltx23_i2v, and vb_movie_builder load it with LatentUpscaleModelLoader."
+        ),
+        "fix": f"Place {name} in ComfyUI/models/{role}/",
+    }
+
+
+DEV_FP8_CKPT = "ltx-2.3-22b-dev-fp8.safetensors"
+
+
+def safetensors_declared_size(path: Path) -> int | None:
+    """Byte length implied by the safetensors header, or None if it cannot be read.
+
+    Layout is an 8-byte little-endian header length, that many JSON bytes,
+    then tensor bytes. ``data_offsets`` are relative to the tensor section.
+    """
+    import json
+    import struct
+
+    try:
+        with path.open("rb") as handle:
+            prefix = handle.read(8)
+            if len(prefix) < 8:
+                return None
+            header_len = struct.unpack("<Q", prefix)[0]
+            if header_len <= 1 or header_len > 100_000_000:
+                return None
+            raw = handle.read(header_len)
+    except OSError:
+        return None
+    if len(raw) < header_len:
+        return None
+    try:
+        meta = json.loads(raw)
+    except (UnicodeDecodeError, json.JSONDecodeError):
+        return None
+    if not isinstance(meta, dict):
+        return None
+    end = 0
+    for key, val in meta.items():
+        if key == "__metadata__" or not isinstance(val, dict):
+            continue
+        offsets = val.get("data_offsets")
+        if isinstance(offsets, list) and len(offsets) == 2:
+            try:
+                end = max(end, int(offsets[1]))
+            except (TypeError, ValueError):
+                return None
+    return 8 + header_len + end
+
+
+def safetensors_trailer(path: Path) -> dict[str, Any]:
+    """Compare any safetensors file with the size its header declares.
+
+    A longer file is a warning: detail has the actual size, the declared
+    size, and the extra byte count. The fix is a backup, then a truncate to
+    the declared size. This function does not rewrite the file.
+    """
+    name = path.name
+    try:
+        size = path.stat().st_size
+    except OSError as exc:
+        return {"ok": True, "path": str(path), "detail": f"{name} could not be stat'd ({exc})", "fix": ""}
+    declared = safetensors_declared_size(path)
+    if declared is None:
+        return {
+            "ok": True,
+            "path": str(path),
+            "detail": f"{name} safetensors header could not be read",
+            "fix": "",
+        }
+    extra = size - declared
+    if extra > 0:
+        return {
+            "ok": False,
+            "path": str(path),
+            "declared": declared,
+            "actual": size,
+            "extra": extra,
+            "detail": (
+                f"{name} actual size {size} bytes, header-declared size {declared} bytes, "
+                f"{extra} extra bytes."
+            ),
+            "fix": (
+                "Back up the file, then truncate it to the header-declared size "
+                f"({declared} bytes)."
+            ),
+        }
+    return {
+        "ok": True,
+        "path": str(path),
+        "detail": f"{name} matches its safetensors header ({size} bytes)",
+        "fix": "",
+    }
+
+
+def dev_fp8_trailing_bytes(roots: Iterable[Path] | None = None) -> dict[str, Any]:
+    """Warn when ``ltx-2.3-22b-dev-fp8.safetensors`` is longer than its header."""
+    name = DEV_FP8_CKPT
+    copies = find_weight_copies(name, roots)
+    if not copies:
+        return {
+            "ok": True,
+            "path": "",
+            "detail": f"{name} is not on disk",
+            "fix": "",
+        }
+    return safetensors_trailer(copies[0])
+
+
 def scan_bundle(bundle: str, *, roots: Iterable[Path] | None = None) -> WeightStatus:
     search = list(roots) if roots is not None else model_search_roots()
     status = WeightStatus(roots=[str(p) for p in search], bundle=bundle)
@@ -1109,6 +1360,51 @@ def require_weights(variant: str, *, roots: Iterable[Path] | None = None) -> Wei
     if status is None or status.ok:
         return status
     raise MissingWeightsError(format_ask(status), status.missing_mandatory, bundle=status.bundle)
+
+
+def download_named_file(
+    weight: WeightFile,
+    *,
+    dest_root: Path | None = None,
+    progress: Callable[[str], None] = print,
+    yes: bool = False,
+) -> Path | None:
+    """Fetch ``weight.filename`` itself. Other ``accepts`` do not count as present.
+
+    A copy outside ``dest_folder`` is reported and left in place. Buddy does
+    not move files. Nothing is downloaded unless ``yes`` is true.
+    """
+    copies = find_weight_copies(weight.filename)
+    in_role = _copies_in_role(copies, weight.dest_folder)
+    if in_role:
+        progress(
+            f"SKIP download of {weight.filename} — already in models/{weight.dest_folder}/"
+        )
+        return in_role[0]
+    if copies:
+        progress(
+            f"SKIP download of {weight.filename} — copy exists outside "
+            f"models/{weight.dest_folder}/ at {copies[0]}. "
+            "Move it; Buddy will not move files."
+        )
+        return None
+    if not yes:
+        progress(
+            f"{weight.filename} → models/{weight.dest_folder}/ ({weight.size_label}). "
+            "Nothing downloaded."
+        )
+        return None
+    from master_agent.config import MODELS_DIR
+    from master_agent.models.download import download_hub_file
+
+    root = Path(dest_root or MODELS_DIR)
+    dest = root / weight.dest_folder / weight.filename
+    return download_hub_file(
+        repo_id=weight.repo_id,
+        repo_filename=weight.repo_filename,
+        dest=dest,
+        progress=progress,
+    )
 
 
 def download_files(

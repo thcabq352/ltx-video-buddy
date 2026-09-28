@@ -85,6 +85,29 @@ def _load_manifests() -> dict[str, Any]:
         return yaml.safe_load(f) or {}
 
 
+def variant_manifest(variant: str) -> dict[str, Any]:
+    meta = (_load_manifests() or {}).get(variant) or {}
+    return meta if isinstance(meta, dict) else {}
+
+
+def variant_input_specs(variant: str) -> dict[str, Any]:
+    """Manifest ``inputs:`` for image / audio / video. Empty when undeclared."""
+    raw = variant_manifest(variant).get("inputs") or {}
+    return raw if isinstance(raw, dict) else {}
+
+
+def variant_final_node_id(variant: str) -> str | None:
+    """SaveVideo / VHS node the manifest marks as the real render."""
+    outputs = variant_manifest(variant).get("outputs") or {}
+    if not isinstance(outputs, dict):
+        return None
+    final = outputs.get("final") or {}
+    if not isinstance(final, dict):
+        return None
+    node_id = final.get("node_id")
+    return str(node_id) if node_id else None
+
+
 def _expected_template_path(variant: str) -> Path:
     """Best-known on-disk path for ``variant`` (may not exist)."""
     manifests = _load_manifests()
@@ -275,6 +298,8 @@ def _apply_named_fields(
             continue
         value = values[logical]
         if not isinstance(spec, dict):
+            continue
+        if spec.get("overwrite") is False:
             continue
         if "node_id" in spec:
             nids = spec["node_id"]
@@ -807,16 +832,28 @@ def _apply_local_family_weights(workflow: dict[str, Any], variant: str) -> None:
 
 
 def _text_enhancer_filename() -> Optional[str]:
-    """Local Gemma-4 E2B enhancer, or None when that file is not on disk."""
+    """Local Gemma-4 E2B enhancer path, or None when that file is not on disk."""
     try:
         from master_agent.models.weights import WEIGHT_FILES, resolve_weight
 
         spec = WEIGHT_FILES.get("text_enhancer")
         if spec is None:
             return None
-        return resolve_weight(spec)
+        found = resolve_weight(spec)
+        return str(found) if found is not None else None
     except Exception:
         return None
+
+
+def _text_enhancer_clip_name() -> Optional[str]:
+    """Combo-style name for the on-disk Gemma-4 E2B enhancer."""
+    raw = _text_enhancer_filename()
+    if not raw:
+        return None
+    path = Path(raw)
+    from master_agent.comfy.loader_names import name_from_local_path
+
+    return name_from_local_path(path) or path.name
 
 
 def _apply_local_ltx25_weights(workflow: dict[str, Any]) -> None:
@@ -833,14 +870,18 @@ def _apply_local_ltx25_weights(workflow: dict[str, Any]) -> None:
         if "ckpt_name" in inputs and isinstance(inputs.get("ckpt_name"), str):
             if "ltx-2.5" in str(inputs.get("ckpt_name")).lower():
                 _set_input(node, "ckpt_name", transformer_name)
+    enhancer_name = _text_enhancer_clip_name()
     for _nid, node in _find_nodes_by_class(workflow, "CLIPLoader"):
         title = str((node.get("_meta") or {}).get("title") or "").lower()
         inputs = node.get("inputs") or {}
         current = str(inputs.get("clip_name") or "")
         if "enhancer" in title or "e2b" in current.lower():
-            # The official enhancer CLIP is optional. Point it at the resolved
-            # Gemma TE when gemma4_e2b is not on disk so the graph still loads.
-            if not _text_enhancer_filename():
+            # Other LTX 2.5 graphs load gemma4_e2b on the enhancer CLIP.
+            # t2a ships the with-proj TE name on that node; retarget it at the
+            # on-disk E2B file, or at the resolved Gemma TE when E2B is absent.
+            if enhancer_name:
+                _set_input(node, "clip_name", enhancer_name)
+            else:
                 _set_input(node, "clip_name", te_name)
             continue
         if any(tok in current.lower() for tok in ("gemma", "ltx-2.5", "ltx25", "ltxv")):
@@ -981,8 +1022,85 @@ def _ensure_lora_node(workflow: dict[str, Any], lora_name: str) -> Optional[str]
     return new_id
 
 
-def _heuristic_patch(workflow: dict[str, Any], values: dict[str, Any]) -> None:
+def _weight_family(name: str) -> str:
+    """Coarse family of a weight filename. Empty when it is not recognizable."""
+    base = str(name or "").lower().replace("\\", "/").rsplit("/", 1)[-1]
+    if not base:
+        return ""
+    if any(tok in base for tok in ("ltx", "10eros", "taeltx", "gemma", "eros")):
+        return "ltx"
+    if any(tok in base for tok in ("wan", "umt5", "lightx2v", "fusionx")):
+        return "wan"
+    if any(tok in base for tok in ("flux", "clip_l", "t5xxl")) or base == "ae.safetensors":
+        return "flux"
+    if "krea" in base:
+        return "krea"
+    if "qwen" in base:
+        return "qwen"
+    if "ideogram" in base:
+        return "ideogram"
+    if "minimax" in base or "h3" in base:
+        return "h3"
+    if "z_image" in base or "z-image" in base:
+        return "zimage"
+    return ""
+
+
+def _same_weight_family(current: str, new: str) -> bool:
+    """True when ``new`` may replace ``current`` on a loader.
+
+    An empty current value can be filled. A named weight is only replaced by
+    another weight from the same family, so an LTX checkpoint cannot land on
+    a Wan, Flux, Qwen, or Krea loader.
+    """
+    if not current or not new:
+        return True
+    left = _weight_family(current)
+    right = _weight_family(new)
+    if not left or not right:
+        return False
+    return left == right
+
+
+def _prompt_locks(workflow: dict[str, Any], field_map: dict[str, Any]) -> set[tuple[str, str]]:
+    """Inputs the manifest marks ``overwrite: false``, plus the node a link targets.
+
+    ltx23_lipsync_v08 (and the air_render copies) keep the positive CLIP text
+    as a link to the authored prompt primitive. Writing a string there, or
+    into that primitive, drops the baked line.
+    """
+    locked: set[tuple[str, str]] = set()
+    for spec in (field_map or {}).values():
+        if not isinstance(spec, dict) or spec.get("overwrite") is not False:
+            continue
+        key = str(spec.get("input") or spec.get("key") or "")
+        nids = spec.get("node_id")
+        if not key or nids is None:
+            continue
+        if not isinstance(nids, list):
+            nids = [nids]
+        for nid in nids:
+            sid = str(nid)
+            locked.add((sid, key))
+            node = workflow.get(sid)
+            if not isinstance(node, dict):
+                continue
+            current = (node.get("inputs") or {}).get(key)
+            if _is_node_link(current):
+                src = str(current[0])
+                for src_key in ("value", "text", "string", "prompt"):
+                    locked.add((src, src_key))
+    return locked
+
+
+def _heuristic_patch(
+    workflow: dict[str, Any],
+    values: dict[str, Any],
+    *,
+    locks: set[tuple[str, str]] | None = None,
+) -> None:
     """Best-effort patching by common ComfyUI / LTX class types."""
+    locked = locks or set()
     prompt = values.get("prompt")
     negative = values.get("negative_prompt")
     seed = values.get("seed")
@@ -1001,18 +1119,24 @@ def _heuristic_patch(workflow: dict[str, Any], values: dict[str, Any]) -> None:
     text_encoder = values.get("text_encoder")
     # quality-correction fields also live on values
 
-    # CLIP / text encode (research graphs also title nodes "Positive Prompt")
-    for _nid, node in _find_nodes_by_class(workflow, "CLIPTextEncode"):
+    # CLIP / text encode (research graphs also title nodes "Positive Prompt").
+    # A list value is a graph link. Leave it. The manifest can also lock a
+    # node with overwrite: false (ltx23 lipsync positive CLIP → node 6203).
+    for nid, node in _find_nodes_by_class(workflow, "CLIPTextEncode"):
+        if (str(nid), "text") in locked:
+            continue
         title = (node.get("_meta") or {}).get("title", "").lower()
+        text = (node.get("inputs") or {}).get("text")
         if negative is not None and "neg" in title:
             # Linked negatives (LTX 2.5 a2v CLIP text ← Prompt primitive) stay links.
-            text = (node.get("inputs") or {}).get("text")
-            if not isinstance(text, list):
+            if not _is_node_link(text):
                 _set_input(node, "text", negative)
         elif prompt is not None and "neg" not in title:
+            if _is_node_link(text):
+                continue
             _set_input(node, "text", prompt)
     if prompt is not None:
-        for node in workflow.values():
+        for nid, node in workflow.items():
             if not isinstance(node, dict):
                 continue
             ctype = (node.get("class_type") or "").lower()
@@ -1022,6 +1146,8 @@ def _heuristic_patch(workflow: dict[str, Any], values: dict[str, Any]) -> None:
             if any(tok in ctype for tok in ("clip", "gemma", "textencode", "prompt", "primitivestring")) or "prompt" in title:
                 inputs = node.get("inputs") or {}
                 for key in ("text", "prompt", "string", "positive", "value"):
+                    if (str(nid), key) in locked:
+                        continue
                     if key in inputs and not isinstance(inputs[key], list):
                         inputs[key] = prompt
     # LTX 2.5 a2v stores the negative on PrimitiveStringMultiline "Prompt (negative)".
@@ -1116,15 +1242,12 @@ def _heuristic_patch(workflow: dict[str, Any], values: dict[str, Any]) -> None:
         for _nid, node in _find_nodes_by_class(workflow, "CreateVideo"):
             if values.get("fps"):
                 _set_input(node, "fps", float(values.get("fps") or 24))
-        # Sampler selection (quality correction may request euler_ancestral_cfg_pp)
+        # Sampler selection only when the caller or the variant config asks.
+        # Authored names such as euler_ancestral_cfg_pp stay put.
         sampler_name = values.get("sampler_name")
-        for _nid, node in _find_nodes_by_class(workflow, "KSamplerSelect"):
-            if sampler_name:
+        if sampler_name:
+            for _nid, node in _find_nodes_by_class(workflow, "KSamplerSelect"):
                 _set_input(node, "sampler_name", str(sampler_name))
-            else:
-                name = str((node.get("inputs") or {}).get("sampler_name") or "")
-                if "cfg_pp" in name or not name:
-                    _set_input(node, "sampler_name", "euler")
 
     # Seeds only on noise / sampler seed fields (never spray cfg onto RandomNoise)
     for class_type in ("RandomNoise",):
@@ -1176,7 +1299,9 @@ def _heuristic_patch(workflow: dict[str, Any], values: dict[str, Any]) -> None:
                 if existing in (None, "", "28") or stg is not None:
                     _set_input(node, "skip_blocks", block_str if float(stg or 0) > 0 else "")
 
-    # All checkpoint-consuming loaders used by LTX graphs
+    # Checkpoint / LoRA / VAE names come only from this variant's MODEL_FILES.
+    # Write them onto loaders of the same family. A dedicated audio-VAE file
+    # (LTX23_audio_vae_*) is not an all-in-one checkpoint slot.
     if ckpt:
         ckpt_l = str(ckpt).lower()
         spray_unet = "ltx-2.5" in ckpt_l or "ltx2.5" in ckpt_l
@@ -1191,6 +1316,9 @@ def _heuristic_patch(workflow: dict[str, Any], values: dict[str, Any]) -> None:
         ):
             for _nid, node in _find_nodes_by_class(workflow, class_type):
                 inputs = node.get("inputs") or {}
+                current_ckpt = inputs.get("ckpt_name") if isinstance(inputs.get("ckpt_name"), str) else ""
+                if class_type == "LTXVAudioVAELoader" and "audio_vae" in current_ckpt.lower():
+                    continue
                 if "ckpt_name" in inputs or class_type in (
                     "CheckpointLoaderSimple",
                     "LTXVAudioVAELoader",
@@ -1198,21 +1326,27 @@ def _heuristic_patch(workflow: dict[str, Any], values: dict[str, Any]) -> None:
                     "LowVRAMCheckpointLoader",
                     "LowVRAMAudioVAELoader",
                 ):
-                    _set_input(node, "ckpt_name", ckpt)
+                    if _same_weight_family(current_ckpt, str(ckpt)):
+                        _set_input(node, "ckpt_name", ckpt)
                 if "unet_name" in inputs:
                     # Do not write a 2.3 all-in-one onto official 2.5 UNET loaders.
                     if class_type in ("UNETLoader", "DiffusionModelLoader") and not spray_unet:
                         continue
-                    _set_input(node, "unet_name", ckpt)
+                    current_unet = inputs.get("unet_name") if isinstance(inputs.get("unet_name"), str) else ""
+                    if _same_weight_family(current_unet, str(ckpt)):
+                        _set_input(node, "unet_name", ckpt)
         if text_encoder:
             for _nid, node in _find_nodes_by_class(workflow, "LTXAVTextEncoderLoader"):
                 _set_input(node, "text_encoder", text_encoder)
 
     if clip_l or t5xxl:
         for _nid, node in _find_nodes_by_class(workflow, "DualCLIPLoader"):
-            if clip_l:
+            inputs = node.get("inputs") or {}
+            current_1 = inputs.get("clip_name1") if isinstance(inputs.get("clip_name1"), str) else ""
+            current_2 = inputs.get("clip_name2") if isinstance(inputs.get("clip_name2"), str) else ""
+            if clip_l and _same_weight_family(current_1, clip_l):
                 _set_input(node, "clip_name1", clip_l)
-            if t5xxl:
+            if t5xxl and _same_weight_family(current_2, t5xxl):
                 _set_input(node, "clip_name2", t5xxl)
 
     if vae_name:
@@ -1220,6 +1354,8 @@ def _heuristic_patch(workflow: dict[str, Any], values: dict[str, Any]) -> None:
             title = str((node.get("_meta") or {}).get("title") or "").lower()
             current = str((node.get("inputs") or {}).get("vae_name") or "")
             if "audio" in title or "audio_vae" in current.lower():
+                continue
+            if not _same_weight_family(current, vae_name):
                 continue
             _set_input(node, "vae_name", vae_name)
 
@@ -1233,8 +1369,17 @@ def _heuristic_patch(workflow: dict[str, Any], values: dict[str, Any]) -> None:
             "LTXVLoraLoader",
         ):
             for _nid, node in _find_nodes_by_class(workflow, class_type):
+                inputs = node.get("inputs") or {}
+                current = ""
+                for key in ("lora_name", "lora"):
+                    val = inputs.get(key)
+                    if isinstance(val, str) and val:
+                        current = val
+                        break
+                if current and not _same_weight_family(current, str(lora)):
+                    continue
                 for k in ("lora_name", "lora"):
-                    if k in (node.get("inputs") or {}) or k == "lora_name":
+                    if k in inputs or k == "lora_name":
                         _set_input(node, k, lora)
                         break
 
@@ -1468,7 +1613,15 @@ def load_and_patch_workflow(
         resolved_id = H3_ALIASES.get(variant, RESEARCH_ALIASES.get(variant, variant))
     except Exception:
         resolved_id = variant
-    models = MODEL_FILES.get(resolved_id) or MODEL_FILES.get(variant) or MODEL_FILES["base"]
+    # Only a variant's own MODEL_FILES may substitute weights. Missing entries
+    # used to inherit the LTX 2.3 base bundle, which sprayed the 10Eros bake,
+    # the rank-111 distilled LoRA, and taeltx2_3 onto Wan/Flux/Qwen/Krea/CCC
+    # graphs. base / eros / directors / lipsync and the dev-fp8 render
+    # variants declare their own entries. Unknown variants keep the JSON.
+    own = MODEL_FILES.get(resolved_id)
+    if own is None:
+        own = MODEL_FILES.get(variant)
+    models = dict(own) if own is not None else {}
     preferred = models.get("checkpoint") or models.get("diffusion")
     # Variants with no single all-in-one checkpoint (e.g. wan22's dual UNETs)
     # must not get a fallback LTX ckpt sprayed onto their loaders.
@@ -1495,7 +1648,12 @@ def load_and_patch_workflow(
 
     workflow = copy.deepcopy(load_workflow_template(variant))
     manifests = _load_manifests()
-    field_map = (manifests.get(variant) or {}).get("fields") or {}
+    manifest = manifests.get(variant) or {}
+    field_map = dict(manifest.get("fields") or {})
+    # inputs: image / audio / optional guide video. Same writer as fields.
+    for key, spec in (manifest.get("inputs") or {}).items():
+        if isinstance(spec, dict) and key not in field_map:
+            field_map[key] = spec
 
     values = {
         "prompt": prompt,
@@ -1522,7 +1680,9 @@ def load_and_patch_workflow(
         "first_image": first_image or image_name,
         "last_image": last_image,
         "audio_name": audio_name,
+        "audio": audio_name,
         "video_name": video_name,
+        "video": video_name,
         "spoken_line": (spoken_line or "").strip() or None,
         "audio_start_s": float(audio_start_s or 0.0),
         "duration_s": float(duration_s),
@@ -1540,6 +1700,7 @@ def load_and_patch_workflow(
         for i, seg in enumerate(segment_prompts):
             values[f"segment_{i}"] = seg
 
+    locks = _prompt_locks(workflow, field_map)
     _apply_named_fields(workflow, field_map, values)
     _remap_stub_filenames(workflow)
     from master_agent.models.weights import bundle_for_variant, is_h3_bundle, is_ltx25_bundle
@@ -1547,7 +1708,7 @@ def load_and_patch_workflow(
     bundle = bundle_for_variant(variant)
     if is_ltx25_bundle(bundle):
         _rewrite_ltx25_checkpoint_loader(workflow)
-    _heuristic_patch(workflow, values)
+    _heuristic_patch(workflow, values, locks=locks)
     if is_ltx25_bundle(bundle):
         _apply_local_ltx25_weights(workflow)
     if is_h3_bundle(bundle):
@@ -1572,13 +1733,12 @@ def load_and_patch_workflow(
     # Final sanitize after extras
     _sanitize_ltx_nodes(workflow, object_info=object_info)
 
-    from master_agent.comfy.graph_ops import (
-        LTX_TEACACHE_VARIANTS,
-        ensure_teacache,
-        looks_like_ltx_graph,
-    )
+    from master_agent.comfy.graph_ops import LTX_TEACACHE_VARIANTS, ensure_teacache
 
-    if variant in LTX_TEACACHE_VARIANTS or looks_like_ltx_graph(workflow):
+    # TeaCache model_type "ltxv" is the older LTX-Video pack. LTX 2.3 / 2.5
+    # AV graphs (lipsync v08, air_render, ltx25) do not opt in. base, eros,
+    # directors, and lipsync still do, via LTX_TEACACHE_VARIANTS.
+    if variant in LTX_TEACACHE_VARIANTS:
         ensure_teacache(workflow, object_info)
 
     if object_info:

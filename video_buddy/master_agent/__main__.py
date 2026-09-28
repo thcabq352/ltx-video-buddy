@@ -402,6 +402,7 @@ def cmd_run(args: argparse.Namespace) -> int:
             width=args.width,
             height=args.height,
             image_name=image_name,
+            mask_name=Path(args.mask).name if getattr(args, "mask", None) else None,
             audio_name=audio_name,
             video_name=Path(args.video).name if getattr(args, "video", None) else None,
             audio_path=args.audio if getattr(args, "audio", None) else None,
@@ -458,6 +459,7 @@ def cmd_run(args: argparse.Namespace) -> int:
             client=client,
             kind="run",
             image_name=Path(args.image).name if getattr(args, "image", None) else None,
+            mask_name=Path(args.mask).name if getattr(args, "mask", None) else None,
             audio_name=Path(args.audio).name if getattr(args, "audio", None) else None,
             video_name=Path(args.video).name if getattr(args, "video", None) else None,
             audio_path=args.audio if getattr(args, "audio", None) else None,
@@ -510,7 +512,7 @@ def cmd_run(args: argparse.Namespace) -> int:
         return 1
 
     # Upload input media into ComfyUI's input dir first
-    video_name = image_name = audio_name = None
+    video_name = image_name = audio_name = mask_name = None
     try:
         if args.video:
             video_name = client.upload_image(Path(args.video))
@@ -518,6 +520,9 @@ def cmd_run(args: argparse.Namespace) -> int:
         if args.image:
             image_name = client.upload_image(Path(args.image))
             print(f"uploaded image: {image_name}")
+        if getattr(args, "mask", None):
+            mask_name = client.upload_image(Path(args.mask))
+            print(f"uploaded mask: {mask_name}")
         if args.audio:
             audio_name = client.upload_audio(Path(args.audio))
             print(f"uploaded audio: {audio_name}")
@@ -536,6 +541,7 @@ def cmd_run(args: argparse.Namespace) -> int:
         video_name=video_name,
         image_name=image_name,
         image_path=args.image if getattr(args, "image", None) else None,
+        mask_name=mask_name,
         audio_name=audio_name,
         audio_path=args.audio if getattr(args, "audio", None) else None,
         tripod=bool(getattr(args, "tripod", False)),
@@ -933,8 +939,12 @@ def cmd_download_flux(args: argparse.Namespace) -> int:
 def cmd_download_models(args: argparse.Namespace) -> int:
     """Scan first; download missing LTX 2.5 / H3 weights only after --yes."""
     from master_agent.models.weights import (
+        WEIGHT_FILES,
         MissingWeightsError,
         download_missing_bundle,
+        download_named_file,
+        ic_ingredients_placement,
+        is_ltx25_bundle,
         scan_bundle,
     )
 
@@ -960,6 +970,26 @@ def cmd_download_models(args: argparse.Namespace) -> int:
     print(json.dumps(status.to_dict(), indent=1) if args.json else (
         "OK    all required weights present" if status.ok else status.to_dict()["ask"]
     ))
+    if is_ltx25_bundle(bundle):
+        place = ic_ingredients_placement()
+        if place["ok"]:
+            print(f"OK    ic-lora {place['detail']}")
+        else:
+            print(place["detail"])
+            if place.get("fix"):
+                print(f"        → {place['fix']}")
+            # Pixel-spatial IC-LoRA satisfies the slot scan. msr / v2v still
+            # name the Ingredients file, so list it even when the bundle is OK.
+            # --yes fetches that exact filename only when no copy exists.
+            # A wrong-folder copy is a move, not a download.
+            if args.yes and not place.get("path"):
+                try:
+                    got = download_named_file(WEIGHT_FILES["ic_lora"], yes=True)
+                except Exception as exc:
+                    print(f"FAIL  ic-lora: {exc}")
+                    return 1
+                if got is not None:
+                    print(f"OK    downloaded {got.name}")
     if status.ok:
         return 0
     if not args.yes:
@@ -1543,6 +1573,11 @@ def main(argv: list[str] | None = None) -> int:
     p.add_argument("--height", type=int, default=512)
     p.add_argument("--video", help="source video file (lipsync); uploaded to ComfyUI first")
     p.add_argument("--image", help="source image file (i2v); uploaded to ComfyUI first")
+    p.add_argument(
+        "--mask",
+        help="inpaint mask image (white=fill); uploaded to ComfyUI first. "
+        "wan_fun_inpaint generates fun_inpaint_mask.png when this is omitted",
+    )
     p.add_argument("--audio", help="source audio file; uploaded to ComfyUI first")
     p.add_argument(
         "--line",

@@ -139,7 +139,11 @@ def prepare_run(
     filename_prefix: str | None = None,
     negative_prompt: str | None = None,
 ) -> dict[str, Any]:
-    from master_agent.comfy.graph_ops import ensure_teacache, looks_like_ltx_graph
+    from master_agent.comfy.graph_ops import (
+        LTX_TEACACHE_VARIANTS,
+        ensure_teacache,
+        looks_like_ltx_graph,
+    )
 
     if mode == "raw":
         if not isinstance(workflow, dict):
@@ -180,7 +184,13 @@ def prepare_run(
         wf = apply_overrides(wf, overrides)
     else:
         raise ValueError(f"unknown mode {mode!r}")
-    if looks_like_ltx_graph(wf):
+    # Generate mode follows the variant opt-in. Raw and template graphs that
+    # look like older LTX-Video still get TeaCache. LTX 2.3/2.5 AV variants
+    # are not in LTX_TEACACHE_VARIANTS, so they are left alone.
+    wants_tea = looks_like_ltx_graph(wf)
+    if mode == "generate" and (variant or "base") not in LTX_TEACACHE_VARIANTS:
+        wants_tea = False
+    if wants_tea:
         ensure_teacache(wf, object_info)
     return wf
 
@@ -233,6 +243,15 @@ def execute_prepared(
     if variant:
         require_weights(str(variant))
     client = ComfyClient()
+    from master_agent.comfy.fun_inpaint import ensure_fun_inpaint_mask
+
+    try:
+        uploaded = ensure_fun_inpaint_mask(wf, client.upload_image)
+    except Exception as exc:
+        print(f"WARN  fun inpaint mask: {exc}")
+    else:
+        if uploaded:
+            print(f"uploaded mask: {uploaded}")
     object_info, source = client.load_object_info(prefer_live=True)
     print(f"object_info: {source}")
     lint_or_raise(wf, object_info)
@@ -243,6 +262,21 @@ def execute_prepared(
     files = ComfyClient.extract_video_files(entry)
     if not files:
         raise RuntimeError("job completed but produced no output files")
+    from master_agent.comfy.workflow_patcher import variant_final_node_id
+
+    def _probe(info: dict[str, Any]) -> dict[str, Any]:
+        try:
+            from master_agent.judge.probe import probe_video
+
+            return probe_video(ComfyClient.resolve_output_path(info))
+        except Exception:
+            return {}
+
+    files = ComfyClient.choose_final_output(
+        files,
+        final_node_id=variant_final_node_id(variant or ""),
+        probe=_probe,
+    )
     OUTPUTS_DIR.mkdir(parents=True, exist_ok=True)
     prefix = run_id or prompt_id[:12]
     video_path = None
