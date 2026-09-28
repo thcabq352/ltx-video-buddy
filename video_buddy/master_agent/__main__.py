@@ -248,6 +248,40 @@ class _DurationSet(argparse.Action):
         setattr(namespace, "duration_set", True)
 
 
+class _DimSet(argparse.Action):
+    """Record that the user passed --width or --height (outpaint canvas)."""
+
+    def __call__(self, parser, namespace, values, option_string=None):
+        setattr(namespace, self.dest, int(values))
+        setattr(namespace, f"{self.dest}_set", True)
+
+
+def _inoutpaint_plan(args: argparse.Namespace):
+    """Outpaint layout, or None when this run is not extending the canvas."""
+    aspect = getattr(args, "aspect", None)
+    if not getattr(args, "outpaint", False) and not aspect:
+        return None
+    video = getattr(args, "video", None)
+    if not video:
+        raise ValueError("outpaint needs --video (the clip to extend)")
+    from master_agent.comfy.inoutpaint import outpaint_layout, probe_video_size
+
+    src_w, src_h = probe_video_size(Path(video))
+    if aspect:
+        return outpaint_layout(src_w, src_h, aspect=str(aspect))
+    if getattr(args, "width_set", False) or getattr(args, "height_set", False):
+        return outpaint_layout(
+            src_w,
+            src_h,
+            target_w=getattr(args, "width", None),
+            target_h=getattr(args, "height", None),
+        )
+    raise ValueError(
+        "outpaint needs --aspect W:H (for example 9:16) "
+        "or --width and --height as the target canvas"
+    )
+
+
 def _reframe_flag(args: argparse.Namespace) -> bool:
     """True only for ``--reframe on``. Default is off (experimental opt-in)."""
     from master_agent.config import LIPDUB_REFRAME
@@ -458,6 +492,37 @@ def cmd_run(args: argparse.Namespace) -> int:
             return 2
         return 1
 
+    inoutpaint = None
+    try:
+        outpaint_plan = _inoutpaint_plan(args)
+    except (ValueError, RuntimeError) as exc:
+        print(f"FAIL  {exc}")
+        return 1
+    if outpaint_plan:
+        # Mask bytes are uploaded before queue. Keep only the pads on run
+        # state so the JSON record does not embed the PNG.
+        inoutpaint = {
+            "mode": "outpaint",
+            "pad": outpaint_plan["pad"],
+        }
+        args.width = outpaint_plan["width"]
+        args.height = outpaint_plan["height"]
+        print(
+            "outpaint canvas "
+            f"{outpaint_plan['canvas_w']}x{outpaint_plan['canvas_h']} "
+            f"pad L{outpaint_plan['pad']['left']} T{outpaint_plan['pad']['top']} "
+            f"R{outpaint_plan['pad']['right']} B{outpaint_plan['pad']['bottom']} "
+            f"stage {outpaint_plan['width']}x{outpaint_plan['height']}"
+        )
+    elif has_video:
+        from master_agent.comfy.inoutpaint import requests_inoutpaint
+
+        if requests_inoutpaint(args.request):
+            print(
+                "note: routed as inpaint. Pass --outpaint --aspect 9:16 "
+                "(or --width and --height) to extend the canvas."
+            )
+
     client = ComfyClient()
     if args.dry_run:
         args.request = _maybe_interview(args.request, no_interview=args.no_interview)
@@ -492,6 +557,7 @@ def cmd_run(args: argparse.Namespace) -> int:
             max_piece_s=getattr(args, "max_piece_seconds", None),
             pause_reset_strength=getattr(args, "pause_reset_strength", None),
             pause_reset_min_s=getattr(args, "pause_reset_min_s", None),
+            inoutpaint=inoutpaint,
         )
 
     if not client.is_up():
@@ -542,9 +608,23 @@ def cmd_run(args: argparse.Namespace) -> int:
         if args.image:
             image_name = client.upload_image(Path(args.image))
             print(f"uploaded image: {image_name}")
-        if getattr(args, "mask", None):
-            mask_name = client.upload_image(Path(args.mask))
+        mask_path = None
+        if outpaint_plan is not None:
+            import tempfile
+
+            handle = tempfile.NamedTemporaryFile(
+                prefix="ltx23-outpaint-", suffix=".png", delete=False
+            )
+            handle.write(outpaint_plan["mask_png"])
+            handle.close()
+            mask_path = Path(handle.name)
+        elif getattr(args, "mask", None):
+            mask_path = Path(args.mask)
+        if mask_path is not None:
+            mask_name = client.upload_image(mask_path)
             print(f"uploaded mask: {mask_name}")
+            if outpaint_plan is not None:
+                mask_path.unlink(missing_ok=True)
         if args.audio:
             audio_name = client.upload_audio(Path(args.audio))
             print(f"uploaded audio: {audio_name}")
@@ -591,6 +671,7 @@ def cmd_run(args: argparse.Namespace) -> int:
         ),
         attach_recipe=attach_recipe,
         client=client,
+        inoutpaint=inoutpaint,
     )
     print()
     if result.status in ("done", "done_with_warnings"):
@@ -1465,6 +1546,41 @@ def cmd_comfy(args: argparse.Namespace) -> int:
             p = Path(args.workflow_json)
             raw = p.read_text(encoding="utf-8") if p.is_file() else args.workflow_json
             workflow = json.loads(raw)
+        gen_extra: dict = {}
+        if getattr(args, "mode", "generate") == "generate":
+            plan = _inoutpaint_plan(args)
+            if plan:
+                gen_extra["inoutpaint"] = {
+                    "mode": "outpaint",
+                    "pad": plan["pad"],
+                    "mask_png": plan["mask_png"],
+                }
+                gen_extra["width"] = plan["width"]
+                gen_extra["height"] = plan["height"]
+                print(
+                    "outpaint canvas "
+                    f"{plan['canvas_w']}x{plan['canvas_h']} "
+                    f"stage {plan['width']}x{plan['height']}"
+                )
+            else:
+                if getattr(args, "width", None):
+                    gen_extra["width"] = args.width
+                if getattr(args, "height", None):
+                    gen_extra["height"] = args.height
+            if getattr(args, "duration", None) is not None:
+                gen_extra["duration_s"] = args.duration
+            if getattr(args, "frames", None) is not None:
+                gen_extra["frames"] = args.frames
+            if getattr(args, "seed", None) is not None:
+                gen_extra["seed"] = args.seed
+            if getattr(args, "negative_prompt", None):
+                gen_extra["negative_prompt"] = args.negative_prompt
+            video = getattr(args, "video", None)
+            if video and not getattr(args, "prepare", False):
+                gen_extra["video_name"] = Path(video).name
+            mask = getattr(args, "mask", None)
+            if mask and plan is None:
+                gen_extra["mask_name"] = Path(mask).name
         prepared = prepare_run(
             args.mode,
             workflow=workflow,
@@ -1472,7 +1588,17 @@ def cmd_comfy(args: argparse.Namespace) -> int:
             variant=args.variant,
             prompt=args.prompt,
             overrides=overrides,
+            **gen_extra,
         )
+        if getattr(args, "mode", "generate") == "generate" and not getattr(args, "prepare", False):
+            from master_agent.comfy.inoutpaint import stash_local_mask, stash_local_video
+
+            video = getattr(args, "video", None)
+            if video:
+                stash_local_video(prepared, video)
+            mask = getattr(args, "mask", None)
+            if mask and "inoutpaint" not in gen_extra:
+                stash_local_mask(prepared, mask)
     except Exception as e:
         print(f"FAIL  {e}")
         return 1
@@ -1597,14 +1723,26 @@ def main(argv: list[str] | None = None) -> int:
     p.set_defaults(duration_set=False)
     p.add_argument("--quality", choices=["draft", "balanced", "quality"], help="quality profile")
     p.add_argument("--seed", type=int, help="fixed seed (default: random)")
-    p.add_argument("--width", type=int, default=768)
-    p.add_argument("--height", type=int, default=512)
-    p.add_argument("--video", help="source video file (lipsync); uploaded to ComfyUI first")
+    p.add_argument("--width", type=int, default=768, action=_DimSet)
+    p.add_argument("--height", type=int, default=512, action=_DimSet)
+    p.set_defaults(width_set=False, height_set=False)
+    p.add_argument("--video", help="source video file (lipsync or ltx23_inoutpaint); uploaded to ComfyUI first")
     p.add_argument("--image", help="source image file (i2v); uploaded to ComfyUI first")
     p.add_argument(
         "--mask",
         help="inpaint mask image (white=fill); uploaded to ComfyUI first. "
-        "wan_fun_inpaint generates fun_inpaint_mask.png when this is omitted",
+        "wan_fun_inpaint generates fun_inpaint_mask.png when this is omitted. "
+        "ltx23_inoutpaint generates a center mask when this is omitted. "
+        "--outpaint builds the border mask itself",
+    )
+    p.add_argument(
+        "--aspect",
+        help="outpaint target aspect, for example 9:16 or 16:9 (with --video)",
+    )
+    p.add_argument(
+        "--outpaint",
+        action="store_true",
+        help="extend the source video; requires --aspect or an explicit --width and --height",
     )
     p.add_argument("--audio", help="source audio file; uploaded to ComfyUI first")
     p.add_argument(
@@ -1935,6 +2073,21 @@ def main(argv: list[str] | None = None) -> int:
     p.add_argument("--template", help="template slug or path under workflows/")
     p.add_argument("--variant", default="base")
     p.add_argument("--prompt", default="")
+    p.add_argument("--negative", dest="negative_prompt", default=None)
+    p.add_argument("--video", help="source video; uploaded before queue")
+    p.add_argument("--mask", help="inpaint mask (white=regenerate); uploaded before queue")
+    p.add_argument("--aspect", help="outpaint target aspect, for example 9:16")
+    p.add_argument(
+        "--outpaint",
+        action="store_true",
+        help="extend the source video; requires --aspect or --width and --height",
+    )
+    p.add_argument("--width", type=int, default=None, action=_DimSet)
+    p.add_argument("--height", type=int, default=None, action=_DimSet)
+    p.add_argument("--duration", type=float, default=None)
+    p.add_argument("--frames", type=int, default=None)
+    p.add_argument("--seed", type=int, default=None)
+    p.set_defaults(width_set=False, height_set=False)
     p.add_argument("--set", action="append", default=[], metavar="NODE.FIELD=VALUE",
                    help="expert override, e.g. 12.steps=8 (repeatable)")
     p.add_argument("--out", help="write prepared workflow JSON (still queues unless --prepare)")

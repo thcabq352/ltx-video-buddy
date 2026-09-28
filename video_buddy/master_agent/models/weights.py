@@ -1144,6 +1144,65 @@ def ltx23_latent_upscaler_placement(roots: Iterable[Path] | None = None) -> dict
     }
 
 
+LTX23_INOUTPAINT_LORA = "ltx-2.3-22b-ic-lora-in-outpainting-0.9.safetensors"
+_INOUTPAINT_LORA_MIN_BYTES = 1_200_000_000
+HF_INOUTPAINT_LORA = "Lightricks/LTX-2.3-22b-IC-LoRA-In-Outpainting"
+
+
+def ltx23_inoutpaint_lora_placement(roots: Iterable[Path] | None = None) -> dict[str, Any]:
+    """Official In-Outpainting IC-LoRA. Scan only — doctor does not download it.
+
+    The loader combo is ``models/loras/``. The tower file is about 1.31 GB.
+    """
+    name = LTX23_INOUTPAINT_LORA
+    copies = find_weight_copies(name, roots)
+    in_role = _copies_in_role(copies, "loras")
+    elsewhere = [path for path in copies if path not in in_role]
+    if in_role:
+        path = in_role[0]
+        size = path.stat().st_size
+        if size < _INOUTPAINT_LORA_MIN_BYTES:
+            return {
+                "ok": False,
+                "path": str(path),
+                "detail": (
+                    f"{name} is in models/loras/ but only {size / 1e9:.2f} GB. "
+                    "The In-Outpainting IC-LoRA is about 1.31 GB "
+                    f"({HF_INOUTPAINT_LORA}). Re-download into models/loras/. "
+                    "Doctor does not fetch it."
+                ),
+                "fix": f"Place {name} in ComfyUI/models/loras/",
+            }
+        return {
+            "ok": True,
+            "path": str(path),
+            "detail": f"{name} in models/loras/ ({size / 1e9:.2f} GB)",
+            "fix": "",
+        }
+    if elsewhere:
+        src = elsewhere[0]
+        return {
+            "ok": False,
+            "path": str(src),
+            "detail": (
+                f"{name} is at {src}, outside models/loras/. "
+                "LTXICLoRALoaderModelOnly will not list it. "
+                "Move it (Buddy will not move files): "
+                f'mv "{src}" "<ComfyUI>/models/loras/{name}"'
+            ),
+            "fix": f'mv "{src}" "<ComfyUI>/models/loras/{name}"',
+        }
+    return {
+        "ok": False,
+        "path": "",
+        "detail": (
+            f"missing {name} → models/loras/ (~1.31 GB, {HF_INOUTPAINT_LORA}). "
+            "Required by ltx23_inoutpaint. Doctor does not download weights."
+        ),
+        "fix": f"Place {name} in ComfyUI/models/loras/",
+    }
+
+
 DEV_FP8_CKPT = "ltx-2.3-22b-dev-fp8.safetensors"
 
 

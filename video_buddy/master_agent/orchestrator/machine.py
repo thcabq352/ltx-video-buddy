@@ -121,6 +121,7 @@ class Orchestrator:
                 audio_name=st.audio_name,
                 video_name=st.video_name,
                 audio_start_s=st.audio_start_s,
+                inoutpaint=st.inoutpaint,
                 filename_prefix="master_agent",
                 stg_scale=st.stg_scale,
                 stg_blocks=st.stg_blocks,
@@ -132,6 +133,13 @@ class Orchestrator:
         except Exception as e:
             st.fail(f"patch failed: {e}")
             return False
+        if (st.variant or "") == "ltx23_inoutpaint":
+            st.width = int(meta.get("width") or st.width)
+            st.height = int(meta.get("height") or st.height)
+            if meta.get("inoutpaint_default_length") and st.frames is None:
+                st.frames = int(meta["frames"])
+                st.duration_s = float(meta["duration_s"])
+                st.fps = 24
         if st.end_guide_image:
             from master_agent.orchestrator.lipdub_guide import apply_last_frame_guide
 
@@ -213,6 +221,15 @@ class Orchestrator:
             return
         if uploaded:
             st.log(f"fun inpaint mask uploaded: {uploaded}")
+        from master_agent.comfy.inoutpaint import prepare_queue_inputs
+
+        try:
+            uploaded_io = prepare_queue_inputs(self._workflow, self.client.upload_image)
+        except Exception as exc:
+            st.log(f"warn: ltx in/outpaint mask upload failed: {exc}")
+            return
+        if uploaded_io:
+            st.log(f"ltx in/outpaint mask uploaded: {uploaded_io}")
 
     @staticmethod
     def _resolve_h3_line(st: RunState) -> None:
@@ -604,6 +621,7 @@ class Orchestrator:
         end_guide_image: Optional[str] = None,
         end_guide_frame_idx: Optional[int] = None,
         end_guide_strength: Optional[float] = None,
+        inoutpaint: Optional[dict[str, Any]] = None,
     ) -> RunState:
         run_id = uuid.uuid4().hex[:12]
         st = RunState(
@@ -648,6 +666,7 @@ class Orchestrator:
             end_guide_strength=(
                 float(end_guide_strength) if end_guide_strength is not None else None
             ),
+            inoutpaint=inoutpaint,
         )
         try:
             st.variant = self._select_variant(st, variant)

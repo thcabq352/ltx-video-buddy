@@ -210,6 +210,7 @@ VARIANT_GEN: dict[str, dict[str, int]] = {
     "ltx25_v2v_ic_lora": {"fps": 24, "frame_snap": 8},
     "ltx25_a2v": {"fps": 24, "frame_snap": 8},
     "ltx25_t2a": {"fps": 24, "frame_snap": 8},
+    "ltx23_inoutpaint": {"fps": 24, "frame_snap": 8},
     "h3_t2v": {"fps": 24, "frame_snap": 17},
     "h3_i2v": {"fps": 24, "frame_snap": 17},
     "h3_flf": {"fps": 24, "frame_snap": 17},
@@ -342,6 +343,14 @@ MODEL_FILES: dict[str, dict[str, str]] = {
     # onto every loader by _heuristic_patch. Do not fall back to base.
     "ltx23_lipsync_v08": {
         "checkpoint": "ltx-2.3-22b-dev-fp8.safetensors",
+    },
+    # Checkpoint + text encoder only. A lora key is sprayed onto every
+    # LoraLoaderModelOnly and LTXICLoRALoaderModelOnly by _heuristic_patch,
+    # which would replace the distilled LoRA (0.5) with the IC-LoRA file.
+    # Both LoRA filenames stay authored in ltx23_inoutpaint_api.json.
+    "ltx23_inoutpaint": {
+        "checkpoint": "ltx-2.3-22b-dev-fp8.safetensors",
+        "text_encoder": "gemma_3_12B_it_fp4_mixed.safetensors",
     },
     "air_render_030": {
         "checkpoint": "ltx-2.3-22b-dev-fp8.safetensors",

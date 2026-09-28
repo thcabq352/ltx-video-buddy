@@ -155,6 +155,24 @@ CAPABILITY_CATALOG: tuple[Capability, ...] = (
         ),
     ),
     Capability(
+        "ltx23_inoutpaint",
+        "LTX 2.3 inpaint / outpaint IC-LoRA",
+        class_types=(
+            "LTXICLoRALoaderModelOnly",
+            "LTXVInpaintPreprocess",
+            "LTXVDilateVideoMask",
+            "LTXVLaplacianPyramidBlend",
+        ),
+        surfaces=("director", "patcher", "template"),
+        templates=("ltx23_inoutpaint",),
+        notes=(
+            "Official Lightricks In-Outpainting IC-LoRA on the dev fp8 checkpoint. "
+            "LTXVInpaintPreprocess, LTXVDilateVideoMask, and LTXVLaplacianPyramidBlend "
+            "come from ComfyUI-LTXVideo (already on the tower object_info). "
+            "White mask = regenerate. Outpaint builds the border mask in Python."
+        ),
+    ),
+    Capability(
         "wan_fun_control",
         "WAN Fun Control",
         class_types=("Wan22FunControlToVideo", "WanFunControlToVideo"),

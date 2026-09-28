@@ -272,6 +272,22 @@ def check_ltx25_ic_lora() -> dict[str, Any]:
     )
 
 
+def check_ltx23_inoutpaint_lora() -> dict[str, Any]:
+    """Official LTX 2.3 In-Outpainting IC-LoRA. Scan only — never downloads."""
+    try:
+        from master_agent.models.weights import ltx23_inoutpaint_lora_placement
+
+        place = ltx23_inoutpaint_lora_placement()
+    except Exception as exc:
+        return _row("ltx23-inoutpaint-lora", False, f"scan failed: {exc}")
+    return _row(
+        "ltx23-inoutpaint-lora",
+        bool(place.get("ok")),
+        str(place.get("detail") or ""),
+        fix=str(place.get("fix") or ""),
+    )
+
+
 def check_ltx23_latent_upscaler() -> dict[str, Any]:
     """LatentUpscaleModelLoader only sees models/latent_upscale_models/."""
     try:
@@ -372,6 +388,7 @@ def snapshot() -> list[dict[str, Any]]:
         check_ltx_guide(),
         check_ltx25_weights(),
         check_ltx25_ic_lora(),
+        check_ltx23_inoutpaint_lora(),
         check_ltx23_latent_upscaler(),
         check_dev_fp8_trailer(),
         check_h3_weights(),

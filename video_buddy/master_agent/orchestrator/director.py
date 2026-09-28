@@ -73,6 +73,12 @@ _VARIANT_KEYWORDS = [
     # exists — rule_based_variant skips any variant not in WORKFLOW_FILES.
     # "heal" / "fill" alone are substrings of unrelated words ("health").
     # FaceID and Voronoi stay unwired — see capabilities notes.
+    # Before wan_fun_inpaint: "ltx inpaint" contains the substring "inpaint".
+    ("ltx23_inoutpaint", (
+        "ltx inpaint", "ltx outpaint", "ltx in-outpaint", "ltx inoutpaint",
+        "in-outpaint", "inoutpaint", "outpaint", "outpainting",
+        "extend the canvas", "extend the frame",
+    )),
     ("wan_fun_inpaint", ("fun inpaint", "wan inpaint", "inpaint", "heal mask")),
     ("wan22", ("wan 2.2", "wan2.2", "wan22", "photoreal", "photo-real", "stock photo", "film grain")),
     ("h3_r2v", ("ref2va", "h3 r2v", "h3_r2v", "reference-to-video", "minimax r2v", "minimax reference")),
@@ -133,6 +139,10 @@ def rank_story_candidates(
     if force:
         return [(force, "forced")]
     if has_video:
+        from master_agent.comfy.inoutpaint import requests_inoutpaint
+
+        if requests_inoutpaint(request):
+            return [("ltx23_inoutpaint", "input")]
         return [("lipsync", "input")]
     if has_image and has_audio:
         from master_agent.orchestrator.talking import requests_h3

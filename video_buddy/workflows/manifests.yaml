@@ -185,6 +185,72 @@ lipsync:
       index: 0
       input: filename_prefix
 
+ltx23_inoutpaint:
+  file: ltx23_inoutpaint_api.json
+  description: >
+    LTX 2.3 video inpaint and outpaint with the official In-Outpainting
+    IC-LoRA. White mask pixels are regenerated. Outpaint pads the frame and
+    builds that mask from a target aspect or size. Dev fp8 checkpoint,
+    distilled LoRA 0.5, IC-LoRA strength 1, CFG 1, 25 frames at 768x448.
+  vram_class: tight
+  vram_peak_gb: 13.5
+  fields:
+    prompt:
+      node_id: "20"
+      input: text
+    negative_prompt:
+      node_id: "21"
+      input: text
+    seed:
+      class_type: RandomNoise
+      index: 0
+      input: noise_seed
+    width:
+      class_type: EmptyLTXVLatentVideo
+      index: 0
+      input: width
+    height:
+      class_type: EmptyLTXVLatentVideo
+      index: 0
+      input: height
+    frames:
+      class_type: EmptyLTXVLatentVideo
+      index: 0
+      input: length
+    checkpoint:
+      class_type: CheckpointLoaderSimple
+      index: 0
+      input: ckpt_name
+    text_encoder:
+      class_type: LTXAVTextEncoderLoader
+      index: 0
+      input: text_encoder
+    video_name:
+      class_type: LoadVideo
+      index: 0
+      input: file
+    mask:
+      class_type: LoadImageMask
+      index: 0
+      input: image
+    filename_prefix:
+      class_type: SaveVideo
+      index: 0
+      input: filename_prefix
+  inputs:
+    video:
+      class_type: LoadVideo
+      index: 0
+      input: file
+    mask:
+      optional: true
+      class_type: LoadImageMask
+      index: 0
+      input: image
+  outputs:
+    final:
+      node_id: "78"
+
 # --- Mickmumpitz library (converted to API format 2026-07-31) ---
 # The `*_api.json` versions (via the /workflow/convert endpoint) are queueable
 # and validate clean live + offline. The original UI exports are kept for
