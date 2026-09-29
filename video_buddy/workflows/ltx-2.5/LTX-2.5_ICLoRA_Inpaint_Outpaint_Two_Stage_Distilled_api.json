@@ -731,7 +731,8 @@
       ],
       "filename_prefix": "ltx25_inoutpaint",
       "format": "auto",
-      "codec": "auto"
+      "codec": "auto",
+      "format.codec": "auto"
     }
   },
   "80": {

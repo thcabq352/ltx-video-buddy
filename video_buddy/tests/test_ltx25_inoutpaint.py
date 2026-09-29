@@ -92,6 +92,9 @@ def test_raw_graph_follows_official_25_loaders():
     assert raw["81"]["inputs"]["mask"] == ["61", 0]
     assert raw["58"]["inputs"]["trim_to_shortest"] is False
     assert raw["76"]["inputs"]["trim_to_shortest"] is False
+    assert raw["79"]["inputs"]["format"] == "auto"
+    assert raw["79"]["inputs"]["codec"] == "auto"
+    assert raw["79"]["inputs"]["format.codec"] == "auto"
     assert raw["64"]["inputs"]["resize_type"] == "scale by multiplier"
     assert raw["64"]["inputs"]["resize_type.multiplier"] == 2
     assert raw["64"]["inputs"]["scale_method"] == "lanczos"

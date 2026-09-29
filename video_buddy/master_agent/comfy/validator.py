@@ -261,6 +261,24 @@ def _dynamic_child_spec(base_spec: Any, selected: Any, child: str) -> Any:
     return _dynamic_child_specs(option).get(child)
 
 
+def _dynamic_child_present(
+    inputs: dict[str, Any],
+    known: dict[str, Any],
+    parent: str,
+    child: str,
+) -> bool:
+    """True when the prompt has the dotted child or Comfy's legacy flat key.
+
+    ``format.codec`` is the 0.35.1 name. SaveVideo still queues ``codec``
+    because that name is also a real (hidden) input on the node. A flat
+    ``width`` does not satisfy ``resize_type.width``: ``width`` is not its
+    own input, and Comfy rejects that prompt.
+    """
+    if f"{parent}.{child}" in inputs:
+        return True
+    return child in inputs and child in known
+
+
 def _validate_scalar(
     report: ValidationReport,
     node_id: str,
@@ -514,13 +532,14 @@ def validate_workflow(
             if isinstance(required_children, dict):
                 for child in sorted(required_children):
                     full = f"{name}.{child}"
-                    if full not in inputs:
-                        report.error(
-                            node_id,
-                            full,
-                            f"required dynamic input missing for {name}={selected!r} "
-                            f"(class {class_type})",
-                        )
+                    if _dynamic_child_present(inputs, known, name, child):
+                        continue
+                    report.error(
+                        node_id,
+                        full,
+                        f"required dynamic input missing for {name}={selected!r} "
+                        f"(class {class_type})",
+                    )
 
         for name, value in inputs.items():
             spec = known.get(name)
