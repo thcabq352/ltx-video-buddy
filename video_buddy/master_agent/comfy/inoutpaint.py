@@ -4,9 +4,9 @@ The shipped graph is ``workflows/ltx23_inoutpaint_api.json``. White mask pixels
 are the region the IC-LoRA regenerates. Black pixels are held. Outpaint grows
 the canvas with ``ImagePadForOutpaint`` (pads are multiples of 8, the node's
 step). The sampler mask for outpaint is that node's own mask so the green
-plate lines up with the pad. Inpaint repeats the still mask to the latent
-length before the blend, which keeps ``trim_to_shortest`` and still emits
-every frame.
+plate lines up with the pad. That pad mask is a single frame, so outpaint
+repeats it with ``VHS_DuplicateMasks`` and sets ``trim_to_shortest`` false.
+Inpaint keeps the official still-repeat and ``trim_to_shortest`` true.
 """
 
 from __future__ import annotations
@@ -364,6 +364,35 @@ def _set(node: dict[str, Any] | None, key: str, value: Any) -> None:
     node.setdefault("inputs", {})[key] = value
 
 
+def _fresh_node_id(workflow: dict[str, Any]) -> str:
+    used = [int(key) for key in workflow if str(key).isdigit()]
+    nxt = (max(used) if used else 0) + 1
+    while str(nxt) in workflow:
+        nxt += 1
+    return str(nxt)
+
+
+def _ensure_mask_duplicate(
+    workflow: dict[str, Any],
+    title: str,
+    source: list[Any],
+    frames: int,
+) -> str:
+    """One ``VHS_DuplicateMasks`` per stage. Re-running finalize updates it."""
+    nid = _nid_by_title(workflow, "VHS_DuplicateMasks", title)
+    if nid is None:
+        nid = _fresh_node_id(workflow)
+        workflow[nid] = {
+            "class_type": "VHS_DuplicateMasks",
+            "inputs": {},
+            "_meta": {"title": title},
+        }
+    inputs = workflow[nid].setdefault("inputs", {})
+    inputs["mask"] = source
+    inputs["multiply_by"] = int(frames)
+    return nid
+
+
 def _nid_by_title(workflow: dict[str, Any], class_type: str, title: str) -> str | None:
     want = title.lower()
     for nid, node in _nodes(workflow, class_type):
@@ -518,14 +547,43 @@ def finalize_inoutpaint_graph(
             length = raw_len
     _set(_by_title(workflow, "RepeatImageBatch", "Repeat Inpaint Mask"), "amount", length)
     if outpaint and pad_id:
-        # The pad node mask is 1 on the new border and 0 on the source, one
-        # entry per frame. A separately painted still can miss that edge.
+        # The pad node mask is 1 on the new border and 0 on the source. It is
+        # one frame, so the blend's trim_to_shortest would collapse the clip.
+        # Match-size that mask, then repeat it to the latent length before dilate.
         for title in ("Resize Mask Stage 1", "Resize Mask Stage 2"):
             _set(
                 _by_title(workflow, "ResizeImageMaskNode", title),
                 "input",
                 [pad_id, 1],
             )
+        stage1 = _nid_by_title(workflow, "ResizeImageMaskNode", "Resize Mask Stage 1")
+        stage2 = _nid_by_title(workflow, "ResizeImageMaskNode", "Resize Mask Stage 2")
+        if stage1:
+            dup1 = _ensure_mask_duplicate(
+                workflow,
+                "Repeat Outpaint Mask Stage 1",
+                [stage1, 0],
+                length,
+            )
+            _set(
+                _by_title(workflow, "LTXVDilateVideoMask", "Dilate Mask Stage 1"),
+                "mask",
+                [dup1, 0],
+            )
+        if stage2:
+            dup2 = _ensure_mask_duplicate(
+                workflow,
+                "Repeat Outpaint Mask Stage 2",
+                [stage2, 0],
+                length,
+            )
+            _set(
+                _by_title(workflow, "LTXVDilateVideoMask", "Dilate Mask Stage 2"),
+                "mask",
+                [dup2, 0],
+            )
+        for _nid, node in _nodes(workflow, "LTXVLaplacianPyramidBlend"):
+            node.setdefault("inputs", {})["trim_to_shortest"] = False
     if mask_png:
         for _nid, node in _nodes(workflow, "LoadImageMask"):
             meta = node.setdefault("_meta", {})
@@ -760,6 +818,8 @@ def prepare_queue_inputs(
     target = _latent_frame_count(workflow) if inoutpaint else None
     if target:
         _set(_by_title(workflow, "RepeatImageBatch", "Repeat Inpaint Mask"), "amount", target)
+        for _nid, node in _nodes(workflow, "VHS_DuplicateMasks"):
+            node.setdefault("inputs", {})["multiply_by"] = int(target)
     local = _pop_local_video(workflow)
     if local is not None:
         if target:

@@ -183,6 +183,71 @@ def test_outpaint_patch_sets_pads_and_skips_dilation():
     assert "inoutpaint_png_b64" not in (wf["33"].get("_meta") or {})
 
 
+def _outpaint_graph(frames: int):
+    plan = outpaint_layout(768, 448, aspect="9:16")
+    return load_and_patch_workflow(
+        VARIANT,
+        prompt="continue the scene naturally past the frame edges",
+        seed=42,
+        width=plan["width"],
+        height=plan["height"],
+        frames=frames,
+        inoutpaint={
+            "mode": "outpaint",
+            "pad": plan["pad"],
+            "mask_png": plan["mask_png"],
+        },
+    )
+
+
+def test_outpaint_mask_matches_requested_frames():
+    """The pad mask is one frame. Outpaint must repeat it before the blend."""
+    wf, _meta = _outpaint_graph(25)
+    assert wf["40"]["inputs"]["length"] == 25
+    assert wf["75"]["inputs"]["trim_to_shortest"] is False
+    assert wf["35"]["inputs"]["input"] == ["32", 1]
+    assert wf["61"]["inputs"]["input"] == ["32", 1]
+
+    dups = {
+        str((node.get("_meta") or {}).get("title")): (nid, node)
+        for nid, node in wf.items()
+        if isinstance(node, dict) and node.get("class_type") == "VHS_DuplicateMasks"
+    }
+    assert set(dups) == {
+        "Repeat Outpaint Mask Stage 1",
+        "Repeat Outpaint Mask Stage 2",
+    }
+    stage1_id, stage1 = dups["Repeat Outpaint Mask Stage 1"]
+    stage2_id, stage2 = dups["Repeat Outpaint Mask Stage 2"]
+    assert stage1["inputs"]["mask"] == ["35", 0]
+    assert stage2["inputs"]["mask"] == ["61", 0]
+    assert stage1["inputs"]["multiply_by"] == 25
+    assert stage2["inputs"]["multiply_by"] == 25
+    assert wf["36"]["inputs"]["mask"] == [stage1_id, 0]
+    assert wf["62"]["inputs"]["mask"] == [stage2_id, 0]
+    assert wf["75"]["inputs"]["mask"] == ["62", 0]
+
+    short, _meta = _outpaint_graph(17)
+    assert short["40"]["inputs"]["length"] == 17
+    assert short["75"]["inputs"]["trim_to_shortest"] is False
+    for node in short.values():
+        if isinstance(node, dict) and node.get("class_type") == "VHS_DuplicateMasks":
+            assert node["inputs"]["multiply_by"] == 17
+
+    painted, _meta = load_and_patch_workflow(VARIANT, prompt="a potted plant", seed=1, frames=25)
+    assert painted["75"]["inputs"]["trim_to_shortest"] is True
+    assert painted["36"]["inputs"]["mask"] == ["35", 0]
+    assert painted["62"]["inputs"]["mask"] == ["61", 0]
+    assert not any(
+        isinstance(node, dict) and node.get("class_type") == "VHS_DuplicateMasks"
+        for node in painted.values()
+    )
+
+    info = json.loads(OBJECT_INFO_CACHE.read_text(encoding="utf-8"))
+    report = validate_workflow(wf, info, file_label="outpaint-mask-length")
+    assert report.ok, [str(item) for item in report.errors]
+
+
 def test_user_mask_name_is_not_replaced():
     wf, _meta = load_and_patch_workflow(
         VARIANT,
