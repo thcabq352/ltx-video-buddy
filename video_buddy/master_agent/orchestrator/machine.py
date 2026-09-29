@@ -141,7 +141,7 @@ class Orchestrator:
         except Exception as e:
             st.fail(f"patch failed: {e}")
             return False
-        if (st.variant or "") == "ltx23_inoutpaint":
+        if (st.variant or "") in ("ltx23_inoutpaint", "ltx25_inoutpaint"):
             st.width = int(meta.get("width") or st.width)
             st.height = int(meta.get("height") or st.height)
             if meta.get("inoutpaint_default_length") and st.frames is None:

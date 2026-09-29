@@ -73,6 +73,16 @@ _VARIANT_KEYWORDS = [
     # exists — rule_based_variant skips any variant not in WORKFLOW_FILES.
     # "heal" / "fill" alone are substrings of unrelated words ("health").
     # FaceID and Voronoi stay unwired — see capabilities notes.
+    # Before ltx23_inoutpaint and the generic "ltx 2.5" / "ltx25" rules.
+    # Bare "inpaint" still falls through to wan_fun_inpaint. Bare "ltx outpaint"
+    # and "outpaint" still fall through to ltx23_inoutpaint.
+    ("ltx25_inoutpaint", (
+        "ltx 2.5 inpaint", "ltx 2.5 outpaint", "ltx 2.5 inoutpaint",
+        "ltx 2.5 in-outpaint", "ltx2.5 inpaint", "ltx2.5 outpaint",
+        "ltx2.5 inoutpaint", "ltx25 inpaint", "ltx25 outpaint",
+        "ltx25 inoutpaint", "ltx-2.5 inpaint", "ltx-2.5 outpaint",
+        "ltx-2.5 inoutpaint", "ltx25_inoutpaint",
+    )),
     # Before wan_fun_inpaint: "ltx inpaint" contains the substring "inpaint".
     ("ltx23_inoutpaint", (
         "ltx inpaint", "ltx outpaint", "ltx in-outpaint", "ltx inoutpaint",
@@ -139,8 +149,13 @@ def rank_story_candidates(
     if force:
         return [(force, "forced")]
     if has_video:
-        from master_agent.comfy.inoutpaint import requests_inoutpaint
+        from master_agent.comfy.inoutpaint import (
+            requests_inoutpaint,
+            requests_ltx25_inoutpaint,
+        )
 
+        if requests_ltx25_inoutpaint(request):
+            return [("ltx25_inoutpaint", "input")]
         if requests_inoutpaint(request):
             return [("ltx23_inoutpaint", "input")]
         return [("lipsync", "input")]

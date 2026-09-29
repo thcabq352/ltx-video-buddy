@@ -55,6 +55,7 @@ LTX25_FILES: dict[str, str] = {
     "ltx25_v2v_ic_lora": "ltx-2.5/LTX-2.5_V2V_ICLoRA_Single_Stage_Distilled_api.json",
     "ltx25_a2v": "ltx-2.5/LTX-2.5_A2V_Two_Stage_Distilled_api.json",
     "ltx25_t2a": "ltx-2.5/LTX-2.5_T2A_Single_Stage_Distilled_api.json",
+    "ltx25_inoutpaint": "ltx-2.5/LTX-2.5_ICLoRA_Inpaint_Outpaint_Two_Stage_Distilled_api.json",
 }
 
 LTX25_META: dict[str, dict[str, Any]] = {
@@ -91,6 +92,14 @@ LTX25_META: dict[str, dict[str, Any]] = {
     "ltx25_t2a": {
         "description": "LTX 2.5 text-to-audio single-stage distilled",
         "modes": ["t2a"],
+        "weight_bundle": "ltx25_core",
+    },
+    "ltx25_inoutpaint": {
+        "description": (
+            "LTX 2.5 two-stage inpaint / outpaint. Distilled transformer, "
+            "2.3 In-Outpainting IC-LoRA at strength 1, pixel 2x refine."
+        ),
+        "modes": ["inpaint", "outpaint", "v2v"],
         "weight_bundle": "ltx25_core",
     },
 }
