@@ -1,15 +1,20 @@
 """LTX 2.3 inpaint / outpaint layout, mask PNG, and queue-time upload.
 
-The shipped graph is ``workflows/ltx23_inoutpaint_api.json``. White mask pixels
-are the region the IC-LoRA regenerates. Black pixels are held. Outpaint grows
-the canvas with ``ImagePadForOutpaint`` (pads are multiples of 8, the node's
-step) and builds a matching mask: white on the new border, black on the source.
+The shipped graphs are ``workflows/ltx23_inoutpaint_api.json`` and
+``workflows/ltx-2.5/LTX-2.5_ICLoRA_Inpaint_Outpaint_Two_Stage_Distilled_api.json``.
+White mask pixels are the region the IC-LoRA regenerates. Black pixels are
+held. Outpaint grows the canvas with ``ImagePadForOutpaint`` (pads are
+multiples of 8, the node's step) and builds a matching mask: white on the new
+border, black on the source. The 2.5 graph swaps its image-condition nodes to
+``LTXVImgToVideoConditionOnly`` when the mode is outpaint.
 """
 
 from __future__ import annotations
 
 import base64
+import json
 import math
+import shutil
 import struct
 import subprocess
 import tempfile
@@ -19,8 +24,11 @@ from pathlib import Path
 from typing import Any
 
 VARIANT = "ltx23_inoutpaint"
+LTX25_VARIANT = "ltx25_inoutpaint"
 MASK_PLACEHOLDER = "example.png"
 MASK_UPLOAD_NAME = "ltx23_inoutpaint_mask.png"
+LTX25_MASK_UPLOAD_NAME = "ltx25_inoutpaint_mask.png"
+PROVENANCE_VARIANTS = frozenset({VARIANT, LTX25_VARIANT})
 OFFICIAL_NEGATIVE = "pc game, console game, video game, cartoon, childish, ugly"
 
 # 16:9-ish working size that stays on the latent grid (multiples of 64) and
@@ -40,7 +48,7 @@ OUTPAINT_BLEND_DILATION = 2
 
 # Phrases that should win over lipsync when a source video is attached,
 # and over Wan Fun when the request names LTX outpaint. Bare "inpaint"
-# stays on wan_fun_inpaint.
+# stays on wan_fun_inpaint. These stay on ltx23_inoutpaint.
 ROUTE_KEYWORDS = (
     "ltx inpaint",
     "ltx outpaint",
@@ -58,6 +66,31 @@ ROUTE_KEYWORDS = (
 def requests_inoutpaint(text: str | None) -> bool:
     lowered = (text or "").lower()
     return any(key in lowered for key in ROUTE_KEYWORDS)
+
+
+# Checked before ROUTE_KEYWORDS and before generic "ltx 2.5" / "ltx25".
+# Bare "inpaint" and "ltx outpaint" do not match.
+LTX25_ROUTE_KEYWORDS = (
+    "ltx 2.5 inpaint",
+    "ltx 2.5 outpaint",
+    "ltx 2.5 inoutpaint",
+    "ltx 2.5 in-outpaint",
+    "ltx2.5 inpaint",
+    "ltx2.5 outpaint",
+    "ltx2.5 inoutpaint",
+    "ltx25 inpaint",
+    "ltx25 outpaint",
+    "ltx25 inoutpaint",
+    "ltx-2.5 inpaint",
+    "ltx-2.5 outpaint",
+    "ltx-2.5 inoutpaint",
+    "ltx25_inoutpaint",
+)
+
+
+def requests_ltx25_inoutpaint(text: str | None) -> bool:
+    lowered = (text or "").lower()
+    return any(key in lowered for key in LTX25_ROUTE_KEYWORDS)
 
 
 def _png_chunk(tag: bytes, data: bytes) -> bytes:
@@ -337,6 +370,99 @@ def probe_video_size(path: Path) -> tuple[int, int]:
     return int(w_s), int(h_s)
 
 
+def probe_video_frames(path: Path) -> int | None:
+    """Decoded video frame count. ``None`` when ffprobe cannot read it."""
+    cmd = [
+        "ffprobe",
+        "-v",
+        "error",
+        "-select_streams",
+        "v:0",
+        "-count_frames",
+        "-show_entries",
+        "stream=nb_read_frames",
+        "-of",
+        "csv=p=0",
+        str(path),
+    ]
+    try:
+        proc = subprocess.run(cmd, capture_output=True, text=True, check=False)
+    except FileNotFoundError as exc:
+        raise RuntimeError("ffprobe is not on PATH; cannot count source frames") from exc
+    if proc.returncode != 0:
+        detail = (proc.stderr or proc.stdout or "").strip()
+        raise RuntimeError(f"ffprobe failed for {path.name}: {detail}")
+    text = (proc.stdout or "").strip()
+    if not text.isdigit():
+        return None
+    return int(text)
+
+
+def trim_video_to_frame_count(path: Path, frames: int) -> Path:
+    """Trim ``path`` to ``frames`` when the source is longer than the latent.
+
+    A longer plate overruns ``EmptyLTXVLatentVideo``. Shorter plates are left
+    as they are. The returned path is the original file when no trim is needed.
+    """
+    want = int(frames)
+    if want < 1:
+        return path
+    have = probe_video_frames(path)
+    if have is None or have <= want:
+        return path
+    dest_dir = Path(tempfile.mkdtemp(prefix="ltx25-trim-"))
+    dest = dest_dir / f"{path.stem}-{want}f.mp4"
+    cmd = [
+        "ffmpeg",
+        "-y",
+        "-i",
+        str(path),
+        "-frames:v",
+        str(want),
+        "-map",
+        "0:v:0",
+        "-map",
+        "0:a:0?",
+        "-c:v",
+        "libx264",
+        "-pix_fmt",
+        "yuv420p",
+        "-preset",
+        "veryfast",
+        "-crf",
+        "18",
+        "-c:a",
+        "aac",
+        "-b:a",
+        "128k",
+        "-movflags",
+        "+faststart",
+        str(dest),
+    ]
+    try:
+        proc = subprocess.run(cmd, capture_output=True, text=True, check=False)
+    except FileNotFoundError as exc:
+        raise RuntimeError("ffmpeg is not on PATH; cannot trim the source to --frames") from exc
+    if proc.returncode != 0 or not dest.is_file():
+        detail = (proc.stderr or proc.stdout or "").strip()
+        raise RuntimeError(f"ffmpeg trim failed for {path.name}: {detail[-500:]}")
+    return dest
+
+
+def probe_output_media(path: str | Path) -> tuple[int | None, float | None]:
+    """Real frame count and duration of a saved mp4. ``(None, None)`` if unread."""
+    try:
+        from master_agent.judge.probe import probe_video
+    except Exception:
+        return None, None
+    info = probe_video(path)
+    frames = info.get("frames")
+    duration = info.get("duration_s")
+    got_frames = frames if isinstance(frames, int) and frames > 0 else None
+    got_duration = float(duration) if isinstance(duration, (int, float)) and duration > 0 else None
+    return got_frames, got_duration
+
+
 def _nodes(workflow: dict[str, Any], class_type: str) -> list[tuple[str, dict[str, Any]]]:
     found: list[tuple[str, dict[str, Any]]] = []
     for nid, node in workflow.items():
@@ -360,6 +486,61 @@ def _set(node: dict[str, Any] | None, key: str, value: Any) -> None:
     node.setdefault("inputs", {})[key] = value
 
 
+def _write_stage_resize(
+    workflow: dict[str, Any],
+    title: str,
+    width: int,
+    height: int,
+    *,
+    ltx25: bool,
+) -> None:
+    """Stage size for a titled ResizeImageMaskNode.
+
+    Comfy 0.35.1 ``scale dimensions`` requires ``resize_type.width``,
+    ``resize_type.height``, and ``resize_type.crop``. Plain ``width`` /
+    ``height`` are not those inputs. Crop stays ``disabled`` so the mask and
+    the frames stretch to the same pixels instead of center-cropping apart.
+    The 2.3 graph still uses the plain widgets until its own fix lands.
+    """
+    node = _by_title(workflow, "ResizeImageMaskNode", title)
+    if node is None:
+        return
+    inputs = node.setdefault("inputs", {})
+    if not ltx25:
+        inputs["width"] = width
+        inputs["height"] = height
+        return
+    inputs.pop("width", None)
+    inputs.pop("height", None)
+    inputs["resize_type"] = "scale dimensions"
+    inputs["resize_type.width"] = int(width)
+    inputs["resize_type.height"] = int(height)
+    inputs["resize_type.crop"] = "disabled"
+
+
+def _latent_frame_count(workflow: dict[str, Any]) -> int | None:
+    for _nid, node in _nodes(workflow, "EmptyLTXVLatentVideo"):
+        raw = (node.get("inputs") or {}).get("length")
+        if isinstance(raw, int) and raw > 0:
+            return raw
+    return None
+
+
+def _set_mask_repeat(workflow: dict[str, Any]) -> None:
+    """Repeat a still mask to the latent length. No-op when the node is absent."""
+    length = _latent_frame_count(workflow) or DEFAULT_FRAMES
+    for _nid, node in _nodes(workflow, "VHS_DuplicateMasks"):
+        node.setdefault("inputs", {})["multiply_by"] = int(length)
+
+
+def _stage_side(inputs: dict[str, Any], key: str, default: int) -> int:
+    for name in (f"resize_type.{key}", key):
+        raw = inputs.get(name)
+        if isinstance(raw, int) and raw > 0:
+            return raw
+    return default
+
+
 def finalize_inoutpaint_graph(
     workflow: dict[str, Any],
     *,
@@ -368,30 +549,31 @@ def finalize_inoutpaint_graph(
     mode: str = "inpaint",
     pad: dict[str, int] | None = None,
     mask_png: bytes | None = None,
+    ltx25: bool = False,
 ) -> None:
     """Write stage sizes, dilate/blend, and outpaint pads after the generic patcher.
 
     ``width`` / ``height`` are the stage-2 output. The empty latent is stage 1
-    (half) so ``LTXVLatentUpsampler`` lands on stage 2.
+    (half) so the x2 step (latent upscaler on 2.3, lanczos pixel resize on
+    2.5) lands on stage 2. ``ltx25`` keeps official blend dilations and, for
+    outpaint, swaps ``LTXVImgToVideoInplace`` to ``LTXVImgToVideoConditionOnly``.
     """
     stage_w, stage_h = fit_working_size(int(width), int(height))
     stage1_w, stage1_h = stage_w // 2, stage_h // 2
     outpaint = (mode or "inpaint").lower() == "outpaint"
-    _set(_by_title(workflow, "ResizeImageMaskNode", "Resize Frames Stage 1"), "width", stage1_w)
-    _set(_by_title(workflow, "ResizeImageMaskNode", "Resize Frames Stage 1"), "height", stage1_h)
-    _set(_by_title(workflow, "ResizeImageMaskNode", "Resize Frames Stage 2"), "width", stage_w)
-    _set(_by_title(workflow, "ResizeImageMaskNode", "Resize Frames Stage 2"), "height", stage_h)
-    _set(_by_title(workflow, "ResizeImageMaskNode", "Resize Mask Stage 1"), "width", stage1_w)
-    _set(_by_title(workflow, "ResizeImageMaskNode", "Resize Mask Stage 1"), "height", stage1_h)
-    _set(_by_title(workflow, "ResizeImageMaskNode", "Resize Mask Stage 2"), "width", stage_w)
-    _set(_by_title(workflow, "ResizeImageMaskNode", "Resize Mask Stage 2"), "height", stage_h)
+    _write_stage_resize(workflow, "Resize Frames Stage 1", stage1_w, stage1_h, ltx25=ltx25)
+    _write_stage_resize(workflow, "Resize Frames Stage 2", stage_w, stage_h, ltx25=ltx25)
+    _write_stage_resize(workflow, "Resize Mask Stage 1", stage1_w, stage1_h, ltx25=ltx25)
+    _write_stage_resize(workflow, "Resize Mask Stage 2", stage_w, stage_h, ltx25=ltx25)
     for _nid, node in _nodes(workflow, "EmptyLTXVLatentVideo"):
         inputs = node.setdefault("inputs", {})
         inputs["width"] = stage1_w
         inputs["height"] = stage1_h
     if outpaint:
         d1 = d2 = OUTPAINT_DILATE
-        blend = OUTPAINT_BLEND_DILATION
+        # 2.5 keeps the official blend dilations (5 then 6) in both modes.
+        # 2.3 outpaint still uses the smaller blend from #41.
+        blend = INPAINT_BLEND_DILATION if ltx25 else OUTPAINT_BLEND_DILATION
     else:
         d1, d2 = INPAINT_DILATE_STAGE1, INPAINT_DILATE_STAGE2
         blend = INPAINT_BLEND_DILATION
@@ -399,11 +581,26 @@ def finalize_inoutpaint_graph(
     _set(_by_title(workflow, "LTXVDilateVideoMask", "Dilate Mask Stage 1"), "temporal_radius", 0)
     _set(_by_title(workflow, "LTXVDilateVideoMask", "Dilate Mask Stage 2"), "spatial_radius", d2)
     _set(_by_title(workflow, "LTXVDilateVideoMask", "Dilate Mask Stage 2"), "temporal_radius", 0)
+    if ltx25:
+        _set(
+            _by_title(workflow, "LTXVLaplacianPyramidBlend", "Blend Stage 1"),
+            "mask_low_res_dilation",
+            5,
+        )
+        # A one-frame mask plus trim_to_shortest collapses the blend to 1 frame.
+        # The mask is repeated to the latent length; a length mismatch should error.
+        for _nid, node in _nodes(workflow, "LTXVLaplacianPyramidBlend"):
+            node.setdefault("inputs", {})["trim_to_shortest"] = False
+        _set_mask_repeat(workflow)
     _set(
         _by_title(workflow, "LTXVLaplacianPyramidBlend", "Blend Stage 2"),
         "mask_low_res_dilation",
         blend,
     )
+    if ltx25 and outpaint:
+        # Official 2.5 outpaint uses ConditionOnly. Inpaint stays Inplace.
+        for _nid, node in _nodes(workflow, "LTXVImgToVideoInplace"):
+            node["class_type"] = "LTXVImgToVideoConditionOnly"
     pads = pad or {}
     pad_node = _by_title(workflow, "ImagePadForOutpaint", "Outpaint Pad")
     if pad_node is None:
@@ -420,6 +617,15 @@ def finalize_inoutpaint_graph(
 
 def _mask_nodes(workflow: dict[str, Any]) -> list[dict[str, Any]]:
     return [node for _nid, node in _nodes(workflow, "LoadImageMask")]
+
+
+def mask_upload_name(workflow: dict[str, Any]) -> str:
+    """2.3 and 2.5 keep separate upload names so a shared queue does not collide."""
+    for _nid, node in _nodes(workflow, "SaveVideo"):
+        prefix = str((node.get("inputs") or {}).get("filename_prefix") or "")
+        if "ltx25" in prefix:
+            return LTX25_MASK_UPLOAD_NAME
+    return MASK_UPLOAD_NAME
 
 
 def _pop_mask_png(workflow: dict[str, Any]) -> bytes | None:
@@ -473,16 +679,14 @@ def ensure_inoutpaint_mask(
     if png is None:
         stage2 = _by_title(workflow, "ResizeImageMaskNode", "Resize Frames Stage 2")
         inputs = (stage2 or {}).get("inputs") or {}
-        try:
-            width = int(inputs.get("width") or 64)
-            height = int(inputs.get("height") or 64)
-        except (TypeError, ValueError):
-            width, height = 64, 64
+        width = _stage_side(inputs, "width", 64)
+        height = _stage_side(inputs, "height", 64)
         png = default_inpaint_mask_png(width, height)
-    with tempfile.TemporaryDirectory(prefix="ltx23-inoutpaint-") as tmp:
-        path = Path(tmp) / MASK_UPLOAD_NAME
+    upload_name = mask_upload_name(workflow)
+    with tempfile.TemporaryDirectory(prefix="ltx-inoutpaint-") as tmp:
+        path = Path(tmp) / upload_name
         path.write_bytes(png)
-        uploaded = upload(path) or MASK_UPLOAD_NAME
+        uploaded = upload(path) or upload_name
     name = str(uploaded)
     for node in _mask_nodes(workflow):
         inputs = node.setdefault("inputs", {})
@@ -492,6 +696,10 @@ def ensure_inoutpaint_mask(
     return name
 
 
+def _is_ltx25_workflow(workflow: dict[str, Any]) -> bool:
+    return mask_upload_name(workflow) == LTX25_MASK_UPLOAD_NAME
+
+
 def prepare_queue_inputs(
     workflow: dict[str, Any],
     upload: Callable[[Path], str],
@@ -499,7 +707,16 @@ def prepare_queue_inputs(
     """Upload a stashed source video, then the in/outpaint mask. Before lint."""
     local = _pop_local_video(workflow)
     if local is not None:
-        name = upload(local) or local.name
+        upload_path = local
+        if _is_ltx25_workflow(workflow):
+            length = _latent_frame_count(workflow)
+            if length:
+                upload_path = trim_video_to_frame_count(local, length)
+        try:
+            name = upload(upload_path) or upload_path.name
+        finally:
+            if upload_path != local:
+                shutil.rmtree(upload_path.parent, ignore_errors=True)
         for _nid, node in _nodes(workflow, "LoadVideo"):
             node.setdefault("inputs", {})["file"] = str(name)
     local_mask = _pop_local_mask(workflow)
@@ -548,7 +765,7 @@ def record_comfy_provenance(
     variant: str | None,
 ) -> dict[str, Any] | None:
     """Write ``buddy.clip.provenance/v1`` next to a comfy-run render."""
-    if (variant or "") != VARIANT:
+    if (variant or "") not in PROVENANCE_VARIANTS:
         return None
     from types import SimpleNamespace
 
@@ -571,15 +788,16 @@ def record_comfy_provenance(
             seed = raw_seed
     stage2 = _by_title(workflow, "ResizeImageMaskNode", "Resize Frames Stage 2")
     stage_in = (stage2 or {}).get("inputs") or {}
-    width = int(stage_in.get("width") or DEFAULT_WIDTH)
-    height = int(stage_in.get("height") or DEFAULT_HEIGHT)
-    frames = DEFAULT_FRAMES
-    latents = _nodes(workflow, "EmptyLTXVLatentVideo")
-    if latents:
-        raw_len = (latents[0][1].get("inputs") or {}).get("length")
-        if isinstance(raw_len, int):
-            frames = raw_len
+    width = _stage_side(stage_in, "width", DEFAULT_WIDTH)
+    height = _stage_side(stage_in, "height", DEFAULT_HEIGHT)
+    frames = _latent_frame_count(workflow) or DEFAULT_FRAMES
     fps = DEFAULT_FPS
+    measured_frames: int | None = None
+    measured_duration: float | None = None
+    if (variant or "") == LTX25_VARIANT:
+        measured_frames, measured_duration = probe_output_media(video_path)
+        if measured_frames:
+            frames = measured_frames
     videos = _nodes(workflow, "LoadVideo")
     video_name = ""
     if videos:
@@ -592,14 +810,14 @@ def record_comfy_provenance(
         request=positive,
         prompt=positive,
         negative_prompt=negative,
-        variant=VARIANT,
+        variant=variant,
         seed=seed,
         steps=8,
         cfg=1.0,
         width=width,
         height=height,
         fps=fps,
-        duration_s=frames / float(fps),
+        duration_s=measured_duration if measured_duration else frames / float(fps),
         video_name=video_name or None,
         mask_name=mask_name or None,
         attempt=1,
@@ -610,5 +828,227 @@ def record_comfy_provenance(
         shot=None,
     )
     payload = build_clip_provenance(state, path=video_path)
+    if (variant or "") == LTX25_VARIANT:
+        payload["params"]["frames"] = frames
+        payload["params"]["output_frames_source"] = (
+            "ffprobe" if measured_frames else "latent"
+        )
     write_clip_provenance(video_path, payload)
     return payload
+
+
+_LORA_SUFFIXES = (
+    ".lora_up.weight",
+    ".lora_down.weight",
+    ".lora_A.weight",
+    ".lora_B.weight",
+    ".lora_magnitude.weight",
+    ".alpha",
+    ".dora_scale",
+)
+_KEY_PREFIXES = (
+    "model.diffusion_model.",
+    "base_model.model.",
+    "diffusion_model.",
+    "transformer.",
+    "model.",
+)
+
+
+def _tensor_names(path: Path) -> list[str]:
+    name = path.name.lower()
+    if name.endswith(".gguf"):
+        return _gguf_tensor_names(path)
+    if name.endswith(".safetensors"):
+        return _safetensors_keys(path)
+    raise ValueError(f"cannot read tensor names from {path.name}")
+
+
+def _safetensors_keys(path: Path) -> list[str]:
+    with path.open("rb") as handle:
+        raw = handle.read(8)
+        if len(raw) < 8:
+            raise ValueError(f"{path.name} is not a safetensors file")
+        nbytes = struct.unpack("<Q", raw)[0]
+        if nbytes > 50_000_000:
+            raise ValueError(f"{path.name} header is unexpectedly large")
+        header = json.loads(handle.read(nbytes))
+    if not isinstance(header, dict):
+        raise ValueError(f"{path.name} header is not an object")
+    return [key for key in header if key != "__metadata__"]
+
+
+def _read_gguf_string(handle: Any) -> str:
+    nbytes = struct.unpack("<Q", handle.read(8))[0]
+    if nbytes > 10_000_000:
+        raise ValueError("gguf string is unexpectedly large")
+    return handle.read(nbytes).decode("utf-8", errors="replace")
+
+
+def _skip_gguf_value(handle: Any, value_type: int) -> None:
+    if value_type in (0, 1, 7):
+        handle.read(1)
+    elif value_type in (2, 3):
+        handle.read(2)
+    elif value_type in (4, 5, 6):
+        handle.read(4)
+    elif value_type in (10, 11, 12):
+        handle.read(8)
+    elif value_type == 8:
+        _read_gguf_string(handle)
+    elif value_type == 9:
+        elem = struct.unpack("<I", handle.read(4))[0]
+        count = struct.unpack("<Q", handle.read(8))[0]
+        if count > 5_000_000:
+            raise ValueError("gguf array is unexpectedly large")
+        for _ in range(count):
+            _skip_gguf_value(handle, elem)
+    else:
+        raise ValueError(f"unknown gguf value type {value_type}")
+
+
+def _gguf_tensor_names(path: Path) -> list[str]:
+    with path.open("rb") as handle:
+        if handle.read(4) != b"GGUF":
+            raise ValueError(f"{path.name} is not a GGUF file")
+        version = struct.unpack("<I", handle.read(4))[0]
+        if version < 2:
+            raise ValueError(f"{path.name} GGUF version {version} is too old")
+        tensor_count, kv_count = struct.unpack("<QQ", handle.read(16))
+        if tensor_count > 200_000 or kv_count > 200_000:
+            raise ValueError(f"{path.name} GGUF header is unexpectedly large")
+        for _ in range(kv_count):
+            _read_gguf_string(handle)
+            value_type = struct.unpack("<I", handle.read(4))[0]
+            _skip_gguf_value(handle, value_type)
+        names: list[str] = []
+        for _ in range(tensor_count):
+            names.append(_read_gguf_string(handle))
+            n_dims = struct.unpack("<I", handle.read(4))[0]
+            if n_dims > 8:
+                raise ValueError(f"{path.name} tensor rank {n_dims} is unexpected")
+            handle.read(8 * n_dims)
+            handle.read(4)
+            handle.read(8)
+        return names
+
+
+def _key_forms(key: str) -> set[str]:
+    forms = {key}
+    pending = [key]
+    while pending:
+        current = pending.pop()
+        for prefix in _KEY_PREFIXES:
+            if current.startswith(prefix):
+                stripped = current[len(prefix) :]
+                if stripped not in forms:
+                    forms.add(stripped)
+                    pending.append(stripped)
+        if current.endswith(".weight"):
+            stripped = current[: -len(".weight")]
+            if stripped not in forms:
+                forms.add(stripped)
+                pending.append(stripped)
+    return forms
+
+
+def _lora_module_names(keys: list[str]) -> set[str]:
+    modules: set[str] = set()
+    for key in keys:
+        for suffix in _LORA_SUFFIXES:
+            if key.endswith(suffix):
+                modules.add(key[: -len(suffix)])
+                break
+    return modules
+
+
+def match_lora_keys(lora_keys: list[str], model_keys: list[str]) -> dict[str, Any]:
+    """Count LoRA modules whose name matches a GGUF or safetensors tensor.
+
+    ``LTXICLoRALoaderModelOnly`` calls ``load_lora_for_models`` and does not
+    print how many keys attached. ``lowvram patches: 0`` is Comfy's offload
+    counter, not this count.
+    """
+    modules = _lora_module_names(lora_keys)
+    model_forms: set[str] = set()
+    for key in model_keys:
+        model_forms.update(_key_forms(key))
+    applied: list[str] = []
+    skipped: list[str] = []
+    for module in sorted(modules):
+        if _key_forms(module) & model_forms:
+            applied.append(module)
+        else:
+            skipped.append(module)
+    return {
+        "lora_modules": len(modules),
+        "applied": len(applied),
+        "skipped": len(skipped),
+        "sample_skipped": skipped[:8],
+        "recognized": bool(modules),
+    }
+
+
+def annotate_ic_lora(workflow: dict[str, Any]) -> dict[str, Any]:
+    """Record whether the IC-LoRA's keys match the loaded transformer.
+
+    Weights that are not on this machine stay ``weights_missing``. A zero
+    match against files that are present is ``no_match``.
+    """
+    loaders = _nodes(workflow, "LTXICLoRALoaderModelOnly")
+    if not loaders:
+        return {"status": "no_loader", "applied": 0, "skipped": 0}
+    node = loaders[0][1]
+    lora_name = str((node.get("inputs") or {}).get("lora_name") or "")
+    model_name = ""
+    model_link = (node.get("inputs") or {}).get("model")
+    if isinstance(model_link, (list, tuple)) and model_link:
+        source = workflow.get(str(model_link[0]))
+        if isinstance(source, dict):
+            model_name = str((source.get("inputs") or {}).get("unet_name") or "")
+    from master_agent.config import resolve_model_path
+
+    lora_path = resolve_model_path(lora_name) if lora_name else None
+    model_path = resolve_model_path(model_name) if model_name else None
+    result: dict[str, Any] = {
+        "status": "weights_missing",
+        "lora": lora_name,
+        "model": model_name,
+        "applied": 0,
+        "skipped": 0,
+    }
+    if lora_path is None or model_path is None:
+        result["missing"] = [
+            name
+            for name, found in ((lora_name, lora_path), (model_name, model_path))
+            if found is None and name
+        ]
+    else:
+        try:
+            counted = match_lora_keys(_tensor_names(lora_path), _tensor_names(model_path))
+        except (OSError, ValueError, json.JSONDecodeError, struct.error, UnicodeError) as exc:
+            result["status"] = "unreadable"
+            result["error"] = str(exc)
+        else:
+            result.update(counted)
+            if not counted["recognized"]:
+                result["status"] = "unrecognized_lora_keys"
+            elif counted["applied"]:
+                result["status"] = "applied"
+            else:
+                result["status"] = "no_match"
+    meta = node.setdefault("_meta", {})
+    meta["ic_lora_status"] = result["status"]
+    meta["ic_lora_applied"] = result["applied"]
+    meta["ic_lora_skipped"] = result["skipped"]
+    meta["ic_lora_model"] = model_name
+    return result
+
+
+def format_ic_lora_line(info: dict[str, Any] | None) -> str:
+    if not info:
+        return ""
+    return (
+        f"IC-LoRA {info.get('status')}: applied={info.get('applied', 0)} "
+        f"skipped={info.get('skipped', 0)} model={info.get('model') or ''}"
+    )

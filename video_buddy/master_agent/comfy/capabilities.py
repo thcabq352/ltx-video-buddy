@@ -173,6 +173,26 @@ CAPABILITY_CATALOG: tuple[Capability, ...] = (
         ),
     ),
     Capability(
+        "ltx25_inoutpaint",
+        "LTX 2.5 inpaint / outpaint IC-LoRA",
+        class_types=(
+            "LTXICLoRALoaderModelOnly",
+            "LTXVInpaintPreprocess",
+            "VAEDecodeTiled",
+            "VAEEncodeTiled",
+            "LTXVImgToVideoConditionOnly",
+        ),
+        surfaces=("director", "patcher", "template"),
+        templates=("ltx25_inoutpaint",),
+        notes=(
+            "Official LTX 2.5 two-stage in/outpaint path on the distilled "
+            "transformer (GGUF Q4 default, NVFP4 fallback). No distilled LoRA. "
+            "Reuses the 2.3 In-Outpainting IC-LoRA at strength 1. Stage 2 is "
+            "VAEDecodeTiled, Laplacian blend, 2x lanczos, VAEEncodeTiled, then "
+            "refine. Outpaint pads stay in Python. Untested on GPU."
+        ),
+    ),
+    Capability(
         "wan_fun_control",
         "WAN Fun Control",
         class_types=("Wan22FunControlToVideo", "WanFunControlToVideo"),

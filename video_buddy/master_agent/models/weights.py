@@ -543,6 +543,7 @@ VARIANT_BUNDLES: dict[str, str] = {
     "ltx25_t2a": "ltx25_core",
     "ltx25_v2v_ic_lora": "ltx25_iclora",
     "ltx25_msr": "ltx25_msr",
+    "ltx25_inoutpaint": "ltx25_core",
     "t2v_i2v": "ltx25_core",
     "t2v_i2v_two_stage": "ltx25_two_stage",
     "flf2v": "ltx25_core",
@@ -1197,7 +1198,8 @@ def ltx23_inoutpaint_lora_placement(roots: Iterable[Path] | None = None) -> dict
         "path": "",
         "detail": (
             f"missing {name} → models/loras/ (~1.31 GB, {HF_INOUTPAINT_LORA}). "
-            "Required by ltx23_inoutpaint. Doctor does not download weights."
+            "Required by ltx23_inoutpaint and ltx25_inoutpaint. "
+            "Doctor does not download weights."
         ),
         "fix": f"Place {name} in ComfyUI/models/loras/",
     }

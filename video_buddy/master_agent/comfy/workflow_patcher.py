@@ -1568,20 +1568,24 @@ def load_and_patch_workflow(
         DEFAULT_HEIGHT as INOUTPAINT_DEFAULT_HEIGHT,
         DEFAULT_WIDTH as INOUTPAINT_DEFAULT_WIDTH,
         OFFICIAL_NEGATIVE,
+        LTX25_VARIANT,
         VARIANT as INOUTPAINT_VARIANT,
         fit_working_size,
     )
 
     inout_mode = str((inoutpaint or {}).get("mode") or "inpaint")
+    inoutpaint_variant = variant in (INOUTPAINT_VARIANT, LTX25_VARIANT)
     h3 = is_h3_variant(variant)
-    if variant == INOUTPAINT_VARIANT:
+    if inoutpaint_variant:
         if inout_mode != "outpaint" and width == 768 and height == 512:
             width, height = INOUTPAINT_DEFAULT_WIDTH, INOUTPAINT_DEFAULT_HEIGHT
         width, height = fit_working_size(width, height)
         if not (negative_prompt or "").strip():
             negative_prompt = OFFICIAL_NEGATIVE
         if filename_prefix == "ltx_agent":
-            filename_prefix = "ltx23_inoutpaint"
+            filename_prefix = (
+                "ltx25_inoutpaint" if variant == LTX25_VARIANT else "ltx23_inoutpaint"
+            )
     elif h3:
         if width == 768 and height == 512:
             width, height = H3_DEFAULT_WIDTH, H3_DEFAULT_HEIGHT
@@ -1591,7 +1595,7 @@ def load_and_patch_workflow(
     gen = get_variant_gen(variant)
     defaulted_length = False
     if (
-        variant == INOUTPAINT_VARIANT
+        inoutpaint_variant
         and frames is None
         and abs(float(duration_s) - 5.0) < 1e-9
     ):
@@ -1770,7 +1774,8 @@ def load_and_patch_workflow(
 
         normalize_loader_widgets(workflow, object_info=object_info)
 
-    if variant == INOUTPAINT_VARIANT:
+    ic_lora_info = None
+    if inoutpaint_variant:
         from master_agent.comfy.inoutpaint import finalize_inoutpaint_graph
 
         finalize_inoutpaint_graph(
@@ -1780,7 +1785,12 @@ def load_and_patch_workflow(
             mode=inout_mode,
             pad=(inoutpaint or {}).get("pad"),
             mask_png=(inoutpaint or {}).get("mask_png"),
+            ltx25=variant == LTX25_VARIANT,
         )
+        if variant == LTX25_VARIANT:
+            from master_agent.comfy.inoutpaint import annotate_ic_lora
+
+            ic_lora_info = annotate_ic_lora(workflow)
 
     meta = {
         "variant": variant,
@@ -1801,6 +1811,8 @@ def load_and_patch_workflow(
         "filename_prefix": filename_prefix,
         "inoutpaint_default_length": defaulted_length,
     }
+    if ic_lora_info is not None:
+        meta["ic_lora"] = ic_lora_info
     try:
         from master_agent.models.vram_policy import prepare_warning, workflow_row
 

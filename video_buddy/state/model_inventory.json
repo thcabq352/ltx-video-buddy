@@ -364,6 +364,76 @@
    "partial": false
   },
   {
+   "name": "ltx-2.5-22b-distilled-transformer-bf16-Q4_K_M.gguf",
+   "rel_path": "diffusion_models/gguf/ltx-2.5-22b-distilled-transformer-bf16-Q4_K_M.gguf",
+   "folder": "diffusion_models",
+   "role": "diffusion",
+   "size_bytes": 13000000000,
+   "mtime": "2026-09-29T00:00:00.000000Z",
+   "root": "project",
+   "partial": false
+  },
+  {
+   "name": "ltx-2.5-22b-distilled-transformer-nvfp4.safetensors",
+   "rel_path": "diffusion_models/ltx-2.5-22b-distilled-transformer-nvfp4.safetensors",
+   "folder": "diffusion_models",
+   "role": "diffusion",
+   "size_bytes": 14000000000,
+   "mtime": "2026-09-29T00:00:00.000000Z",
+   "root": "project",
+   "partial": false
+  },
+  {
+   "name": "ltx-2.5-22b-distilled-transformer-bf16.safetensors",
+   "rel_path": "diffusion_models/ltx-2.5-22b-distilled-transformer-bf16.safetensors",
+   "folder": "diffusion_models",
+   "role": "diffusion",
+   "size_bytes": 42000000000,
+   "mtime": "2026-09-29T00:00:00.000000Z",
+   "root": "project",
+   "partial": false
+  },
+  {
+   "name": "gemma4-12b-heretic-ltx25-int8convrot.safetensors",
+   "rel_path": "text_encoders/gemma4-12b-heretic-ltx25-int8convrot.safetensors",
+   "folder": "text_encoders",
+   "role": "text_encoder",
+   "size_bytes": 12000000000,
+   "mtime": "2026-09-29T00:00:00.000000Z",
+   "root": "project",
+   "partial": false
+  },
+  {
+   "name": "gemma4-12b-with-proj-ltx-2.5-bf16.safetensors",
+   "rel_path": "text_encoders/gemma4-12b-with-proj-ltx-2.5-bf16.safetensors",
+   "folder": "text_encoders",
+   "role": "text_encoder",
+   "size_bytes": 26300000000,
+   "mtime": "2026-09-29T00:00:00.000000Z",
+   "root": "project",
+   "partial": false
+  },
+  {
+   "name": "ltx-2.5-video-vae-bf16.safetensors",
+   "rel_path": "vae/ltx-2.5-video-vae-bf16.safetensors",
+   "folder": "vae",
+   "role": "vae",
+   "size_bytes": 1500000000,
+   "mtime": "2026-09-29T00:00:00.000000Z",
+   "root": "project",
+   "partial": false
+  },
+  {
+   "name": "ltx-2.5-audio-vae-bf16.safetensors",
+   "rel_path": "vae/ltx-2.5-audio-vae-bf16.safetensors",
+   "folder": "vae",
+   "role": "vae",
+   "size_bytes": 365000000,
+   "mtime": "2026-09-29T00:00:00.000000Z",
+   "root": "project",
+   "partial": false
+  },
+  {
    "name": "ltx-2.3-22b-ic-lora-lipdub-0.9.safetensors",
    "rel_path": "loras/ltx-2.3-22b-ic-lora-lipdub-0.9.safetensors",
    "folder": "loras",

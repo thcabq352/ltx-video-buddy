@@ -190,6 +190,13 @@ def prepare_run(
         warn = (meta or {}).get("prepare_warning")
         if warn:
             print(warn)
+        ic_line = ""
+        if (meta or {}).get("ic_lora"):
+            from master_agent.comfy.inoutpaint import format_ic_lora_line
+
+            ic_line = format_ic_lora_line(meta.get("ic_lora"))
+        if ic_line:
+            print(ic_line)
         wf = apply_overrides(wf, overrides)
     else:
         raise ValueError(f"unknown mode {mode!r}")

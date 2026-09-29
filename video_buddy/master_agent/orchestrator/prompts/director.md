@@ -47,6 +47,10 @@ clean clone. Only pick them if they appear in the payload.
 - `ltx25_a2v` — audio-to-video. A still photo plus a voice file (no source video)
   uses this graph. Clip length follows the audio.
 - `ltx25_t2a` — text-to-audio only.
+- `ltx25_inoutpaint` — LTX 2.5 inpaint or outpaint of a source video. Pick this
+  when the request names LTX 2.5 (or ltx25) together with inpaint or outpaint.
+  Bare "inpaint" stays on `wan_fun_inpaint`. "ltx outpaint" / "outpaint" without
+  a 2.5 version stays on `ltx23_inoutpaint`.
 
 ## Variants — MiniMax H3
 - `h3_t2v` — fl2va text-to-AV (native stereo). Prefer for MiniMax / H3 / fl2va.

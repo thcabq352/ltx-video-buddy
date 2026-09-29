@@ -120,7 +120,7 @@ class RunState:
     end_guide_image: Optional[str] = None
     end_guide_frame_idx: Optional[int] = None
     end_guide_strength: Optional[float] = None
-    # ltx23_inoutpaint: mode / pad / optional mask PNG bytes. Not serialized to Comfy.
+    # ltx23_inoutpaint / ltx25_inoutpaint: mode / pad / optional mask PNG bytes. Not serialized to Comfy.
     inoutpaint: Optional[dict[str, Any]] = None
 
     # Control flow
