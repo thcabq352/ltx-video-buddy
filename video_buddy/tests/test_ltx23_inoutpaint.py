@@ -264,15 +264,6 @@ def test_user_mask_name_is_not_replaced():
     assert ensure_inoutpaint_mask(wf, _upload) is None
 
 
-def _non_resize_errors(report):
-    """2.3 still authors plain width/height. Its own PR owns that graph fix."""
-    return [
-        item
-        for item in report.errors
-        if not str(item.input_name).startswith("resize_type.")
-    ]
-
-
 def test_template_and_patched_graph_validate_offline():
     info = json.loads(OBJECT_INFO_CACHE.read_text(encoding="utf-8"))
     raw = json.loads((WORKFLOWS_DIR / WORKFLOW_FILES[VARIANT]).read_text(encoding="utf-8"))
@@ -281,12 +272,12 @@ def test_template_and_patched_graph_validate_offline():
     assert save["format.codec"] == "auto"
     assert save["codec"] == "auto"
     report = validate_workflow(raw, info, file_label="ltx23_inoutpaint_api.json")
-    assert not _non_resize_errors(report), [str(item) for item in _non_resize_errors(report)]
+    assert report.ok, [str(item) for item in report.errors]
     wf, _meta = load_and_patch_workflow(VARIANT, prompt="a wet street", seed=1, frames=17)
     assert wf["78"]["inputs"]["format.codec"] == "auto"
     assert wf["78"]["inputs"]["codec"] == "auto"
     patched = validate_workflow(wf, info, file_label="patched")
-    assert not _non_resize_errors(patched), [str(item) for item in _non_resize_errors(patched)]
+    assert patched.ok, [str(item) for item in patched.errors]
     # The IC-LoRA is newer than the cached combo. Inventory makes that a warning.
     assert any("in-outpainting" in str(item) for item in patched.warnings)
 
