@@ -251,6 +251,72 @@ ltx23_inoutpaint:
     final:
       node_id: "78"
 
+ltx25_inoutpaint:
+  file: ltx-2.5/LTX-2.5_ICLoRA_Inpaint_Outpaint_Two_Stage_Distilled_api.json
+  format: api
+  description: >
+    LTX 2.5 video inpaint and outpaint. The distilled transformer is already
+    distilled, so there is no distilled LoRA. The official 2.3 In-Outpainting
+    IC-LoRA is applied at strength 1. Stage 2 decodes, Laplacian-blends, and
+    2x lanczos-resizes in pixels before a tiled encode and refine. Default
+    768x448, 25 frames, CFG 1. GGUF Q4 is the authored loader; NVFP4 is the
+    fallback when that file is absent and VRAM is at least 14 GB.
+  vram_class: tight
+  vram_peak_gb: 14.0
+  requires: [ComfyUI-LTXVideo, VideoHelperSuite, ComfyUI-GGUF]
+  fields:
+    prompt:
+      node_id: "20"
+      input: text
+    negative_prompt:
+      node_id: "21"
+      input: text
+    seed:
+      class_type: RandomNoise
+      index: 0
+      input: noise_seed
+    width:
+      class_type: EmptyLTXVLatentVideo
+      index: 0
+      input: width
+    height:
+      class_type: EmptyLTXVLatentVideo
+      index: 0
+      input: height
+    frames:
+      class_type: EmptyLTXVLatentVideo
+      index: 0
+      input: length
+    text_encoder:
+      class_type: CLIPLoader
+      index: 0
+      input: clip_name
+    video_name:
+      class_type: LoadVideo
+      index: 0
+      input: file
+    mask:
+      class_type: LoadImageMask
+      index: 0
+      input: image
+    filename_prefix:
+      class_type: SaveVideo
+      index: 0
+      input: filename_prefix
+  inputs:
+    video:
+      class_type: LoadVideo
+      index: 0
+      input: file
+    mask:
+      optional: true
+      class_type: LoadImageMask
+      index: 0
+      input: image
+  outputs:
+    final:
+      node_id: "79"
+
 # --- Mickmumpitz library (converted to API format 2026-07-31) ---
 # The `*_api.json` versions (via the /workflow/convert endpoint) are queueable
 # and validate clean live + offline. The original UI exports are kept for

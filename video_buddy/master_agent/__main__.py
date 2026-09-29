@@ -1726,13 +1726,13 @@ def main(argv: list[str] | None = None) -> int:
     p.add_argument("--width", type=int, default=768, action=_DimSet)
     p.add_argument("--height", type=int, default=512, action=_DimSet)
     p.set_defaults(width_set=False, height_set=False)
-    p.add_argument("--video", help="source video file (lipsync or ltx23_inoutpaint); uploaded to ComfyUI first")
+    p.add_argument("--video", help="source video file (lipsync, ltx23_inoutpaint, or ltx25_inoutpaint); uploaded to ComfyUI first")
     p.add_argument("--image", help="source image file (i2v); uploaded to ComfyUI first")
     p.add_argument(
         "--mask",
         help="inpaint mask image (white=fill); uploaded to ComfyUI first. "
         "wan_fun_inpaint generates fun_inpaint_mask.png when this is omitted. "
-        "ltx23_inoutpaint generates a center mask when this is omitted. "
+        "ltx23_inoutpaint and ltx25_inoutpaint generate a center mask when this is omitted. "
         "--outpaint builds the border mask itself",
     )
     p.add_argument(

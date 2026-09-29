@@ -1,9 +1,12 @@
 """LTX 2.3 inpaint / outpaint layout, mask PNG, and queue-time upload.
 
-The shipped graph is ``workflows/ltx23_inoutpaint_api.json``. White mask pixels
-are the region the IC-LoRA regenerates. Black pixels are held. Outpaint grows
-the canvas with ``ImagePadForOutpaint`` (pads are multiples of 8, the node's
-step) and builds a matching mask: white on the new border, black on the source.
+The shipped graphs are ``workflows/ltx23_inoutpaint_api.json`` and
+``workflows/ltx-2.5/LTX-2.5_ICLoRA_Inpaint_Outpaint_Two_Stage_Distilled_api.json``.
+White mask pixels are the region the IC-LoRA regenerates. Black pixels are
+held. Outpaint grows the canvas with ``ImagePadForOutpaint`` (pads are
+multiples of 8, the node's step) and builds a matching mask: white on the new
+border, black on the source. The 2.5 graph swaps its image-condition nodes to
+``LTXVImgToVideoConditionOnly`` when the mode is outpaint.
 """
 
 from __future__ import annotations
@@ -19,8 +22,11 @@ from pathlib import Path
 from typing import Any
 
 VARIANT = "ltx23_inoutpaint"
+LTX25_VARIANT = "ltx25_inoutpaint"
 MASK_PLACEHOLDER = "example.png"
 MASK_UPLOAD_NAME = "ltx23_inoutpaint_mask.png"
+LTX25_MASK_UPLOAD_NAME = "ltx25_inoutpaint_mask.png"
+PROVENANCE_VARIANTS = frozenset({VARIANT, LTX25_VARIANT})
 OFFICIAL_NEGATIVE = "pc game, console game, video game, cartoon, childish, ugly"
 
 # 16:9-ish working size that stays on the latent grid (multiples of 64) and
@@ -40,7 +46,7 @@ OUTPAINT_BLEND_DILATION = 2
 
 # Phrases that should win over lipsync when a source video is attached,
 # and over Wan Fun when the request names LTX outpaint. Bare "inpaint"
-# stays on wan_fun_inpaint.
+# stays on wan_fun_inpaint. These stay on ltx23_inoutpaint.
 ROUTE_KEYWORDS = (
     "ltx inpaint",
     "ltx outpaint",
@@ -58,6 +64,31 @@ ROUTE_KEYWORDS = (
 def requests_inoutpaint(text: str | None) -> bool:
     lowered = (text or "").lower()
     return any(key in lowered for key in ROUTE_KEYWORDS)
+
+
+# Checked before ROUTE_KEYWORDS and before generic "ltx 2.5" / "ltx25".
+# Bare "inpaint" and "ltx outpaint" do not match.
+LTX25_ROUTE_KEYWORDS = (
+    "ltx 2.5 inpaint",
+    "ltx 2.5 outpaint",
+    "ltx 2.5 inoutpaint",
+    "ltx 2.5 in-outpaint",
+    "ltx2.5 inpaint",
+    "ltx2.5 outpaint",
+    "ltx2.5 inoutpaint",
+    "ltx25 inpaint",
+    "ltx25 outpaint",
+    "ltx25 inoutpaint",
+    "ltx-2.5 inpaint",
+    "ltx-2.5 outpaint",
+    "ltx-2.5 inoutpaint",
+    "ltx25_inoutpaint",
+)
+
+
+def requests_ltx25_inoutpaint(text: str | None) -> bool:
+    lowered = (text or "").lower()
+    return any(key in lowered for key in LTX25_ROUTE_KEYWORDS)
 
 
 def _png_chunk(tag: bytes, data: bytes) -> bytes:
@@ -368,11 +399,14 @@ def finalize_inoutpaint_graph(
     mode: str = "inpaint",
     pad: dict[str, int] | None = None,
     mask_png: bytes | None = None,
+    ltx25: bool = False,
 ) -> None:
     """Write stage sizes, dilate/blend, and outpaint pads after the generic patcher.
 
     ``width`` / ``height`` are the stage-2 output. The empty latent is stage 1
-    (half) so ``LTXVLatentUpsampler`` lands on stage 2.
+    (half) so the x2 step (latent upscaler on 2.3, lanczos pixel resize on
+    2.5) lands on stage 2. ``ltx25`` keeps official blend dilations and, for
+    outpaint, swaps ``LTXVImgToVideoInplace`` to ``LTXVImgToVideoConditionOnly``.
     """
     stage_w, stage_h = fit_working_size(int(width), int(height))
     stage1_w, stage1_h = stage_w // 2, stage_h // 2
@@ -391,7 +425,9 @@ def finalize_inoutpaint_graph(
         inputs["height"] = stage1_h
     if outpaint:
         d1 = d2 = OUTPAINT_DILATE
-        blend = OUTPAINT_BLEND_DILATION
+        # 2.5 keeps the official blend dilations (5 then 6) in both modes.
+        # 2.3 outpaint still uses the smaller blend from #41.
+        blend = INPAINT_BLEND_DILATION if ltx25 else OUTPAINT_BLEND_DILATION
     else:
         d1, d2 = INPAINT_DILATE_STAGE1, INPAINT_DILATE_STAGE2
         blend = INPAINT_BLEND_DILATION
@@ -399,11 +435,21 @@ def finalize_inoutpaint_graph(
     _set(_by_title(workflow, "LTXVDilateVideoMask", "Dilate Mask Stage 1"), "temporal_radius", 0)
     _set(_by_title(workflow, "LTXVDilateVideoMask", "Dilate Mask Stage 2"), "spatial_radius", d2)
     _set(_by_title(workflow, "LTXVDilateVideoMask", "Dilate Mask Stage 2"), "temporal_radius", 0)
+    if ltx25:
+        _set(
+            _by_title(workflow, "LTXVLaplacianPyramidBlend", "Blend Stage 1"),
+            "mask_low_res_dilation",
+            5,
+        )
     _set(
         _by_title(workflow, "LTXVLaplacianPyramidBlend", "Blend Stage 2"),
         "mask_low_res_dilation",
         blend,
     )
+    if ltx25 and outpaint:
+        # Official 2.5 outpaint uses ConditionOnly. Inpaint stays Inplace.
+        for _nid, node in _nodes(workflow, "LTXVImgToVideoInplace"):
+            node["class_type"] = "LTXVImgToVideoConditionOnly"
     pads = pad or {}
     pad_node = _by_title(workflow, "ImagePadForOutpaint", "Outpaint Pad")
     if pad_node is None:
@@ -420,6 +466,15 @@ def finalize_inoutpaint_graph(
 
 def _mask_nodes(workflow: dict[str, Any]) -> list[dict[str, Any]]:
     return [node for _nid, node in _nodes(workflow, "LoadImageMask")]
+
+
+def mask_upload_name(workflow: dict[str, Any]) -> str:
+    """2.3 and 2.5 keep separate upload names so a shared queue does not collide."""
+    for _nid, node in _nodes(workflow, "SaveVideo"):
+        prefix = str((node.get("inputs") or {}).get("filename_prefix") or "")
+        if "ltx25" in prefix:
+            return LTX25_MASK_UPLOAD_NAME
+    return MASK_UPLOAD_NAME
 
 
 def _pop_mask_png(workflow: dict[str, Any]) -> bytes | None:
@@ -479,10 +534,11 @@ def ensure_inoutpaint_mask(
         except (TypeError, ValueError):
             width, height = 64, 64
         png = default_inpaint_mask_png(width, height)
-    with tempfile.TemporaryDirectory(prefix="ltx23-inoutpaint-") as tmp:
-        path = Path(tmp) / MASK_UPLOAD_NAME
+    upload_name = mask_upload_name(workflow)
+    with tempfile.TemporaryDirectory(prefix="ltx-inoutpaint-") as tmp:
+        path = Path(tmp) / upload_name
         path.write_bytes(png)
-        uploaded = upload(path) or MASK_UPLOAD_NAME
+        uploaded = upload(path) or upload_name
     name = str(uploaded)
     for node in _mask_nodes(workflow):
         inputs = node.setdefault("inputs", {})
@@ -548,7 +604,7 @@ def record_comfy_provenance(
     variant: str | None,
 ) -> dict[str, Any] | None:
     """Write ``buddy.clip.provenance/v1`` next to a comfy-run render."""
-    if (variant or "") != VARIANT:
+    if (variant or "") not in PROVENANCE_VARIANTS:
         return None
     from types import SimpleNamespace
 
@@ -592,7 +648,7 @@ def record_comfy_provenance(
         request=positive,
         prompt=positive,
         negative_prompt=negative,
-        variant=VARIANT,
+        variant=variant,
         seed=seed,
         steps=8,
         cfg=1.0,

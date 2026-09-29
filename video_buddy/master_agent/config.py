@@ -211,6 +211,7 @@ VARIANT_GEN: dict[str, dict[str, int]] = {
     "ltx25_a2v": {"fps": 24, "frame_snap": 8},
     "ltx25_t2a": {"fps": 24, "frame_snap": 8},
     "ltx23_inoutpaint": {"fps": 24, "frame_snap": 8},
+    "ltx25_inoutpaint": {"fps": 24, "frame_snap": 8},
     "h3_t2v": {"fps": 24, "frame_snap": 17},
     "h3_i2v": {"fps": 24, "frame_snap": 17},
     "h3_flf": {"fps": 24, "frame_snap": 17},
@@ -431,6 +432,15 @@ MODEL_FILES["ltx25_v2v_ic_lora"] = {
 MODEL_FILES["ltx25_msr"] = {
     **_LTX25_SPLIT,
     "lora": "ltx-2.5-22b-ic-lora-ingredients-0.9.safetensors",
+}
+# No lora key and no latent upscaler. A lora key is sprayed onto
+# LTXICLoRALoaderModelOnly and would replace the authored 2.3 in/outpaint
+# IC-LoRA. Stage 2 is a pixel resize, so the spatial upscaler is not loaded.
+MODEL_FILES["ltx25_inoutpaint"] = {
+    "diffusion": _LTX25_SPLIT["diffusion"],
+    "vae": _LTX25_SPLIT["vae"],
+    "audio_vae": _LTX25_SPLIT["audio_vae"],
+    "text_encoder": _LTX25_SPLIT["text_encoder"],
 }
 
 _H3_SPLIT = {

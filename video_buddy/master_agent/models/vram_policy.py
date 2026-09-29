@@ -333,6 +333,15 @@ def _build_rows() -> dict[str, WorkflowVramRow]:
         ("ltx25_a2v", _LTX25[0], 12.8, "safe", ltx25_notes),
         ("ltx25_t2a", _LTX25[0], 8.5, "safe", "Audio-only; still prefers GGUF transformer if wired."),
         (
+            "ltx25_inoutpaint",
+            _LTX25[0],
+            14.0,
+            "tight",
+            ltx25_notes
+            + " Two-stage in/outpaint at 768x448 x 25 frames. "
+            "Estimated peak about 14 GB. Unmeasured — no GPU smoke test.",
+        ),
+        (
             "ltx25_t2v_i2v_two_stage",
             _LTX25[0],
             14.0,

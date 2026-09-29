@@ -31,6 +31,7 @@ See [`../../REQUIRED-FILES.md`](../../REQUIRED-FILES.md) and
 | `ltx25_v2v_ic_lora` | `v2v_ic_lora` | `LTX-2.5_V2V_ICLoRA_Single_Stage_Distilled_api.json` | IC-LoRA |
 | `ltx25_msr` | `msr` | `LTX-2.5_MSR_Multi_Reference_api.json` | pic1–pic4 + background |
 | `ltx25_flf2v` | `flf2v` | `LTX-2.5_FLF2V_api.json` | first + last frame |
+| `ltx25_inoutpaint` | — | `LTX-2.5_ICLoRA_Inpaint_Outpaint_Two_Stage_Distilled_api.json` | inpaint / outpaint, 2.3 IC-LoRA, pixel 2x |
 
 ```bash
 python -m master_agent workflows
