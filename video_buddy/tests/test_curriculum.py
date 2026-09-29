@@ -20,7 +20,8 @@ def test_part1_is_l0_through_l5():
     assert names == ["tree", "about", "health", "dry-run", "speed diagnose", "short proof"]
     card = curriculum_card()
     assert card["part1"] == PART1_ID == "LESSON_BUDDY_WORKS_HERE"
-    assert card["part2"] == PART2_ID == "LESSON_BUDDY_PART2_OVERNIGHT"
+    # Part 2 is the 1s–10s duration ladder. The overnight id predates that card.
+    assert card["part2"] == PART2_ID == "LESSON_BUDDY_DURATION_LADDER"
 
 
 def test_part2_requires_l5_and_human_ok():
