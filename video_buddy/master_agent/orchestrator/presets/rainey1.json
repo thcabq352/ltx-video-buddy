@@ -1,0 +1,88 @@
+{
+  "schema": "buddy.director.preset/v1",
+  "id": "rainey1",
+  "keyword": "rainey1",
+  "preferred_variant": "base",
+  "variant_note": "16GB default pin is catalog variant base. Its checkpoint is the distilled 10Eros bake (DEFAULT_ALL_IN_ONE_CKPT). A brief that says rainey1 stays on base even when it also says photoreal. Phase 0 ships no style LoRA and no face identity.",
+  "identity_policy": "Steal craft, not identity. Do not ship Jason Rainey's face as a hero, character asset, or LoRA. Lock the brief's own character (Scott / Blaze / KK / operator plate).",
+  "negative": "identity drift, face morph, twin faces, melted face, extra fingers, glow soup, rainbow noise, sparse melt, soft beauty filter, plastic skin, cartoon, anime, lowres, jpeg artifacts, watermark, subtitle, UI overlay, handheld phone selfie, empty flat lighting, toy MIDI vibe, stock b-roll look, random scene jump every frame, text burned in, logo burn",
+  "additives": [
+    "emissive multi-light",
+    "identity lock",
+    "zero slop",
+    "music-video hold",
+    "no text overlay"
+  ],
+  "recipes": [
+    {
+      "id": "rainey1_lock_open",
+      "cues": ["lock open", "lock_open", "lock-open", "identity desk"],
+      "frames": 9,
+      "width": 768,
+      "height": 512,
+      "variant": "base",
+      "purpose": "Identity desk plate I2V",
+      "anchor": "cluttered desk",
+      "prompt_pattern": "photoreal cinematic, locked character, medium shot at cluttered desk, open PC tower, keyboard hands, high-key window, shallow DOF, filmic contrast, identity stable, no morph, no text overlay",
+      "delivery": "",
+      "vertical_latent": false,
+      "notes": "DOWNSCALE_LADDER rung (768, 512, 9). Frames are 8n+1, minimum 9."
+    },
+    {
+      "id": "rainey1_breach",
+      "cues": ["breach"],
+      "frames": 17,
+      "width": 640,
+      "height": 384,
+      "variant": "base",
+      "purpose": "Same character dropped into a desert / craft breach",
+      "anchor": "night desert mesa",
+      "prompt_pattern": "same locked character, night desert mesa, metallic saucer overhead, soft bioluminescent mushrooms, white plasma arcs, deep blacks, emissive rim light on the face, craft owns the top third, identity stable, no morph",
+      "delivery": "",
+      "vertical_latent": false,
+      "notes": "DOWNSCALE_LADDER rung (640, 384, 17)."
+    },
+    {
+      "id": "rainey1_density",
+      "cues": ["density", "umbilicus", "look-up", "look up", "lookup"],
+      "frames": 25,
+      "width": 512,
+      "height": 384,
+      "variant": "base",
+      "purpose": "Climax umbilicus / look-up",
+      "anchor": "energy umbilicus",
+      "prompt_pattern": "same locked character looking up, multicolor energy umbilicus from the desk into the craft belly, nested neon mycelium, magenta cyan light-trails, RGB tower glow keys the face, maximal detail still readable on a phone, zero slop, HDR highlight roll-off",
+      "delivery": "",
+      "vertical_latent": false,
+      "notes": "DOWNSCALE_LADDER rung (512, 384, 25)."
+    },
+    {
+      "id": "rainey1_myth_16x9",
+      "cues": ["myth", "set-piece", "setpiece", "set piece"],
+      "frames": 25,
+      "width": 768,
+      "height": 512,
+      "variant": "base",
+      "purpose": "16:9 music-video myth set-piece",
+      "anchor": "myth set-piece",
+      "prompt_pattern": "cinematic 16:9 music-video plate, myth set-piece, photoreal, dramatic volumetric light, stable character continuity, music-video pacing hold, no watermark, no UI chrome",
+      "delivery": "",
+      "vertical_latent": false,
+      "notes": "Start 768x512 at 25 frames (8n+1). That pair is above the 25-frame ladder rung. OOM walks DOWNSCALE_LADDER; the next legal length after 25 is 33. Never queue length 8."
+    },
+    {
+      "id": "rainey1_story_9x16",
+      "cues": ["9:16", "9x16", "9×16", "reels", "vertical"],
+      "frames": 17,
+      "width": 640,
+      "height": 384,
+      "variant": "base",
+      "purpose": "Vertical story / reel plate",
+      "anchor": "9:16 story frame",
+      "prompt_pattern": "same locked character, 9:16 story frame composed for a center crop, craft owns the top third, emissive rim light, identity stable, no text overlay",
+      "delivery": "16:9 plate then ffmpeg center-crop to 9:16. Portrait 512x768 is not a legal start size: clamp_resolution caps height at 512 (balanced) or 384 (draft). Generate the DOWNSCALE_LADDER rung 640x384x17, then crop width to height*9/16 (216x384): ffmpeg -i plate.mp4 -vf crop=216:384 story.mp4",
+      "vertical_latent": false,
+      "notes": "Vertical latent is unsupported on this pin. Honor DOWNSCALE_LADDER (640, 384, 17) and crop."
+    }
+  ]
+}

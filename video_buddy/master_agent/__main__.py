@@ -314,6 +314,17 @@ def cmd_run(args: argparse.Namespace) -> int:
         args.duration = parsed_duration
         brief_applied = True
 
+    from master_agent.orchestrator.director_presets import (
+        apply_rainey1_namespace,
+        format_preset_line,
+    )
+
+    rainey_plan = apply_rainey1_namespace(args)
+    if rainey_plan is not None:
+        print(format_preset_line(rainey_plan))
+        if rainey_plan.delivery:
+            print(f"preset-delivery: {rainey_plan.delivery}")
+
     if args.variant:
         from master_agent.comfy.catalog import default_variant_ids, is_known_variant
 
@@ -441,6 +452,9 @@ def cmd_run(args: argparse.Namespace) -> int:
         from master_agent.orchestrator.machine import Orchestrator
 
         args.request = _maybe_interview(args.request, no_interview=args.no_interview)
+        from master_agent.orchestrator.director_presets import reapply_rainey1_prompt
+
+        reapply_rainey1_prompt(args)
         image_name = Path(args.image).name if getattr(args, "image", None) else None
         audio_name = Path(args.audio).name if getattr(args, "audio", None) else None
         st = Orchestrator().run(
@@ -463,6 +477,8 @@ def cmd_run(args: argparse.Namespace) -> int:
             max_judge_rounds=args.max_judge_rounds or MAX_JUDGE_ROUNDS,
             attach_recipe=attach_recipe,
             dry_run=True,
+            negative_prompt=getattr(args, "negative_prompt", None),
+            frames=getattr(args, "frames", None),
             control_pack_present=bool(attach_loaded and attach_loaded.control_pack_present),
             previs_source=(attach_loaded.previs_source if attach_loaded else ""),
         )
@@ -526,6 +542,9 @@ def cmd_run(args: argparse.Namespace) -> int:
     client = ComfyClient()
     if args.dry_run:
         args.request = _maybe_interview(args.request, no_interview=args.no_interview)
+        from master_agent.orchestrator.director_presets import reapply_rainey1_prompt
+
+        reapply_rainey1_prompt(args)
         return dry_run_pipeline(
             args.request,
             variant=args.variant,
@@ -558,6 +577,8 @@ def cmd_run(args: argparse.Namespace) -> int:
             pause_reset_strength=getattr(args, "pause_reset_strength", None),
             pause_reset_min_s=getattr(args, "pause_reset_min_s", None),
             inoutpaint=inoutpaint,
+            latent_frames=getattr(args, "frames", None),
+            negative_prompt=getattr(args, "negative_prompt", None),
         )
 
     if not client.is_up():
@@ -565,6 +586,9 @@ def cmd_run(args: argparse.Namespace) -> int:
         return 1
 
     args.request = _maybe_interview(args.request, no_interview=args.no_interview)
+    from master_agent.orchestrator.director_presets import reapply_rainey1_prompt
+
+    reapply_rainey1_prompt(args)
 
     # Auto-route music videos to the beat-synced pipeline (explicit --variant wins)
     if (
@@ -672,6 +696,8 @@ def cmd_run(args: argparse.Namespace) -> int:
         attach_recipe=attach_recipe,
         client=client,
         inoutpaint=inoutpaint,
+        latent_frames=getattr(args, "frames", None),
+        negative_prompt=getattr(args, "negative_prompt", None),
     )
     print()
     if result.status in ("done", "done_with_warnings"):
@@ -1146,10 +1172,13 @@ def cmd_download_models(args: argparse.Namespace) -> int:
 def cmd_workflows(args: argparse.Namespace) -> int:
     from master_agent.comfy.catalog import list_catalog_items
 
+    from master_agent.orchestrator.director_presets import list_recipe_rows
+
     items = list_catalog_items()
+    recipes = list_recipe_rows()
     variants = [i for i in items if i.get("kind") == "variant"]
     if args.json:
-        print(json.dumps(items, indent=1))
+        print(json.dumps([*items, *recipes], indent=1))
         return 0
     if getattr(args, "vram", False):
         from master_agent.models.vram_policy import format_vram_table, workflow_row
@@ -1163,12 +1192,21 @@ def cmd_workflows(args: argparse.Namespace) -> int:
                 f"  {item['id']:<28} {row.vram_class:<8} ~{row.expected_vram_gb:4.1f}G  "
                 f"{row.default_pack}{alt}"
             )
-        return 0
-    print(f"{len(variants)} default catalog variant(s):")
-    for item in variants:
-        desc = item.get("description") or ""
-        suffix = f"  {desc}" if desc else ""
-        print(f"  {item['id']:<28} {item.get('path', '')}{suffix}")
+    else:
+        print(f"{len(variants)} default catalog variant(s):")
+        for item in variants:
+            desc = item.get("description") or ""
+            suffix = f"  {desc}" if desc else ""
+            print(f"  {item['id']:<28} {item.get('path', '')}{suffix}")
+    if recipes:
+        print(f"{len(recipes)} director recipe(s):")
+        for row in recipes:
+            delivery = " crop" if row.get("delivery") else ""
+            print(
+                f"  {row['id']:<28} variant={row['variant']:<6} "
+                f"{row['width']}x{row['height']} {row['frames']}f  "
+                f"{row.get('description', '')}{delivery}"
+            )
     return 0
 
 

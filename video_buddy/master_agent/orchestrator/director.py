@@ -119,6 +119,13 @@ def _allowed_variants() -> set[str]:
 def rule_based_variant(request: str) -> str:
     text = (request or "").lower()
     allowed = set(WORKFLOW_FILES)
+    # rainey1 is a director preset, not a workflow slug. It pins `base`
+    # (the 16GB distilled 10Eros bake) before "photoreal" can select wan22.
+    from master_agent.orchestrator.director_presets import preset_variant_for_request
+
+    pinned = preset_variant_for_request(text)
+    if pinned and pinned in allowed:
+        return pinned
     for variant, keywords in _VARIANT_KEYWORDS:
         if variant not in allowed:
             continue
@@ -181,6 +188,11 @@ def rank_story_candidates(
         override = attach_director_override(attach_recipe)
         if override:
             _add(override, "attach")
+    from master_agent.orchestrator.director_presets import preset_variant_for_request
+
+    pinned = preset_variant_for_request(request)
+    if pinned:
+        _add(pinned, "preset")
     fallback = rule_based_variant(request)
     if DIRECTOR_LLM:
         llm_variant = _llm_variant(request, fallback=fallback)
