@@ -92,6 +92,40 @@ class Orchestrator:
 
     # ── states ────────────────────────────────────────────
 
+    def _apply_director_preset(self, st: RunState, force_variant: Optional[str]) -> None:
+        """Fill rainey1 frames, size, negative, and additives when the caller did not."""
+        from master_agent.orchestrator.director_presets import fill_rainey1
+
+        filled = fill_rainey1(
+            st.request or "",
+            variant=force_variant,
+            width=st.width,
+            height=st.height,
+            frames=st.frames,
+            negative=st.negative_prompt,
+        )
+        if filled is None:
+            return
+        if filled.apply_geometry:
+            st.width = filled.width
+            st.height = filled.height
+            st.frames = filled.frames
+            st.log(
+                f"preset {filled.recipe_id} {filled.width}x{filled.height} "
+                f"frames={filled.frames}"
+            )
+        if not (st.negative_prompt or "").strip():
+            st.negative_prompt = filled.negative
+        from master_agent.orchestrator.director_presets import (
+            compose_positive,
+            load_rainey1_pack,
+            recipe_by_id,
+        )
+
+        recipe = recipe_by_id(filled.recipe_id)
+        pack = load_rainey1_pack()
+        st.prompt = compose_positive(st.prompt or st.request or "", recipe, pack.additives)
+
     def _select_variant(self, st: RunState, force_variant: Optional[str]) -> str:
         from master_agent.hands import LiveHands
         from master_agent.orchestrator.director import choose_variant
@@ -705,6 +739,7 @@ class Orchestrator:
             ),
             max_piece_s=float(max_piece_s) if max_piece_s is not None else None,
         )
+        self._apply_director_preset(st, force_variant=variant)
         try:
             st.variant = self._select_variant(st, variant)
             from master_agent.orchestrator.talking import h3_r2v_audio_warning, media_route_error
