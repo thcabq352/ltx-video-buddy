@@ -12,6 +12,11 @@ from master_agent.judge.judge import (
     merge_scores,
     parse_weak_shot_indices,
 )
+from master_agent.judge.rubric import (
+    judge_rubric_debug,
+    resolve_judge_rubric,
+    verdict_from_frame_description,
+)
 from master_agent.judge.probe import (
     MIN_FRAMES,
     analyze,
@@ -46,7 +51,10 @@ __all__ = [
     "health_score_from_issues",
     "is_critical_fail",
     "judge_full_video",
+    "judge_rubric_debug",
     "judge_segment",
+    "resolve_judge_rubric",
+    "verdict_from_frame_description",
     "look_score_from_heuristic",
     "merge_scores",
     "parse_weak_shot_indices",
