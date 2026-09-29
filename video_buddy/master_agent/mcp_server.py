@@ -20,9 +20,33 @@ from pathlib import Path
 # Allow running as a plain script (no package context / cwd independence)
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
-from mcp.server.fastmcp import FastMCP  # noqa: E402
+try:
+    from mcp.server.fastmcp import FastMCP  # noqa: E402
+except ImportError:
+    FastMCP = None
 
-mcp = FastMCP("master-agent")
+
+class _ToolPassthrough:
+    """Call tool functions directly when the mcp package is not installed.
+
+    ``python -m`` / the script entry still need mcp. Unit tests import
+    ``create_video`` without starting the stdio server.
+    """
+
+    def tool(self):
+        def deco(fn):
+            return fn
+
+        return deco
+
+    def run(self) -> None:
+        raise ImportError(
+            "mcp is required to run the master-agent server. "
+            "Install video_buddy/requirements.txt."
+        )
+
+
+mcp = FastMCP("master-agent") if FastMCP is not None else _ToolPassthrough()
 
 
 def _quiet(fn, *args, **kwargs):

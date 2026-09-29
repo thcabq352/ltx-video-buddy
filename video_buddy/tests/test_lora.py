@@ -111,14 +111,24 @@ class TestRetryLadder:
 
 @pytest.fixture
 def train_env(tmp_path, monkeypatch):
-    """tmp CHARACTERS_DIR / AI_TOOLKIT_DIR / MODELS_DIR + character on disk."""
+    """tmp CHARACTERS_DIR / AI_TOOLKIT_DIR / MODELS_DIR + character on disk.
+
+    ``train_lora`` refuses to start unless ``resolve_model_path`` can see a
+    non-empty Flux UNet. That search uses ``config.MODELS_DIR``, not the
+    trainer binding, so the stand-in weight has to live on the config root.
+    """
     chars = tmp_path / "characters"
     toolkit = tmp_path / "ai-toolkit"
     models = tmp_path / "models"
     monkeypatch.setattr(tr, "CHARACTERS_DIR", chars)
     monkeypatch.setattr(tr, "AI_TOOLKIT_DIR", toolkit)
     monkeypatch.setattr(tr, "MODELS_DIR", models)
+    monkeypatch.setattr("master_agent.config.MODELS_DIR", models)
     monkeypatch.setattr("master_agent.kb.store.kb_available", lambda: False)
+
+    unet = models / "diffusion_models" / FLUX_UNET
+    unet.parent.mkdir(parents=True)
+    unet.write_bytes(b"flux-unet-stand-in")
 
     char_dir = chars / "mira"
     (char_dir / "dataset").mkdir(parents=True)

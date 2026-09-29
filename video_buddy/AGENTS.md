@@ -51,7 +51,7 @@ Print the card anytime: `python -m master_agent curriculum`.
 
 ### Part 1 — `LESSON_BUDDY_WORKS_HERE` (L0→L5)
 
-Do these in order. Do not jump to overnight work.
+Do these in order. Do not jump to the Part 2 duration ladder.
 
 | Lesson | Name | Do |
 |---|---|---|
@@ -62,9 +62,9 @@ Do these in order. Do not jump to overnight work.
 | L4 | speed diagnose | `python -m master_agent diagnose --variant base --prompt "garden proof"` — 9-frame hull, print `sec/step`. |
 | L5 | short proof | A real file in `outputs/`. `ffprobe` frames + size. Junk `<100KB` or `<3` frames is FAIL. |
 
-### Part 2 — `LESSON_BUDDY_PART2_OVERNIGHT`
+### Part 2 — `LESSON_BUDDY_DURATION_LADDER`
 
-Gated on **Part 1 L5 + human OK**. Do not start overnight/long-run work until a 9-frame proof exists and a human says OK.
+Gated on **Part 1 L5 + human OK**. This is the 1s→10s duration ladder (25→241 frames, `8n+1`). Do not start it until a 9-frame proof exists and a human says OK.
 
 ## Run
 
