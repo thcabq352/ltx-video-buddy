@@ -141,6 +141,12 @@ def _refs_from_state(st: Any) -> list[str]:
         value = getattr(st, attr, None)
         if value:
             refs.append(str(value))
+    extra = getattr(st, "ref_names", None)
+    if isinstance(extra, (list, tuple)):
+        for value in extra:
+            text = str(value or "").strip()
+            if text and text not in refs:
+                refs.append(text)
     return refs
 
 

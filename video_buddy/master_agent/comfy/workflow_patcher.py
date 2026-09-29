@@ -1559,6 +1559,7 @@ def load_and_patch_workflow(
     loras: Optional[list[dict[str, Any]]] = None,
     multi_ref: Optional[dict[str, Any]] = None,
     inoutpaint: Optional[dict[str, Any]] = None,
+    clamp_canvas: bool = True,
 ) -> tuple[dict[str, Any], dict[str, Any]]:
     """
     Returns (workflow_api_dict, meta) where meta has resolved generation params.
@@ -1590,8 +1591,13 @@ def load_and_patch_workflow(
         if width == 768 and height == 512:
             width, height = H3_DEFAULT_WIDTH, H3_DEFAULT_HEIGHT
         width, height = clamp_h3_resolution(width, height)
-    else:
+    elif clamp_canvas:
         width, height = clamp_resolution(width, height, quality="flux" if variant == "flux" else None)
+    else:
+        # Caller owns the 16GB cap (blaze vertical remakes). Still snap to
+        # the latent grid. Do not apply the landscape 768×512 clamp.
+        width = max(256, (int(width) // 32) * 32)
+        height = max(256, (int(height) // 32) * 32)
     gen = get_variant_gen(variant)
     defaulted_length = False
     if (

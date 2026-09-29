@@ -75,7 +75,10 @@ LTX25_META: dict[str, dict[str, Any]] = {
         "weight_bundle": "ltx25_core",
     },
     "ltx25_msr": {
-        "description": "LTX 2.5 multi-reference (pic1–pic4 + background)",
+        "description": (
+            "LTX 2.5 Ingredients IC-LoRA guide image "
+            "(LTXAddVideoICLoRAGuide + ingredients LoRA)"
+        ),
         "modes": ["msr", "i2v"],
         "weight_bundle": "ltx25_msr",
     },

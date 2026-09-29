@@ -29,7 +29,7 @@ See [`../../REQUIRED-FILES.md`](../../REQUIRED-FILES.md) and
 | `ltx25_t2a` | `t2a` | `LTX-2.5_T2A_Single_Stage_Distilled_api.json` | audio only |
 | `ltx25_a2v` | `a2v` | `LTX-2.5_A2V_Two_Stage_Distilled_api.json` | needs LoadAudio |
 | `ltx25_v2v_ic_lora` | `v2v_ic_lora` | `LTX-2.5_V2V_ICLoRA_Single_Stage_Distilled_api.json` | IC-LoRA |
-| `ltx25_msr` | `msr` | `LTX-2.5_MSR_Multi_Reference_api.json` | pic1–pic4 + background |
+| `ltx25_msr` | `msr` | `LTX-2.5_MSR_Multi_Reference_api.json` | Ingredients IC-LoRA guide. Vertical Blaze remakes: [`knowledge/workflows/2026-09-29-blaze-vertical-remake-ltx25-msr.md`](../../../knowledge/workflows/2026-09-29-blaze-vertical-remake-ltx25-msr.md) |
 | `ltx25_flf2v` | `flf2v` | `LTX-2.5_FLF2V_api.json` | first + last frame |
 | `ltx25_inoutpaint` | — | `LTX-2.5_ICLoRA_Inpaint_Outpaint_Two_Stage_Distilled_api.json` | inpaint / outpaint, 2.3 IC-LoRA, pixel 2x |
 
@@ -38,6 +38,8 @@ python -m master_agent workflows
 python -m master_agent doctor
 python -m master_agent download-models --ltx25
 python -m master_agent comfy run --mode generate --variant ltx25_t2v_i2v --prompt "BRIEF"
+python -m master_agent comfy run --mode generate --recipe blaze-concert --scott inputs/blaze/scott.jpg --blaze inputs/blaze/blaze.jpg --prepare
+python -m master_agent comfy run --mode generate --recipe blaze-pier --scott inputs/blaze/scott.jpg --blaze inputs/blaze/blaze.jpg --prepare
 python -m master_agent comfy run --mode generate --variant t2v_i2v --prompt "BRIEF" --prepare
 python -m master_agent run "BRIEF" --variant ltx25_flf2v --no-interview
 python -m master_agent run "BRIEF" --variant flf2v --image start.png --no-interview
