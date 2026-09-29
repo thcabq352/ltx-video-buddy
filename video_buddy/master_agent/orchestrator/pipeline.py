@@ -64,9 +64,17 @@ def _plan_storyboard(
 
     rag_context = ""
     try:
-        from master_agent.kb.recall import recall_similar_runs, recall_workflows
+        from master_agent.kb.recall import (
+            recall_knowledge,
+            recall_similar_runs,
+            recall_workflows,
+        )
 
-        blocks = [recall_similar_runs(request), recall_workflows(request)]
+        blocks = [
+            recall_knowledge(request),
+            recall_similar_runs(request),
+            recall_workflows(request),
+        ]
         rag_context = "\n\n".join(b for b in blocks if b)
         if rag_context:
             log("kb recall: injecting similar past runs into storyboard prompt")

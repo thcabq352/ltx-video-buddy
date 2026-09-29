@@ -134,11 +134,15 @@ POWER_MODE = os.getenv("POWER_MODE", "0").lower() in ("1", "true", "yes", "on")
 POWER_MODE_MAX_OPS = int(os.getenv("POWER_MODE_MAX_OPS", "12"))
 POWER_MODE_REPAIR = os.getenv("POWER_MODE_REPAIR", "1").lower() in ("1", "true", "yes", "on")
 
-# Knowledge base — ChromaDB RAG over workflows + run records
+# Knowledge base — ChromaDB RAG over workflows + run records + git knowledge/
 KB_ENABLED = os.getenv("KB_ENABLED", "1").lower() in ("1", "true", "yes", "on")
 KB_EMBED_MODEL = os.getenv("KB_EMBED_MODEL", "nomic-embed-text")
 KB_RECALL_K = int(os.getenv("KB_RECALL_K", "3"))
 CHROMA_DIR = Path(os.getenv("CHROMA_DIR", str(STATE_DIR / "chroma"))).resolve()
+# Git-synced learnings live at the repo root, next to the video_buddy/ package.
+KNOWLEDGE_DIR = Path(
+    os.getenv("KNOWLEDGE_DIR", str(PROJECT_ROOT.parent / "knowledge"))
+).resolve()
 # Outer full-video judge (multi-segment pipeline)
 MAX_FULL_JUDGE_ROUNDS = int(os.getenv("MAX_FULL_JUDGE_ROUNDS", "2"))
 

@@ -45,14 +45,64 @@ digests and run records on that machine. Markdown here is what git carries.
 Files under those folders that start with `EXAMPLE` are placeholders.
 They are not recorded runs.
 
-## TODO
+## Ingest into local Chroma
 
-**Next step, separate PR — do not do it in the scaffold PR.** Wire each
-local ChromaDB to ingest `knowledge/` on startup.
+Recorded entries are embedded into each machine's local Chroma collection
+`knowledge` (same store as workflows and runs: `video_buddy/state/chroma/`,
+same Ollama / llama.cpp embedding path). Workflow digests and run records
+are unchanged.
 
-Today `python -m master_agent kb ingest` loads workflow digests and run
-records through `video_buddy/master_agent/kb/ingest.py`
-(`ingest_workflows`, `ingest_all_runs`). It does not read this folder.
-The follow-up should add that ingest (startup, alongside the existing
-bulk load) without changing how workflows or run records are stored.
-Leave runtime code alone until that PR.
+Buddy does this on startup:
+
+- `python -m master_agent ui` (studio process, background)
+- the Hermes MCP server (`master_agent/mcp_server.py`, background, logs on stderr)
+
+The same pass runs inside `python -m master_agent kb ingest` and before
+storyboard / power-mode recall, so a new process picks up a pull without a
+separate command. After you edit this folder while a studio is already
+running, restart Buddy or run `kb ingest` again.
+
+**What is indexed.** `knowledge/**/*.md` with a real learning. One Chroma
+document per file, split into ~4000-character chunks only when an entry is
+longer than that. Document id is `knowledge:<relative-path>:<content-hash>`
+(plus `:chunk` when split). A second run upserts that id. A changed file
+deletes the previous id. A removed file is dropped. Re-running does not
+pile up copies.
+
+**What is skipped.**
+
+| Skip | Why |
+|---|---|
+| `README.md`, `AGENTS.md` | Schema and operator docs, not learnings. |
+| Filename starts with `EXAMPLE` | Placeholder seeds. |
+| First `status:` line is `example` | Same rule when the name was not prefixed. |
+| Secret-like tokens (`api_key=`, `sk-…`, `hf_…`, `ltxv_…`, bearer tokens) | Refused whole. Nothing from that file is embedded. |
+
+Absolute local paths (`C:\…`, `/Users/…`, `/home/…`) are replaced with
+`[local-path]` before embed. Repo-relative paths stay.
+
+`failures/` is stored with metadata `priority=high` and recalled ahead of
+other shared notes. Other metadata: `source=knowledge`,
+`category=prompts|workflows|judge-feedback|failures|decisions`, `path`.
+
+The scaffold ships only READMEs and one EXAMPLE prompt, so a fresh
+`kb stats` shows `knowledge=0` until somebody commits a `status: recorded`
+entry. That is the skip policy, not a failed ingest.
+
+### On the tower (Ocala or Albuquerque)
+
+From the repo root, after someone has pushed a recorded entry:
+
+```powershell
+git pull
+cd video_buddy
+.\.venv\Scripts\python.exe -m master_agent kb ingest
+.\.venv\Scripts\python.exe -m master_agent kb stats
+.\.venv\Scripts\python.exe -m master_agent kb search "the symptom you care about" --knowledge
+```
+
+`kb ingest` prints `N knowledge doc(s)` and a skipped-file count. Run it
+twice: `knowledge=` in `kb stats` stays the same. Starting the studio
+(`python -m master_agent ui`) or Hermes runs the same ingest; then `kb stats`
+in another shell shows the count. `GET /api/health` includes
+`kb.knowledge`. Search the studio with `/api/kb/search?collection=knowledge`.

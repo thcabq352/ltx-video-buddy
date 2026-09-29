@@ -59,7 +59,12 @@ def _quiet(fn, *args, **kwargs):
 def health() -> dict:
     """ComfyUI reachability + GPU VRAM, local LLM (Ollama / llama.cpp), KB counts."""
     from master_agent.comfy.client import ComfyClient
-    from master_agent.kb.store import COLLECTION_RUNS, COLLECTION_WORKFLOWS, collection_count
+    from master_agent.kb.store import (
+        COLLECTION_KNOWLEDGE,
+        COLLECTION_RUNS,
+        COLLECTION_WORKFLOWS,
+        collection_count,
+    )
     from master_agent.llm import attach_llm_health
 
     from master_agent.control.versioned_config import get_versioned_config
@@ -91,6 +96,7 @@ def health() -> dict:
     out["kb"] = {
         "workflows": collection_count(COLLECTION_WORKFLOWS),
         "runs": collection_count(COLLECTION_RUNS),
+        "knowledge": collection_count(COLLECTION_KNOWLEDGE),
     }
     return out
 
@@ -342,10 +348,16 @@ def search_runs(query: str, k: int = 3) -> list[dict]:
 
 @mcp.tool()
 def kb_ingest() -> dict:
-    """Bulk-load workflows + all run records into the knowledge base."""
-    from master_agent.kb.ingest import ingest_all_runs, ingest_workflows
+    """Bulk-load workflows, run records, and git-synced knowledge/ markdown."""
+    from master_agent.kb.ingest import ingest_all_runs, ingest_knowledge, ingest_workflows
 
-    return {"workflows": ingest_workflows(), "runs": ingest_all_runs()}
+    knowledge = ingest_knowledge()
+    return {
+        "workflows": ingest_workflows(),
+        "runs": ingest_all_runs(),
+        "knowledge": knowledge.docs,
+        "knowledge_skipped": knowledge.skipped,
+    }
 
 
 @mcp.tool()
@@ -458,4 +470,10 @@ if __name__ == "__main__":
         print(announce_config(), file=sys.stderr, flush=True)
     except Exception:
         pass
+    try:
+        from master_agent.kb.ingest import schedule_knowledge_ingest
+
+        schedule_knowledge_ingest(stderr=True)
+    except Exception as e:
+        print(f"[mcp_server] knowledge ingest not scheduled: {e}", file=sys.stderr)
     mcp.run()  # stdio transport

@@ -1,8 +1,10 @@
 # Agents reading `knowledge/`
 
 This folder is the git-synced memory between Ocala and Albuquerque.
-Local ChromaDB does not see it until a later PR wires ingest. Read
-these files yourself.
+Recorded markdown is copied into each machine's local Chroma collection
+`knowledge` on Buddy startup and by `python -m master_agent kb ingest`.
+Schema docs and `EXAMPLE` files are not indexed. Read these files
+yourself before you write; git stays the source of truth.
 
 ## Before you write
 

@@ -975,8 +975,9 @@ def cmd_music(args: argparse.Namespace) -> int:
 
 
 def cmd_kb(args: argparse.Namespace) -> int:
-    from master_agent.kb.ingest import ingest_all_runs, ingest_workflows
+    from master_agent.kb.ingest import ingest_all_runs, ingest_knowledge, ingest_workflows
     from master_agent.kb.store import (
+        COLLECTION_KNOWLEDGE,
         COLLECTION_RUNS,
         COLLECTION_WORKFLOWS,
         collection_count,
@@ -991,15 +992,30 @@ def cmd_kb(args: argparse.Namespace) -> int:
     if args.kb_command == "ingest":
         n_wf = ingest_workflows()
         n_runs = ingest_all_runs()
-        print(f"OK    ingested {n_wf} workflow(s), {n_runs} run record(s)")
-        print(f"      workflows={collection_count(COLLECTION_WORKFLOWS)} runs={collection_count(COLLECTION_RUNS)}")
+        knowledge = ingest_knowledge()
+        print(
+            f"OK    ingested {n_wf} workflow(s), {n_runs} run record(s), "
+            f"{knowledge.docs} knowledge doc(s)"
+        )
+        if knowledge.skipped:
+            print(f"      skipped {knowledge.skipped} knowledge file(s) (schema, EXAMPLE, or secret)")
+        print(
+            f"      workflows={collection_count(COLLECTION_WORKFLOWS)} "
+            f"runs={collection_count(COLLECTION_RUNS)} "
+            f"knowledge={collection_count(COLLECTION_KNOWLEDGE)}"
+        )
         return 0
 
     if args.kb_command == "search":
         if not args.query:
             print("FAIL  pass a query: kb search \"coffee ad\"")
             return 2
-        coll = COLLECTION_WORKFLOWS if args.workflows else COLLECTION_RUNS
+        if args.knowledge:
+            coll = COLLECTION_KNOWLEDGE
+        elif args.workflows:
+            coll = COLLECTION_WORKFLOWS
+        else:
+            coll = COLLECTION_RUNS
         hits = search(coll, args.query, k=args.k)
         if not hits:
             print("no hits")
@@ -1007,13 +1023,20 @@ def cmd_kb(args: argparse.Namespace) -> int:
         for h in hits:
             m = h.get("metadata") or {}
             dist = h.get("distance")
-            print(f"- [{dist:.3f}] {h.get('id')} {m.get('request') or m.get('name') or ''}")
+            print(
+                f"- [{dist:.3f}] {h.get('id')} "
+                f"{m.get('request') or m.get('path') or m.get('name') or ''}"
+            )
             first = (h.get("text") or "").splitlines()[0] if h.get("text") else ""
             print(f"    {first[:160]}")
         return 0
 
     if args.kb_command == "stats":
-        print(f"workflows={collection_count(COLLECTION_WORKFLOWS)} runs={collection_count(COLLECTION_RUNS)}")
+        print(
+            f"workflows={collection_count(COLLECTION_WORKFLOWS)} "
+            f"runs={collection_count(COLLECTION_RUNS)} "
+            f"knowledge={collection_count(COLLECTION_KNOWLEDGE)}"
+        )
         return 0
 
     return 2
@@ -1696,6 +1719,11 @@ def main(argv: list[str] | None = None) -> int:
     p.add_argument("query", nargs="?", default="", help="search query")
     p.add_argument("-k", type=int, default=3, help="max hits (default 3)")
     p.add_argument("--workflows", action="store_true", help="search workflows instead of runs")
+    p.add_argument(
+        "--knowledge",
+        action="store_true",
+        help="search the git-synced knowledge/ collection",
+    )
     p.set_defaults(func=cmd_kb)
 
     p = sub.add_parser("ui", help="web dashboard (FastAPI) on 127.0.0.1:8189")

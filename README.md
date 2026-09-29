@@ -195,8 +195,10 @@ video_buddy/
 Each machine's ChromaDB stays local (`video_buddy/state/chroma/`,
 gitignored). Learnings the other machine should see live in
 [`knowledge/`](knowledge/). **Pull before a run. Commit after** you add
-an entry. No secrets, API keys, or local absolute paths. Startup ingest
-into Chroma is a later PR — see the TODO in
+an entry. No secrets, API keys, or local absolute paths. Studio startup,
+the Hermes MCP server, and `python -m master_agent kb ingest` embed
+recorded entries into the local `knowledge` Chroma collection. Schema
+docs and `EXAMPLE` files are skipped. See
 [`knowledge/README.md`](knowledge/README.md).
 
 ## Documentation
