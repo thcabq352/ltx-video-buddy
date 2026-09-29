@@ -229,6 +229,7 @@ HEAVY_SLUGS: frozenset[str] = frozenset(
         "vb_aivfx_adv",
         "vb_aivfx_preprocess",
         "ltx23_lipsync_v08",
+        "ltx25_inoutpaint",
     }
 )
 
@@ -335,11 +336,13 @@ def _build_rows() -> dict[str, WorkflowVramRow]:
         (
             "ltx25_inoutpaint",
             _LTX25[0],
-            14.0,
-            "tight",
+            15.7,
+            "heavy",
             ltx25_notes
-            + " Two-stage in/outpaint at 768x448 x 25 frames. "
-            "Estimated peak about 14 GB. Unmeasured — no GPU smoke test.",
+            + " Two-stage in/outpaint. Tower smoke at 768x448 x 25 frames, "
+            "GGUF Q4, decode temporal 128, peaked about 15.7 GB. "
+            "Temporal tiles are now 16/4 so a 25-frame clip is decoded and "
+            "encoded in chunks; that peak is unmeasured.",
         ),
         (
             "ltx25_t2v_i2v_two_stage",
@@ -349,6 +352,7 @@ def _build_rows() -> dict[str, WorkflowVramRow]:
             ltx25_notes + " Spatial upscale is the quality path — not the 16GB default.",
         ),
     ):
+        heavy_inout = slug == "ltx25_inoutpaint"
         add(
             WorkflowVramRow(
                 slug=slug,
@@ -356,7 +360,19 @@ def _build_rows() -> dict[str, WorkflowVramRow]:
                 default_pack=pack,
                 expected_vram_gb=vram,
                 vram_class=klass,
-                safer_alternate="ltx25_t2v_i2v" if slug == "ltx25_t2v_i2v_two_stage" else "",
+                safer_alternate=(
+                    "ltx25_t2v_i2v"
+                    if slug in {"ltx25_t2v_i2v_two_stage", "ltx25_inoutpaint"}
+                    else ""
+                ),
+                prepare_warning=(
+                    _warn_heavy(
+                        "LTX 2.5 in/outpaint (measured ~15.7 GB at 768x448 x 25)",
+                        "ltx25_t2v_i2v",
+                    )
+                    if heavy_inout
+                    else ""
+                ),
                 notes=notes,
             )
         )

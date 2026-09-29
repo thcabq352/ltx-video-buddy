@@ -1774,6 +1774,7 @@ def load_and_patch_workflow(
 
         normalize_loader_widgets(workflow, object_info=object_info)
 
+    ic_lora_info = None
     if inoutpaint_variant:
         from master_agent.comfy.inoutpaint import finalize_inoutpaint_graph
 
@@ -1786,6 +1787,10 @@ def load_and_patch_workflow(
             mask_png=(inoutpaint or {}).get("mask_png"),
             ltx25=variant == LTX25_VARIANT,
         )
+        if variant == LTX25_VARIANT:
+            from master_agent.comfy.inoutpaint import annotate_ic_lora
+
+            ic_lora_info = annotate_ic_lora(workflow)
 
     meta = {
         "variant": variant,
@@ -1806,6 +1811,8 @@ def load_and_patch_workflow(
         "filename_prefix": filename_prefix,
         "inoutpaint_default_length": defaulted_length,
     }
+    if ic_lora_info is not None:
+        meta["ic_lora"] = ic_lora_info
     try:
         from master_agent.models.vram_policy import prepare_warning, workflow_row
 

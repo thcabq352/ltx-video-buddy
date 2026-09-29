@@ -6,6 +6,8 @@ Run: python -m pytest tests/test_ltx25_inoutpaint.py -q
 from __future__ import annotations
 
 import json
+import struct
+import subprocess
 from pathlib import Path
 
 from master_agent.comfy.inoutpaint import (
@@ -14,10 +16,15 @@ from master_agent.comfy.inoutpaint import (
     LTX25_VARIANT,
     MASK_PLACEHOLDER,
     OFFICIAL_NEGATIVE,
+    annotate_ic_lora,
     ensure_inoutpaint_mask,
     finalize_inoutpaint_graph,
+    match_lora_keys,
     outpaint_layout,
+    prepare_queue_inputs,
+    probe_video_frames,
     record_comfy_provenance,
+    stash_local_video,
 )
 from master_agent.comfy.validator import validate_workflow
 from master_agent.comfy.workflow_patcher import load_and_patch_workflow
@@ -69,10 +76,22 @@ def test_raw_graph_follows_official_25_loaders():
     assert raw["55"]["inputs"]["av_latent"] == ["54", 1]
     assert raw["74"]["inputs"]["av_latent"] == ["73", 0]
     assert raw["57"]["class_type"] == "VAEDecodeTiled"
-    assert raw["57"]["inputs"]["tile_size"] == 512
+    assert raw["57"]["inputs"]["tile_size"] == 384
     assert raw["57"]["inputs"]["overlap"] == 64
-    assert raw["57"]["inputs"]["temporal_size"] == 128
-    assert raw["57"]["inputs"]["temporal_overlap"] == 32
+    assert raw["57"]["inputs"]["temporal_size"] == 16
+    assert raw["57"]["inputs"]["temporal_overlap"] == 4
+    assert raw["65"]["inputs"]["temporal_size"] == 16
+    for nid in ("34", "35", "60", "61"):
+        assert raw[nid]["inputs"]["resize_type.width"]
+        assert raw[nid]["inputs"]["resize_type.height"]
+        assert raw[nid]["inputs"]["resize_type.crop"] == "disabled"
+        assert "width" not in raw[nid]["inputs"]
+    assert raw["36"]["inputs"]["mask"] == ["80", 0]
+    assert raw["80"]["class_type"] == "VHS_DuplicateMasks"
+    assert raw["80"]["inputs"]["multiply_by"] == 25
+    assert raw["81"]["inputs"]["mask"] == ["61", 0]
+    assert raw["58"]["inputs"]["trim_to_shortest"] is False
+    assert raw["76"]["inputs"]["trim_to_shortest"] is False
     assert raw["64"]["inputs"]["resize_type"] == "scale by multiplier"
     assert raw["64"]["inputs"]["resize_type.multiplier"] == 2
     assert raw["64"]["inputs"]["scale_method"] == "lanczos"
@@ -108,6 +127,15 @@ def test_patch_writes_prompt_and_keeps_ic_lora():
     assert wf["62"]["inputs"]["spatial_radius"] == 30
     assert wf["58"]["inputs"]["mask_low_res_dilation"] == 5
     assert wf["76"]["inputs"]["mask_low_res_dilation"] == 6
+    assert wf["58"]["inputs"]["trim_to_shortest"] is False
+    assert wf["76"]["inputs"]["trim_to_shortest"] is False
+    assert wf["34"]["inputs"]["resize_type.width"] == DEFAULT_WIDTH // 2
+    assert wf["34"]["inputs"]["resize_type.height"] == DEFAULT_HEIGHT // 2
+    assert wf["34"]["inputs"]["resize_type.crop"] == "disabled"
+    assert "width" not in wf["34"]["inputs"]
+    assert wf["60"]["inputs"]["resize_type.width"] == DEFAULT_WIDTH
+    assert wf["80"]["inputs"]["multiply_by"] == 25
+    assert wf["81"]["inputs"]["multiply_by"] == 25
     assert wf["33"]["inputs"]["image"] == MASK_PLACEHOLDER
     assert wf["30"]["inputs"]["file"] == "robot_unitree.mp4"
     assert wf["40"]["class_type"] == "LTXVImgToVideoInplace"
@@ -257,6 +285,9 @@ def test_comfy_run_provenance_uses_existing_schema(tmp_path: Path):
     assert payload["prompts"]["positive"] == "UNIQUE_SANDY_BEACH"
     assert payload["engine"]["variant"] == LTX25_VARIANT
     assert payload["params"]["fps"] == 24
+    assert payload["params"]["frames"] == 25
+    assert payload["params"]["output_frames_source"] == "latent"
+    assert payload["params"]["duration"] == 25 / 24
     assert "robot_unitree.mp4" in payload["params"]["refs"]
     assert record_comfy_provenance(wf, clip, variant="lipsync") is None
     assert record_comfy_provenance(wf, clip, variant="ltx23_inoutpaint") is not None
@@ -288,7 +319,10 @@ def test_finalize_halves_stage_size_and_keeps_23_blend():
         },
     }
     finalize_inoutpaint_graph(wf, width=768, height=448, mode="outpaint", ltx25=True)
-    assert wf["60"]["inputs"]["width"] == 768
+    assert wf["60"]["inputs"]["resize_type.width"] == 768
+    assert wf["60"]["inputs"]["resize_type.crop"] == "disabled"
+    assert "width" not in wf["60"]["inputs"]
+    assert wf["58"]["inputs"]["trim_to_shortest"] is False
     assert wf["39"]["inputs"]["width"] == 384
     assert wf["39"]["inputs"]["height"] == 224
     assert wf["58"]["inputs"]["mask_low_res_dilation"] == 5
@@ -306,3 +340,144 @@ def test_finalize_halves_stage_size_and_keeps_23_blend():
     finalize_inoutpaint_graph(legacy, width=768, height=448, mode="outpaint")
     assert legacy["75"]["inputs"]["mask_low_res_dilation"] == 2
     assert legacy["42"]["class_type"] == "LTXVImgToVideoInplace"
+    assert "trim_to_shortest" not in legacy["75"]["inputs"]
+
+
+def test_missing_resize_type_children_fail_offline_validation():
+    info = json.loads(OBJECT_INFO_CACHE.read_text(encoding="utf-8"))
+    raw = json.loads((WORKFLOWS_DIR / WORKFLOW_FILES[LTX25_VARIANT]).read_text(encoding="utf-8"))
+    for key in ("resize_type.width", "resize_type.height", "resize_type.crop"):
+        del raw["34"]["inputs"][key]
+    raw["34"]["inputs"]["width"] = 384
+    raw["34"]["inputs"]["height"] = 224
+    report = validate_workflow(raw, info, file_label="plain-width")
+    assert not report.ok
+    fields = {err.input_name for err in report.errors}
+    assert "resize_type.width" in fields
+    assert "resize_type.height" in fields
+    assert "resize_type.crop" in fields
+
+
+def test_prepare_trims_source_to_latent_length(tmp_path: Path):
+    src = tmp_path / "long.mp4"
+    subprocess.run(
+        [
+            "ffmpeg", "-y", "-f", "lavfi", "-i", "color=c=black:s=64x64:r=24",
+            "-frames:v", "12", str(src),
+        ],
+        check=True, capture_output=True,
+    )
+    assert probe_video_frames(src) == 12
+    wf, _meta = load_and_patch_workflow(LTX25_VARIANT, prompt="trim me", seed=1, frames=9)
+    stash_local_video(wf, src)
+    uploaded: list[int | None] = []
+
+    def _upload(path: Path) -> str:
+        uploaded.append(probe_video_frames(path))
+        return "trimmed.mp4"
+
+    prepare_queue_inputs(wf, _upload)
+    assert uploaded[0] == 9
+    assert wf["30"]["inputs"]["file"] == "trimmed.mp4"
+    assert wf["80"]["inputs"]["multiply_by"] == 9
+
+
+def test_prepare_leaves_a_short_source_untrimmed(tmp_path: Path):
+    src = tmp_path / "short.mp4"
+    subprocess.run(
+        [
+            "ffmpeg", "-y", "-f", "lavfi", "-i", "color=c=black:s=64x64:r=24",
+            "-frames:v", "9", str(src),
+        ],
+        check=True, capture_output=True,
+    )
+    wf, _meta = load_and_patch_workflow(LTX25_VARIANT, prompt="keep", seed=1, frames=17)
+    stash_local_video(wf, src)
+    seen: list[Path] = []
+
+    def _upload(path: Path) -> str:
+        seen.append(path)
+        return path.name
+
+    prepare_queue_inputs(wf, _upload)
+    assert seen[0] == src
+
+
+def test_ic_lora_key_match_counts_gguf_modules(tmp_path, monkeypatch):
+    module = "blocks.0.attn.to_q"
+    lora = tmp_path / "lora.safetensors"
+    model = tmp_path / "model.gguf"
+    _write_safetensors(
+        lora,
+        [f"diffusion_model.{module}.lora_A.weight", f"diffusion_model.{module}.lora_B.weight"],
+    )
+    _write_gguf(model, [f"model.diffusion_model.{module}.weight", "unrelated.bias"])
+    counted = match_lora_keys(
+        ["diffusion_model." + module + ".lora_A.weight", "diffusion_model." + module + ".lora_B.weight", "other.alpha"],
+        [f"model.diffusion_model.{module}.weight"],
+    )
+    assert counted["applied"] == 1
+    assert counted["skipped"] == 1
+
+    def _resolve(name: str):
+        if name.endswith(".safetensors"):
+            return lora
+        if name.endswith(".gguf"):
+            return model
+        return None
+
+    monkeypatch.setattr("master_agent.config.resolve_model_path", _resolve)
+    wf, meta = load_and_patch_workflow(LTX25_VARIANT, prompt="lora check", seed=1, frames=9)
+    # The patcher may rewrite the loader when no local GGUF exists. Point it
+    # at the synthetic files after patch, then re-count.
+    wf["15"]["inputs"]["lora_name"] = lora.name
+    wf["10"]["inputs"]["unet_name"] = model.name
+    wf["10"]["class_type"] = "UnetLoaderGGUF"
+    info = annotate_ic_lora(wf)
+    assert info["status"] == "applied"
+    assert info["applied"] == 1
+    assert info["skipped"] == 0
+    assert wf["15"]["_meta"]["ic_lora_applied"] == 1
+    assert wf["15"]["_meta"]["ic_lora_status"] == "applied"
+    assert "ic_lora" in meta
+
+
+def test_provenance_records_probed_output_frames(tmp_path, monkeypatch):
+    wf, _meta = load_and_patch_workflow(
+        LTX25_VARIANT, prompt="UNIQUE_SANDY_BEACH", seed=11, frames=25,
+    )
+    clip = tmp_path / "clip.mp4"
+    clip.write_bytes(b"not a real mp4")
+
+    def _probe(_path):
+        return {"frames": 9, "duration_s": 0.375, "exists": True}
+
+    monkeypatch.setattr("master_agent.judge.probe.probe_video", _probe)
+    payload = record_comfy_provenance(wf, clip, variant=LTX25_VARIANT)
+    assert payload["params"]["frames"] == 9
+    assert payload["params"]["duration"] == 0.375
+    assert payload["params"]["output_frames_source"] == "ffprobe"
+    assert missing_required(payload) == []
+
+
+def _write_safetensors(path: Path, keys: list[str]) -> None:
+    header = {key: {"dtype": "F32", "shape": [1], "data_offsets": [0, 4]} for key in keys}
+    raw = json.dumps(header).encode("utf-8")
+    path.write_bytes(struct.pack("<Q", len(raw)) + raw + b"\x00\x00\x00\x00")
+
+
+def _gguf_string(text: str) -> bytes:
+    blob = text.encode("utf-8")
+    return struct.pack("<Q", len(blob)) + blob
+
+
+def _write_gguf(path: Path, names: list[str]) -> None:
+    # version 3, no metadata, one dummy dim per tensor
+    parts = [b"GGUF", struct.pack("<I", 3), struct.pack("<QQ", len(names), 0)]
+    for name in names:
+        parts.append(_gguf_string(name))
+        parts.append(struct.pack("<I", 1))  # n_dims
+        parts.append(struct.pack("<Q", 1))  # dim
+        parts.append(struct.pack("<I", 0))  # ggml type
+        parts.append(struct.pack("<Q", 0))  # offset
+    path.write_bytes(b"".join(parts))

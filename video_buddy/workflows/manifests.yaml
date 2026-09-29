@@ -260,9 +260,11 @@ ltx25_inoutpaint:
     IC-LoRA is applied at strength 1. Stage 2 decodes, Laplacian-blends, and
     2x lanczos-resizes in pixels before a tiled encode and refine. Default
     768x448, 25 frames, CFG 1. GGUF Q4 is the authored loader; NVFP4 is the
-    fallback when that file is absent and VRAM is at least 14 GB.
-  vram_class: tight
-  vram_peak_gb: 14.0
+    fallback when that file is absent and VRAM is at least 14 GB. A tower
+    smoke at this size peaked about 15.7 GB before temporal tiles were
+    lowered to 16.
+  vram_class: heavy
+  vram_peak_gb: 15.7
   requires: [ComfyUI-LTXVideo, VideoHelperSuite, ComfyUI-GGUF]
   fields:
     prompt:

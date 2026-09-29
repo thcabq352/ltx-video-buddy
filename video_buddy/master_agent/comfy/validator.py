@@ -212,6 +212,55 @@ def _autogrow_child_type(spec: Any) -> Optional[str]:
     return _spec_type(_autogrow_child_spec(spec))
 
 
+def _dynamic_combo_options(spec: Any) -> Optional[list[dict[str, Any]]]:
+    """Options of a COMFY_DYNAMICCOMBO_V3 input, or None.
+
+    Comfy 0.35.1 names the selected option's children ``resize_type.width``.
+    A plain ``width`` widget does not satisfy that required input.
+    """
+    if not (
+        isinstance(spec, (list, tuple))
+        and spec
+        and spec[0] == "COMFY_DYNAMICCOMBO_V3"
+        and len(spec) > 1
+        and isinstance(spec[1], dict)
+    ):
+        return None
+    options = spec[1].get("options")
+    if not isinstance(options, list):
+        return None
+    return [opt for opt in options if isinstance(opt, dict) and opt.get("key")]
+
+
+def _dynamic_option(spec: Any, selected: Any) -> Optional[dict[str, Any]]:
+    options = _dynamic_combo_options(spec)
+    if not options or not isinstance(selected, str):
+        return None
+    for opt in options:
+        if opt.get("key") == selected:
+            return opt
+    return None
+
+
+def _dynamic_child_specs(option: dict[str, Any]) -> dict[str, Any]:
+    groups = option.get("inputs")
+    if not isinstance(groups, dict):
+        return {}
+    found: dict[str, Any] = {}
+    for section in ("required", "optional"):
+        block = groups.get(section)
+        if isinstance(block, dict):
+            found.update(block)
+    return found
+
+
+def _dynamic_child_spec(base_spec: Any, selected: Any, child: str) -> Any:
+    option = _dynamic_option(base_spec, selected)
+    if option is None:
+        return None
+    return _dynamic_child_specs(option).get(child)
+
+
 def _validate_scalar(
     report: ValidationReport,
     node_id: str,
@@ -445,15 +494,45 @@ def validate_workflow(
                 continue
             report.error(node_id, name, f"required input missing (class {class_type})")
 
+        for name, spec in known.items():
+            options = _dynamic_combo_options(spec)
+            if not options:
+                continue
+            selected = inputs.get(name)
+            if _is_link(selected):
+                continue
+            option = _dynamic_option(spec, selected)
+            if option is None:
+                keys = ", ".join(repr(opt.get("key")) for opt in options[:6])
+                report.error(
+                    node_id,
+                    name,
+                    f"value {selected!r} is not a {class_type} dynamic option: {keys}",
+                )
+                continue
+            required_children = (option.get("inputs") or {}).get("required") or {}
+            if isinstance(required_children, dict):
+                for child in sorted(required_children):
+                    full = f"{name}.{child}"
+                    if full not in inputs:
+                        report.error(
+                            node_id,
+                            full,
+                            f"required dynamic input missing for {name}={selected!r} "
+                            f"(class {class_type})",
+                        )
+
         for name, value in inputs.items():
             spec = known.get(name)
             expected: Optional[str] = None
             if spec is None and "." in name:
-                # Child of an autogrow group ('values.a' → 'values').
-                # Validate the slot as the template input (IMAGE, COMBO, …),
-                # not as the COMFY_AUTOGROW_V3 group.
-                base_spec = known.get(name.split(".", 1)[0])
+                # Child of an autogrow group ('values.a' → 'values') or a
+                # dynamic combo ('resize_type.width' → 'resize_type').
+                base, child = name.split(".", 1)
+                base_spec = known.get(base)
                 child_spec = _autogrow_child_spec(base_spec)
+                if child_spec is None:
+                    child_spec = _dynamic_child_spec(base_spec, inputs.get(base), child)
                 child_type = _spec_type(child_spec)
                 if child_type is not None:
                     spec = child_spec

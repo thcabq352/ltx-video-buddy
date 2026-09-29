@@ -141,9 +141,10 @@
         0
       ],
       "resize_type": "scale dimensions",
-      "scale_method": "area",
-      "width": 384,
-      "height": 224
+      "resize_type.width": 384,
+      "resize_type.height": 224,
+      "resize_type.crop": "disabled",
+      "scale_method": "area"
     },
     "_meta": {
       "title": "Resize Frames Stage 1"
@@ -157,9 +158,10 @@
         0
       ],
       "resize_type": "scale dimensions",
-      "scale_method": "area",
-      "width": 384,
-      "height": 224
+      "resize_type.width": 384,
+      "resize_type.height": 224,
+      "resize_type.crop": "disabled",
+      "scale_method": "area"
     },
     "_meta": {
       "title": "Resize Mask Stage 1"
@@ -171,7 +173,7 @@
       "spatial_radius": 15,
       "temporal_radius": 0,
       "mask": [
-        "35",
+        "80",
         0
       ]
     },
@@ -411,10 +413,10 @@
         "12",
         0
       ],
-      "tile_size": 512,
+      "tile_size": 384,
       "overlap": 64,
-      "temporal_size": 128,
-      "temporal_overlap": 32
+      "temporal_size": 16,
+      "temporal_overlap": 4
     }
   },
   "58": {
@@ -432,7 +434,7 @@
         "36",
         0
       ],
-      "trim_to_shortest": true,
+      "trim_to_shortest": false,
       "mask_low_res_dilation": 5
     },
     "_meta": {
@@ -447,9 +449,10 @@
         0
       ],
       "resize_type": "scale dimensions",
-      "scale_method": "area",
-      "width": 768,
-      "height": 448
+      "resize_type.width": 768,
+      "resize_type.height": 448,
+      "resize_type.crop": "disabled",
+      "scale_method": "area"
     },
     "_meta": {
       "title": "Resize Frames Stage 2"
@@ -463,9 +466,10 @@
         0
       ],
       "resize_type": "scale dimensions",
-      "scale_method": "area",
-      "width": 768,
-      "height": 448
+      "resize_type.width": 768,
+      "resize_type.height": 448,
+      "resize_type.crop": "disabled",
+      "scale_method": "area"
     },
     "_meta": {
       "title": "Resize Mask Stage 2"
@@ -477,7 +481,7 @@
       "spatial_radius": 30,
       "temporal_radius": 0,
       "mask": [
-        "61",
+        "81",
         0
       ]
     },
@@ -524,10 +528,10 @@
         "12",
         0
       ],
-      "tile_size": 512,
+      "tile_size": 384,
       "overlap": 64,
-      "temporal_size": 500,
-      "temporal_overlap": 64
+      "temporal_size": 16,
+      "temporal_overlap": 4
     }
   },
   "66": {
@@ -663,10 +667,10 @@
         "12",
         0
       ],
-      "tile_size": 512,
+      "tile_size": 384,
       "overlap": 64,
-      "temporal_size": 128,
-      "temporal_overlap": 32
+      "temporal_size": 16,
+      "temporal_overlap": 4
     }
   },
   "76": {
@@ -684,7 +688,7 @@
         "62",
         0
       ],
-      "trim_to_shortest": true,
+      "trim_to_shortest": false,
       "mask_low_res_dilation": 6
     },
     "_meta": {
@@ -728,6 +732,32 @@
       "filename_prefix": "ltx25_inoutpaint",
       "format": "auto",
       "codec": "auto"
+    }
+  },
+  "80": {
+    "class_type": "VHS_DuplicateMasks",
+    "inputs": {
+      "mask": [
+        "35",
+        0
+      ],
+      "multiply_by": 25
+    },
+    "_meta": {
+      "title": "Repeat Mask Stage 1"
+    }
+  },
+  "81": {
+    "class_type": "VHS_DuplicateMasks",
+    "inputs": {
+      "mask": [
+        "61",
+        0
+      ],
+      "multiply_by": 25
+    },
+    "_meta": {
+      "title": "Repeat Mask Stage 2"
     }
   }
 }
