@@ -1557,9 +1557,121 @@ def cmd_comfy_attach(args: argparse.Namespace) -> int:
     return 0 if rec.get("ok") else 1
 
 
+def _cmd_comfy_blaze_remake(args: argparse.Namespace) -> int:
+    """Named concert / pier remakes. Prepare does not queue and does not invent a clip."""
+    from master_agent.comfy.blaze_remake import (
+        prepare_blaze_remake,
+        provenance_for_clip,
+        upload_remake_stills,
+    )
+    from master_agent.comfy.cli_run import LintError, execute_prepared, lint_or_raise
+    from master_agent.provenance import missing_required, write_clip_provenance
+
+    if getattr(args, "mode", "generate") != "generate":
+        print("FAIL  blaze remake uses --mode generate")
+        return 1
+    scott = getattr(args, "scott", None)
+    blaze = getattr(args, "blaze", None)
+    if not scott or not blaze:
+        print("FAIL  blaze remake requires --scott and --blaze")
+        return 1
+    variant = getattr(args, "variant", None) or "base"
+    if variant not in {"base", "ltx25_msr", "msr"}:
+        print(f"WARN  blaze remake locks variant ltx25_msr (ignored {variant})")
+    try:
+        prepared = prepare_blaze_remake(
+            args.recipe,
+            scott=scott,
+            blaze=blaze,
+            prompt=getattr(args, "prompt", "") or "",
+            negative=getattr(args, "negative_prompt", None),
+            width=getattr(args, "width", None),
+            height=getattr(args, "height", None),
+            frames=getattr(args, "frames", None),
+            seed=getattr(args, "seed", None),
+        )
+    except ValueError as exc:
+        print(f"FAIL  {exc}")
+        return 1
+    if prepared.warning:
+        print(prepared.warning)
+    workflow = prepared.workflow
+    missing = missing_required(prepared.provenance)
+    if missing:
+        print(f"FAIL  provenance missing {missing}")
+        return 1
+    if args.out:
+        out = Path(args.out)
+        out.parent.mkdir(parents=True, exist_ok=True)
+        out.write_text(json.dumps(workflow, indent=1) + "\n", encoding="utf-8")
+        print(f"wrote {out}")
+    if args.prepare:
+        try:
+            client = ComfyClient()
+            object_info, _src = client.load_object_info(prefer_live=True)
+            lint_or_raise(workflow, object_info)
+        except LintError as exc:
+            print(f"FAIL  {exc}")
+            return 1
+        except Exception as exc:
+            print(f"WARN  linter skipped ({exc})")
+        sidecar = ""
+        if args.out:
+            planned = Path(args.out).with_suffix(".mp4")
+            payload = provenance_for_clip(prepared, planned)
+            dest = write_clip_provenance(planned, payload)
+            sidecar = str(dest)
+            print(f"provenance: {sidecar}")
+        body = {
+            "ok": True,
+            "nodes": len(workflow),
+            "recipe": prepared.recipe_id,
+            "variant": prepared.variant,
+            "width": prepared.width,
+            "height": prepared.height,
+            "frames": prepared.frames,
+            "warning": prepared.warning,
+            "provenance": prepared.provenance,
+        }
+        if sidecar:
+            body["provenance_sidecar"] = sidecar
+        print(json.dumps(body, indent=1))
+        return 0
+    try:
+        client = ComfyClient()
+        upload_remake_stills(workflow, client.upload_image, scott, blaze)
+        rec = execute_prepared(workflow, variant=prepared.variant)
+    except FileNotFoundError as exc:
+        print(f"FAIL  {exc}")
+        return 1
+    except Exception as exc:
+        print(f"FAIL  {exc}")
+        return 1
+    clip = rec.get("video_path")
+    if clip:
+        payload = provenance_for_clip(prepared, clip)
+        dest = write_clip_provenance(clip, payload)
+        rec["provenance_sidecar"] = str(dest)
+        rec["provenance"] = payload
+        print(f"provenance: {dest}")
+    print(json.dumps(rec, indent=1))
+    return 0
+
+
 def cmd_comfy(args: argparse.Namespace) -> int:
     if getattr(args, "comfy_command", "run") == "attach":
         return cmd_comfy_attach(args)
+    from master_agent.comfy.blaze_remake import is_blaze_remake
+
+    recipe = getattr(args, "recipe", None)
+    if recipe:
+        if is_blaze_remake(recipe):
+            return _cmd_comfy_blaze_remake(args)
+        print(
+            "FAIL  comfy run --recipe expects blaze-concert or blaze-pier. "
+            "Attach recipes use: comfy attach --recipe FILE"
+        )
+        return 1
     from master_agent.comfy.cli_run import LintError, execute_prepared, lint_or_raise, prepare_run
 
     try:
@@ -2102,6 +2214,14 @@ def main(argv: list[str] | None = None) -> int:
     p.add_argument("--variant", default="base")
     p.add_argument("--prompt", default="")
     p.add_argument("--negative", dest="negative_prompt", default=None)
+    p.add_argument(
+        "--scott",
+        help="Scott identity still for a blaze remake (uploaded before queue, not committed)",
+    )
+    p.add_argument(
+        "--blaze",
+        help="Blaze identity still for a blaze remake (uploaded before queue, not committed)",
+    )
     p.add_argument("--video", help="source video; uploaded before queue")
     p.add_argument("--mask", help="inpaint mask (white=regenerate); uploaded before queue")
     p.add_argument("--aspect", help="outpaint target aspect, for example 9:16")
@@ -2126,7 +2246,10 @@ def main(argv: list[str] | None = None) -> int:
     )
     p.add_argument(
         "--recipe",
-        help="attach: previs buddy.comfy.attach/v1 / WorkflowPatchPlan JSON",
+        help=(
+            "comfy run: blaze remake id (blaze-concert, blaze-pier). "
+            "comfy attach: previs buddy.comfy.attach/v1 / WorkflowPatchPlan JSON"
+        ),
     )
     p.add_argument(
         "--submit",
