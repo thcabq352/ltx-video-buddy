@@ -17,19 +17,23 @@ from master_agent.comfy.inoutpaint import (
     VARIANT,
     default_inpaint_mask_png,
     ensure_inoutpaint_mask,
+    fit_source_video,
     fit_working_size,
     finalize_inoutpaint_graph,
     outpaint_layout,
     outpaint_mask_png,
     paint_mask,
     parse_aspect,
+    prepare_queue_inputs,
     record_comfy_provenance,
+    stash_local_video,
+    trim_video_command,
 )
 from master_agent.comfy.validator import validate_workflow
 from master_agent.comfy.workflow_patcher import load_and_patch_workflow
 from master_agent.config import OBJECT_INFO_CACHE, WORKFLOW_FILES, WORKFLOWS_DIR
 from master_agent.orchestrator.director import choose_variant, rule_based_variant
-from master_agent.provenance import CLIP_PROVENANCE_SCHEMA, missing_required
+from master_agent.provenance import CLIP_PROVENANCE_SCHEMA, missing_required, sidecar_path
 from master_agent.setup import snapshot
 
 
@@ -127,8 +131,12 @@ def test_patch_writes_user_prompt_and_official_negative():
     assert wf["36"]["inputs"]["spatial_radius"] == 15
     assert wf["62"]["inputs"]["spatial_radius"] == 30
     assert wf["75"]["inputs"]["mask_low_res_dilation"] == 6
+    assert wf["75"]["inputs"]["trim_to_shortest"] is True
     assert wf["33"]["inputs"]["image"] == MASK_PLACEHOLDER
     assert wf["30"]["inputs"]["file"] == "robot_unitree.mp4"
+    assert "attention_mask" not in wf["43"]["inputs"]
+    assert wf["43"]["inputs"]["use_tiled_encode"] is False
+    assert wf["74"]["inputs"]["overlap"] == 6
 
 
 def test_outpaint_patch_sets_pads_and_skips_dilation():
@@ -154,6 +162,9 @@ def test_outpaint_patch_sets_pads_and_skips_dilation():
     assert wf["36"]["inputs"]["spatial_radius"] == 0
     assert wf["62"]["inputs"]["spatial_radius"] == 0
     assert wf["75"]["inputs"]["mask_low_res_dilation"] == 2
+    assert wf["35"]["inputs"]["input"] == ["32", 1]
+    assert wf["61"]["inputs"]["input"] == ["32", 1]
+    assert wf["32"]["inputs"]["feathering"] == 0
     assert "inoutpaint_png_b64" in (wf["33"].get("_meta") or {})
     assert meta["width"] == plan["width"]
     assert wf["20"]["inputs"]["text"] == "continue the street"
@@ -249,10 +260,227 @@ def test_finalize_halves_stage_size():
             "inputs": {"width": 1, "height": 1},
             "_meta": {"title": "Resize Frames Stage 2"},
         },
+        "35": {
+            "class_type": "ResizeImageMaskNode",
+            "inputs": {"width": 1, "height": 1},
+            "_meta": {"title": "Resize Mask Stage 1"},
+        },
         "40": {"class_type": "EmptyLTXVLatentVideo", "inputs": {"width": 9, "height": 9, "length": 25}},
     }
     finalize_inoutpaint_graph(wf, width=768, height=448, mode="inpaint")
-    assert wf["60"]["inputs"]["width"] == 768
-    assert wf["60"]["inputs"]["height"] == 448
+    stage2 = wf["60"]["inputs"]
+    assert stage2["resize_type.width"] == 768
+    assert stage2["resize_type.height"] == 448
+    assert stage2["resize_type.crop"] == "disabled"
+    assert "width" not in stage2 and "height" not in stage2
+    assert wf["34"]["inputs"]["resize_type.width"] == 384
+    assert wf["34"]["inputs"]["resize_type.height"] == 224
+    assert wf["35"]["inputs"]["resize_type"] == "match size"
+    assert wf["35"]["inputs"]["resize_type.match"] == ["34", 0]
+    assert wf["35"]["inputs"]["resize_type.crop"] == "center"
+    assert "width" not in wf["35"]["inputs"]
     assert wf["40"]["inputs"]["width"] == 384
     assert wf["40"]["inputs"]["height"] == 224
+
+
+def _resize_nodes(wf: dict) -> list[dict]:
+    return [
+        node
+        for node in wf.values()
+        if isinstance(node, dict) and node.get("class_type") == "ResizeImageMaskNode"
+    ]
+
+
+def test_prefixed_resize_inputs_on_template_and_patch():
+    raw = json.loads((WORKFLOWS_DIR / WORKFLOW_FILES[VARIANT]).read_text(encoding="utf-8"))
+    for node in _resize_nodes(raw):
+        inputs = node["inputs"]
+        assert "width" not in inputs and "height" not in inputs
+        kind = inputs["resize_type"]
+        if kind == "scale dimensions":
+            assert isinstance(inputs["resize_type.width"], int)
+            assert isinstance(inputs["resize_type.height"], int)
+            assert inputs["resize_type.crop"] == "disabled"
+        else:
+            assert kind == "match size"
+            assert inputs["resize_type.crop"] == "center"
+            assert isinstance(inputs["resize_type.match"], list)
+    wf, _meta = load_and_patch_workflow(VARIANT, prompt="a potted plant", seed=1, frames=25)
+    frames = wf["60"]["inputs"]
+    assert frames["resize_type.width"] == DEFAULT_WIDTH
+    assert frames["resize_type.height"] == DEFAULT_HEIGHT
+    assert frames["resize_type.crop"] == "disabled"
+    assert wf["61"]["inputs"]["resize_type"] == "match size"
+    assert wf["61"]["inputs"]["resize_type.match"] == ["60", 0]
+    info = json.loads(OBJECT_INFO_CACHE.read_text(encoding="utf-8"))
+    bare = {
+        "1": {
+            "class_type": "ResizeImageMaskNode",
+            "inputs": {
+                "input": ["2", 0],
+                "resize_type": "scale dimensions",
+                "scale_method": "area",
+                "width": 768,
+                "height": 448,
+            },
+        },
+        "2": {"class_type": "LoadImage", "inputs": {"image": "a.png"}},
+    }
+    # LoadImage may not be required for the missing-prefix errors.
+    report = validate_workflow(bare, info, file_label="plain-resize")
+    missing = {err.input_name for err in report.errors if "resize_type." in err.input_name}
+    assert missing == {"resize_type.width", "resize_type.height", "resize_type.crop"}
+
+
+def test_mask_repeat_matches_requested_frames():
+    wf, _meta = load_and_patch_workflow(VARIANT, prompt="a potted plant", seed=1, frames=25)
+    assert wf["80"]["inputs"]["amount"] == 25
+    assert wf["80"]["inputs"]["image"] == ["79", 0]
+    assert wf["81"]["inputs"]["image"] == ["80", 0]
+    assert wf["35"]["inputs"]["input"] == ["81", 0]
+    assert wf["61"]["inputs"]["input"] == ["81", 0]
+    assert wf["75"]["inputs"]["trim_to_shortest"] is True
+    short, _meta = load_and_patch_workflow(VARIANT, prompt="a potted plant", seed=1, frames=17)
+    assert short["40"]["inputs"]["length"] == 17
+    assert short["80"]["inputs"]["amount"] == 17
+
+
+def test_prepare_trims_source_longer_than_latent(tmp_path: Path, monkeypatch):
+    src = tmp_path / "smoke_src_48f.mp4"
+    src.write_bytes(b"long-source")
+    wf, _meta = load_and_patch_workflow(
+        VARIANT,
+        prompt="a potted plant",
+        seed=1,
+        frames=25,
+        video_name="smoke_src_48f.mp4",
+        mask_name="kept.png",
+    )
+    stash_local_video(wf, src)
+    trimmed = tmp_path / "trimmed.mp4"
+
+    def _probe(path: Path) -> int:
+        if Path(path) == src:
+            return 48
+        return 25
+
+    def _trim(src_path: Path, frames: int, dest: Path) -> None:
+        assert Path(src_path) == src
+        assert frames == 25
+        dest.write_bytes(b"trimmed-25")
+        trimmed.write_bytes(b"trimmed-25")
+
+    monkeypatch.setattr("master_agent.comfy.inoutpaint.probe_video_frame_count", _probe)
+    monkeypatch.setattr("master_agent.comfy.inoutpaint.trim_video_to_frames", _trim)
+    uploaded: list[bytes] = []
+
+    def _upload(path: Path) -> str:
+        uploaded.append(path.read_bytes())
+        return "uploaded.mp4"
+
+    prepare_queue_inputs(wf, _upload)
+    assert uploaded == [b"trimmed-25"]
+    assert wf["30"]["inputs"]["file"] == "uploaded.mp4"
+    assert "local_path" not in (wf["30"].get("_meta") or {})
+
+    same = tmp_path / "already25.mp4"
+    same.write_bytes(b"already")
+    wf2, _ = load_and_patch_workflow(
+        VARIANT, prompt="a potted plant", seed=1, frames=25, mask_name="kept.png"
+    )
+    stash_local_video(wf2, same)
+
+    def _probe_same(path: Path) -> int:
+        return 25
+
+    def _trim_forbidden(*_args, **_kwargs):
+        raise AssertionError("a clip that already matches the latent must not be re-encoded")
+
+    monkeypatch.setattr("master_agent.comfy.inoutpaint.probe_video_frame_count", _probe_same)
+    monkeypatch.setattr("master_agent.comfy.inoutpaint.trim_video_to_frames", _trim_forbidden)
+    seen: list[bytes] = []
+
+    def _upload_same(path: Path) -> str:
+        seen.append(path.read_bytes())
+        return "same.mp4"
+
+    prepare_queue_inputs(wf2, _upload_same)
+    assert seen == [b"already"]
+    cmd = trim_video_command(src, 25, trimmed)
+    assert cmd[cmd.index("-frames:v") + 1] == "25"
+    assert "0:v:0" in cmd and "0:a?" in cmd
+
+
+def test_prepare_does_not_trim_a_graph_without_inpaint_preprocess(tmp_path: Path, monkeypatch):
+    src = tmp_path / "talk.mp4"
+    src.write_bytes(b"talk")
+    wf = {
+        "1": {
+            "class_type": "LoadVideo",
+            "inputs": {"file": "talk.mp4"},
+            "_meta": {},
+        },
+        "2": {
+            "class_type": "EmptyLTXVLatentVideo",
+            "inputs": {"length": 25, "width": 64, "height": 64},
+        },
+    }
+    stash_local_video(wf, src)
+
+    def _boom(*_args, **_kwargs):
+        raise AssertionError("a graph without the inpaint plate must not be trimmed")
+
+    monkeypatch.setattr("master_agent.comfy.inoutpaint.fit_source_video", _boom)
+    seen: list[bytes] = []
+
+    def _upload(path: Path) -> str:
+        seen.append(path.read_bytes())
+        return "talk.mp4"
+
+    prepare_queue_inputs(wf, _upload)
+    assert seen == [b"talk"]
+
+
+def test_fit_source_video_rejects_a_bad_trim(tmp_path: Path, monkeypatch):
+    src = tmp_path / "clip.mp4"
+    src.write_bytes(b"x")
+
+    def _probe(path: Path) -> int:
+        return 48 if Path(path) == src else 10
+
+    def _trim(_src: Path, _frames: int, dest: Path) -> None:
+        dest.write_bytes(b"bad")
+
+    monkeypatch.setattr("master_agent.comfy.inoutpaint.probe_video_frame_count", _probe)
+    monkeypatch.setattr("master_agent.comfy.inoutpaint.trim_video_to_frames", _trim)
+    try:
+        fit_source_video(src, 25)
+    except Exception as exc:
+        assert "25" in str(exc)
+    else:
+        raise AssertionError("a trim that does not land on the latent length must fail")
+
+
+def test_provenance_duration_follows_the_output_file(tmp_path: Path, monkeypatch):
+    wf, _meta = load_and_patch_workflow(
+        VARIANT,
+        prompt="a potted plant",
+        seed=11,
+        frames=25,
+        video_name="robot_unitree.mp4",
+    )
+    clip = tmp_path / "one_frame.mp4"
+    clip.write_bytes(b"not a real mp4")
+
+    def _probe(_path):
+        return {"exists": True, "frames": 1, "duration_s": 1 / 24, "size_bytes": 10}
+
+    monkeypatch.setattr("master_agent.judge.probe.probe_video", _probe)
+    payload = record_comfy_provenance(wf, clip, variant=VARIANT)
+    assert payload is not None
+    assert payload["params"]["frames"] == 1
+    assert abs(payload["params"]["duration"] - (1 / 24)) < 1e-9
+    assert payload["params"]["duration"] != 25 / 24
+    sidecar = json.loads(sidecar_path(clip).read_text(encoding="utf-8"))
+    assert sidecar["params"]["frames"] == 1
+    assert abs(sidecar["params"]["duration"] - (1 / 24)) < 1e-9

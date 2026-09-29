@@ -101,3 +101,97 @@ def test_autogrow_slots_and_combo_choices_alias():
     bad_combo["2"]["inputs"]["mode"] = "nope"
     combo_report = validate_workflow(bad_combo, info, file_label="combo-alias")
     assert any("not in combo choices" in err.message for err in combo_report.errors)
+
+
+def test_dynamic_combo_requires_prefixed_children():
+    """COMFY_DYNAMICCOMBO_V3 children live under options, as parent.child."""
+    from master_agent.comfy.validator import validate_workflow
+
+    resize = [
+        "COMFY_DYNAMICCOMBO_V3",
+        {
+            "options": [
+                {
+                    "key": "scale dimensions",
+                    "inputs": {
+                        "required": {
+                            "width": ["INT", {"min": 0, "max": 4096}],
+                            "height": ["INT", {"min": 0, "max": 4096}],
+                            "crop": ["COMBO", {"options": ["disabled", "center"]}],
+                        }
+                    },
+                },
+                {
+                    "key": "match size",
+                    "inputs": {
+                        "required": {
+                            "match": ["IMAGE,MASK", {}],
+                            "crop": ["COMBO", {"options": ["disabled", "center"]}],
+                        }
+                    },
+                },
+            ]
+        },
+    ]
+    info = {
+        "Src": {"input": {"required": {}}, "output": ["IMAGE"]},
+        "ResizeImageMaskNode": {
+            "input": {
+                "required": {
+                    "input": ["IMAGE", {}],
+                    "resize_type": resize,
+                    "scale_method": ["COMBO", {"options": ["area", "lanczos"]}],
+                }
+            },
+            "output": ["IMAGE"],
+        },
+    }
+    plain = {
+        "1": {"class_type": "Src", "inputs": {}},
+        "2": {
+            "class_type": "ResizeImageMaskNode",
+            "inputs": {
+                "input": ["1", 0],
+                "resize_type": "scale dimensions",
+                "scale_method": "area",
+                "width": 768,
+                "height": 448,
+            },
+        },
+    }
+    report = validate_workflow(plain, info, file_label="plain-size")
+    missing = {err.input_name for err in report.errors}
+    assert missing == {"resize_type.width", "resize_type.height", "resize_type.crop"}
+
+    prefixed = {
+        "1": {"class_type": "Src", "inputs": {}},
+        "2": {
+            "class_type": "ResizeImageMaskNode",
+            "inputs": {
+                "input": ["1", 0],
+                "resize_type": "scale dimensions",
+                "scale_method": "lanczos",
+                "resize_type.width": 384,
+                "resize_type.height": 224,
+                "resize_type.crop": "disabled",
+            },
+        },
+    }
+    ok = validate_workflow(prefixed, info, file_label="prefixed")
+    assert ok.ok, ok.errors
+
+    matched = {
+        "1": {"class_type": "Src", "inputs": {}},
+        "2": {
+            "class_type": "ResizeImageMaskNode",
+            "inputs": {
+                "input": ["1", 0],
+                "resize_type": "match size",
+                "scale_method": "area",
+                "resize_type.match": ["1", 0],
+                "resize_type.crop": "center",
+            },
+        },
+    }
+    match_report = validate_workflow(matched, info, file_label="match")
+    assert match_report.ok, match_report.errors

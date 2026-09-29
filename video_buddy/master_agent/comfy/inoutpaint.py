@@ -3,12 +3,16 @@
 The shipped graph is ``workflows/ltx23_inoutpaint_api.json``. White mask pixels
 are the region the IC-LoRA regenerates. Black pixels are held. Outpaint grows
 the canvas with ``ImagePadForOutpaint`` (pads are multiples of 8, the node's
-step) and builds a matching mask: white on the new border, black on the source.
+step). The sampler mask for outpaint is that node's own mask so the green
+plate lines up with the pad. Inpaint repeats the still mask to the latent
+length before the blend, which keeps ``trim_to_shortest`` and still emits
+every frame.
 """
 
 from __future__ import annotations
 
 import base64
+import json
 import math
 import struct
 import subprocess
@@ -360,6 +364,72 @@ def _set(node: dict[str, Any] | None, key: str, value: Any) -> None:
     node.setdefault("inputs", {})[key] = value
 
 
+def _nid_by_title(workflow: dict[str, Any], class_type: str, title: str) -> str | None:
+    want = title.lower()
+    for nid, node in _nodes(workflow, class_type):
+        got = str((node.get("_meta") or {}).get("title") or "").lower()
+        if got == want:
+            return nid
+    return None
+
+
+def _widget_int(node: dict[str, Any] | None, key: str) -> int | None:
+    if node is None:
+        return None
+    raw = (node.get("inputs") or {}).get(key)
+    if isinstance(raw, bool) or not isinstance(raw, int):
+        return None
+    return int(raw)
+
+
+def _resize_size(inputs: dict[str, Any], key: str, default: int) -> int:
+    """Read ``resize_type.width`` / ``height`` (Comfy 0.35), then a plain widget."""
+    raw = inputs.get(f"resize_type.{key}")
+    if raw is None:
+        raw = inputs.get(key)
+    try:
+        return int(raw)
+    except (TypeError, ValueError):
+        return default
+
+
+class SourceVideoTrimError(RuntimeError):
+    """The source clip could not be cut to the latent frame count."""
+
+
+def _write_scale_dimensions(node: dict[str, Any] | None, width: int, height: int) -> None:
+    """Exact stage size. ``crop=disabled`` stretches onto the latent grid.
+
+    ComfyUI 0.35 names these ``resize_type.width`` / ``height`` / ``crop``.
+    Plain ``width`` / ``height`` fail prompt validation.
+    """
+    if node is None:
+        return
+    inputs = node.setdefault("inputs", {})
+    inputs.pop("width", None)
+    inputs.pop("height", None)
+    inputs["resize_type"] = "scale dimensions"
+    inputs["resize_type.width"] = int(width)
+    inputs["resize_type.height"] = int(height)
+    inputs["resize_type.crop"] = "disabled"
+    inputs["scale_method"] = "lanczos"
+
+
+def _write_match_size(node: dict[str, Any] | None, match: list[Any]) -> None:
+    """Fit the mask to the already-resized frames (official IC-LoRA graph)."""
+    if node is None:
+        return
+    inputs = node.setdefault("inputs", {})
+    inputs.pop("width", None)
+    inputs.pop("height", None)
+    inputs.pop("resize_type.width", None)
+    inputs.pop("resize_type.height", None)
+    inputs["resize_type"] = "match size"
+    inputs["resize_type.match"] = match
+    inputs["resize_type.crop"] = "center"
+    inputs["scale_method"] = "area"
+
+
 def finalize_inoutpaint_graph(
     workflow: dict[str, Any],
     *,
@@ -372,19 +442,35 @@ def finalize_inoutpaint_graph(
     """Write stage sizes, dilate/blend, and outpaint pads after the generic patcher.
 
     ``width`` / ``height`` are the stage-2 output. The empty latent is stage 1
-    (half) so ``LTXVLatentUpsampler`` lands on stage 2.
+    (half) so ``LTXVLatentUpsampler`` lands on stage 2. Masks are match-sized
+    to those frames so a still mask cannot drift off the plate. Spatial dilate
+    stays the official 15 / 30 (outpaint 0) and the blend stays 6 / 2.
     """
     stage_w, stage_h = fit_working_size(int(width), int(height))
     stage1_w, stage1_h = stage_w // 2, stage_h // 2
     outpaint = (mode or "inpaint").lower() == "outpaint"
-    _set(_by_title(workflow, "ResizeImageMaskNode", "Resize Frames Stage 1"), "width", stage1_w)
-    _set(_by_title(workflow, "ResizeImageMaskNode", "Resize Frames Stage 1"), "height", stage1_h)
-    _set(_by_title(workflow, "ResizeImageMaskNode", "Resize Frames Stage 2"), "width", stage_w)
-    _set(_by_title(workflow, "ResizeImageMaskNode", "Resize Frames Stage 2"), "height", stage_h)
-    _set(_by_title(workflow, "ResizeImageMaskNode", "Resize Mask Stage 1"), "width", stage1_w)
-    _set(_by_title(workflow, "ResizeImageMaskNode", "Resize Mask Stage 1"), "height", stage1_h)
-    _set(_by_title(workflow, "ResizeImageMaskNode", "Resize Mask Stage 2"), "width", stage_w)
-    _set(_by_title(workflow, "ResizeImageMaskNode", "Resize Mask Stage 2"), "height", stage_h)
+    _write_scale_dimensions(
+        _by_title(workflow, "ResizeImageMaskNode", "Resize Frames Stage 1"),
+        stage1_w,
+        stage1_h,
+    )
+    _write_scale_dimensions(
+        _by_title(workflow, "ResizeImageMaskNode", "Resize Frames Stage 2"),
+        stage_w,
+        stage_h,
+    )
+    frames1 = _nid_by_title(workflow, "ResizeImageMaskNode", "Resize Frames Stage 1")
+    frames2 = _nid_by_title(workflow, "ResizeImageMaskNode", "Resize Frames Stage 2")
+    if frames1:
+        _write_match_size(
+            _by_title(workflow, "ResizeImageMaskNode", "Resize Mask Stage 1"),
+            [frames1, 0],
+        )
+    if frames2:
+        _write_match_size(
+            _by_title(workflow, "ResizeImageMaskNode", "Resize Mask Stage 2"),
+            [frames2, 0],
+        )
     for _nid, node in _nodes(workflow, "EmptyLTXVLatentVideo"):
         inputs = node.setdefault("inputs", {})
         inputs["width"] = stage1_w
@@ -405,13 +491,41 @@ def finalize_inoutpaint_graph(
         blend,
     )
     pads = pad or {}
-    pad_node = _by_title(workflow, "ImagePadForOutpaint", "Outpaint Pad")
-    if pad_node is None:
+    pad_id = _nid_by_title(workflow, "ImagePadForOutpaint", "Outpaint Pad")
+    pad_node = workflow.get(pad_id) if pad_id else None
+    if not isinstance(pad_node, dict):
         found = _nodes(workflow, "ImagePadForOutpaint")
-        pad_node = found[0][1] if found else None
+        if found:
+            pad_id, pad_node = found[0]
+        else:
+            pad_id, pad_node = None, None
     for key in ("left", "top", "right", "bottom"):
         _set(pad_node, key, int(pads.get(key, 0) or 0))
     _set(pad_node, "feathering", 0)
+    # Official guide leaves attention_mask disconnected and encodes the green
+    # plate in one pass. Tiled encode was tinting the kept strip.
+    for _nid, node in _nodes(workflow, "LTXAddVideoICLoRAGuideAdvanced"):
+        inputs = node.setdefault("inputs", {})
+        inputs.pop("attention_mask", None)
+        inputs["use_tiled_encode"] = False
+    for _nid, node in _nodes(workflow, "LTXVTiledVAEDecode"):
+        _set(node, "overlap", 6)
+    length = DEFAULT_FRAMES
+    latents = _nodes(workflow, "EmptyLTXVLatentVideo")
+    if latents:
+        raw_len = _widget_int(latents[0][1], "length")
+        if raw_len:
+            length = raw_len
+    _set(_by_title(workflow, "RepeatImageBatch", "Repeat Inpaint Mask"), "amount", length)
+    if outpaint and pad_id:
+        # The pad node mask is 1 on the new border and 0 on the source, one
+        # entry per frame. A separately painted still can miss that edge.
+        for title in ("Resize Mask Stage 1", "Resize Mask Stage 2"):
+            _set(
+                _by_title(workflow, "ResizeImageMaskNode", title),
+                "input",
+                [pad_id, 1],
+            )
     if mask_png:
         for _nid, node in _nodes(workflow, "LoadImageMask"):
             meta = node.setdefault("_meta", {})
@@ -473,11 +587,8 @@ def ensure_inoutpaint_mask(
     if png is None:
         stage2 = _by_title(workflow, "ResizeImageMaskNode", "Resize Frames Stage 2")
         inputs = (stage2 or {}).get("inputs") or {}
-        try:
-            width = int(inputs.get("width") or 64)
-            height = int(inputs.get("height") or 64)
-        except (TypeError, ValueError):
-            width, height = 64, 64
+        width = _resize_size(inputs, "width", 64)
+        height = _resize_size(inputs, "height", 64)
         png = default_inpaint_mask_png(width, height)
     with tempfile.TemporaryDirectory(prefix="ltx23-inoutpaint-") as tmp:
         path = Path(tmp) / MASK_UPLOAD_NAME
@@ -492,13 +603,167 @@ def ensure_inoutpaint_mask(
     return name
 
 
+def _ffprobe_video_stream(path: Path, *, count_frames: bool) -> dict[str, Any]:
+    cmd = ["ffprobe", "-v", "error", "-select_streams", "v:0"]
+    if count_frames:
+        cmd.append("-count_frames")
+    cmd += [
+        "-show_entries",
+        "stream=nb_frames,nb_read_frames,avg_frame_rate,duration",
+        "-of",
+        "json",
+        str(path),
+    ]
+    try:
+        proc = subprocess.run(cmd, capture_output=True, text=True, check=False)
+    except FileNotFoundError as exc:
+        raise SourceVideoTrimError("ffprobe is not on PATH; cannot read the source frame count") from exc
+    if proc.returncode != 0:
+        detail = (proc.stderr or proc.stdout or "").strip()
+        raise SourceVideoTrimError(f"ffprobe failed for {path.name}: {detail}")
+    try:
+        data = json.loads(proc.stdout or "{}")
+    except json.JSONDecodeError as exc:
+        raise SourceVideoTrimError(f"ffprobe returned no JSON for {path.name}") from exc
+    streams = data.get("streams") or []
+    return streams[0] if streams and isinstance(streams[0], dict) else {}
+
+
+def _stream_int(stream: dict[str, Any], key: str) -> int:
+    raw = stream.get(key)
+    if isinstance(raw, int) and not isinstance(raw, bool) and raw > 0:
+        return raw
+    if isinstance(raw, str) and raw.isdigit() and int(raw) > 0:
+        return int(raw)
+    return 0
+
+
+def _frame_rate(text: Any) -> float:
+    raw = str(text or "")
+    if "/" in raw:
+        num, den = raw.split("/", 1)
+        try:
+            denom = float(den)
+        except ValueError:
+            return 0.0
+        if denom == 0:
+            return 0.0
+        try:
+            return float(num) / denom
+        except ValueError:
+            return 0.0
+    try:
+        return float(raw)
+    except ValueError:
+        return 0.0
+
+
+def probe_video_frame_count(path: Path) -> int:
+    """Decoded frame count of the first video stream."""
+    stream = _ffprobe_video_stream(path, count_frames=False)
+    frames = _stream_int(stream, "nb_frames")
+    if frames:
+        return frames
+    stream = _ffprobe_video_stream(path, count_frames=True)
+    frames = _stream_int(stream, "nb_read_frames") or _stream_int(stream, "nb_frames")
+    if frames:
+        return frames
+    try:
+        duration = float(stream.get("duration") or 0)
+    except (TypeError, ValueError):
+        duration = 0.0
+    rate = _frame_rate(stream.get("avg_frame_rate"))
+    if duration > 0 and rate > 0:
+        return max(int(round(duration * rate)), 1)
+    return 0
+
+
+def trim_video_command(src: Path, frames: int, dest: Path) -> list[str]:
+    """First ``frames`` pictures, with audio when the source has any."""
+    return [
+        "ffmpeg",
+        "-y",
+        "-i",
+        str(src),
+        "-map",
+        "0:v:0",
+        "-map",
+        "0:a?",
+        "-frames:v",
+        str(int(frames)),
+        "-c:v",
+        "libx264",
+        "-pix_fmt",
+        "yuv420p",
+        "-c:a",
+        "aac",
+        str(dest),
+    ]
+
+
+def trim_video_to_frames(src: Path, frames: int, dest: Path) -> None:
+    cmd = trim_video_command(src, frames, dest)
+    try:
+        proc = subprocess.run(cmd, capture_output=True, text=True, check=False)
+    except FileNotFoundError as exc:
+        raise SourceVideoTrimError("ffmpeg is not on PATH; cannot trim the source video") from exc
+    if proc.returncode != 0 or not dest.is_file():
+        detail = (proc.stderr or proc.stdout or "").strip().splitlines()
+        tail = detail[-1] if detail else "no output"
+        raise SourceVideoTrimError(f"ffmpeg failed to trim {src.name} to {frames} frames: {tail}")
+
+
+def _latent_frame_count(workflow: dict[str, Any]) -> int | None:
+    latents = _nodes(workflow, "EmptyLTXVLatentVideo")
+    if not latents:
+        return None
+    return _widget_int(latents[0][1], "length")
+
+
+def fit_source_video(path: Path, frames: int) -> Path:
+    """Cut a longer source down to the requested 8n+1 latent length.
+
+    ``LTXAddVideoICLoRAGuideAdvanced`` asserts when the encoded guide is
+    longer than ``EmptyLTXVLatentVideo``. LoadVideo in this Comfy build has
+    no frame cap, so the file itself has to be the right length.
+    """
+    target = int(frames)
+    if target < 1:
+        raise SourceVideoTrimError(f"latent length {frames} is not a frame count")
+    count = probe_video_frame_count(path)
+    if count <= 0:
+        raise SourceVideoTrimError(f"could not read a frame count for {path.name}")
+    if count <= target:
+        return path
+    dest_dir = Path(tempfile.mkdtemp(prefix="ltx23-trim-"))
+    suffix = path.suffix if path.suffix else ".mp4"
+    dest = dest_dir / f"{path.stem}_{target}f{suffix}"
+    trim_video_to_frames(path, target, dest)
+    got = probe_video_frame_count(dest)
+    if got != target:
+        raise SourceVideoTrimError(
+            f"trimmed {path.name} has {got} frames; the latent length is {target}"
+        )
+    return dest
+
+
+def _is_inoutpaint_graph(workflow: dict[str, Any]) -> bool:
+    return bool(_nodes(workflow, "LTXVInpaintPreprocess"))
+
+
 def prepare_queue_inputs(
     workflow: dict[str, Any],
     upload: Callable[[Path], str],
 ) -> str | None:
     """Upload a stashed source video, then the in/outpaint mask. Before lint."""
+    inoutpaint = _is_inoutpaint_graph(workflow)
+    target = _latent_frame_count(workflow) if inoutpaint else None
+    if target:
+        _set(_by_title(workflow, "RepeatImageBatch", "Repeat Inpaint Mask"), "amount", target)
     local = _pop_local_video(workflow)
     if local is not None:
+        if target:
+            local = fit_source_video(local, target)
         name = upload(local) or local.name
         for _nid, node in _nodes(workflow, "LoadVideo"):
             node.setdefault("inputs", {})["file"] = str(name)
@@ -571,15 +836,34 @@ def record_comfy_provenance(
             seed = raw_seed
     stage2 = _by_title(workflow, "ResizeImageMaskNode", "Resize Frames Stage 2")
     stage_in = (stage2 or {}).get("inputs") or {}
-    width = int(stage_in.get("width") or DEFAULT_WIDTH)
-    height = int(stage_in.get("height") or DEFAULT_HEIGHT)
+    width = _resize_size(stage_in, "width", DEFAULT_WIDTH)
+    height = _resize_size(stage_in, "height", DEFAULT_HEIGHT)
     frames = DEFAULT_FRAMES
     latents = _nodes(workflow, "EmptyLTXVLatentVideo")
     if latents:
-        raw_len = (latents[0][1].get("inputs") or {}).get("length")
-        if isinstance(raw_len, int):
+        raw_len = _widget_int(latents[0][1], "length")
+        if raw_len:
             frames = raw_len
     fps = DEFAULT_FPS
+    duration_s = frames / float(fps)
+    output_frames: int | None = None
+    try:
+        from master_agent.judge.probe import probe_video
+
+        probed = probe_video(video_path)
+    except Exception:
+        probed = None
+    if isinstance(probed, dict):
+        probed_frames = probed.get("frames")
+        probed_duration = probed.get("duration_s")
+        if isinstance(probed_frames, int) and not isinstance(probed_frames, bool) and probed_frames > 0:
+            output_frames = probed_frames
+            frames = probed_frames
+        if isinstance(probed_duration, (int, float)) and not isinstance(probed_duration, bool):
+            if float(probed_duration) > 0:
+                duration_s = float(probed_duration)
+        elif output_frames:
+            duration_s = output_frames / float(fps)
     videos = _nodes(workflow, "LoadVideo")
     video_name = ""
     if videos:
@@ -599,7 +883,7 @@ def record_comfy_provenance(
         width=width,
         height=height,
         fps=fps,
-        duration_s=frames / float(fps),
+        duration_s=duration_s,
         video_name=video_name or None,
         mask_name=mask_name or None,
         attempt=1,
@@ -610,5 +894,10 @@ def record_comfy_provenance(
         shot=None,
     )
     payload = build_clip_provenance(state, path=video_path)
+    if output_frames is not None:
+        params = payload.get("params")
+        if isinstance(params, dict):
+            params["frames"] = output_frames
+            params["duration"] = duration_s
     write_clip_provenance(video_path, payload)
     return payload

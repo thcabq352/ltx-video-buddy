@@ -212,6 +212,45 @@ def _autogrow_child_type(spec: Any) -> Optional[str]:
     return _spec_type(_autogrow_child_spec(spec))
 
 
+def _dynamic_combo_options(spec: Any) -> dict[str, dict[str, Any]]:
+    """Selected-key → input groups for a COMFY_DYNAMICCOMBO_V3 widget.
+
+    ComfyUI 0.35 exposes the chosen option's fields as ``parent.child``
+    (``resize_type.width``), not as plain ``width``. The object_info cache
+    stores those fields under ``options[].inputs``, which a top-level name
+    check never sees.
+    """
+    if not (
+        isinstance(spec, (list, tuple))
+        and spec
+        and spec[0] == "COMFY_DYNAMICCOMBO_V3"
+        and len(spec) > 1
+        and isinstance(spec[1], dict)
+    ):
+        return {}
+    found: dict[str, dict[str, Any]] = {}
+    for option in spec[1].get("options") or []:
+        if isinstance(option, dict) and isinstance(option.get("key"), str):
+            groups = option.get("inputs")
+            found[option["key"]] = groups if isinstance(groups, dict) else {}
+    return found
+
+
+def _dynamic_combo_child_spec(spec: Any, selected: Any, child: str) -> Any:
+    """Input spec for ``parent.child`` under the selected dynamic-combo option."""
+    options = _dynamic_combo_options(spec)
+    if not isinstance(selected, str):
+        return None
+    groups = options.get(selected)
+    if not isinstance(groups, dict):
+        return None
+    for section in ("required", "optional"):
+        section_inputs = groups.get(section)
+        if isinstance(section_inputs, dict) and child in section_inputs:
+            return section_inputs[child]
+    return None
+
+
 def _validate_scalar(
     report: ValidationReport,
     node_id: str,
@@ -435,9 +474,32 @@ def validate_workflow(
 
         # 1. required inputs present
         for name in sorted(required):
+            spec = known.get(name)
+            options = _dynamic_combo_options(spec)
+            if options:
+                selected = inputs.get(name)
+                if name not in inputs:
+                    report.error(node_id, name, f"required input missing (class {class_type})")
+                    continue
+                if not isinstance(selected, str) or selected not in options:
+                    preview = ", ".join(repr(key) for key in list(options)[:6])
+                    report.error(
+                        node_id,
+                        name,
+                        f"value {selected!r} is not a dynamic-combo option: {preview}",
+                    )
+                    continue
+                for child in sorted((options[selected].get("required") or {})):
+                    prefixed = f"{name}.{child}"
+                    if prefixed not in inputs:
+                        report.error(
+                            node_id,
+                            prefixed,
+                            f"required input missing (class {class_type})",
+                        )
+                continue
             if name in inputs:
                 continue
-            spec = known.get(name)
             # Autogrow groups ('values') are satisfied by children ('values.a')
             if _autogrow_child_type(spec) is not None and any(
                 k.startswith(name + ".") for k in inputs
@@ -449,11 +511,23 @@ def validate_workflow(
             spec = known.get(name)
             expected: Optional[str] = None
             if spec is None and "." in name:
-                # Child of an autogrow group ('values.a' → 'values').
-                # Validate the slot as the template input (IMAGE, COMBO, …),
-                # not as the COMFY_AUTOGROW_V3 group.
-                base_spec = known.get(name.split(".", 1)[0])
+                # Child of an autogrow group ('values.a' → 'values') or of a
+                # dynamic combo ('resize_type.width' → the selected option).
+                parent, child = name.split(".", 1)
+                base_spec = known.get(parent)
                 child_spec = _autogrow_child_spec(base_spec)
+                if child_spec is None and _dynamic_combo_options(base_spec):
+                    child_spec = _dynamic_combo_child_spec(
+                        base_spec, inputs.get(parent), child
+                    )
+                    if child_spec is None:
+                        report.error(
+                            node_id,
+                            name,
+                            "input not declared for dynamic combo "
+                            f"{parent}={inputs.get(parent)!r} on {class_type}",
+                        )
+                        continue
                 child_type = _spec_type(child_spec)
                 if child_type is not None:
                     spec = child_spec
