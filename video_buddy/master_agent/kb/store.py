@@ -1,8 +1,9 @@
 """Knowledge base — ChromaDB store with local embeddings.
 
-Two collections:
+Three collections in one local Chroma client:
 - ``workflows`` — digests of the workflow JSON templates (what each is for)
 - ``runs``      — every orchestrator/pipeline run record (self-learning seed)
+- ``knowledge`` — git-synced ``knowledge/`` markdown (shared across machines)
 
 Embeddings come from the active local LLM backend:
 - Ollama: native ``POST {OLLAMA_URL}/api/embed``
@@ -28,6 +29,7 @@ log = logging.getLogger(__name__)
 
 COLLECTION_WORKFLOWS = "workflows"
 COLLECTION_RUNS = "runs"
+COLLECTION_KNOWLEDGE = "knowledge"
 COLLECTION_CHARACTERS = "characters"
 COLLECTION_LORA_RUNS = "lora_runs"
 
@@ -223,6 +225,36 @@ def search(
         return out
     except Exception:
         return []
+
+
+def list_doc_metas(collection: str) -> list[dict[str, Any]] | None:
+    """Return ``[{id, metadata}, ...]`` or ``None`` when the store cannot be read.
+
+    ``None`` means "do not delete anything" — an empty collection is ``[]``.
+    """
+    if not kb_available():
+        return None
+    try:
+        coll = get_collection(collection)
+        res = coll.get(include=["metadatas"], limit=10000)
+        ids = res.get("ids") or []
+        metas = res.get("metadatas") or []
+        return [{"id": doc_id, "metadata": meta or {}} for doc_id, meta in zip(ids, metas)]
+    except Exception:
+        log.debug("kb list failed for %s", collection, exc_info=True)
+        return None
+
+
+def delete_docs(collection: str, ids: list[str]) -> int:
+    """Delete by id. Returns count deleted, 0 when the store is unavailable."""
+    if not (ids and kb_available()):
+        return 0
+    try:
+        get_collection(collection).delete(ids=list(ids))
+        return len(ids)
+    except Exception:
+        log.debug("kb delete failed for %s", collection, exc_info=True)
+        return 0
 
 
 def collection_count(collection: str) -> int:

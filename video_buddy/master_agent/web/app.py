@@ -24,8 +24,10 @@ STATIC_DIR = Path(__file__).resolve().parent / "static"
 @asynccontextmanager
 async def _lifespan(_app: FastAPI):
     from master_agent.control.versioned_config import announce_config
+    from master_agent.kb.ingest import schedule_knowledge_ingest
 
     print(announce_config(), flush=True)
+    schedule_knowledge_ingest()
     yield
 
 
@@ -159,7 +161,12 @@ def health_alias() -> dict[str, Any]:
 @app.get("/api/health")
 def api_health() -> dict[str, Any]:
     from master_agent.comfy.client import ComfyClient
-    from master_agent.kb.store import COLLECTION_RUNS, COLLECTION_WORKFLOWS, collection_count
+    from master_agent.kb.store import (
+        COLLECTION_KNOWLEDGE,
+        COLLECTION_RUNS,
+        COLLECTION_WORKFLOWS,
+        collection_count,
+    )
     from master_agent.llm import attach_llm_health, provider_available
 
     out: dict[str, Any] = {
@@ -167,6 +174,7 @@ def api_health() -> dict[str, Any]:
         "kb": {
             "workflows": collection_count(COLLECTION_WORKFLOWS),
             "runs": collection_count(COLLECTION_RUNS),
+            "knowledge": collection_count(COLLECTION_KNOWLEDGE),
         },
     }
     attach_llm_health(out)
@@ -664,9 +672,19 @@ def _video_url(video_path: str) -> Optional[str]:
 
 @app.get("/api/kb/search")
 def api_kb_search(q: str, collection: str = "runs", k: int = Query(5, le=20)):
-    from master_agent.kb.store import COLLECTION_RUNS, COLLECTION_WORKFLOWS, search
+    from master_agent.kb.store import (
+        COLLECTION_KNOWLEDGE,
+        COLLECTION_RUNS,
+        COLLECTION_WORKFLOWS,
+        search,
+    )
 
-    coll = COLLECTION_WORKFLOWS if collection == "workflows" else COLLECTION_RUNS
+    if collection == "workflows":
+        coll = COLLECTION_WORKFLOWS
+    elif collection == "knowledge":
+        coll = COLLECTION_KNOWLEDGE
+    else:
+        coll = COLLECTION_RUNS
     return search(coll, q, k=k)
 
 
