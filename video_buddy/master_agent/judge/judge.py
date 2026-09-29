@@ -105,6 +105,11 @@ def judge_system_prompt(
             "\nThis is a FULL stitched video review. "
             "Mention weak shot indices as shot:N if needed."
         )
+    rubric = context.get("rubric_file") if isinstance(context, dict) else None
+    if rubric:
+        rubric_path = Path(str(rubric))
+        if rubric_path.is_file():
+            system += "\n\n# Recipe rubric\n" + rubric_path.read_text(encoding="utf-8")
     return system
 
 

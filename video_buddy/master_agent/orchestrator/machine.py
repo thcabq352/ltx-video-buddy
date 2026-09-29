@@ -25,6 +25,7 @@ from master_agent.comfy.client import ComfyClient, ComfyClientError
 from master_agent.comfy.linter import LintBlocked, hard_gate, lint_workflow
 from master_agent.comfy.workflow_patcher import load_and_patch_workflow, media_wiring_error
 from master_agent.config import (
+    DEFAULT_FPS,
     DOWNSCALE_LADDER,
     JUDGE_ENABLED,
     MAX_JUDGE_ROUNDS,
@@ -84,6 +85,25 @@ _OOM_PATTERN = re.compile(
 
 def _looks_oom(exc: Exception) -> bool:
     return bool(_OOM_PATTERN.search(str(exc) or ""))
+
+
+def apply_oom_downscale(st: Any, ladder: list[tuple[int, int, int]]) -> bool:
+    """Step one rung down ``DOWNSCALE_LADDER`` and write width, height, and frames.
+
+    The logged frame count is the count the next patch uses. LTX rungs are
+    already ``8n+1``. Returns False when the ladder is exhausted.
+    """
+    level = int(getattr(st, "downscale_level", 0) or 0)
+    if level + 1 >= len(ladder):
+        return False
+    level += 1
+    width, height, frames = ladder[level]
+    st.downscale_level = level
+    st.width = int(width)
+    st.height = int(height)
+    st.frames = int(frames)
+    st.duration_s = float(st.frames) / float(DEFAULT_FPS)
+    return True
 
 
 class Orchestrator:
@@ -361,14 +381,14 @@ class Orchestrator:
                 ladder = downscale_ladder_for(st.variant or "")
             except Exception:
                 ladder = DOWNSCALE_LADDER
-            if st.retries > MAX_RETRIES or st.downscale_level + 1 >= len(ladder):
+            if st.retries > MAX_RETRIES or not apply_oom_downscale(st, ladder):
                 st.fail(f"{phase} OOM after {st.retries} retries: {exc}")
                 return False
             st.transition("PLAN_OOM_RETRY")
-            st.downscale_level += 1
-            w, h, frames = ladder[st.downscale_level]
-            st.width, st.height = w, h
-            st.log(f"OOM at {phase}: downscaling to {w}x{h} ({frames}f), retry {st.retries}")
+            st.log(
+                f"OOM at {phase}: downscaling to {st.width}x{st.height} "
+                f"({st.frames}f), retry {st.retries}"
+            )
             return self._patch(st) and self._validate(st) and self._submit_and_poll(st)
         st.fail(f"{phase} failed: {exc}")
         return False
@@ -624,6 +644,8 @@ class Orchestrator:
         duration_s: float = 5.0,
         quality: Optional[str] = None,
         seed: Optional[int] = None,
+        steps: Optional[int] = None,
+        cfg: Optional[float] = None,
         width: int = 768,
         height: int = 512,
         video_name: Optional[str] = None,
@@ -655,6 +677,7 @@ class Orchestrator:
         inoutpaint: Optional[dict[str, Any]] = None,
         duration_cap_s: Optional[float] = None,
         max_piece_s: Optional[float] = None,
+        downscale_level: int = 0,
     ) -> RunState:
         run_id = uuid.uuid4().hex[:12]
         st = RunState(
@@ -666,6 +689,8 @@ class Orchestrator:
             duration_s=duration_s,
             quality=quality,
             seed=seed,
+            steps=steps,
+            cfg=cfg,
             width=width,
             height=height,
             video_name=video_name,
@@ -705,6 +730,7 @@ class Orchestrator:
             ),
             max_piece_s=float(max_piece_s) if max_piece_s is not None else None,
         )
+        st.downscale_level = max(0, int(downscale_level))
         try:
             st.variant = self._select_variant(st, variant)
             from master_agent.orchestrator.talking import h3_r2v_audio_warning, media_route_error

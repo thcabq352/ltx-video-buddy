@@ -60,6 +60,8 @@ ComfyUI_windows_portable\run_api_8188.bat
 
 python -m master_agent health
 python -m master_agent comfy run --mode generate --prompt "a test shot" --variant base
+# Rainey1 top-cut (no GPU). Tower batch is after merge/approve — see docs/RAINEY1_BATCH.md
+python -m master_agent rainey1-batch --recipe lock_open --seeds 42,43,44,45 --top-k 2 --dry-run --no-interview
 # optional dashboard:
 # python -m master_agent ui --port 8189
 ```
