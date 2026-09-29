@@ -195,3 +195,135 @@ def test_dynamic_combo_requires_prefixed_children():
     }
     match_report = validate_workflow(matched, info, file_label="match")
     assert match_report.ok, match_report.errors
+
+
+def _savevideo_0351_schema() -> dict:
+    """ComfyUI 0.35.1 SaveVideo: format is a dynamic combo requiring codec.
+
+    A second top-level codec widget stays optional so older flat prompts
+    (``format`` + ``codec``) still queue.
+    """
+    codec = [
+        "COMFY_DYNAMICCOMBO_V3",
+        {
+            "options": [
+                {"key": "auto", "inputs": {}},
+                {"key": "h264", "inputs": {}},
+                {"key": "av1", "inputs": {}},
+            ]
+        },
+    ]
+    return {
+        "input": {
+            "required": {
+                "video": ["VIDEO", {}],
+                "filename_prefix": ["STRING", {"default": "video/ComfyUI"}],
+                "format": [
+                    "COMFY_DYNAMICCOMBO_V3",
+                    {
+                        "options": [
+                            {
+                                "key": key,
+                                "inputs": {"required": {"codec": codec}},
+                            }
+                            for key in ("auto", "mp4", "mkv", "webm")
+                        ]
+                    },
+                ],
+            },
+            "optional": {"codec": codec},
+            "hidden": {
+                "prompt": ["PROMPT", {}],
+                "extra_pnginfo": ["EXTRA_PNGINFO", {}],
+            },
+        },
+        "output": ["VIDEO"],
+    }
+
+
+def test_savevideo_accepts_flat_or_dotted_codec():
+    """format.codec or the legacy flat codec both satisfy SaveVideo."""
+    from master_agent.comfy.validator import validate_workflow
+
+    info = {
+        "Src": {"input": {"required": {}}, "output": ["VIDEO"]},
+        "SaveVideo": _savevideo_0351_schema(),
+    }
+
+    def _graph(**codec_inputs):
+        inputs = {
+            "video": ["1", 0],
+            "filename_prefix": "ltx23_inoutpaint",
+            "format": "auto",
+        }
+        inputs.update(codec_inputs)
+        return {
+            "1": {"class_type": "Src", "inputs": {}},
+            "78": {"class_type": "SaveVideo", "inputs": inputs},
+        }
+
+    missing = validate_workflow(_graph(), info, file_label="missing-codec")
+    assert any(err.input_name == "format.codec" for err in missing.errors)
+
+    flat = validate_workflow(_graph(codec="auto"), info, file_label="flat-codec")
+    assert flat.ok, flat.errors
+
+    dotted = validate_workflow(
+        _graph(**{"format.codec": "auto"}), info, file_label="dotted-codec"
+    )
+    assert dotted.ok, dotted.errors
+
+    both = validate_workflow(
+        _graph(**{"format.codec": "auto", "codec": "auto"}),
+        info,
+        file_label="both-codecs",
+    )
+    assert both.ok, both.errors
+
+
+def test_all_shipped_workflows_pass_hard_gate():
+    """Every shipped workflow clears the SaveVideo hard gate.
+
+    The cache still describes SaveVideo.format as a flat combo. ComfyUI
+    0.35.1 makes format a dynamic combo that requires format.codec and
+    still accepts the legacy flat codec. Overlaying that schema must not
+    add a hard error on any shipped graph, and every graph the cache
+    already accepts must still pass hard_gate.
+    """
+    import copy
+    import json
+
+    from master_agent.comfy.validator import ValidationReport, validate_workflow
+    from master_agent.config import OBJECT_INFO_CACHE, WORKFLOW_FILES, WORKFLOWS_DIR
+
+    cache = json.loads(OBJECT_INFO_CACHE.read_text(encoding="utf-8"))
+    live = copy.deepcopy(cache)
+    live["SaveVideo"] = _savevideo_0351_schema()
+
+    clean: list[str] = []
+    preexisting: list[str] = []
+    for slug, rel in sorted(WORKFLOW_FILES.items()):
+        workflow = json.loads((WORKFLOWS_DIR / rel).read_text(encoding="utf-8"))
+        base = validate_workflow(
+            copy.deepcopy(workflow), cache, file_label=rel, object_info_source="cache"
+        )
+        report = validate_workflow(
+            copy.deepcopy(workflow), live, file_label=rel, object_info_source="savevideo-0.35.1"
+        )
+        save_gate = ValidationReport(file=rel, object_info_source="savevideo-0.35.1")
+        save_gate.errors = [
+            err for err in report.errors if err.input_name.startswith("format.codec")
+        ]
+        hard_gate(save_gate)
+        added = {(e.node_id, e.input_name, e.message) for e in report.errors} - {
+            (e.node_id, e.input_name, e.message) for e in base.errors
+        }
+        assert not added, f"{slug} gained hard errors under SaveVideo 0.35.1: {added}"
+        if base.ok:
+            hard_gate(report)
+            clean.append(slug)
+        else:
+            preexisting.append(slug)
+
+    assert len(clean) + len(preexisting) == len(WORKFLOW_FILES)
+    assert "ltx23_inoutpaint" in clean

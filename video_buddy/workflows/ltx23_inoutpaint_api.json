@@ -657,6 +657,7 @@
       ],
       "filename_prefix": "ltx23_inoutpaint",
       "format": "auto",
+      "format.codec": "auto",
       "codec": "auto"
     }
   },

@@ -202,9 +202,15 @@ def test_user_mask_name_is_not_replaced():
 def test_template_and_patched_graph_validate_offline():
     info = json.loads(OBJECT_INFO_CACHE.read_text(encoding="utf-8"))
     raw = json.loads((WORKFLOWS_DIR / WORKFLOW_FILES[VARIANT]).read_text(encoding="utf-8"))
+    save = raw["78"]["inputs"]
+    assert save["format"] == "auto"
+    assert save["format.codec"] == "auto"
+    assert save["codec"] == "auto"
     report = validate_workflow(raw, info, file_label="ltx23_inoutpaint_api.json")
     assert report.ok, [str(item) for item in report.errors]
     wf, _meta = load_and_patch_workflow(VARIANT, prompt="a wet street", seed=1, frames=17)
+    assert wf["78"]["inputs"]["format.codec"] == "auto"
+    assert wf["78"]["inputs"]["codec"] == "auto"
     patched = validate_workflow(wf, info, file_label="patched")
     assert patched.ok, [str(item) for item in patched.errors]
     # The IC-LoRA is newer than the cached combo. Inventory makes that a warning.

@@ -491,12 +491,20 @@ def validate_workflow(
                     continue
                 for child in sorted((options[selected].get("required") or {})):
                     prefixed = f"{name}.{child}"
-                    if prefixed not in inputs:
-                        report.error(
-                            node_id,
-                            prefixed,
-                            f"required input missing (class {class_type})",
-                        )
+                    if prefixed in inputs:
+                        continue
+                    # Comfy still accepts a declared top-level widget in place
+                    # of the dotted child. SaveVideo on 0.35.1 requires
+                    # format.codec and also keeps a flat codec input; either
+                    # queues. ResizeImageMaskNode does not declare width,
+                    # height, or crop, so those flats stay missing.
+                    if child in inputs and child in known:
+                        continue
+                    report.error(
+                        node_id,
+                        prefixed,
+                        f"required input missing (class {class_type})",
+                    )
                 continue
             if name in inputs:
                 continue
