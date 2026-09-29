@@ -107,21 +107,24 @@ def test_audio_upload_fallback_logs(tmp_path, caplog, monkeypatch):
 
 def test_free_memory_logs_http_error(caplog, monkeypatch):
     class _Client:
-        def __enter__(self):
-            return self
-
-        def __exit__(self, *args):
-            return False
+        is_closed = False
 
         def post(self, *args, **kwargs):
             raise httpx.ConnectError("connection refused")
 
+        def close(self):
+            self.is_closed = True
+
     monkeypatch.setattr("master_agent.comfy.client.httpx.Client", lambda *a, **k: _Client())
-    with caplog.at_level(logging.DEBUG, logger="master_agent.comfy.client"):
-        ComfyClient("http://comfy.test").free_memory()
-    assert any(
-        r.exc_info and isinstance(r.exc_info[1], httpx.ConnectError) for r in caplog.records
-    )
+    try:
+        with caplog.at_level(logging.DEBUG, logger="master_agent.comfy.client"):
+            ComfyClient("http://comfy.test").free_memory()
+        assert any(
+            r.exc_info and isinstance(r.exc_info[1], httpx.ConnectError) for r in caplog.records
+        )
+    finally:
+        # This double is the pooled client. close_pool() closes it.
+        ComfyClient.close_pool()
 
 
 def test_music_and_fractal_kb_ingest_logs(tmp_path, caplog):
