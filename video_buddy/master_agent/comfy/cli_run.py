@@ -260,7 +260,11 @@ def execute_prepared(
         require_weights(str(variant))
     client = ComfyClient()
     from master_agent.comfy.fun_inpaint import ensure_fun_inpaint_mask
-    from master_agent.comfy.inoutpaint import prepare_queue_inputs, record_comfy_provenance
+    from master_agent.comfy.inoutpaint import (
+        SourceVideoTrimError,
+        prepare_queue_inputs,
+        record_comfy_provenance,
+    )
 
     try:
         uploaded = ensure_fun_inpaint_mask(wf, client.upload_image)
@@ -271,6 +275,8 @@ def execute_prepared(
             print(f"uploaded mask: {uploaded}")
     try:
         uploaded_io = prepare_queue_inputs(wf, client.upload_image)
+    except SourceVideoTrimError:
+        raise
     except Exception as exc:
         print(f"WARN  ltx in/outpaint mask: {exc}")
     else:

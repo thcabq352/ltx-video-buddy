@@ -516,6 +516,12 @@ def validate_workflow(
             options = _dynamic_combo_options(spec)
             if not options:
                 continue
+            # An omitted optional or hidden combo is not a prompt. SaveVideo
+            # still queues when only format.codec is set and the legacy flat
+            # codec widget is left out. A missing required combo is already
+            # reported above.
+            if name not in inputs:
+                continue
             selected = inputs.get(name)
             if _is_link(selected):
                 continue

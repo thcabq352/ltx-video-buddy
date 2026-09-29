@@ -137,9 +137,10 @@
         0
       ],
       "resize_type": "scale dimensions",
-      "scale_method": "area",
-      "width": 384,
-      "height": 224
+      "scale_method": "lanczos",
+      "resize_type.width": 384,
+      "resize_type.height": 224,
+      "resize_type.crop": "disabled"
     },
     "_meta": {
       "title": "Resize Frames Stage 1"
@@ -149,13 +150,16 @@
     "class_type": "ResizeImageMaskNode",
     "inputs": {
       "input": [
-        "33",
+        "81",
         0
       ],
-      "resize_type": "scale dimensions",
+      "resize_type": "match size",
       "scale_method": "area",
-      "width": 384,
-      "height": 224
+      "resize_type.match": [
+        "34",
+        0
+      ],
+      "resize_type.crop": "center"
     },
     "_meta": {
       "title": "Resize Mask Stage 1"
@@ -243,14 +247,10 @@
       "strength": 1,
       "latent_downscale_factor": 1,
       "crop": "disabled",
-      "use_tiled_encode": true,
+      "use_tiled_encode": false,
       "tile_size": 256,
       "tile_overlap": 64,
-      "attention_strength": 1,
-      "attention_mask": [
-        "36",
-        0
-      ]
+      "attention_strength": 1
     }
   },
   "44": {
@@ -391,9 +391,10 @@
         0
       ],
       "resize_type": "scale dimensions",
-      "scale_method": "area",
-      "width": 768,
-      "height": 448
+      "scale_method": "lanczos",
+      "resize_type.width": 768,
+      "resize_type.height": 448,
+      "resize_type.crop": "disabled"
     },
     "_meta": {
       "title": "Resize Frames Stage 2"
@@ -403,13 +404,16 @@
     "class_type": "ResizeImageMaskNode",
     "inputs": {
       "input": [
-        "33",
+        "81",
         0
       ],
-      "resize_type": "scale dimensions",
+      "resize_type": "match size",
       "scale_method": "area",
-      "width": 768,
-      "height": 448
+      "resize_type.match": [
+        "60",
+        0
+      ],
+      "resize_type.crop": "center"
     },
     "_meta": {
       "title": "Resize Mask Stage 2"
@@ -591,7 +595,7 @@
       ],
       "horizontal_tiles": 2,
       "vertical_tiles": 2,
-      "overlap": 2,
+      "overlap": 6,
       "last_frame_fix": false
     }
   },
@@ -653,7 +657,46 @@
       ],
       "filename_prefix": "ltx23_inoutpaint",
       "format": "auto",
+      "format.codec": "auto",
       "codec": "auto"
+    }
+  },
+  "79": {
+    "class_type": "MaskToImage",
+    "inputs": {
+      "mask": [
+        "33",
+        0
+      ]
+    },
+    "_meta": {
+      "title": "Mask To Image"
+    }
+  },
+  "80": {
+    "class_type": "RepeatImageBatch",
+    "inputs": {
+      "image": [
+        "79",
+        0
+      ],
+      "amount": 25
+    },
+    "_meta": {
+      "title": "Repeat Inpaint Mask"
+    }
+  },
+  "81": {
+    "class_type": "ImageToMask",
+    "inputs": {
+      "image": [
+        "80",
+        0
+      ],
+      "channel": "red"
+    },
+    "_meta": {
+      "title": "Mask From Repeated Still"
     }
   }
 }

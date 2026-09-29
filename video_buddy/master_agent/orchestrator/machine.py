@@ -229,10 +229,12 @@ class Orchestrator:
             return
         if uploaded:
             st.log(f"fun inpaint mask uploaded: {uploaded}")
-        from master_agent.comfy.inoutpaint import prepare_queue_inputs
+        from master_agent.comfy.inoutpaint import SourceVideoTrimError, prepare_queue_inputs
 
         try:
             uploaded_io = prepare_queue_inputs(self._workflow, self.client.upload_image)
+        except SourceVideoTrimError:
+            raise
         except Exception as exc:
             st.log(f"warn: ltx in/outpaint mask upload failed: {exc}")
             return
