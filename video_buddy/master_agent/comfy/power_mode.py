@@ -112,9 +112,21 @@ def _rag_context(request: str) -> tuple[str, bool]:
 
         if not KB_ENABLED:
             return "", False
-        from master_agent.kb.recall import recall_similar_runs, recall_workflows
+        from master_agent.kb.recall import (
+            recall_knowledge,
+            recall_similar_runs,
+            recall_workflows,
+        )
 
-        parts = [p for p in (recall_workflows(request, k=2), recall_similar_runs(request)) if p]
+        parts = [
+            p
+            for p in (
+                recall_knowledge(request),
+                recall_workflows(request, k=2),
+                recall_similar_runs(request),
+            )
+            if p
+        ]
         if not parts:
             return "", False
         return "\n\n".join(parts), True

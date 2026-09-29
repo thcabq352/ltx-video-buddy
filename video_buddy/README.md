@@ -439,16 +439,21 @@ hard-requires Ollama.
 ## Knowledge base (local RAG)
 
 ChromaDB (`state/chroma/`) with local embeddings (Ollama `nomic-embed-text`
-via `/api/embed`, or llama.cpp `POST /v1/embeddings`) — fully local. Two
-collections: `workflows` (digests of the templates) and `runs`
-(every orchestrator/pipeline run record, auto-ingested after each run).
+via `/api/embed`, or llama.cpp `POST /v1/embeddings`) — fully local. Three
+collections: `workflows` (digests of the templates), `runs`
+(every orchestrator/pipeline run record, auto-ingested after each run),
+and `knowledge` (recorded markdown from the git-synced `knowledge/` folder
+at the repo root). `failures/` is stored with `priority=high` and recalled
+first. README / AGENTS schema docs and `EXAMPLE` seeds are not indexed.
 
-- Before storyboarding, the pipeline recalls similar past runs (request,
-  scores, the judge's own words) and injects them into the prompt — the
-  start of the self-learning loop.
-- CLI: `python -m master_agent kb ingest` (bulk load), `kb search "query"
-  [-k N] [--workflows]`, `kb stats`.
-- `KB_ENABLED=0` disables it; `KB_RECALL_K` tunes hit count (default 3).
+- Before storyboarding, the pipeline recalls shared knowledge (failure
+  notes first), similar past runs (request, scores, the judge's own words),
+  and workflow digests, and injects them into the prompt.
+- CLI: `python -m master_agent kb ingest` (workflows, runs, and `knowledge/`),
+  `kb search "query" [-k N] [--workflows | --knowledge]`, `kb stats`.
+- Studio startup and the Hermes MCP server run the `knowledge/` ingest in
+  the background. `KB_ENABLED=0` disables the store; `KB_STARTUP_INGEST=0`
+  skips only the startup thread. `KB_RECALL_K` tunes hit count (default 3).
 
 ## Characters & LoRAs (CCC stage)
 

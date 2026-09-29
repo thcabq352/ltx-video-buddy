@@ -177,6 +177,7 @@ when you need those older filenames. Full operator docs:
 ```
 docs/demo/             # H3 BMX poster + 720p + provenance
 docs/showcase/h3-bmx/  # pointer README to docs/demo/
+knowledge/             # git-synced learnings between Ocala and Albuquerque
 video_buddy/
 ├── master_agent/      # the agent: orchestrator, director, judge, persona,
 │                      # KB, characters/LoRA, music, fractal, upscale, web, MCP
@@ -188,6 +189,17 @@ video_buddy/
 ├── state/             # tooling: legacy model downloader, UI→API converter
 └── docs/              # operator quickstart (CLI / doctor / download-models)
 ```
+
+## Shared knowledge
+
+Each machine's ChromaDB stays local (`video_buddy/state/chroma/`,
+gitignored). Learnings the other machine should see live in
+[`knowledge/`](knowledge/). **Pull before a run. Commit after** you add
+an entry. No secrets, API keys, or local absolute paths. Studio startup,
+the Hermes MCP server, and `python -m master_agent kb ingest` embed
+recorded entries into the local `knowledge` Chroma collection. Schema
+docs and `EXAMPLE` files are skipped. See
+[`knowledge/README.md`](knowledge/README.md).
 
 ## Documentation
 

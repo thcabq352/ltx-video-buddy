@@ -52,7 +52,7 @@ is hours. Prefer ~900s MCP timeout.
 | `budget status` / `budget reset-shift` | VRAM-min shift ledger. Reset archives history; never wipes. |
 | `hermes status` / `hermes register` | Discover ltx seat (Hermes / buddy-adapter / A2A fallback). Register seats `~/.hermes/profiles/ltx/` (no `.env`). |
 | `ui` | Studio dashboard, default `:8189`. |
-| `kb ingest` / `kb search` / `kb stats` | Local RAG. `search` defaults to runs; `--workflows` for templates. |
+| `kb ingest` / `kb search` / `kb stats` | Local RAG. `search` defaults to runs; `--workflows` for templates; `--knowledge` for git-synced `knowledge/` (failures recalled first). |
 | `persona list\|show\|set` | Interview voice (`ara`, `exec`, `zod`). |
 | `soul list\|show\|set` | Standing values (`studio`, `play`). |
 | `brief "idea"` | Interview only. `--go` chains into generation. |
