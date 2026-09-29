@@ -21,6 +21,7 @@ Commands:
   comfy run           Drive ComfyUI from the CLI (prepare + lint + queue)
   comfy attach        Apply previs buddy.comfy.attach/v1 (dry-run; --submit to /prompt)
   diagnose            9-frame hull fire (sec/step); does not spend shift budget
+  rainey1-batch       Rainey1 seeds → junk filter → judge → top-K (.buddy.json)
   budget              status | reset-shift  (VRAM-min shift ledger)
   hermes              status | register  (profile ltx + discovery)
   capabilities        Gap matrix: tower-ish Comfy nodes vs Buddy wiring
@@ -1652,6 +1653,27 @@ def cmd_comfy(args: argparse.Namespace) -> int:
     return 0
 
 
+def cmd_rainey1_batch(args: argparse.Namespace) -> int:
+    """Batch Rainey1 seeds. --dry-run queues zero Comfy jobs."""
+    from master_agent.rainey1.batch import format_batch_report, run_rainey1_batch
+
+    try:
+        result = run_rainey1_batch(
+            recipe=args.recipe,
+            seeds=args.seeds,
+            top_k=args.top_k,
+            out=args.out,
+            dry_run=bool(args.dry_run),
+            allow_empty=bool(args.allow_empty),
+            llm_judge=bool(args.llm_judge),
+        )
+    except (KeyError, ValueError) as exc:
+        print(f"error: {exc}")
+        return 2
+    print(format_batch_report(result))
+    return result.exit_code
+
+
 def main(argv: list[str] | None = None) -> int:
     # Windows console is cp1252 — never crash on LLM-emitted unicode (e.g. →)
     for stream in (sys.stdout, sys.stderr):
@@ -2178,6 +2200,90 @@ def main(argv: list[str] | None = None) -> int:
     p.add_argument("--offline", action="store_true", help="use cached object_info only")
     p.add_argument("--json", action="store_true", help="machine-readable matrix")
     p.set_defaults(func=cmd_capabilities)
+
+    p = sub.add_parser(
+        "rainey1-batch",
+        help="Rainey1 generate → junk filter → judge → top-K cut",
+        description=(
+            "Queue one Rainey1 seed at a time, drop junk under ~100KB or "
+            "under 3 frames before the judge, then copy the top-K keepers "
+            "to --out with a buddy.clip.provenance/v1 sidecar.\n\n"
+            "Frames are 8n+1 (minimum 9). OOM walks DOWNSCALE_LADDER "
+            "downward inside the single-seed orchestrator run.\n\n"
+            "--dry-run resolves the recipe and prints the table. It queues "
+            "zero Comfy jobs and writes no clips.\n\n"
+            "GPU batch is for the operator tower after this draft is merged "
+            "and approved.\n\n"
+            "Phase 1 (from video_buddy/, Comfy :8188 up, after approve):\n"
+            "  python -m master_agent rainey1-batch --recipe lock_open "
+            "--seeds 42,43,44,45,46,47,48,49 --top-k 3 "
+            "--out outputs/rainey1/phase1/lock_open --no-interview\n"
+            "  python -m master_agent rainey1-batch --recipe breach "
+            "--seeds 42,43,44,45,46,47 --top-k 3 "
+            "--out outputs/rainey1/phase1/breach --no-interview\n"
+            "  python -m master_agent rainey1-batch --recipe density "
+            "--seeds 42,43,44,45,46,47 --top-k 3 "
+            "--out outputs/rainey1/phase1/density --no-interview\n\n"
+            "Phase 2 LoRA train YAML is not part of this command."
+        ),
+        formatter_class=argparse.RawDescriptionHelpFormatter,
+    )
+    p.add_argument(
+        "--recipe",
+        required=True,
+        choices=[
+            "lock_open",
+            "breach",
+            "density",
+            "myth_16x9",
+            "story_9x16",
+            "rainey1_lock_open",
+            "rainey1_breach",
+            "rainey1_density",
+            "rainey1_myth_16x9",
+            "rainey1_story_9x16",
+        ],
+        help="recipe slug (lock_open, breach, density, myth_16x9, story_9x16)",
+    )
+    p.add_argument(
+        "--seeds",
+        required=True,
+        help="comma-separated integer seeds, for example 42,43,44,45",
+    )
+    p.add_argument("--top-k", dest="top_k", type=int, default=2, help="keepers to copy (default 2)")
+    p.add_argument(
+        "--out",
+        default=None,
+        help="keeper directory (default outputs/rainey1/topcut/<recipe>)",
+    )
+    p.add_argument(
+        "--dry-run",
+        action="store_true",
+        help="resolve and print the table; queue zero Comfy jobs; write no clips",
+    )
+    p.add_argument(
+        "--no-interview",
+        action="store_true",
+        help="accepted for tower-command compatibility; this subcommand never interviews",
+    )
+    p.add_argument(
+        "--allow-empty",
+        action="store_true",
+        help="exit 0 when every seed drops (dry-run already exits 0)",
+    )
+    p.add_argument(
+        "--llm-judge",
+        dest="llm_judge",
+        action="store_true",
+        help="use the text judge (rainey1 rubric if present, else judge.md)",
+    )
+    p.add_argument(
+        "--no-llm-judge",
+        dest="llm_judge",
+        action="store_false",
+        help="heuristic look score only; skip the text/vision judge",
+    )
+    p.set_defaults(func=cmd_rainey1_batch, llm_judge=True)
 
     args = parser.parse_args(argv)
     from master_agent.control.versioned_config import announce_config
