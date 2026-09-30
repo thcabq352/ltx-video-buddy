@@ -3,6 +3,8 @@
 from __future__ import annotations
 
 import os
+import shutil
+import subprocess
 from pathlib import Path
 from typing import Any
 
@@ -152,8 +154,54 @@ STORYBOARD_MODE = (os.getenv("STORYBOARD_MODE", "smart") or "smart").strip().low
 # Per-run JSON records (orchestrator output; seed of the knowledge-base log)
 RUNS_DIR = STATE_DIR / "runs"
 
-# VRAM profile — RTX 5060 Ti 16GB defaults
-VRAM_GB = float(os.getenv("VRAM_GB", "16"))
+# VRAM profile. Explicit VRAM_GB wins. Otherwise nvidia-smi total memory.
+# 16 stays the fallback only when neither is available (RTX 5060 Ti class).
+# Cards under 14GB (RTX 4000 Ada 12GB / rainey1) must not be offered NVFP4/bf16.
+def detect_nvidia_vram_gb() -> float | None:
+    """Total GPU memory in GB from ``nvidia-smi``, or None."""
+    if not shutil.which("nvidia-smi"):
+        return None
+    try:
+        proc = subprocess.run(
+            ["nvidia-smi", "--query-gpu=memory.total", "--format=csv,noheader,nounits"],
+            capture_output=True,
+            text=True,
+            timeout=3,
+            check=False,
+        )
+    except (OSError, subprocess.TimeoutExpired):
+        return None
+    if proc.returncode != 0:
+        return None
+    line = (proc.stdout or "").strip().splitlines()
+    if not line:
+        return None
+    token = line[0].split(",")[0].strip()
+    try:
+        mib = float(token)
+    except ValueError:
+        return None
+    if mib <= 0:
+        return None
+    return round(mib / 1024.0, 1)
+
+
+def _resolve_vram_gb() -> tuple[float, str]:
+    raw = (os.getenv("VRAM_GB") or "").strip()
+    if raw:
+        try:
+            return float(raw), "env"
+        except ValueError:
+            pass
+    detected = detect_nvidia_vram_gb()
+    if detected is not None:
+        return detected, "nvidia-smi"
+    return 16.0, "default"
+
+
+VRAM_GB, VRAM_SOURCE = _resolve_vram_gb()
+# gguf | nvfp4 | int8 | bf16 | "" (auto from VRAM_GB)
+FORCE_LOADER = (os.getenv("FORCE_LOADER") or "").strip().lower()
 MAX_WIDTH = int(os.getenv("MAX_WIDTH", "768"))
 MAX_HEIGHT = int(os.getenv("MAX_HEIGHT", "512"))
 # Total requested length (multi-segment stitches clips up to this)

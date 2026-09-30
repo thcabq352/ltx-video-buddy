@@ -14,7 +14,7 @@ Local ComfyUI video studio in this repo (`video_buddy/`). Package is `master_age
 - Local brief → storyboard → validate → render → judge → stitch on **this** machine
 - LTX 2.5 (`ltx25_*` / aliases `t2v_i2v`, `flf2v`, …), MiniMax H3 (`h3_*` / `fl2va` / `ref2va`), LTX 2.3 (`base` / `eros` / `directors` / `lipsync`), Wan 2.2, music video, fractal, Movie Builder
 - Drive or lint a Comfy API graph (`comfy run`)
-- Inventory-first weights: `doctor` (no fetch) then `download-models --ltx25` or `--h3` if a slot is confirmed missing
+- Inventory-first weights: `inventory`, then `doctor` (no fetch), then `download-models --ltx25` or `--h3` if a slot is confirmed missing. `--scan-only` never fetches. 12GB: `VRAM_GB=12` and `FORCE_LOADER=gguf`. Fully local LLM: `LLM_PROVIDER=ollama`.
 - Character → Flux sheet → LoRA (CCC)
 
 ## When NOT to use
@@ -112,7 +112,7 @@ Full signatures: [TOOLS.md](TOOLS.md). Invoke MCP as `master-agent.<tool>`. CLI 
 | `create_character(description, name="", shots=0, train=False)` | `python -m master_agent character create "DESC" [--name N --shots N --train]` |
 | `train_lora(character_name, steps=0, lr=0, rank=0, validate=True)` | `python -m master_agent lora train NAME [--steps N --lr X --rank N --validate]` |
 
-CLI-only (no MCP tool): `about`, `curriculum`, `doctor`/`setup`, `workflows`, `capabilities`, `download-models`, `download-flux`, `comfy run`, `diagnose`, `budget`, `hermes`, `ui`, `fetch-object-info`, `power-tune`, `persona`, `soul`, `brief`, `fractal`, `music`, `mv plan`/`mv render`, `lora setup`/`validate`, `character list`.
+CLI-only (no MCP tool): `about`, `curriculum`, `inventory`, `doctor`/`setup`, `workflows`, `capabilities`, `download-models`, `download-flux`, `comfy run`, `diagnose`, `budget`, `hermes`, `ui`, `fetch-object-info`, `power-tune`, `persona`, `soul`, `brief`, `fractal`, `music`, `mv plan`/`mv render`, `lora setup`/`validate`, `character list`.
 
 Drive graphs with CLI first: `comfy run`. Director pipeline: `run`. Unattended: `--no-interview`.
 

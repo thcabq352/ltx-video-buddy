@@ -36,7 +36,8 @@ is hours. Prefer ~900s MCP timeout.
 |---|---|
 | `about` | Studio identity card (`--json` ok). |
 | `curriculum` | Print L0→L5 + Part 2 overnight gate (`--json` ok). |
-| `setup` / `doctor` | Deps + LTX 2.5 / H3 scan. **Does not fetch weights.** `--fix` installs deps. `--fix-models` only after you agree. |
+| `inventory` | List discovered weights (path + role) before doctor. `--json` optional. Never fetches. |
+| `setup` / `doctor` | Deps + LTX 2.5 / H3 / LTX 2.3 scan. **Does not fetch weights.** `--scan-only` never fetches. `--use-existing` keeps disk files. `--download` / `--fix-models` only after you agree. `--fix` installs deps; Ollama pull skips models already in `ollama list` unless you pass `--yes`. |
 | `health` | Comfy `:8188` + GPU stats. |
 | `workflows` | Default catalog (includes `ltx25_*` and `h3_*`). `--vram` prints 16GB pack table. |
 | `capabilities` | Comfy pack vs Buddy wiring. `--offline` uses cache. |
@@ -44,7 +45,7 @@ is hours. Prefer ~900s MCP timeout.
 | `comfy run` | Prepare, lint, queue, copy into `outputs/`. `--prepare` stops before GPU. Modes: `generate` / `template` / `raw`. |
 | `comfy attach` | Apply previs `buddy.comfy.attach/v1` / WorkflowPatchPlan JSON. Default dry-run (patch + `/object_info`). `--submit` POSTs `/prompt`. |
 | `run "BRIEF"` | Director pipeline. `--dry-run` plan+lint only. `--self-improve-dry` closes judge→revise→rejudge (quality_bar a/c/d, no Comfy). `--attach RECIPE.json` patches a previs pack. `--no-interview` for unattended. `--variant` forces a catalog slug. Every clip writes `shot-N.buddy.json` + run-row ClipProvenance. |
-| `download-models` | List confirmed-missing slots. `--ltx25` / `--h3` / `--wan` / … Add `--yes` only after the ask. |
+| `download-models` | List confirmed-missing slots. `--ltx25` / `--h3` / `--wan` / … `--scan-only` never fetches. `--use-existing` does not download. `--download` asks first. `--yes` only after the ask. |
 | `download-flux` | One-time Flux fp8 weights (~17GB). |
 | `validate` | One file or `--all`. `--offline` / `--strict` (illegal LTX frames = ERROR). |
 | `scan-models` | Scan `models/` → inventory. |

@@ -141,6 +141,44 @@ def check_ffmpeg() -> dict[str, Any]:
     )
 
 
+def ollama_list_text() -> str:
+    """Raw ``ollama list`` output, or empty when the CLI is missing."""
+    if not _which("ollama"):
+        return ""
+    code, out = _run(["ollama", "list"], timeout=20)
+    return out if code == 0 else ""
+
+
+def ollama_has_model(listed: str, model: str) -> bool:
+    """True when ``model`` (or ``model:tag``) is already in ``ollama list``."""
+    want = (model or "").strip().lower()
+    if not want:
+        return False
+    for line in (listed or "").splitlines():
+        parts = line.split()
+        if not parts:
+            continue
+        token = parts[0].lower()
+        if token in {"name", "name:"}:
+            continue
+        base = token.split(":", 1)[0]
+        if token == want or base == want or token.startswith(want + ":"):
+            return True
+    return False
+
+
+def confirm_prompt(prompt: str) -> bool:
+    """y/n. Non-interactive stdin defaults to no so nothing is pulled by surprise."""
+    if sys.stdin is None or not sys.stdin.isatty():
+        print(prompt + "n  (non-interactive; pass --yes)")
+        return False
+    try:
+        answer = input(prompt).strip().lower()
+    except EOFError:
+        return False
+    return answer in {"y", "yes"}
+
+
 def check_ollama() -> dict[str, Any]:
     path = _which("ollama")
     if not path:
@@ -150,9 +188,8 @@ def check_ollama() -> dict[str, Any]:
             "not on PATH",
             fix="Install from https://ollama.com/download then: ollama pull qwen3-vl-heretic",
         )
-    code, out = _run(["ollama", "list"], timeout=20)
-    have = out.lower() if code == 0 else ""
-    missing = [m for m in OLLAMA_MODELS if m not in have]
+    out = ollama_list_text()
+    missing = [m for m in OLLAMA_MODELS if not ollama_has_model(out, m)]
     ok = not missing
     return _row(
         "ollama",
@@ -185,11 +222,13 @@ def check_ltx25_weights() -> dict[str, Any]:
         status = scan_bundle("ltx25_core")
     except Exception as exc:
         return _row("ltx25-weights", False, f"scan failed: {exc}", fix="python -m master_agent download-models --ltx25")
+    from master_agent.models.vram_policy import heavy_not_suggested
     from master_agent.models.weights import describe_transformer_pick
 
-    pick = describe_transformer_pick(
-        Path(status.found_paths["transformer"]) if status.found_paths.get("transformer") else None
-    )
+    transformer_path = status.found_paths.get("transformer")
+    pick = describe_transformer_pick(Path(transformer_path) if transformer_path else None)
+    if transformer_path and heavy_not_suggested(Path(transformer_path).name):
+        pick += " — on disk, not suggested for this VRAM; prefer GGUF (FORCE_LOADER=gguf, VRAM_GB=12)"
     if status.ok:
         found = ", ".join(Path(p).name for p in status.found_paths.values()) or "accepted local names"
         return _row("ltx25-weights", True, f"{pick}; present ({found})")
@@ -219,6 +258,34 @@ def _with_h3_us(detail: str) -> str:
     if _H3_US_NOTE in detail:
         return detail
     return f"{detail} {_H3_US_NOTE}"
+
+
+def check_ltx23_weights() -> dict[str, Any]:
+    """Scan for an LTX 2.3 GGUF (including Sulphur Q3_K_S). Never downloads."""
+    try:
+        from master_agent.models.weights import find_ltx23_compatible
+
+        found = find_ltx23_compatible()
+    except Exception as exc:
+        return _row(
+            "ltx23-weights",
+            False,
+            f"scan failed: {exc}",
+            fix="python -m master_agent inventory",
+        )
+    if found is not None:
+        return _row(
+            "ltx23-weights",
+            True,
+            f"compatible {found.name} at {found} — not downloading official bf16/fp8",
+        )
+    return _row(
+        "ltx23-weights",
+        False,
+        "no compatible LTX 2.3 GGUF after inventory "
+        "(sulphur_dev-Q3_K_S.gguf and other LTX 2.3 Q3/Q4/Q5 GGUF count)",
+        fix="python -m master_agent inventory   # doctor does not download this",
+    )
 
 
 def check_h3_weights() -> dict[str, Any]:
@@ -387,6 +454,7 @@ def snapshot() -> list[dict[str, Any]]:
         check_vram_policy(),
         check_ltx_guide(),
         check_ltx25_weights(),
+        check_ltx23_weights(),
         check_ltx25_ic_lora(),
         check_ltx23_inoutpaint_lora(),
         check_ltx23_latent_upscaler(),
@@ -395,15 +463,33 @@ def snapshot() -> list[dict[str, Any]]:
     ]
 
 
-def print_report(rows: list[dict[str, Any]]) -> int:
+# Weight rows stay informational under --use-existing (do not fail the process).
+_WEIGHT_ROWS = frozenset(
+    {
+        "ltx25-weights",
+        "ltx23-weights",
+        "ltx25-ic-lora",
+        "ltx23-inoutpaint-lora",
+        "ltx23-upscaler",
+        "h3-weights",
+        "dev-fp8-trailer",
+    }
+)
+
+
+def print_report(rows: list[dict[str, Any]], *, weight_optional: bool = False) -> int:
     print("VIDEO BUDDY setup")
     failed = 0
     for row in rows:
         mark = "OK  " if row["ok"] else "NEED"
-        if not row["ok"]:
+        optional = weight_optional and not row["ok"] and row["name"] in _WEIGHT_ROWS
+        if not row["ok"] and not optional:
             failed += 1
-        print(f"  {mark}  {row['name']:<12} {row['detail']}")
-        if not row["ok"] and row.get("fix"):
+        detail = row["detail"]
+        if optional:
+            detail = f"{detail} (--use-existing: not downloading)"
+        print(f"  {mark}  {row['name']:<18} {detail}")
+        if not row["ok"] and row.get("fix") and not optional:
             print(f"        → {row['fix']}")
     print()
     if failed:
@@ -476,18 +562,32 @@ def install_ffmpeg() -> None:
     print("WARN  could not auto-install ffmpeg — " + check_ffmpeg()["fix"])
 
 
-def install_ollama_models() -> None:
+def install_ollama_models(*, consent: bool = False) -> None:
+    """Pull Ollama models only when they are absent and the operator opted in.
+
+    Models already listed by ``ollama list`` are skipped. A missing model is
+    not pulled unless ``consent`` is true (``--yes``) or the operator answers
+    ``y`` at the prompt. Non-interactive runs without ``--yes`` do not pull.
+    """
     if not _which("ollama"):
         print("WARN  ollama not on PATH — install from https://ollama.com/download")
         return
+    listed = ollama_list_text()
     for model in OLLAMA_MODELS:
+        if ollama_has_model(listed, model):
+            print(f"SKIP  ollama {model} — already in ollama list")
+            continue
+        allowed = consent or confirm_prompt(f"Pull ollama model {model}? [y/N] ")
+        if not allowed:
+            print(f"SKIP  ollama pull {model} — no confirmation (pass --yes to pull)")
+            continue
         print(f"ollama pull {model}…")
         code, out = _run(["ollama", "pull", model], timeout=1800)
         if code != 0:
             print(f"WARN  ollama pull {model}: {out[-300:]}")
 
 
-def fix() -> int:
+def fix(*, pull_ollama: bool = False) -> int:
     print("VIDEO BUDDY setup --fix")
     if sys.version_info[:2] < MIN_PY:
         print(f"FAIL  Python {MIN_PY[0]}.{MIN_PY[1]}+ required")
@@ -498,7 +598,7 @@ def fix() -> int:
         install_playwright()
         install_env()
         install_ffmpeg()
-        install_ollama_models()
+        install_ollama_models(consent=pull_ollama)
     except RuntimeError as exc:
         print(f"FAIL  {exc}")
         return 1
@@ -506,30 +606,72 @@ def fix() -> int:
     return print_report(snapshot())
 
 
-def cmd_setup(*, do_fix: bool, fix_models: bool = False) -> int:
-    rc = 0
-    if do_fix:
-        rc = fix()
-        if not fix_models:
-            return rc
-    if fix_models:
-        from master_agent.models.weights import MissingWeightsError, download_missing_bundle, format_ask, scan_bundle
+def print_inventory_preamble() -> None:
+    """Count discovered weights before doctor or download-models suggests anything."""
+    try:
+        from master_agent.config import COMFYUI_ROOT, MODELS_DIR
+        from master_agent.models.inventory import scan_inventory
 
-        status = scan_bundle("ltx25_all")
-        if status.ok:
-            print("OK    LTX 2.5 weights already present")
+        inv = scan_inventory(MODELS_DIR, COMFYUI_ROOT, write=False)
+    except Exception as exc:
+        print(f"Inventory scan failed ({exc}). Nothing downloaded.")
+        return
+    usable = [e for e in inv.entries if not e.partial]
+    print(
+        f"Inventory first: {len(usable)} weight file(s) on disk. "
+        "`python -m master_agent inventory` lists paths and roles. "
+        "Nothing downloaded yet."
+    )
+
+
+def cmd_setup(
+    *,
+    do_fix: bool,
+    fix_models: bool = False,
+    mode: str = "report",
+    yes: bool = False,
+) -> int:
+    """``mode`` is report | scan | existing | download.
+
+    ``scan`` and ``existing`` never fetch weights. ``download`` fetches only
+    after ``--yes`` or a y/n prompt. ``--fix-models`` remains the consent
+    shortcut (it still inventories first and skips files already on disk).
+    """
+    print_inventory_preamble()
+    weight_optional = mode == "existing"
+    rc = 0
+    if do_fix and mode != "scan":
+        rc = fix(pull_ollama=yes)
+        if mode not in {"download"} and not fix_models:
             return rc
-        print(format_ask(status))
-        print()
+    elif do_fix and mode == "scan":
+        rc = fix(pull_ollama=False)
+        return print_report(snapshot(), weight_optional=False) if rc == 0 else rc
+    if mode in {"scan", "existing"} or (not fix_models and mode != "download"):
+        return print_report(snapshot(), weight_optional=weight_optional) or rc
+    from master_agent.models.weights import MissingWeightsError, download_missing_bundle, format_ask, scan_bundle
+
+    status = scan_bundle("ltx25_all")
+    if status.ok:
+        print("OK    LTX 2.5 weights already present (compatible names included)")
+        return print_report(snapshot(), weight_optional=weight_optional) or rc
+    print(format_ask(status))
+    print()
+    consent = bool(yes or fix_models)
+    if not consent:
+        consent = confirm_prompt("Download the confirmed-missing set? [y/N] ")
+    if not consent:
+        print("Nothing downloaded.")
+        return 2
+    if fix_models:
         print("doctor --fix-models is explicit consent to fetch the missing mandatory set.")
-        try:
-            download_missing_bundle("ltx25_all", yes=True)
-        except MissingWeightsError as exc:
-            print(f"FAIL  {exc}")
-            return 1
-        except Exception as exc:
-            print(f"FAIL  {exc}")
-            return 1
-        model_rc = print_report(snapshot())
-        return rc or model_rc
-    return print_report(snapshot())
+    try:
+        download_missing_bundle("ltx25_all", yes=True)
+    except MissingWeightsError as exc:
+        print(f"FAIL  {exc}")
+        return 1
+    except Exception as exc:
+        print(f"FAIL  {exc}")
+        return 1
+    model_rc = print_report(snapshot())
+    return rc or model_rc

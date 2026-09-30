@@ -153,15 +153,20 @@ flag. Research aliases (`t2v_i2v`, `flf2v`, …) resolve the same way.
 | `ltx25_a2v` | `a2v` | audio-to-video |
 | `ltx25_t2a` | `t2a` | text-to-audio |
 
-Inventory first: Buddy locates existing files under `MODELS_DIR`, Comfy
-`models/`, `EXTRA_MODELS_DIRS`, `extra_model_paths.yaml`, and the Hugging
-Face hub cache. **GGUF Q4 → NVFP4 (if `VRAM_GB` ≥ 14) → int8-convrot →
-bf16.** Official bf16 Gemma is not required if a heretic / int8 TE is
-present. Zero-byte files = missing.
+Inventory first: `python -m master_agent inventory`, then doctor. Buddy
+locates existing files under `MODELS_DIR`, Comfy `models/`,
+`EXTRA_MODELS_DIRS`, `extra_model_paths.yaml`, and the Hugging Face hub
+cache. **GGUF Q3/Q4 → NVFP4 (if `VRAM_GB` ≥ 14) → int8-convrot → bf16.**
+Below 14GB, or with `FORCE_LOADER=gguf`, NVFP4 and bf16 are not suggested.
+`sulphur_dev-Q3_K_S.gguf` counts as LTX 2.3. A Gemma heretic encoder counts
+as the text encoder. Official bf16 Gemma is not required. Zero-byte files
+= missing.
 
-`doctor` reports that pick and **does not fetch**. `download-models --ltx25`
+`doctor` reports that pick and **does not fetch**. `--scan-only` never
+fetches. `--use-existing` keeps disk files. `download-models --ltx25`
 prints the ask for confirmed-missing slots; `--yes` / `doctor --fix-models`
-only after consent. See [docs/QUICKSTART.md](docs/QUICKSTART.md),
+only after consent. `setup --fix` skips Ollama models already in
+`ollama list`. See [docs/QUICKSTART.md](docs/QUICKSTART.md),
 [REQUIRED-FILES.md](REQUIRED-FILES.md), and historical
 [MERGE-LTX25.md](../MERGE-LTX25.md).
 
@@ -411,7 +416,18 @@ not need both. Jason / Scott running Hermes + llama.cpp can skip Ollama.
 | Embeddings (KB) | native `POST /api/embed` | OpenAI-compat `POST /v1/embeddings` |
 | Vision judge | native `POST /api/chat` + `images` | OpenAI-compat multimodal chat (`image_url` parts) |
 
-`LLM_PROVIDER=auto` tries **ollama → llamacpp → grok**. Pin a backend:
+`LLM_PROVIDER=auto` tries **ollama → llamacpp → grok**. Cloud is the last
+step, not the default. Pin a backend (Admeria / rainey1: stay on Ollama):
+
+```bash
+# fully local — no Grok fallback
+export LLM_PROVIDER=ollama
+export LLM_PANEL=local
+export PANEL_JUDGE=ollama
+# 12GB (RTX 4000 Ada)
+export VRAM_GB=12
+export FORCE_LOADER=gguf
+```
 
 ```bash
 # Jason — llama.cpp only (no Ollama)
