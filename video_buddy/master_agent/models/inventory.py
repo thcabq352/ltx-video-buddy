@@ -51,6 +51,7 @@ class ModelEntry:
     mtime: str
     root: str  # "project" (MODELS_DIR) or "comfyui" (COMFYUI_ROOT/models)
     partial: bool = False
+    abs_path: str = ""
 
 
 @dataclass
@@ -125,6 +126,7 @@ def _scan_root(root: Path, root_label: str) -> list[ModelEntry]:
                 .replace("+00:00", "Z"),
                 root=root_label,
                 partial=partial,
+                abs_path=str(path),
             )
         )
     return entries
@@ -151,7 +153,15 @@ def check_bundles(entries: list[ModelEntry]) -> dict[str, dict[str, Any]]:
         for key, filename in files.items():
             slash = str(filename).replace("\\", "/")
             base = slash.rsplit("/", 1)[-1]
-            if filename in names or slash in names or base in names:
+            matched = filename in names or slash in names or base in names
+            if not matched:
+                try:
+                    from master_agent.models.weights import names_match_slot
+                except Exception:
+                    names_match_slot = None  # type: ignore[assignment]
+                if names_match_slot is not None:
+                    matched = any(names_match_slot(base, have) for have in names)
+            if matched:
                 present[key] = filename
             else:
                 missing[key] = filename
@@ -226,6 +236,32 @@ def load_inventory(path: Path = MODEL_INVENTORY_JSON) -> Inventory:
         entries=entries,
         bundles=data.get("bundles") or {},
     )
+
+
+def format_listing(inv: Inventory) -> str:
+    """Human-readable paths and roles. Does not suggest downloads."""
+    usable = [e for e in inv.entries if not e.partial]
+    lines = [
+        "Installed / discovered models",
+        "Inventory only — nothing is downloaded.",
+        f"Project: {inv.models_dir}",
+        f"Comfy:   {inv.comfyui_models_dir}",
+        "",
+        f"{'role':<16} {'size':>8}  path",
+    ]
+    if not usable:
+        lines.append("(none)")
+    else:
+        for entry in sorted(usable, key=lambda e: (e.role, e.abs_path or e.rel_path)):
+            size = f"{entry.size_bytes / 1e9:7.2f}G"
+            path = entry.abs_path or f"[{entry.root}] {entry.rel_path}"
+            lines.append(f"{entry.role:<16} {size}  {path}")
+    lines.append("")
+    lines.append(
+        f"{len(usable)} file(s). Next: `python -m master_agent doctor` "
+        "(report only) or `download-models --scan-only`."
+    )
+    return "\n".join(lines)
 
 
 def format_summary(inv: Inventory) -> str:

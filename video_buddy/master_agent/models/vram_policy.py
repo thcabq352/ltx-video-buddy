@@ -40,7 +40,8 @@ def pack_kind(filename: str) -> str:
     name = (filename or "").lower().replace("\\", "/")
     base = name.rsplit("/", 1)[-1]
     if base.endswith(".gguf"):
-        if "q4" in base:
+        # Q3 (Sulphur / 12GB) ranks with Q4: both are the low-VRAM GGUF pick.
+        if "q3" in base or "q4" in base:
             return "gguf_q4"
         if "q5" in base:
             return "gguf_q5"
@@ -60,26 +61,50 @@ def pack_kind(filename: str) -> str:
     return "other"
 
 
+_HEAVY_KINDS = frozenset({"nvfp4", "bf16", "fp16"})
+
+
 def preference_order(
     names: Iterable[str],
     *,
     vram_gb: float | None = None,
+    force_loader: str | None = None,
 ) -> tuple[str, ...]:
-    """GGUF Q4/Q5 → NVFP4 (if VRAM_GB ≥ 14) → int8/int4 → fp8 → fp16/bf16."""
-    from master_agent.config import VRAM_GB
+    """GGUF Q3/Q4/Q5 → NVFP4 (if VRAM ≥ 14 and not forced) → int8 → fp8.
+
+    Below 14GB, or when ``FORCE_LOADER=gguf``, NVFP4 and bf16/fp16 are not
+    suggested. A file that is only on disk as bf16 still counts as present
+    later so Buddy does not download a second copy.
+    """
+    from master_agent.config import FORCE_LOADER, VRAM_GB
 
     gb = float(VRAM_GB if vram_gb is None else vram_gb)
+    force = (FORCE_LOADER if force_loader is None else force_loader).strip().lower()
     seen: list[str] = []
     for name in names:
         if name and name not in seen:
             seen.append(name)
+    ranked = sorted(seen, key=lambda n: (_KIND_RANK.get(pack_kind(n), 9), n.lower()))
+    if force == "gguf":
+        gguf = [n for n in ranked if pack_kind(n).startswith("gguf")]
+        if gguf:
+            return tuple(gguf)
+        return tuple(n for n in ranked if pack_kind(n) not in _HEAVY_KINDS)
     if gb < NVFP4_MIN_VRAM_GB:
-        seen = [n for n in seen if pack_kind(n) != "nvfp4"] + [
-            n for n in seen if pack_kind(n) == "nvfp4"
-        ]
-        ranked = [n for n in seen if pack_kind(n) != "nvfp4"]
-        return tuple(sorted(ranked, key=lambda n: (_KIND_RANK.get(pack_kind(n), 9), n)))
-    return tuple(sorted(seen, key=lambda n: (_KIND_RANK.get(pack_kind(n), 9), n)))
+        return tuple(n for n in ranked if pack_kind(n) not in _HEAVY_KINDS)
+    return tuple(ranked)
+
+
+def heavy_not_suggested(filename: str, *, vram_gb: float | None = None, force_loader: str | None = None) -> bool:
+    """True when this file is NVFP4/bf16 and the card should stay on GGUF."""
+    from master_agent.config import FORCE_LOADER, VRAM_GB
+
+    kind = pack_kind(filename)
+    if kind not in _HEAVY_KINDS:
+        return False
+    gb = float(VRAM_GB if vram_gb is None else vram_gb)
+    force = (FORCE_LOADER if force_loader is None else force_loader).strip().lower()
+    return force == "gguf" or gb < NVFP4_MIN_VRAM_GB
 
 
 def describe_pack(filename: str | None) -> str:
@@ -125,6 +150,8 @@ _LTX23 = (
     "ltx-2.3-22b-dev-fp8.safetensors",
     "ltx-2.3-22b-dev_transformer_only_fp8_scaled.safetensors",
     "LTX-2.3-dev-Q4_K_S.gguf",
+    # Acceptance alias only (vantagewithai/Sulphur-2-Base-GGUF). Not a download target.
+    "sulphur_dev-Q3_K_S.gguf",
     "LTX-2.3-22B-distilled-1.1-Q4_K_S.gguf",
     "gemma_3_12B_it_fp4_mixed.safetensors",
     "gemma_3_12B_it_fp8_scaled.safetensors",
@@ -198,6 +225,7 @@ QWEN_EDIT_PREFERENCE: tuple[str, ...] = (
 )
 LTX23_PREFERENCE: tuple[str, ...] = (
     "LTX2.3_DISTILLED-1.1_BAKED_LTX_10Eros_v14_r768.safetensors",
+    "sulphur_dev-Q3_K_S.gguf",
     "LTX-2.3-22B-distilled-1.1-Q4_K_S.gguf",
     "LTX-2.3-dev-Q4_K_S.gguf",
     "ltx-2.3-22b-distilled-1.1_transformer_only_fp8_scaled.safetensors",
@@ -400,8 +428,9 @@ def _build_rows() -> dict[str, WorkflowVramRow]:
 
     ltx23_notes = (
         "EROS baked all-in-one is the proven 16GB default. "
-        "QuantStack LTX-2.3 GGUF Q4_K_S (~16.7 GB) is optional / tight. "
-        "Official bf16/dev is not a default. DOWNSCALE_LADDER + distilled LoRA."
+        "QuantStack LTX-2.3 GGUF Q4_K_S and Sulphur Q3_K_S "
+        "(sulphur_dev-Q3_K_S.gguf) count as already installed — not a new download. "
+        "Official bf16/dev is not a default. On <14GB prefer GGUF (FORCE_LOADER=gguf)."
     )
     for slug, vram, klass in (
         ("base", 9.5, "safe"),
@@ -742,11 +771,30 @@ def format_vram_table() -> str:
 
 
 def format_doctor_line() -> str:
+    """Doctor row: detected VRAM, loader pick, and the 16GB policy card."""
+    from master_agent.config import FORCE_LOADER, VRAM_GB, VRAM_SOURCE
+
+    gb = float(VRAM_GB)
+    force = (FORCE_LOADER or "").strip().lower()
+    avoid_heavy = force == "gguf" or gb < NVFP4_MIN_VRAM_GB
+    if avoid_heavy:
+        ladder = "GGUF Q3/Q4/Q5 (NVFP4 and bf16 are not suggested"
+        if force == "gguf":
+            ladder += f"; FORCE_LOADER={force}"
+        ladder += f" below {NVFP4_MIN_VRAM_GB:.0f}GB)"
+    else:
+        ladder = (
+            f"GGUF Q3/Q4/Q5 then NVFP4 (≥{NVFP4_MIN_VRAM_GB:.0f}GB) then int8/fp8"
+        )
+    source = VRAM_SOURCE or "default"
+    hint = ""
+    if source == "default":
+        hint = " Set VRAM_GB=12 and FORCE_LOADER=gguf on a 12GB card (RTX 4000 Ada)."
     return (
-        f"{TARGET_GPU} {TARGET_VRAM_GB:.0f}GB — GGUF Q4/Q5 then NVFP4 "
-        f"(≥{NVFP4_MIN_VRAM_GB:.0f}GB) then int8/fp8. Peak headroom "
-        f"~{PEAK_HEADROOM_GB[0]:.0f}–{PEAK_HEADROOM_GB[1]:.0f}GB. "
-        "See `python -m master_agent workflows --vram`."
+        f"VRAM {gb:.1f}GB via {source}. {ladder}. "
+        f"Policy card {TARGET_GPU} {TARGET_VRAM_GB:.0f}GB. "
+        f"Peak headroom ~{PEAK_HEADROOM_GB[0]:.0f}–{PEAK_HEADROOM_GB[1]:.0f}GB."
+        f"{hint} See `python -m master_agent workflows --vram`."
     )
 
 
@@ -794,6 +842,7 @@ __all__ = [
     "format_doctor_line",
     "format_vram_table",
     "is_16gb_default",
+    "heavy_not_suggested",
     "pack_kind",
     "preference_order",
     "prepare_warning",

@@ -647,6 +647,151 @@ def filename_search_names(name: str) -> tuple[str, ...]:
     return tuple(seen)
 
 
+# Sulphur 2 Q3_K_S is an LTX-2.3 GGUF (vantagewithai/Sulphur-2-Base-GGUF).
+# Acceptance alias only — Buddy does not add a download pack for it.
+SULPHUR_Q3_GGUF = "sulphur_dev-Q3_K_S.gguf"
+_QUANT_MARKERS = ("q3", "q4", "q5", "q6", "q8")
+_WEIGHT_SUFFIXES = {".gguf", ".safetensors", ".bin", ".pt", ".ckpt"}
+
+
+def _basename(name: str) -> str:
+    return Path(str(name or "").replace("\\", "/")).name.lower()
+
+
+def _compact_name(name: str) -> str:
+    return name.replace("_", "").replace("-", "").replace(".", "")
+
+
+def is_sulphur_or_ltx23_gguf(name: str) -> bool:
+    """LTX 2.3 GGUF quants, including Sulphur ``*_Q3_K_S.gguf``."""
+    base = _basename(name)
+    if not base.endswith(".gguf"):
+        return False
+    if not any(tok in base for tok in _QUANT_MARKERS):
+        return False
+    if "sulphur" in base:
+        return True
+    return "ltx23" in _compact_name(base)
+
+
+def is_ltx25_quant_gguf(name: str) -> bool:
+    """LTX 2.5 GGUF quants whose filename is not the exact Hub alias."""
+    base = _basename(name)
+    if not base.endswith(".gguf") or "sulphur" in base:
+        return False
+    if not any(tok in base for tok in _QUANT_MARKERS):
+        return False
+    compact = base.replace("_", "")
+    return "ltx-2.5" in base or "ltx2.5" in base or "ltx25" in compact
+
+
+def is_compatible_heretic_encoder(name: str) -> bool:
+    """Gemma / LTX heretic text encoders. Not an Ollama tag and not a LoRA."""
+    base = _basename(name)
+    if "heretic" not in base or "gemma" not in base:
+        return False
+    return any(base.endswith(ext) for ext in (".safetensors", ".gguf"))
+
+
+def names_match_slot(expected: str, actual: str) -> bool:
+    """True when ``actual`` is an accepted stand-in for ``expected``.
+
+    Exact names are handled by the caller. This only widens Sulphur / LTX 2.3
+    GGUF and heretic Gemma encoders — it does not invent download targets.
+    """
+    exp = _basename(expected)
+    act = Path(str(actual or "").replace("\\", "/")).name
+    if not exp or not act:
+        return False
+    if exp == act.lower():
+        return True
+    ltx23_slot = "ltx23" in _compact_name(exp) and not any(
+        tok in exp for tok in ("vae", "lora", "gemma")
+    )
+    if ltx23_slot and is_sulphur_or_ltx23_gguf(act):
+        return True
+    if "gemma" in exp and is_compatible_heretic_encoder(act):
+        return True
+    if "ltx-2.5" in exp and "transformer" in exp and is_ltx25_quant_gguf(act):
+        return True
+    return False
+
+
+def _iter_weight_files(roots: Iterable[Path]) -> Iterable[Path]:
+    for root in roots:
+        if not root.is_dir():
+            continue
+        try:
+            paths = root.rglob("*")
+        except OSError:
+            continue
+        for path in paths:
+            if path.suffix.lower() not in _WEIGHT_SUFFIXES:
+                continue
+            if not _is_usable_file(path):
+                continue
+            yield path
+
+
+def _first_compatible(
+    roots: Iterable[Path],
+    predicate: Callable[[str], bool],
+    *,
+    folders: frozenset[str] | None = None,
+) -> Path | None:
+    hits: list[Path] = []
+    for path in _iter_weight_files(roots):
+        if folders is not None:
+            parts = {part.lower() for part in path.parts}
+            parent = path.parent.name.lower()
+            if not (parts & folders or parent in folders or parent == "models"):
+                continue
+        if predicate(path.name):
+            hits.append(path)
+    if not hits:
+        return None
+    hits.sort(key=lambda path: (0 if "q3" in path.name.lower() or "q4" in path.name.lower() else 1, path.name.lower()))
+    return hits[0]
+
+
+def find_compatible_for_weight(weight: WeightFile, roots: Iterable[Path]) -> Path | None:
+    """Family match after the exact ``accepts`` list misses."""
+    if weight.key == "text_encoder":
+        return _first_compatible(
+            roots,
+            is_compatible_heretic_encoder,
+            folders=frozenset({"text_encoders", "clip"}),
+        )
+    if weight.key == "transformer":
+        return _first_compatible(
+            roots,
+            is_ltx25_quant_gguf,
+            folders=frozenset({"diffusion_models", "unet", "checkpoints", "gguf"}),
+        )
+    return None
+
+
+def find_ltx23_compatible(roots: Iterable[Path] | None = None) -> Path | None:
+    """On-disk LTX 2.3 GGUF, including Sulphur Q3_K_S. None if the scan is empty."""
+    search = list(roots) if roots is not None else model_search_roots()
+    exact = (
+        SULPHUR_Q3_GGUF,
+        "LTX-2.3-22B-distilled-1.1-Q4_K_S.gguf",
+        "LTX-2.3-dev-Q4_K_S.gguf",
+        "ltx-2.3-22b-distilled-Q3_K_S.gguf",
+        "LTX-2.3-distilled-Q3_K_S.gguf",
+    )
+    for name in exact:
+        found = _search_name(name, search)
+        if found is not None:
+            return found
+    return _first_compatible(
+        search,
+        is_sulphur_or_ltx23_gguf,
+        folders=frozenset({"diffusion_models", "unet", "checkpoints", "gguf"}),
+    )
+
+
 def _hf_hub_cache_dirs() -> list[Path]:
     """HF hub cache locations (env, XDG, default home, huggingface_hub constant)."""
     hubs: list[Path] = []
@@ -878,14 +1023,23 @@ def find_weight_file(filename: str, roots: Iterable[Path] | None = None) -> Path
     return None
 
 
-def transformer_preference_order(*, vram_gb: float | None = None) -> tuple[str, ...]:
-    """16GB-class pick order: GGUF → NVFP4 (if VRAM fits) → int8 → bf16 → stub."""
-    from master_agent.models.vram_policy import preference_order
+def transformer_preference_order(
+    *,
+    vram_gb: float | None = None,
+    force_loader: str | None = None,
+) -> tuple[str, ...]:
+    """GGUF → NVFP4 (if VRAM fits) → int8 → bf16. Heavy rungs drop below 14GB."""
+    from master_agent.config import FORCE_LOADER, VRAM_GB
+    from master_agent.models.vram_policy import NVFP4_MIN_VRAM_GB, preference_order
 
-    names = list(preference_order(TRANSFORMER_PREFERENCE, vram_gb=vram_gb))
-    for stub, official in STUB_ALIASES.items():
-        if official == TRANSFORMER_PREFERENCE[-1] and stub not in names:
-            names.append(stub)
+    gb = float(VRAM_GB if vram_gb is None else vram_gb)
+    force = (FORCE_LOADER if force_loader is None else force_loader).strip().lower()
+    names = list(preference_order(TRANSFORMER_PREFERENCE, vram_gb=gb, force_loader=force))
+    avoid_heavy = force == "gguf" or gb < NVFP4_MIN_VRAM_GB
+    if not avoid_heavy:
+        for stub, official in STUB_ALIASES.items():
+            if official == TRANSFORMER_PREFERENCE[-1] and stub not in names:
+                names.append(stub)
     return tuple(names)
 
 
@@ -953,6 +1107,10 @@ def resolve_weight(weight: WeightFile, roots: Iterable[Path] | None = None) -> P
         found = _search_name(name, search)
         if found is not None:
             return found
+    compatible = find_compatible_for_weight(weight, search)
+    if compatible is not None:
+        return compatible
+    # A heavy file already on disk still counts. Do not download another pack.
     if weight.key == "transformer" or weight.key in H3_TRANSFORMER_KEYS:
         for name in weight.candidates:
             found = _search_name(name, search)

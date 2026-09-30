@@ -15,8 +15,9 @@ Commands:
   character create|list   CCC stage: bible -> Flux sheet -> captioned dataset
   lora setup|train|validate  Flux LoRA training via ai-toolkit + vision validation
   download-flux       One-time Flux fp8 weights download (~17GB)
-  download-models     Scan 16GB packs (LTX 2.5 / H3 / Wan / VACE / Krea / Flux / Qwen); --yes to fetch
-  setup | doctor      Scan local deps + LTX 2.5 / H3 weights (--fix-models after you agree)
+  inventory           List discovered weights (paths + roles) before doctor
+  download-models     Scan packs; --scan-only / --use-existing / --download; --yes to fetch
+  setup | doctor      Scan deps + weights (--fix-models after inventory; --scan-only never fetches)
   workflows           List default catalog variants (no env flags)
   comfy run           Drive ComfyUI from the CLI (prepare + lint + queue)
   comfy attach        Apply previs buddy.comfy.attach/v1 (dry-run; --submit to /prompt)
@@ -69,10 +70,38 @@ def cmd_about(args: argparse.Namespace) -> int:
     return 0
 
 
+def _weight_mode(args: argparse.Namespace) -> str:
+    if getattr(args, "scan_only", False):
+        return "scan"
+    if getattr(args, "use_existing", False):
+        return "existing"
+    if getattr(args, "download", False):
+        return "download"
+    return "report"
+
+
 def cmd_setup(args: argparse.Namespace) -> int:
     from master_agent.setup import cmd_setup as run_setup
 
-    return run_setup(do_fix=bool(args.fix), fix_models=bool(getattr(args, "fix_models", False)))
+    return run_setup(
+        do_fix=bool(args.fix),
+        fix_models=bool(getattr(args, "fix_models", False)),
+        mode=_weight_mode(args),
+        yes=bool(getattr(args, "yes", False)),
+    )
+
+
+def cmd_inventory(args: argparse.Namespace) -> int:
+    """List discovered weights (paths + roles) before doctor suggests downloads."""
+    from master_agent.config import COMFYUI_ROOT, MODELS_DIR
+    from master_agent.models.inventory import format_listing, scan_inventory
+
+    inv = scan_inventory(MODELS_DIR, COMFYUI_ROOT, write=False)
+    if getattr(args, "json", False):
+        print(json.dumps(inv.to_dict(), indent=1))
+        return 0
+    print(format_listing(inv))
+    return 0
 
 
 def cmd_health(args: argparse.Namespace) -> int:
@@ -1069,7 +1098,10 @@ def cmd_download_flux(args: argparse.Namespace) -> int:
 
 
 def cmd_download_models(args: argparse.Namespace) -> int:
-    """Scan first; download missing LTX 2.5 / H3 weights only after --yes."""
+    """Scan first; download missing weights only after consent."""
+    from master_agent.setup import print_inventory_preamble
+
+    print_inventory_preamble()
     from master_agent.models.weights import (
         WEIGHT_FILES,
         MissingWeightsError,
@@ -1114,7 +1146,12 @@ def cmd_download_models(args: argparse.Namespace) -> int:
             # name the Ingredients file, so list it even when the bundle is OK.
             # --yes fetches that exact filename only when no copy exists.
             # A wrong-folder copy is a move, not a download.
-            if args.yes and not place.get("path"):
+            allow_ic = (
+                args.yes
+                and not getattr(args, "scan_only", False)
+                and not getattr(args, "use_existing", False)
+            )
+            if allow_ic and not place.get("path"):
                 try:
                     got = download_named_file(WEIGHT_FILES["ic_lora"], yes=True)
                 except Exception as exc:
@@ -1122,11 +1159,23 @@ def cmd_download_models(args: argparse.Namespace) -> int:
                     return 1
                 if got is not None:
                     print(f"OK    downloaded {got.name}")
+    if getattr(args, "scan_only", False):
+        print("\n--scan-only: nothing downloaded.")
+        return 0 if status.ok else 2
+    if getattr(args, "use_existing", False):
+        print("\n--use-existing: keeping files already on disk. Nothing downloaded.")
+        return 0
     if status.ok:
         return 0
-    if not args.yes:
-        print("\nNothing downloaded. Re-run with --yes after you agree.")
+    if not args.yes and not getattr(args, "download", False):
+        print("\nNothing downloaded. Re-run with --yes after you agree, or pass --download to confirm.")
         return 2
+    if not args.yes:
+        from master_agent.setup import confirm_prompt
+
+        if not confirm_prompt("Download the confirmed-missing set? [y/N] "):
+            print("\nNothing downloaded.")
+            return 2
     try:
         _status, paths = download_missing_bundle(
             bundle,
@@ -1679,13 +1728,25 @@ def main(argv: list[str] | None = None) -> int:
         aliases=["doctor"],
         help="check local deps + 16GB pack policy + LTX 2.5 / H3 weights (scan first; --fix-models after you agree)",
     )
-    p.add_argument("--fix", action="store_true", help="create venv, pip install, Playwright, .env, ffmpeg, Ollama models")
+    p.add_argument("--fix", action="store_true", help="create venv, pip install, Playwright, .env, ffmpeg; Ollama pulls only for models missing from `ollama list` and only with --yes or y/n")
     p.add_argument(
         "--fix-models",
         action="store_true",
-        help="after reviewing the missing list, download required LTX 2.5 weights (gated HF)",
+        help="after the inventory, download confirmed-missing LTX 2.5 weights (explicit consent)",
     )
+    p.add_argument("--yes", action="store_true", help="consent for Ollama pulls (--fix) and for --download")
+    fetch = p.add_mutually_exclusive_group()
+    fetch.add_argument("--scan-only", action="store_true", help="inventory and report only; never fetch weights or pull Ollama")
+    fetch.add_argument("--use-existing", action="store_true", help="use weights already on disk; do not download")
+    fetch.add_argument("--download", action="store_true", help="fetch confirmed-missing weights after --yes or a y/n prompt")
     p.set_defaults(func=cmd_setup)
+
+    p = sub.add_parser(
+        "inventory",
+        help="list discovered model files (paths + roles) before doctor suggests downloads",
+    )
+    p.add_argument("--json", action="store_true", help="machine-readable inventory")
+    p.set_defaults(func=cmd_inventory)
 
     p = sub.add_parser("workflows", help="list default catalog variants (no env flags)")
     p.add_argument("--json", action="store_true")
@@ -2069,6 +2130,10 @@ def main(argv: list[str] | None = None) -> int:
     p.add_argument("--yes", action="store_true", help="consent: download the missing mandatory set")
     p.add_argument("--optional", action="store_true", help="also fetch optional Hub files (distilled LoRA 450, temporal upscaler)")
     p.add_argument("--json", action="store_true")
+    fetch = p.add_mutually_exclusive_group()
+    fetch.add_argument("--scan-only", action="store_true", help="inventory and report only; never fetch (overrides --yes)")
+    fetch.add_argument("--use-existing", action="store_true", help="keep whatever is on disk; do not download")
+    fetch.add_argument("--download", action="store_true", help="fetch confirmed-missing files after --yes or a y/n prompt")
     p.set_defaults(func=cmd_download_models)
 
     p = sub.add_parser("character", help="CCC stage: create | list")

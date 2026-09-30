@@ -121,7 +121,8 @@ you ──▶ persona intake ──▶ creative brief
 
 **Local-first by design:** the director, storyboard, judge, and embeddings run
 on Ollama (`qwen3-vl-heretic`, 9B-class VL). Cloud LLMs (Grok, Claude) are optional fallbacks
-and panel members, never a requirement.
+and panel members, never a requirement. `LLM_PROVIDER=auto` tries Ollama, then
+llama.cpp, then Grok. Set `LLM_PROVIDER=ollama` to stay fully local.
 
 ## Quickstart
 
@@ -154,12 +155,18 @@ python -m master_agent mv render "I'm in love with a bot" --audio track.mp3 --ou
 python -m master_agent mv render --audio track.mp3 --dry-run   # plan + unique + Remotion wiring, no GPU
 ```
 
-**Do not assume a weight download is needed.** `doctor` reports the 16GB-class
-loader pick (GGUF Q4 → NVFP4 if `VRAM_GB` ≥ 14 → int8-convrot → bf16). If a
-slot is confirmed missing (zero-byte files count as missing), review the ask
-then:
+**Do not assume a weight download is needed.** Run `inventory` first. `doctor`
+reports the loader pick (GGUF Q3/Q4 → NVFP4 only if `VRAM_GB` ≥ 14 → int8 →
+bf16). `sulphur_dev-Q3_K_S.gguf` counts for LTX 2.3. Gemma `*heretic*` encoders
+count for the text-encoder slot. Below 14GB (RTX 4000 Ada 12GB), set
+`VRAM_GB=12` and `FORCE_LOADER=gguf` so NVFP4/bf16 are not suggested.
+`nvidia-smi` fills `VRAM_GB` when the env var is unset. If a slot is confirmed
+missing (zero-byte files count as missing), review the ask then:
 
 ```bash
+python -m master_agent inventory
+python -m master_agent download-models --ltx25 --scan-only   # never fetch
+python -m master_agent download-models --ltx25 --use-existing
 python -m master_agent download-models --ltx25        # list only
 python -m master_agent download-models --ltx25 --yes  # fetch that missing set
 python -m master_agent download-models --h3           # MiniMax H3 list only

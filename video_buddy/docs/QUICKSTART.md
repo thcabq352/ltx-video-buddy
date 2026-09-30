@@ -5,11 +5,36 @@ Post-merge `main` (LTX 2.5 PR #6 + capability audit PR #5). From the
 
 ```bash
 cd video_buddy
-python install.py                         # once: venv, pip, Playwright, .env, ffmpeg, Ollama
+python install.py                         # once: venv, pip, Playwright, .env, ffmpeg
+python -m master_agent inventory          # paths + roles; no download
 python -m master_agent doctor             # scan only — never fetches weights
 python -m master_agent workflows          # default catalog (includes ltx25_*)
+python -m master_agent download-models --ltx25 --scan-only
 python -m master_agent download-models --ltx25   # list confirmed-missing; add --yes only then
 python -m master_agent download-models --h3      # MiniMax H3 confirmed-missing; add --yes only then
+```
+
+`install.py` / `setup --fix` does **not** `ollama pull` a model that is already in `ollama list`. A missing model is pulled only after `y` or `setup --fix --yes`.
+
+## 12GB cards (Admeria / rainey1, RTX 4000 Ada)
+
+Put this in `video_buddy/.env` and stay local. Cloud LLM fallback exists only when `LLM_PROVIDER=auto` and both Ollama and llama.cpp are down.
+
+```bash
+VRAM_GB=12
+FORCE_LOADER=gguf
+LLM_PROVIDER=ollama
+LLM_PANEL=local
+PANEL_JUDGE=ollama
+```
+
+Unset `VRAM_GB` and Buddy uses `nvidia-smi` when it can. The 16GB figure is only the fallback when detection fails. Below 14GB, doctor does not suggest NVFP4 or bf16. `sulphur_dev-Q3_K_S.gguf` counts as an LTX 2.3 GGUF. A Gemma filename with `heretic` counts as the text encoder. Neither is a new download pack.
+
+```bash
+python -m master_agent inventory
+python -m master_agent doctor --scan-only          # never fetch
+python -m master_agent doctor --use-existing       # keep what is on disk
+python -m master_agent download-models --ltx25 --download --yes   # only confirmed-missing
 ```
 
 ## 1. Default catalog (no experimental flags)
@@ -162,11 +187,13 @@ See [`../REQUIRED-FILES.md`](../REQUIRED-FILES.md).
 
 ## 5. 16GB-class loader preference
 
-`VRAM_GB` defaults to `16`. When several transformers are on disk:
+`VRAM_GB` is the env value, else `nvidia-smi`, else `16`. When several transformers are on disk:
 
-1. **GGUF Q4** (`ltx-2.5-22b-distilled-transformer-bf16-Q4_K_M.gguf`) → `UnetLoaderGGUF`
+1. **GGUF Q3/Q4** (`FORCE_LOADER=gguf`, or any card under 14GB) → `UnetLoaderGGUF`
 2. Else **NVFP4** if `VRAM_GB` ≥ 14
 3. Else **int8-convrot**, then official bf16
+
+On a 12GB card, NVFP4 and bf16 are not suggested. A heavy file that is already on disk still counts as present so Buddy does not download a second copy.
 
 A machine that already has GGUF Q4 + NVFP4 loads **GGUF Q4**. Research JSON
 still says `ckpt_name: ltx-2.5-22b-distilled.safetensors` on
