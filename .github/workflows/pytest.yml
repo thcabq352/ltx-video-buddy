@@ -27,6 +27,7 @@ jobs:
             video_buddy/tests/test_ltx_frames.py \
             video_buddy/tests/test_director_allowlist.py \
             video_buddy/tests/test_director_vision.py \
+            video_buddy/tests/test_ltx_routing.py \
             video_buddy/tests/test_upscale.py \
             video_buddy/tests/test_accelerator_bypass.py \
             video_buddy/tests/test_music_video.py \

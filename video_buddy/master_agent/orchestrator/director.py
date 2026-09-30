@@ -22,6 +22,17 @@ from master_agent.capability import CapabilityContract, contract_from_variant
 from master_agent.comfy.catalog import default_variant_ids, is_known_variant
 from master_agent.config import DIRECTOR_LLM, WORKFLOW_FILES
 from master_agent.hands import FitResult, Hands, default_hands
+from master_agent.orchestrator.ltx_routing import (
+    LTX23_PRO_EXISTING_VIDEO,
+    LTX23_PRO_PLATE,
+    LTX25_NEW_SCENE,
+    LTX25_SYNCED_DIALOGUE,
+    MULTICUT_PHRASES,
+    NEW_SCENE_PHRASES,
+    RETAKE_EXTEND_PHRASES,
+    SYNCED_DIALOGUE_PHRASES,
+    is_plate_retake_or_extend,
+)
 
 # First match wins. Keep specific family phrases before generic ones
 # (`vfx` / `ccc` / `shots`). Hard constraints in choose_variant still win.
@@ -95,6 +106,11 @@ _VARIANT_KEYWORDS = [
     ("h3_flf", ("h3 flf", "h3_flf", "minimax first-last", "minimax flf")),
     ("h3_i2v", ("h3 i2v", "h3_i2v", "minimax i2v", "minimax image-to-video")),
     ("h3_t2v", ("minimax h3", "minimax-h3", "minimax_h3", "fl2va", "h3 t2v", "h3_t2v", "native stereo")),
+    # Pack B local lock. See orchestrator/ltx_routing.py.
+    # Retake / temporal extend beat a named "ltx 2.5" so those plates stay on 2.3 Pro.
+    (LTX23_PRO_PLATE, RETAKE_EXTEND_PHRASES),
+    (LTX25_NEW_SCENE, NEW_SCENE_PHRASES),
+    (LTX25_SYNCED_DIALOGUE, SYNCED_DIALOGUE_PHRASES),
     ("ltx25_flf2v", ("flf2v", "first-last", "first last frame", "last frame", "start and end frame")),
     ("ltx25_msr", ("multi-reference", "multi reference", "msr", "pic1", "reference sheet")),
     ("ltx25_v2v_ic_lora", ("ic-lora", "iclora", "ic lora", "video-to-video", "v2v")),
@@ -118,7 +134,8 @@ _VARIANT_KEYWORDS = [
     ("ltx23_i2v_distilled", ("sulphur",)),
     ("ltx25_t2v_i2v_two_stage", ("two-stage", "two stage", "latent upscale", "ltx 2.5 two")),
     ("ltx25_t2v_i2v", ("ltx 2.5", "ltx2.5", "ltx25", "ltx-2.5")),
-    ("directors", ("director", "storyboard", "scene", "shots", "multi-shot")),
+    # multi-cut has no LTX 2.5 graph; directors is the 2.3 dev (Pro) multi-shot path.
+    ("directors", ("director", "storyboard", "scene", "shots", "multi-shot", *MULTICUT_PHRASES)),
     ("eros", ("eros", "10eros")),
 ]
 
@@ -176,6 +193,10 @@ def rank_story_candidates(
             requests_ltx25_inoutpaint,
         )
 
+        # Existing plate: retake / temporal extend stay on LTX 2.3 Pro (lipsync
+        # loads dev-fp8). Do not send them to an ltx25 graph.
+        if is_plate_retake_or_extend(request):
+            return [(LTX23_PRO_EXISTING_VIDEO, "ltx-lock")]
         if requests_ltx25_inoutpaint(request):
             return [("ltx25_inoutpaint", "input")]
         if requests_inoutpaint(request):
@@ -184,6 +205,8 @@ def rank_story_candidates(
     if has_image and has_audio:
         from master_agent.orchestrator.talking import requests_h3
 
+        if is_plate_retake_or_extend(request):
+            return [(LTX23_PRO_PLATE, "ltx-lock")]
         # Named H3 / Hailuo / ref2va stays on h3_r2v (sample voice + written line, coarse sync).
         if requests_h3(request):
             return [("h3_r2v", "input")]
@@ -197,21 +220,41 @@ def rank_story_candidates(
         seen.add(variant)
         ranked.append((variant, source))
 
+    _pin_ltx_lock(request, _add)
     if attach_recipe is not None:
         from master_agent.comfy.attach import attach_director_override
 
         override = attach_director_override(attach_recipe)
-        if override:
+        if override and not (
+            is_plate_retake_or_extend(request) and str(override).startswith("ltx25")
+        ):
             _add(override, "attach")
     fallback = rule_based_variant(request)
     if DIRECTOR_LLM:
         llm_variant = _llm_variant(request, fallback=fallback)
-        if llm_variant:
+        if llm_variant and not (
+            is_plate_retake_or_extend(request) and str(llm_variant).startswith("ltx25")
+        ):
             _add(llm_variant, "llm")
     _add(fallback, "rules")
     if fallback != "base":
         _add("base", "fallback")
-    return ranked or [("base", "rules")]
+    if is_plate_retake_or_extend(request):
+        ranked = [(variant, source) for variant, source in ranked if not str(variant).startswith("ltx25")]
+    return ranked or [(LTX23_PRO_PLATE if is_plate_retake_or_extend(request) else "base", "ltx-lock")]
+
+
+def _pin_ltx_lock(request: str, add) -> None:
+    """Rank Pack B ahead of the LLM. Hands may still reject a 2.5 pin."""
+    if is_plate_retake_or_extend(request):
+        add(LTX23_PRO_PLATE, "ltx-lock")
+        return
+    text = (request or "").lower()
+    if any(phrase in text for phrase in SYNCED_DIALOGUE_PHRASES):
+        add(LTX25_SYNCED_DIALOGUE, "ltx-lock")
+        return
+    if any(phrase in text for phrase in NEW_SCENE_PHRASES):
+        add(LTX25_NEW_SCENE, "ltx-lock")
 
 
 def choose_variant(

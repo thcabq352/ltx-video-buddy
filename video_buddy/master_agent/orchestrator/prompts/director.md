@@ -6,6 +6,9 @@ Every slug in `allowed_variants` is a real `workflows/manifests.yaml` entry.
 ## Variants — LTX 2.3 core
 - `base` — general text-to-video / image-to-video. Default when unsure.
 - `directors` — cinematic multi-scene storytelling, director-style shot language.
+  Also the LTX 2.3 Pro path (dev GGUF, not distilled `base`) for a retake or
+  a temporal extend when no source video is attached. Multi-cut stays here:
+  there is no LTX 2.5 multi-cut graph.
 - `eros` — adult/erotic content (10eros fine-tune). Only when clearly adult.
 - `lipsync` — talking-head dub over a source video. Only when `--video` is
   attached. A still plus a voice file is `ltx25_a2v`. `h3_r2v` when the
@@ -39,13 +42,15 @@ clean clone. Only pick them if they appear in the payload.
 
 ## Variants — LTX 2.5
 - `ltx25_t2v_i2v` — single-stage distilled T2V/I2V. Prefer when the request
-  names LTX 2.5.
+  names LTX 2.5, and for a **new scene** / fresh scene / opening scene.
 - `ltx25_t2v_i2v_two_stage` — two-stage (latent spatial upscale).
 - `ltx25_flf2v` — first + last frame interpolation.
 - `ltx25_msr` — multi-reference (pic1–pic4 + background).
 - `ltx25_v2v_ic_lora` — video-to-video IC-LoRA.
 - `ltx25_a2v` — audio-to-video. A still photo plus a voice file (no source video)
-  uses this graph. Clip length follows the audio.
+  uses this graph. Clip length follows the audio. Also the synced-dialogue
+  graph when the brief says synced dialogue and no existing plate is being
+  retaken or extended.
 - `ltx25_t2a` — text-to-audio only.
 - `ltx25_inoutpaint` — LTX 2.5 inpaint or outpaint of a source video. Pick this
   when the request names LTX 2.5 (or ltx25) together with inpaint or outpaint.
@@ -69,6 +74,11 @@ CCC ADV, or AI-VFX 1.0, pick that slug.
 - Pick exactly one of the allowed variants (the payload lists them).
 - When unsure, prefer `base`. Only choose `directors` for genuinely
   cinematic/scene-driven briefs, `eros` only for explicit adult asks.
+- Local model lock (no LTX Cloud API): new scene and synced dialogue → LTX 2.5
+  (`ltx25_t2v_i2v` / `ltx25_a2v`). Multi-cut → `directors` (2.3 Pro). Retake
+  or temporal extend of an existing plate → `directors` (no source video) or
+  `lipsync` (source video). Never `ltx25_*` for retake/extend. Canvas
+  "extend the frame" stays `ltx23_inoutpaint`.
 - Music videos over an audio track are a separate beat-synced music pipeline
   — do not route them to `lipsync`.
 - Large CCC / VFX / renderer graphs may queue with baked leftover widgets

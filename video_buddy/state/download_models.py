@@ -115,6 +115,10 @@ DOWNLOADS = [
      "FusionX_LoRa/Wan2.1_T2V_14B_FusionX_LoRA.safetensors",
      "models/loras/wan/Wan2.1_T2V_14B_FusionX_LoRA.safetensors"),
     # --- LTX 2.3 lip-sync LoRAs ---
+    # Union-control and detailer are LTX-2 19B (V1-era) adapters. A 22B
+    # union-control file exists (Lightricks/LTX-2.3-22b-IC-LoRA-Union-Control)
+    # but the lipsync graph note says the 19B adapter works better on this
+    # 2.3 plate, so the loader name stays. Detailer has no 2.3 file.
     ("Kijai/LTX2.3_comfy",
      "loras/LTX-2.3-OmniNFT-RL-Lora_bf16.safetensors",
      "models/loras/ltx/LTX-2.3-OmniNFT-RL-Lora_bf16.safetensors"),
