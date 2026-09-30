@@ -22,6 +22,7 @@ Local ComfyUI video studio in this repo (`video_buddy/`). Package is `master_age
 | Signal | Route elsewhere |
 |---|---|
 | Grok / Imagine cloud clip, no local Comfy | default cloud video skills — not Buddy |
+| Seedance 2.5 Draft → 1080p one-take | Comfy Partner templates `api_seedance2_5_draft_{t2v,i2v,r2v}` — Buddy only stores stub ids and refuses the queue. See `video_buddy/docs/SEEDANCE_2_5_DRAFT.md` |
 | Pixie Forge brand / scotty.fyi / HyperFrames | `hermes -p forge` |
 | Generic node poke on a **different** Comfy install | that install's MCP, not `master-agent` |
 | Sibling trees (`ltx_director/`, `SOS/`, `lot/`) | those packages — L0 is this tree only |

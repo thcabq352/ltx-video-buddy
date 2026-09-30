@@ -111,3 +111,11 @@ H3 speaks your line in the voice of your 2-12 s sample and animates the mouth to
 
 Still-working: `base`, `eros`, `directors`, `lipsync`, `wan22`, `flux`,
 `vb_movie_builder`, CCC / renderer / AI-VFX slugs. List: `python -m master_agent workflows`.
+
+## Partner pointers (not queueable)
+
+`seedance25_draft_t2v` / `seedance25_draft_i2v` / `seedance25_draft_r2v` map to
+Comfy templates `api_seedance2_5_draft_{t2v,i2v,r2v}`. Scout is model
+`Seedance 2.5 Draft` at 480p plus `draft_task_id` (fix the seed). Promote is
+`ByteDance2DraftToFinalVideoNode` at native 1080p. Buddy refuses these ids.
+Doc: `video_buddy/docs/SEEDANCE_2_5_DRAFT.md`.

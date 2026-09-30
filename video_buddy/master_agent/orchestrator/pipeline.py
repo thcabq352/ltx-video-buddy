@@ -418,6 +418,15 @@ def run_pipeline(
 ) -> PipelineResult:
     run_id = uuid.uuid4().hex[:12]
     result = PipelineResult(run_id, request=request)
+    from master_agent.comfy.partner_pointers import partner_refusal
+
+    refusal = partner_refusal(request, variant)
+    if refusal:
+        result.status = "error"
+        result.error = refusal
+        result.log(refusal)
+        _write_record(result)
+        return result
     j_enabled = JUDGE_ENABLED if judge_enabled is None else judge_enabled
     sb_mode = (storyboard_mode or STORYBOARD_MODE).strip().lower()
     base_seed = seed if seed is not None else random.randint(0, 2**32 - 1)
@@ -894,6 +903,13 @@ def dry_run_pipeline(
     inoutpaint: Optional[dict[str, Any]] = None,
 ) -> int:
     """Storyboard + patch + validate every segment without queueing. CLI exit code."""
+    from master_agent.comfy.partner_pointers import partner_refusal
+
+    refusal = partner_refusal(request, variant)
+    if refusal:
+        print(f"FAIL  {refusal}")
+        return 2
+
     from master_agent.comfy.validator import format_report, validate_workflow
     from master_agent.comfy.workflow_patcher import (
         load_and_patch_workflow,

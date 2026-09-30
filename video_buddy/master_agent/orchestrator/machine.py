@@ -93,8 +93,13 @@ class Orchestrator:
     # ── states ────────────────────────────────────────────
 
     def _select_variant(self, st: RunState, force_variant: Optional[str]) -> str:
+        from master_agent.comfy.partner_pointers import PartnerPointerError, partner_refusal
         from master_agent.hands import LiveHands
         from master_agent.orchestrator.director import choose_variant
+
+        refusal = partner_refusal(st.request or "", force_variant)
+        if refusal:
+            raise PartnerPointerError(refusal)
 
         variant, source = choose_variant(
             st.request or "",
@@ -705,8 +710,14 @@ class Orchestrator:
             ),
             max_piece_s=float(max_piece_s) if max_piece_s is not None else None,
         )
+        from master_agent.comfy.partner_pointers import PartnerPointerError
+
         try:
             st.variant = self._select_variant(st, variant)
+        except PartnerPointerError as exc:
+            st.fail(str(exc))
+            return st
+        try:
             from master_agent.orchestrator.talking import h3_r2v_audio_warning, media_route_error
 
             route_err = media_route_error(
