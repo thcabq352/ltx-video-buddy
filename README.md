@@ -156,10 +156,12 @@ python -m master_agent mv render --audio track.mp3 --dry-run   # plan + unique +
 ```
 
 **Do not assume a weight download is needed.** Run `inventory` first. `doctor`
-reports the loader pick (GGUF Q3/Q4 → NVFP4 only if `VRAM_GB` ≥ 14 → int8 →
-bf16). `sulphur_dev-Q3_K_S.gguf` counts for LTX 2.3. Gemma `*heretic*` encoders
-count for the text-encoder slot. Below 14GB (RTX 4000 Ada 12GB), set
-`VRAM_GB=12` and `FORCE_LOADER=gguf` so NVFP4/bf16 are not suggested.
+reports the loader pick (GGUF when a compatible file is on disk → NVFP4 only
+if `VRAM_GB` ≥ 14 → int8/fp8 → bf16 or EROS). `sulphur_dev-Q3_K_S.gguf` counts
+for LTX 2.3. Gemma `*heretic*` encoders count for the text-encoder slot.
+Below 14GB (RTX 4000 Ada 12GB), set `VRAM_GB=12` and `FORCE_LOADER=gguf` so
+NVFP4/bf16 are not suggested. Leave `FORCE_LOADER` empty when the only local
+pack is bf16 or EROS.
 `nvidia-smi` fills `VRAM_GB` when the env var is unset. If a slot is confirmed
 missing (zero-byte files count as missing), review the ask then:
 

@@ -70,11 +70,16 @@ def preference_order(
     vram_gb: float | None = None,
     force_loader: str | None = None,
 ) -> tuple[str, ...]:
-    """GGUF Q3/Q4/Q5 → NVFP4 (if VRAM ≥ 14 and not forced) → int8 → fp8.
+    """Standing rule: GGUF Q3/Q4/Q5, then NVFP4, int8, fp8, bf16.
 
-    Below 14GB, or when ``FORCE_LOADER=gguf``, NVFP4 and bf16/fp16 are not
-    suggested. A file that is only on disk as bf16 still counts as present
-    later so Buddy does not download a second copy.
+    Callers load the first name in this tuple that exists on disk. A
+    compatible GGUF therefore wins at any VRAM, including 16GB+, without
+    ``FORCE_LOADER``. fp8, bf16, and other packs are fallbacks for a slot
+    that has no matching GGUF.
+
+    Below 14GB, or when ``FORCE_LOADER=gguf``, NVFP4 and bf16/fp16 drop out
+    of this suggestion list. A heavy file that is the only copy on disk
+    still counts later so Buddy does not download a second pack.
     """
     from master_agent.config import FORCE_LOADER, VRAM_GB
 
@@ -149,10 +154,12 @@ _LTX23 = (
     "ltx-2.3-22b-distilled-1.1_transformer_only_fp8_scaled.safetensors",
     "ltx-2.3-22b-dev-fp8.safetensors",
     "ltx-2.3-22b-dev_transformer_only_fp8_scaled.safetensors",
-    "LTX-2.3-dev-Q4_K_S.gguf",
-    # Acceptance alias only (vantagewithai/Sulphur-2-Base-GGUF). Not a download target.
-    "sulphur_dev-Q3_K_S.gguf",
     "LTX-2.3-22B-distilled-1.1-Q4_K_S.gguf",
+    "LTX-2.3-dev-Q4_K_S.gguf",
+    # Acceptance aliases only. Not download targets.
+    "sulphur_dev-Q3_K_S.gguf",
+    "ltx-2.3-22b-distilled-Q3_K_S.gguf",
+    "LTX-2.3-distilled-Q3_K_S.gguf",
     "gemma_3_12B_it_fp4_mixed.safetensors",
     "gemma_3_12B_it_fp8_scaled.safetensors",
 )
@@ -223,13 +230,32 @@ QWEN_EDIT_PREFERENCE: tuple[str, ...] = (
     "Qwen-Image-Edit-2509-Q5_0.gguf",
     "qwen-image-edit-2511-Q5_0.gguf",
 )
-LTX23_PREFERENCE: tuple[str, ...] = (
-    "LTX2.3_DISTILLED-1.1_BAKED_LTX_10Eros_v14_r768.safetensors",
+# QuantStack Q4_K_S, then Sulphur Q3_K_S, then the other aliases #52 already
+# accepts. fp8 and the EROS all-in-one are fallbacks when none of these exist.
+LTX23_DISTILLED_GGUF: tuple[str, ...] = (
+    "LTX-2.3-22B-distilled-1.1-Q4_K_S.gguf",
+    "ltx-2.3-22b-distilled-Q3_K_S.gguf",
+    "LTX-2.3-distilled-Q3_K_S.gguf",
+    "sulphur_dev-Q3_K_S.gguf",
+    "LTX-2.3-dev-Q4_K_S.gguf",
+)
+LTX23_DEV_GGUF: tuple[str, ...] = (
+    "LTX-2.3-dev-Q4_K_S.gguf",
     "sulphur_dev-Q3_K_S.gguf",
     "LTX-2.3-22B-distilled-1.1-Q4_K_S.gguf",
+    "ltx-2.3-22b-distilled-Q3_K_S.gguf",
+    "LTX-2.3-distilled-Q3_K_S.gguf",
+)
+LTX23_PREFERENCE: tuple[str, ...] = (
+    "LTX-2.3-22B-distilled-1.1-Q4_K_S.gguf",
     "LTX-2.3-dev-Q4_K_S.gguf",
+    "sulphur_dev-Q3_K_S.gguf",
+    "ltx-2.3-22b-distilled-Q3_K_S.gguf",
+    "LTX-2.3-distilled-Q3_K_S.gguf",
     "ltx-2.3-22b-distilled-1.1_transformer_only_fp8_scaled.safetensors",
+    "ltx-2.3-22b-dev_transformer_only_fp8_scaled.safetensors",
     "ltx-2.3-22b-dev-fp8.safetensors",
+    "LTX2.3_DISTILLED-1.1_BAKED_LTX_10Eros_v14_r768.safetensors",
 )
 
 
@@ -427,21 +453,22 @@ def _build_rows() -> dict[str, WorkflowVramRow]:
         )
 
     ltx23_notes = (
-        "EROS baked all-in-one is the proven 16GB default. "
-        "QuantStack LTX-2.3 GGUF Q4_K_S and Sulphur Q3_K_S "
-        "(sulphur_dev-Q3_K_S.gguf) count as already installed — not a new download. "
-        "Official bf16/dev is not a default. On <14GB prefer GGUF (FORCE_LOADER=gguf)."
+        "Standing rule: if a compatible GGUF is on disk, load it "
+        "(QuantStack Q4_K_S, then Sulphur Q3_K_S, then other LTX 2.3 GGUF aliases). "
+        "fp8 and the EROS all-in-one are the MODEL fallback only when no GGUF matches. "
+        "The all-in-one checkpoint still feeds VAE and text projection. "
+        "Not a new download pack. 16GB+ machines that only have EROS or bf16 keep those files."
     )
-    for slug, vram, klass in (
-        ("base", 9.5, "safe"),
-        ("eros", 11.0, "safe"),
-        ("directors", 13.5, "tight"),
+    for slug, pack, vram, klass in (
+        ("base", LTX23_DISTILLED_GGUF[0], 9.5, "safe"),
+        ("eros", LTX23_DISTILLED_GGUF[0], 11.0, "safe"),
+        ("directors", LTX23_DEV_GGUF[0], 13.5, "tight"),
     ):
         add(
             WorkflowVramRow(
                 slug=slug,
                 family="ltx23",
-                default_pack=_LTX23[0],
+                default_pack=pack,
                 expected_vram_gb=vram,
                 vram_class=klass,
                 notes=ltx23_notes,
@@ -682,13 +709,27 @@ def _fallback_row(slug: str) -> WorkflowVramRow:
     templates = {
         "ltx25": WorkflowVramRow(slug, family, _LTX25[0], 12.5, "safe", notes="Inherits LTX 2.5 16GB pick."),
         "h3": WorkflowVramRow(slug, family, _H3[0], 13.0, "tight", notes="Inherits H3 16GB pick."),
-        "ltx23": WorkflowVramRow(slug, family, _LTX23[0], 10.0, "safe", notes="Inherits LTX 2.3 EROS baked."),
+        "ltx23": WorkflowVramRow(
+            slug,
+            family,
+            LTX23_DISTILLED_GGUF[0],
+            10.0,
+            "safe",
+            notes="Inherits LTX 2.3 GGUF-first; EROS/fp8 when no GGUF is on disk.",
+        ),
         "wan22": WorkflowVramRow(slug, family, WAN22_HIGH_PREFERENCE[0], 13.2, "tight", notes="Inherits Wan 2.2 Lightx2v path."),
         "vace": WorkflowVramRow(slug, family, _VACE[0], 13.6, "tight", notes="Inherits VACE GGUF Q4_K_M."),
         "krea2": WorkflowVramRow(slug, family, _KREA[0], 10.5, "safe", notes="Inherits Krea-2 NVFP4."),
         "flux": WorkflowVramRow(slug, family, _FLUX[0], 11.0, "safe", notes="Inherits Flux GGUF/fp8."),
         "qwen_edit": WorkflowVramRow(slug, family, _QWEN[0], 12.0, "safe", notes="Inherits Qwen Edit GGUF Q5."),
-        "other": WorkflowVramRow(slug, family, _LTX23[0], 10.0, "tight", notes="Unclassified — inherit LTX 2.3 16GB baked."),
+        "other": WorkflowVramRow(
+            slug,
+            family,
+            LTX23_DISTILLED_GGUF[0],
+            10.0,
+            "tight",
+            notes="Unclassified — inherit LTX 2.3 GGUF-first.",
+        ),
     }
     return templates.get(family, templates["other"])
 
@@ -740,7 +781,13 @@ def is_16gb_default(slug: str) -> bool:
 def format_vram_table() -> str:
     """Family → default pack → expected VRAM → notes (PR / doctor)."""
     families: list[tuple[str, str, str, float, str]] = [
-        ("LTX 2.3", "base / eros / directors", _LTX23[0], 9.5, "EROS baked; GGUF Q4_K_S optional; bf16 not default"),
+        (
+            "LTX 2.3",
+            "base / eros / directors",
+            LTX23_DISTILLED_GGUF[0],
+            9.5,
+            "GGUF Q4_K_S when on disk; Sulphur Q3; EROS/fp8 fallback",
+        ),
         ("LTX 2.5", "ltx25_t2v_i2v (default 2.5)", _LTX25[0], 12.5, "GGUF Q4 → NVFP4 → int8 → bf16; two-stage is quality"),
         ("MiniMax H3", "h3_t2v / i2v / flf / r2v", _H3[0], 13.0, "Q4_K + NVFP4 TE; ≤12s / 0.8MP / 4 steps / CFG 1.0"),
         ("Wan 2.2", "wan22", WAN22_HIGH_PREFERENCE[0], 13.2, "GGUF Q4_K_S or fp8 + Lightx2v; sequential high/low; no dual bf16"),
@@ -778,13 +825,14 @@ def format_doctor_line() -> str:
     force = (FORCE_LOADER or "").strip().lower()
     avoid_heavy = force == "gguf" or gb < NVFP4_MIN_VRAM_GB
     if avoid_heavy:
-        ladder = "GGUF Q3/Q4/Q5 (NVFP4 and bf16 are not suggested"
+        ladder = "GGUF when a compatible file is on disk (NVFP4 and bf16 are not suggested"
         if force == "gguf":
             ladder += f"; FORCE_LOADER={force}"
         ladder += f" below {NVFP4_MIN_VRAM_GB:.0f}GB)"
     else:
         ladder = (
-            f"GGUF Q3/Q4/Q5 then NVFP4 (≥{NVFP4_MIN_VRAM_GB:.0f}GB) then int8/fp8"
+            "GGUF when a compatible file is on disk, else NVFP4 "
+            f"(≥{NVFP4_MIN_VRAM_GB:.0f}GB), else int8/fp8/bf16"
         )
     source = VRAM_SOURCE or "default"
     hint = ""
@@ -825,6 +873,8 @@ __all__ = [
     "FLUX_PREFERENCE",
     "HEAVY_SLUGS",
     "KREA_PREFERENCE",
+    "LTX23_DEV_GGUF",
+    "LTX23_DISTILLED_GGUF",
     "LTX23_PREFERENCE",
     "NVFP4_MIN_VRAM_GB",
     "PEAK_HEADROOM_GB",
