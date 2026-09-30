@@ -343,12 +343,14 @@ def cmd_run(args: argparse.Namespace) -> int:
         args.duration = parsed_duration
         brief_applied = True
 
-    from master_agent.comfy.partner_pointers import partner_refusal
+    from master_agent.comfy.partner_pointers import route_pack_c
 
-    refusal = partner_refusal(getattr(args, "request", ""), getattr(args, "variant", None))
+    routed, refusal = route_pack_c(getattr(args, "request", ""), getattr(args, "variant", None))
     if refusal:
         print(f"FAIL  {refusal}")
         return 2
+    if routed:
+        args.variant = routed
 
     if args.variant:
         from master_agent.comfy.catalog import default_variant_ids, is_known_variant
@@ -1223,7 +1225,7 @@ def cmd_workflows(args: argparse.Namespace) -> int:
             )
         print(
             f"{len(pointers)} Partner pointer(s) omitted from the VRAM table "
-            "(not local graphs)."
+            "(field-shape records, not executable)."
         )
         return 0
     print(f"{len(variants)} default catalog variant(s):")
@@ -1232,7 +1234,7 @@ def cmd_workflows(args: argparse.Namespace) -> int:
         suffix = f"  {desc}" if desc else ""
         print(f"  {item['id']:<28} {item.get('path', '')}{suffix}")
     print(
-        f"{len(pointers)} Partner pointer(s) (not queueable — open the Comfy template):"
+        f"{len(pointers)} Partner pointer(s) (field-shape record, not executable):"
     )
     for item in pointers:
         print(

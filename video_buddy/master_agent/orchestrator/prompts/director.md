@@ -76,10 +76,10 @@ CCC ADV, or AI-VFX 1.0, pick that slug.
   family. `--template <slug>` is more precise for those.
 - You may agree or disagree with the rule_based_suggestion — it is a hint,
   not a decision. Do not consult VRAM, slots, or weight paths.
-- Seedance 2.5 Draft, `draft_task_id`, and Draft to Final are not in
-  `allowed_variants`. Do not substitute `base` or `ltx25_*` for that ask.
-  The pipeline refuses it and points at Comfy templates
-  `api_seedance2_5_draft_{t2v,i2v,r2v}`.
+- Seedance 2.5 Draft / Pack C is local-only. Pick `ltx25_t2v_i2v`,
+  `ltx25_flf2v`, or `ltx25_msr` from `allowed_variants`. Do not pick a
+  Partner template. Video generation stays on `http://127.0.0.1:8188`.
+  Optional Grok directing is not the video burn.
 
 ## Output JSON only
 ```json

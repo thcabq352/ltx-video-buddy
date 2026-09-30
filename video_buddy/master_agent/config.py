@@ -65,6 +65,31 @@ COMFYUI_OUTPUT_DIR = Path(
     os.getenv("COMFYUI_OUTPUT_DIR", str(COMFYUI_ROOT / "output"))
 ).resolve()
 
+# Pack C / Seedance Draft→Final. Hard local-only. Video burns for this route
+# always target loopback Comfy. Existing LTX / Wan / H3 graphs keep using
+# COMFYUI_URL. Optional Grok (XAI_BASE_URL below) may direct; it is not a
+# video inference client for this route.
+PACK_C_COMFY_URL = "http://127.0.0.1:8188"
+PACK_C_LOCAL_ONLY = {
+    "hardRequirement": True,
+    "cloudApis": False,
+    "cloudServices": False,
+    "hostedInference": False,
+    "execution": "local-comfy",
+    "comfy": PACK_C_COMFY_URL,
+    "localPacks": {
+        "t2v": "ltx25_t2v_i2v",
+        "i2v": "ltx25_t2v_i2v",
+        "flf": "ltx25_flf2v",
+        "r2v": "ltx25_msr",
+    },
+    "keptLocalFamilies": ("ltx", "wan", "h3"),
+    "partnerGraphs": "field-shape-record",
+    "partnerGraphsExecutable": False,
+    "videoInference": "local-comfy",
+    "directingLlmSeparateFromVideo": True,
+}
+
 # SpaceXAI
 XAI_API_KEY = os.getenv("XAI_API_KEY", "")
 
@@ -77,6 +102,7 @@ def ltxv_api_key() -> str:
     """
     return (os.getenv("LTXV_API_KEY") or "").strip()
 SPACEXAI_MODEL = os.getenv("SPACEXAI_MODEL", "grok-4.5")
+# Directing only. Pack C video generation does not call this host.
 XAI_BASE_URL = "https://api.x.ai/v1"
 
 # Local Ollama — MAIN LLM (user pivot: local-only first).

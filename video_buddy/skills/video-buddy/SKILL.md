@@ -13,6 +13,7 @@ Local ComfyUI video studio in this repo (`video_buddy/`). Package is `master_age
 
 - Local brief → storyboard → validate → render → judge → stitch on **this** machine
 - LTX 2.5 (`ltx25_*` / aliases `t2v_i2v`, `flf2v`, …), MiniMax H3 (`h3_*` / `fl2va` / `ref2va`), LTX 2.3 (`base` / `eros` / `directors` / `lipsync`), Wan 2.2, music video, fractal, Movie Builder
+- Seedance 2.5 Draft → Final (Pack C). **Local-only is a hard requirement.** Generate on `http://127.0.0.1:8188` with `ltx25_t2v_i2v`, `ltx25_flf2v`, or `ltx25_msr`. Partner ids are a field-shape record and are not queued. See `references/local-only.md` and `video_buddy/docs/SEEDANCE_2_5_DRAFT.md`
 - Drive or lint a Comfy API graph (`comfy run`)
 - Inventory-first weights: `inventory`, then `doctor` (no fetch), then `download-models --ltx25` or `--h3` if a slot is confirmed missing. `--scan-only` never fetches. GGUF is the loader whenever a compatible file is on disk; fp8/bf16/EROS are fallbacks. 12GB: `VRAM_GB=12` and `FORCE_LOADER=gguf` (hides NVFP4/bf16 suggestions; does not block a lone bf16). Fully local LLM: `LLM_PROVIDER=ollama`.
 - Character → Flux sheet → LoRA (CCC)
@@ -22,7 +23,6 @@ Local ComfyUI video studio in this repo (`video_buddy/`). Package is `master_age
 | Signal | Route elsewhere |
 |---|---|
 | Grok / Imagine cloud clip, no local Comfy | default cloud video skills — not Buddy |
-| Seedance 2.5 Draft → 1080p one-take | Comfy Partner templates `api_seedance2_5_draft_{t2v,i2v,r2v}` — Buddy only stores stub ids and refuses the queue. See `video_buddy/docs/SEEDANCE_2_5_DRAFT.md` |
 | Pixie Forge brand / scotty.fyi / HyperFrames | `hermes -p forge` |
 | Generic node poke on a **different** Comfy install | that install's MCP, not `master-agent` |
 | Sibling trees (`ltx_director/`, `SOS/`, `lot/`) | those packages — L0 is this tree only |

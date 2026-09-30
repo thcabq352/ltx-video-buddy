@@ -93,11 +93,11 @@ class Orchestrator:
     # ── states ────────────────────────────────────────────
 
     def _select_variant(self, st: RunState, force_variant: Optional[str]) -> str:
-        from master_agent.comfy.partner_pointers import PartnerPointerError, partner_refusal
+        from master_agent.comfy.partner_pointers import PartnerPointerError, route_pack_c
         from master_agent.hands import LiveHands
         from master_agent.orchestrator.director import choose_variant
 
-        refusal = partner_refusal(st.request or "", force_variant)
+        force_variant, refusal = route_pack_c(st.request or "", force_variant)
         if refusal:
             raise PartnerPointerError(refusal)
 

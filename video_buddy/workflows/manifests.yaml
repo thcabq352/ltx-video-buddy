@@ -1075,13 +1075,13 @@ h3_r2v:
     seed: { class_type: KSampler, index: 0, input: seed }
     frames: { class_type: MiniMaxH3ReferenceToVideo, index: 0, input: length }
 
-# --- Seedance 2.5 Draft (Comfy Partner pointers, not queueable) ---
-# No ``file:`` key on purpose. A path here would enter WORKFLOW_FILES once
-# the JSON existed, and any workflows/**/*.json shows up in the template
-# picker. Stub ids live in master_agent/comfy/partner_pointers.py:
-#   seedance25_draft_t2v → api_seedance2_5_draft_t2v
-#   seedance25_draft_i2v → api_seedance2_5_draft_i2v
-#   seedance25_draft_r2v → api_seedance2_5_draft_r2v
-# Scout: Seedance 2.5 Draft @ 480p + draft_task_id. Promote:
-# ByteDance2DraftToFinalVideoNode → native 1080p. See
-# docs/SEEDANCE_2_5_DRAFT.md. Do not add a ByteDance client here.
+# --- Seedance 2.5 Draft (Pack C field-shape record, not executable) ---
+# Local-only is a hard requirement. No ``file:`` key on purpose. A path
+# here would enter WORKFLOW_FILES once the JSON existed. Generate on
+# http://127.0.0.1:8188 with ltx25_t2v_i2v / ltx25_flf2v / ltx25_msr.
+# Stub ids in master_agent/comfy/partner_pointers.py are not queued:
+#   seedance25_draft_t2v → api_seedance2_5_draft_t2v (record only)
+#   seedance25_draft_i2v → api_seedance2_5_draft_i2v (record only)
+#   seedance25_draft_r2v → api_seedance2_5_draft_r2v (record only)
+# partnerGraphsExecutable is false. Do not add a ByteDance / comfy.org /
+# BytePlus / ModelArk / KIE client. See docs/SEEDANCE_2_5_DRAFT.md.

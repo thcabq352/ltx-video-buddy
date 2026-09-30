@@ -117,6 +117,12 @@ def _allowed_variants() -> set[str]:
 
 
 def rule_based_variant(request: str) -> str:
+    from master_agent.comfy.partner_pointers import local_catalog_for_pack_c_brief
+
+    # Pack C fails closed onto a local catalog id. Partner templates are not variants.
+    local_pack_c = local_catalog_for_pack_c_brief(request)
+    if local_pack_c and local_pack_c in set(WORKFLOW_FILES):
+        return local_pack_c
     text = (request or "").lower()
     allowed = set(WORKFLOW_FILES)
     for variant, keywords in _VARIANT_KEYWORDS:
