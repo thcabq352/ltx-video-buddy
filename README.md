@@ -62,6 +62,9 @@ you.** You bring the intent; it brings the craft.
   video+stereo audio, CFG 1.0. LTX 2.3 (`base` / `eros` / `directors` /
   `lipsync`), Wan 2.2 T2V, music videos, and LTX TeaCache
   inject-when-registered (soft-bypass if the pack is missing).
+  **Seedance 2.5 Draft → 1080p** is not in this catalog. Stub ids point at
+  Comfy Partner templates and the queue refuses them
+  ([`video_buddy/docs/SEEDANCE_2_5_DRAFT.md`](video_buddy/docs/SEEDANCE_2_5_DRAFT.md)).
 - **Scan-local-first weights.** Buddy inventories `MODELS_DIR`, Comfy
   `models/`, extra volumes, `extra_model_paths.yaml`, and the Hugging Face
   hub cache. It asks before downloading. Official bf16 Gemma is not required

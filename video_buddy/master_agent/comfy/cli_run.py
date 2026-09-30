@@ -86,6 +86,11 @@ def resolve_template(rel: str | Path) -> Path:
     key = str(rel or "").strip().replace("\\", "/")
     if not key:
         raise ValueError("template path required")
+    from master_agent.comfy.partner_pointers import PartnerPointerError, partner_refusal
+
+    refusal = partner_refusal("", key, match_request=False)
+    if refusal:
+        raise PartnerPointerError(refusal)
     if is_known_variant(key):
         return resolve_workflow_path(key)
     if key in WORKFLOW_FILES:
@@ -147,6 +152,17 @@ def prepare_run(
         ensure_teacache,
         looks_like_ltx_graph,
     )
+
+    from master_agent.comfy.partner_pointers import PartnerPointerError, partner_refusal
+
+    if mode == "generate":
+        refusal = partner_refusal("", variant, match_request=False)
+        if refusal:
+            raise PartnerPointerError(refusal)
+    elif mode == "template":
+        refusal = partner_refusal("", str(template_path or ""), match_request=False)
+        if refusal:
+            raise PartnerPointerError(refusal)
 
     if mode == "raw":
         if not isinstance(workflow, dict):

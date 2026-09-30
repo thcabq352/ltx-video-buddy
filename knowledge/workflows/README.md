@@ -30,3 +30,7 @@ this graph won a cold-brew test.
 Catalog ids and invoke lines:
 [`video_buddy/workflows/minimax-h3/README.md`](../../video_buddy/workflows/minimax-h3/README.md),
 [`video_buddy/workflows/ltx-2.5/README.md`](../../video_buddy/workflows/ltx-2.5/README.md).
+
+Seedance 2.5 Draft → Final is not a graph in this tree. Stub ids and the
+Comfy Partner template names are in
+[`video_buddy/docs/SEEDANCE_2_5_DRAFT.md`](../../video_buddy/docs/SEEDANCE_2_5_DRAFT.md).

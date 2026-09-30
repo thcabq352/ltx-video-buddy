@@ -232,6 +232,12 @@ def api_submit_job(req: JobRequest):
         raise HTTPException(400, "request must not be empty")
     if req.quality not in ("draft", "balanced", "quality"):
         raise HTTPException(400, "quality must be draft|balanced|quality")
+    from master_agent.comfy.partner_pointers import partner_refusal
+
+    forced_variant = None if req.variant in (None, "", "auto") else req.variant
+    refusal = partner_refusal(req.request, forced_variant)
+    if refusal:
+        raise HTTPException(400, refusal)
     if req.variant not in (None, "", "auto"):
         from master_agent.comfy.catalog import is_known_variant
 
@@ -471,7 +477,11 @@ def api_power_tune(req: PowerTuneRequest):
     if not req.request.strip():
         raise HTTPException(400, "request must not be empty")
     from master_agent.comfy.catalog import is_known_variant
+    from master_agent.comfy.partner_pointers import partner_refusal
 
+    refusal = partner_refusal("", req.variant, match_request=False)
+    if refusal:
+        raise HTTPException(400, refusal)
     if not is_known_variant(req.variant):
         raise HTTPException(400, f"unknown variant: {req.variant}")
     if req.quality not in ("draft", "balanced", "quality"):

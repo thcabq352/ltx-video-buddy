@@ -1074,3 +1074,14 @@ h3_r2v:
     prompt: { class_type: MiniMaxH3ReferenceToVideo, index: 0, input: prompt }
     seed: { class_type: KSampler, index: 0, input: seed }
     frames: { class_type: MiniMaxH3ReferenceToVideo, index: 0, input: length }
+
+# --- Seedance 2.5 Draft (Comfy Partner pointers, not queueable) ---
+# No ``file:`` key on purpose. A path here would enter WORKFLOW_FILES once
+# the JSON existed, and any workflows/**/*.json shows up in the template
+# picker. Stub ids live in master_agent/comfy/partner_pointers.py:
+#   seedance25_draft_t2v → api_seedance2_5_draft_t2v
+#   seedance25_draft_i2v → api_seedance2_5_draft_i2v
+#   seedance25_draft_r2v → api_seedance2_5_draft_r2v
+# Scout: Seedance 2.5 Draft @ 480p + draft_task_id. Promote:
+# ByteDance2DraftToFinalVideoNode → native 1080p. See
+# docs/SEEDANCE_2_5_DRAFT.md. Do not add a ByteDance client here.

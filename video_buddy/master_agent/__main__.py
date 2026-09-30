@@ -343,6 +343,13 @@ def cmd_run(args: argparse.Namespace) -> int:
         args.duration = parsed_duration
         brief_applied = True
 
+    from master_agent.comfy.partner_pointers import partner_refusal
+
+    refusal = partner_refusal(getattr(args, "request", ""), getattr(args, "variant", None))
+    if refusal:
+        print(f"FAIL  {refusal}")
+        return 2
+
     if args.variant:
         from master_agent.comfy.catalog import default_variant_ids, is_known_variant
 
@@ -1194,11 +1201,13 @@ def cmd_download_models(args: argparse.Namespace) -> int:
 
 def cmd_workflows(args: argparse.Namespace) -> int:
     from master_agent.comfy.catalog import list_catalog_items
+    from master_agent.comfy.partner_pointers import POINTERS
 
     items = list_catalog_items()
+    pointers = [p.as_list_item() for p in POINTERS]
     variants = [i for i in items if i.get("kind") == "variant"]
     if args.json:
-        print(json.dumps(items, indent=1))
+        print(json.dumps([*items, *pointers], indent=1))
         return 0
     if getattr(args, "vram", False):
         from master_agent.models.vram_policy import format_vram_table, workflow_row
@@ -1212,12 +1221,23 @@ def cmd_workflows(args: argparse.Namespace) -> int:
                 f"  {item['id']:<28} {row.vram_class:<8} ~{row.expected_vram_gb:4.1f}G  "
                 f"{row.default_pack}{alt}"
             )
+        print(
+            f"{len(pointers)} Partner pointer(s) omitted from the VRAM table "
+            "(not local graphs)."
+        )
         return 0
     print(f"{len(variants)} default catalog variant(s):")
     for item in variants:
         desc = item.get("description") or ""
         suffix = f"  {desc}" if desc else ""
         print(f"  {item['id']:<28} {item.get('path', '')}{suffix}")
+    print(
+        f"{len(pointers)} Partner pointer(s) (not queueable — open the Comfy template):"
+    )
+    for item in pointers:
+        print(
+            f"  {item['id']:<28} {item.get('template', '')}  {item.get('description', '')}"
+        )
     return 0
 
 

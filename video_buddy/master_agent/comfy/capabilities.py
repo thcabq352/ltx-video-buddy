@@ -424,6 +424,27 @@ CAPABILITY_CATALOG: tuple[Capability, ...] = (
         surfaces=(),
         notes="HYPOTHESIS: tower launch flag. Patch nodes exist in cache; no Buddy graph inserts them.",
     ),
+    Capability(
+        "seedance25_draft",
+        "Seedance 2.5 Draft → Final (Partner pointer)",
+        class_types=(
+            "ByteDance2TextToVideoNode",
+            "ByteDance2FirstLastFrameNode",
+            "ByteDance2ReferenceNodeV2",
+            "ByteDance2DraftToFinalVideoNode",
+        ),
+        surfaces=(),
+        templates=(
+            "seedance25_draft_t2v",
+            "seedance25_draft_i2v",
+            "seedance25_draft_r2v",
+        ),
+        notes=(
+            "Not wired. Official Comfy templates api_seedance2_5_draft_{t2v,i2v,r2v}. "
+            "Buddy refuses the queue and points at docs/SEEDANCE_2_5_DRAFT.md. "
+            "No Partner HTTP client."
+        ),
+    ),
 )
 
 

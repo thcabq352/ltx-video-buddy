@@ -57,6 +57,11 @@ tower nodes or weights are missing.
 | `h3_flf` | — | MiniMax H3 fl2va first + last frame |
 | `h3_r2v` | `ref2va` | MiniMax H3 ref2va: line in a 2–12 s sample voice (coarse mouth sync) |
 
+Seedance 2.5 Draft → Final is **not** in that list. Stub ids
+`seedance25_draft_t2v` / `_i2v` / `_r2v` point at Comfy Partner templates
+`api_seedance2_5_draft_{t2v,i2v,r2v}` and are refused if you try to queue
+them. See [`SEEDANCE_2_5_DRAFT.md`](SEEDANCE_2_5_DRAFT.md).
+
 The director allowlist is every `workflows/manifests.yaml` slug (derived in
 `load_workflow_files()`). Rules + LLM can pick `base`, `eros`, `directors`,
 `lipsync`, `wan22`, `flux`, `vb_aivfx_*`, `vb_movie_builder`, CCC / renderer /
