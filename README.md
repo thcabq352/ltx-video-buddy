@@ -177,6 +177,8 @@ python -m master_agent download-models --ltx25        # list only
 python -m master_agent download-models --ltx25 --yes  # fetch that missing set
 python -m master_agent download-models --h3           # MiniMax H3 list only
 python -m master_agent download-models --h3 --yes
+python -m master_agent download-models --heartmula    # list only; check disk first
+python -m master_agent download-models --heartmula --yes
 ```
 
 Legacy Mickmumpitz / LTX 2.3 packs still use `python state/download_models.py`

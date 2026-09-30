@@ -446,6 +446,22 @@ CAPABILITY_CATALOG: tuple[Capability, ...] = (
             "No comfy.org, BytePlus, ModelArk, or KIE client."
         ),
     ),
+    Capability(
+        "heartmula",
+        "HeartMuLa music (Comfy classes registered; Buddy drives heartlib)",
+        class_types=("HeartMuLa_Generate", "HeartMuLa_Transcribe"),
+        surfaces=(),
+        notes=(
+            "Tower Comfy Desk 2026-09-30: benjiyaya/HeartMuLa_ComfyUI @ fdb53c4 "
+            "loaded with no import errors. object_info classes: "
+            "HeartMuLa_Generate (display HeartMuLa Music Generator) and "
+            "HeartMuLa_Transcribe (display HeartMuLa Lyrics Transcriber). "
+            "Not an attach control channel and not a shipped API template. "
+            "Buddy generate/transcribe uses heartlib, not these nodes. "
+            "Weights were not downloaded (empty model dirs). "
+            "Do not invent other HeartMuLa class names."
+        ),
+    ),
 )
 
 

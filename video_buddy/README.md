@@ -190,6 +190,10 @@ python -m master_agent download-models --ltx25
 # Nothing downloaded. Re-run with --yes after you agree.   # exit 2
 
 python -m master_agent download-models --ltx25 --yes
+python -m master_agent download-models --heartmula
+# lists HeartMuLa / HeartCodec-oss-20260123 / HeartTranscriptor slots
+# Nothing downloaded. Re-run with --yes after you agree.
+# Check free space first (tower F: ~28GB free on 2026-09-30; default pull ~25GB).
 python -m master_agent doctor --fix-models     # same consent path
 python -m master_agent setup --fix             # deps only; still no weights
 ```
@@ -355,7 +359,12 @@ pipeline unless `--variant` is given.
 python -m master_agent mv plan --audio track.mp3 --out out/beat_plan.json
 python -m master_agent mv render "I'm in love with a bot" --audio track.mp3 --out out/MV-FIXED.mp4
 python -m master_agent mv render --audio track.mp3 --image still.png --dry-run
+python -m master_agent heartmula generate --lyrics "..." --tags piano,happy --out out/track.wav --dry-run
 ```
+
+Pre-made `--audio` stays the default. `--heartmula-lyrics` and
+`--heartmula-tags` generate a track only when `--audio` is omitted.
+See [docs/HEARTMULA.md](docs/HEARTMULA.md).
 
 `mv render` burns one unique motion clip per beat window via `prepare_run`
 (TeaCache inject-when-registered), refuses still-holds and duplicate hashes,

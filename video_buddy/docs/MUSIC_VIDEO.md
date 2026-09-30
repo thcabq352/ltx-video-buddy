@@ -36,6 +36,15 @@ python -m master_agent mv render --audio track.mp3 --image still.png   # I2V loc
 python -m master_agent mv render --audio track.mp3 --dry-run           # no GPU
 ```
 
+`--audio` is the track. Omit it only when you also pass
+`--heartmula-lyrics` and `--heartmula-tags` (or `HEARTMULA_LYRICS` /
+`HEARTMULA_TAGS`). A file wins if both are set. `mv render --dry-run`
+without a file writes a silent wav so the beat plan can run; that wav is
+not model audio. `mv plan` still requires `--audio`. HeartMuLa and LTX
+are sequential on 16GB. Check free space before any weight pull
+(tower F: ~28GB free on 2026-09-30). Details:
+[HEARTMULA.md](HEARTMULA.md).
+
 `--dry-run` proves plan + unique mock burns + Remotion wiring. It does not
 queue Comfy and does not need Node.
 
@@ -122,3 +131,6 @@ the clips. Live mode runs that command. Output is **1080p** (1920×1080 @
 `music` stays as the ffmpeg-mux path. `mv` is the MTV product path.
 Diagnose / draft / generate are unchanged — MV reuses `prepare_run`, it
 does not fork a second orchestrator.
+
+`music` accepts the same optional `--heartmula-lyrics` / `--heartmula-tags`
+when `--audio` is omitted. Pre-made `--audio` stays the default.

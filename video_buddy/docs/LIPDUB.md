@@ -21,7 +21,8 @@ Locally, `frames_for_duration` caps every LTX 2.5 latent at 193 frames (~8.04s) 
 | `--max-piece-seconds` | `3.0` (`LIPDUB_MAX_PIECE_S`) | After the clip is already segmented, split a speech run longer than this at the quietest audio frame. Word edges are snapped onto the frame grid first (faster-whisper is 0.02s; 24fps is 1/24s). The cut is that frame, so the join stays locked to the wav. A window with no snapped edge keeps the run whole. This does not change the 6.5s one-pass threshold. |
 | `--pause-reset-strength` | `0.65` (`LIPDUB_PAUSE_RESET_STRENGTH`) | `LTXVAddGuide` strength when `--anchor pause-reset` pins the source still. `1.0` turned the head in about 0.2s. |
 | `--pause-reset-min-s` | `0.5` (`LIPDUB_PAUSE_RESET_MIN_S`) | Only pauses at least this long get the source keyframe. Shorter breaths stay plain idle. |
-| `--words` | none | JSON word timestamps (`[{w,s,e}]` or `{"words":[...]}`). Splits prefer pauses and never cut a word. A word longer than the cap is kept whole. |
+| `--words` | none | JSON word timestamps (`[{w,s,e}]` or `{"words":[...]}`). Splits prefer pauses and never cut a word. A word longer than the cap is kept whole. When this flag is set, HeartTranscriptor is not run. |
+| `--heartmula-transcribe` | off (`HEARTMULA_TRANSCRIBE`) | Optional. With `--audio` and no `--words`, write HeartTranscriptor `{w,s,e}` JSON and use it as `--words`. Dry-run plans only. See [HEARTMULA.md](HEARTMULA.md). |
 | `--tripod` | off | Locked-off talking head. Prompt, negative, and stage-1 `LTXVImgToVideoInplace` strength `0.7 → 0.85`. Stage 2 stays `1.0`. The graph has no camera-motion input. |
 | `--dry-run` | | Prints idle pieces, anchor, reframe, and the segment plan, then validates each Comfy piece. Nothing is queued. |
 

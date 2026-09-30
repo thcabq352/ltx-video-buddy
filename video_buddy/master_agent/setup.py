@@ -460,6 +460,7 @@ def snapshot() -> list[dict[str, Any]]:
         check_ltx23_latent_upscaler(),
         check_dev_fp8_trailer(),
         check_h3_weights(),
+        *heartmula_rows(),
     ]
 
 
@@ -476,20 +477,36 @@ _WEIGHT_ROWS = frozenset(
     }
 )
 
+# Optional HeartMuLa pack: report the slots, do not fail doctor when absent.
+_OPTIONAL_INFO_ROWS = frozenset(
+    {
+        "heartlib",
+        "heartmula-weights",
+        "heartmula-comfy",
+    }
+)
+
+
+def heartmula_rows() -> list[dict[str, Any]]:
+    from master_agent.heartmula.doctor import heartmula_doctor_rows
+
+    return heartmula_doctor_rows()
+
 
 def print_report(rows: list[dict[str, Any]], *, weight_optional: bool = False) -> int:
     print("VIDEO BUDDY setup")
     failed = 0
     for row in rows:
         mark = "OK  " if row["ok"] else "NEED"
+        info_only = row["name"] in _OPTIONAL_INFO_ROWS
         optional = weight_optional and not row["ok"] and row["name"] in _WEIGHT_ROWS
-        if not row["ok"] and not optional:
+        if not row["ok"] and not optional and not info_only:
             failed += 1
         detail = row["detail"]
         if optional:
             detail = f"{detail} (--use-existing: not downloading)"
         print(f"  {mark}  {row['name']:<18} {detail}")
-        if not row["ok"] and row.get("fix") and not optional:
+        if not row["ok"] and row.get("fix") and (info_only or not optional):
             print(f"        → {row['fix']}")
     print()
     if failed:

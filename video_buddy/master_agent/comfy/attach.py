@@ -32,6 +32,11 @@ ATTACH_SCHEMA_ALIASES = frozenset(
 )
 CONTROL_CHANNELS = ("openpose", "depth", "edges", "camera")
 
+# Tower object_info 2026-09-30. Attach does not patch these (no widget map).
+# Recipes must not name any other HeartMuLa class.
+HEARTMULA_COMFY_CLASSES = ("HeartMuLa_Generate", "HeartMuLa_Transcribe")
+_HEARTMULA_COMFY = frozenset(HEARTMULA_COMFY_CLASSES)
+
 _TITLE_MARKERS: dict[str, tuple[str, ...]] = {
     "openpose": ("openpose", "dwpose", "pose", "skeleton"),
     "depth": ("depth", "depthmap", "midas"),
@@ -203,6 +208,30 @@ def _preferred_variants(data: dict[str, Any]) -> list[str]:
     return prefs
 
 
+def _collect_class_types(node: Any, found: list[str]) -> None:
+    if isinstance(node, dict):
+        for key, value in node.items():
+            if key in {"class_type", "type"} and isinstance(value, str):
+                found.append(value)
+            else:
+                _collect_class_types(value, found)
+    elif isinstance(node, list):
+        for item in node:
+            _collect_class_types(item, found)
+
+
+def _reject_unattested_heartmula(names: list[str]) -> None:
+    """Only the two tower-registered class names are allowed."""
+    for name in names:
+        if "heartmula" in name.lower() and name not in _HEARTMULA_COMFY:
+            raise AttachError(
+                f"unattested HeartMuLa class {name!r}. "
+                "Tower object_info registers only HeartMuLa_Generate "
+                "(HeartMuLa Music Generator) and HeartMuLa_Transcribe "
+                "(HeartMuLa Lyrics Transcriber)."
+            )
+
+
 def load_attach_recipe(raw: Any) -> AttachRecipe:
     """Load and type-check a v1 attach recipe / WorkflowPatchPlan."""
     data = _as_dict(raw, label="attach recipe")
@@ -221,11 +250,15 @@ def load_attach_recipe(raw: Any) -> AttachRecipe:
         required = []
     if not isinstance(required, list):
         raise AttachError("required_nodes must be a list of class_type names")
+    _reject_unattested_heartmula([str(x) for x in required if x])
     patches = data.get("patches") or data.get("ops") or []
     if patches is None:
         patches = []
     if not isinstance(patches, list):
         raise AttachError("patches must be a list of graph ops")
+    found: list[str] = []
+    _collect_class_types(patches, found)
+    _reject_unattested_heartmula(found)
     previs = data.get("previs_source") or data.get("source") or data.get("previs") or ""
     recipe = AttachRecipe(
         schema=ATTACH_SCHEMA,

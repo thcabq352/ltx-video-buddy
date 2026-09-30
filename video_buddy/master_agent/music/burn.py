@@ -109,6 +109,7 @@ def _write_window_provenance(
     run_id: str,
     steps: int | None = None,
     cfg: float | None = None,
+    heartmula: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
     from types import SimpleNamespace
 
@@ -133,6 +134,7 @@ def _write_window_provenance(
         image_name=image_name,
         kind="music_video",
         music_bed_attached=True,
+        heartmula=heartmula or {},
     )
     payload = persist_clip_provenance(st, path=clip)
     payload["schema"] = CLIP_PROVENANCE_SCHEMA
@@ -188,6 +190,7 @@ def burn_windows(
     height: int = 512,
     dry_run: bool = False,
     run_id: str = "mv",
+    heartmula: dict[str, Any] | None = None,
     object_info: dict[str, Any] | None = None,
     execute: Optional[Callable[..., dict[str, Any]]] = None,
     upload_image: Optional[Callable[[Path], str]] = None,
@@ -273,6 +276,7 @@ def burn_windows(
             width=width,
             height=height,
             run_id=run_id,
+            heartmula=heartmula,
         )
         loaded = read_clip_provenance(clip)
         if not loaded or loaded.get("schema") != CLIP_PROVENANCE_SCHEMA:

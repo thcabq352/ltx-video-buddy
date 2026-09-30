@@ -281,6 +281,32 @@ def build_clip_provenance(
             "method": sample.get("method"),
             "trimmed": bool(sample.get("trimmed")),
         }
+    heart = getattr(st, "heartmula", None) or {}
+    if isinstance(heart, dict) and (
+        heart.get("lyrics")
+        or heart.get("tags")
+        or heart.get("wav")
+        or heart.get("transcribe_source")
+        or heart.get("words_path")
+    ):
+        payload["params"]["heartmula"] = {
+            "lyrics": heart.get("lyrics"),
+            "tags": heart.get("tags"),
+            "mula_repo": heart.get("mula_repo"),
+            "codec_repo": heart.get("codec_repo"),
+            "transcriptor_repo": heart.get("transcriptor_repo"),
+            "gen_repo": heart.get("gen_repo"),
+            "version": heart.get("version"),
+            "mula_dtype": heart.get("mula_dtype"),
+            "codec_dtype": heart.get("codec_dtype"),
+            "lazy_load": heart.get("lazy_load"),
+            "seed": heart.get("seed"),
+            "wav": heart.get("wav"),
+            "transcribe_source": heart.get("transcribe_source"),
+            "words_path": heart.get("words_path"),
+            "max_audio_length_ms": heart.get("max_audio_length_ms"),
+            "dry_run": heart.get("dry_run"),
+        }
     return payload
 
 

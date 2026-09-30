@@ -9,6 +9,7 @@ Commands:
   fractal             Procedural fractal deep-zoom video (CPU only, no ComfyUI)
   music               Beat-synced music video from an audio track (ffmpeg mux)
   mv plan|render      Comfy/LTX → Remotion MTV mode (beat plan, unique burns)
+  heartmula           generate lyrics+tags → wav, or transcribe → words.json
   persona list|show|set   Intake voice (default: ara)
   soul list|show|set      Standing values (default: studio)
   brief               Interview-only: rough idea -> creative brief (--go to generate)
@@ -462,6 +463,7 @@ def cmd_run(args: argparse.Namespace) -> int:
             print(f"warn: {voice_warn}")
 
     words = None
+    heartmula_block = None
     if getattr(args, "words", None):
         from master_agent.orchestrator.lipdub import load_words
 
@@ -474,6 +476,45 @@ def cmd_run(args: argparse.Namespace) -> int:
         except Exception as exc:
             print(f"FAIL  --words: {exc}")
             return 1
+        from master_agent.heartmula.transcribe import transcribe_requested
+
+        if transcribe_requested(bool(getattr(args, "heartmula_transcribe", False))):
+            print("note: --words set; HeartTranscriptor skipped (faster-whisper file kept)")
+    else:
+        from master_agent.heartmula.transcribe import transcribe_requested
+
+        if transcribe_requested(bool(getattr(args, "heartmula_transcribe", False))):
+            if not getattr(args, "audio", None):
+                print("FAIL  --heartmula-transcribe needs --audio")
+                return 2
+            from master_agent.heartmula.config import HeartMuLaConfigError
+            from master_agent.heartmula.generate import (
+                HeartMuLaUnavailable,
+                MissingHeartMuLaWeights,
+            )
+            from master_agent.heartmula.transcribe import (
+                format_transcribe_plan,
+                plan_transcribe,
+                transcribe_audio,
+            )
+
+            words_out = Path(args.audio).with_suffix(".heartmula.words.json")
+            if getattr(args, "dry_run", False) or getattr(args, "self_improve_dry", False):
+                heartmula_block = plan_transcribe(
+                    audio=args.audio, out=words_out, dry_run=True
+                )
+                print(format_transcribe_plan(heartmula_block))
+            else:
+                try:
+                    transcribed = transcribe_audio(audio=args.audio, out=words_out)
+                except (HeartMuLaUnavailable, MissingHeartMuLaWeights, HeartMuLaConfigError) as exc:
+                    print(f"FAIL  {exc}")
+                    return 1
+                from master_agent.orchestrator.lipdub import load_words
+
+                words = load_words(str(transcribed.path))
+                heartmula_block = transcribed.provenance
+                print(f"heartmula words: {transcribed.path} ({len(words)} word(s))")
 
     if getattr(args, "self_improve_dry", False):
         from master_agent.orchestrator.machine import Orchestrator
@@ -498,6 +539,7 @@ def cmd_run(args: argparse.Namespace) -> int:
             revise_enabled=not args.no_judge,
             spoken_line=spoken_line or None,
             voice_sample=voice_sample,
+            heartmula=heartmula_block,
             max_judge_rounds=args.max_judge_rounds or MAX_JUDGE_ROUNDS,
             attach_recipe=attach_recipe,
             dry_run=True,
@@ -586,6 +628,7 @@ def cmd_run(args: argparse.Namespace) -> int:
             seed=args.seed,
             tripod=bool(getattr(args, "tripod", False)),
             words=words,
+            heartmula=heartmula_block,
             lipdub_max_s=getattr(args, "lipdub_max_s", None),
             silence_min_s=getattr(args, "silence_min_s", None),
             lipdub_overlap=getattr(args, "lipdub_overlap", None),
@@ -700,6 +743,7 @@ def cmd_run(args: argparse.Namespace) -> int:
         revise_enabled=not args.no_judge,
         spoken_line=spoken_line or None,
         voice_sample=voice_sample,
+        heartmula=heartmula_block,
         max_judge_rounds=args.max_judge_rounds or MAX_JUDGE_ROUNDS,
         max_full_judge_rounds=args.max_full_judge_rounds or MAX_FULL_JUDGE_ROUNDS,
         llm_panel=args.llm_panel,
@@ -904,6 +948,7 @@ def cmd_mv(args: argparse.Namespace) -> int:
 
     action = getattr(args, "mv_command", None) or "render"
     audio = getattr(args, "audio", None)
+    heartmula_block = None
     if action == "plan":
         if not audio:
             print("FAIL  mv plan needs --audio <file>")
@@ -922,10 +967,39 @@ def cmd_mv(args: argparse.Namespace) -> int:
             print(f"      {plan.bpm:.0f} BPM, {len(plan.windows)} windows, {plan.duration_s:.2f}s @ {plan.fps}fps")
         return 0
 
-    if not audio:
-        print("FAIL  mv render needs --audio <file>")
-        return 2
     out = args.out or str(Path("out") / "MV-FIXED.mp4")
+    if not audio or getattr(args, "heartmula_lyrics", None) or getattr(args, "heartmula_tags", None):
+        from master_agent.heartmula.config import HeartMuLaConfigError
+        from master_agent.heartmula.generate import (
+            HeartMuLaUnavailable,
+            MissingHeartMuLaWeights,
+        )
+        from master_agent.heartmula.wire import materialize_track
+
+        work = getattr(args, "work_dir", None) or str(Path(out).parent / "heartmula-track")
+        try:
+            source = materialize_track(
+                audio=audio,
+                lyrics=getattr(args, "heartmula_lyrics", None),
+                tags=getattr(args, "heartmula_tags", None),
+                out_dir=work,
+                dry_run=bool(getattr(args, "dry_run", False)),
+                duration_s=getattr(args, "heartmula_duration", None),
+                seed=getattr(args, "heartmula_seed", None),
+            )
+        except (HeartMuLaConfigError, HeartMuLaUnavailable, MissingHeartMuLaWeights) as exc:
+            if not audio:
+                print(f"FAIL  {exc}")
+                return 2
+            print(f"FAIL  {exc}")
+            return 1
+        if source.note:
+            print(f"note: {source.note}")
+        audio = str(source.audio)
+        heartmula_block = source.heartmula
+    if not audio:
+        print("FAIL  mv render needs --audio, or --heartmula-lyrics and --heartmula-tags")
+        return 2
     brief = (getattr(args, "prompt", None) or getattr(args, "request", None) or "music video").strip()
     plan_arg = getattr(args, "plan", None)
     try:
@@ -942,6 +1016,7 @@ def cmd_mv(args: argparse.Namespace) -> int:
             height=int(getattr(args, "height", 512) or 512),
             fps=int(getattr(args, "fps", 30) or 30),
             work_dir=getattr(args, "work_dir", None),
+            heartmula=heartmula_block,
         )
     except DuplicateClipError as e:
         print(f"FAIL  uniqueness gate: {e}")
@@ -974,8 +1049,35 @@ def cmd_music(args: argparse.Namespace) -> int:
     from master_agent.config import JUDGE_ENABLED, MAX_JUDGE_ROUNDS
     from master_agent.music.pipeline import run_music_video
 
-    if not args.audio:
-        print("FAIL  music needs --audio <file>")
+    audio = args.audio
+    heartmula_block = None
+    if not audio or getattr(args, "heartmula_lyrics", None) or getattr(args, "heartmula_tags", None):
+        from master_agent.heartmula.config import HeartMuLaConfigError
+        from master_agent.heartmula.generate import (
+            HeartMuLaUnavailable,
+            MissingHeartMuLaWeights,
+        )
+        from master_agent.heartmula.wire import materialize_track
+
+        try:
+            source = materialize_track(
+                audio=audio,
+                lyrics=getattr(args, "heartmula_lyrics", None),
+                tags=getattr(args, "heartmula_tags", None),
+                out_dir=Path("out") / "heartmula-track",
+                dry_run=False,
+                duration_s=getattr(args, "heartmula_duration", None),
+                seed=getattr(args, "seed", None),
+            )
+        except (HeartMuLaConfigError, HeartMuLaUnavailable, MissingHeartMuLaWeights) as exc:
+            print(f"FAIL  {exc}")
+            return 2 if not audio else 1
+        if source.note:
+            print(f"note: {source.note}")
+        audio = str(source.audio)
+        heartmula_block = source.heartmula
+    if not audio:
+        print("FAIL  music needs --audio, or --heartmula-lyrics and --heartmula-tags")
         return 2
     args.request = _maybe_interview(args.request, no_interview=args.no_interview)
     client = ComfyClient()
@@ -985,7 +1087,8 @@ def cmd_music(args: argparse.Namespace) -> int:
         return 1
     rec = run_music_video(
         args.request,
-        args.audio,
+        audio,
+        heartmula=heartmula_block,
         visual=args.visual,
         variant=args.variant,
         quality=args.quality,
@@ -1106,11 +1209,76 @@ def cmd_download_flux(args: argparse.Namespace) -> int:
     return 0
 
 
+def cmd_heartmula(args: argparse.Namespace) -> int:
+    """``heartmula generate|transcribe``. Dry-run never imports heartlib."""
+    from master_agent.heartmula.config import HeartMuLaConfigError
+    from master_agent.heartmula.generate import (
+        HeartMuLaUnavailable,
+        MissingHeartMuLaWeights,
+        format_plan,
+        generate_track,
+        plan_generate,
+    )
+    from master_agent.heartmula.transcribe import (
+        format_transcribe_plan,
+        plan_transcribe,
+        transcribe_audio,
+    )
+
+    action = getattr(args, "heartmula_command", None)
+    dry = bool(getattr(args, "dry_run", False))
+    try:
+        if action == "generate":
+            plan = plan_generate(
+                lyrics=args.lyrics,
+                tags=args.tags,
+                out=args.out,
+                duration_s=args.duration,
+                seed=args.seed,
+                topk=args.topk,
+                temperature=args.temperature,
+                cfg_scale=args.cfg_scale,
+                dry_run=dry,
+            )
+            print(format_plan(plan))
+            if dry:
+                return 0
+            generate_track(
+                lyrics=args.lyrics,
+                tags=args.tags,
+                out=args.out,
+                duration_s=args.duration,
+                seed=args.seed,
+                topk=args.topk,
+                temperature=args.temperature,
+                cfg_scale=args.cfg_scale,
+            )
+            print(f"OK    {args.out}")
+            return 0
+        if action == "transcribe":
+            plan = plan_transcribe(audio=args.audio, out=args.out, dry_run=dry)
+            print(format_transcribe_plan(plan))
+            if dry:
+                return 0
+            result = transcribe_audio(audio=args.audio, out=args.out)
+            print(f"OK    {result.path} ({len(result.words)} word(s))")
+            return 0
+    except (HeartMuLaConfigError, HeartMuLaUnavailable, MissingHeartMuLaWeights) as exc:
+        print(f"FAIL  {exc}")
+        return 1
+    print("FAIL  heartmula needs generate or transcribe")
+    return 2
+
+
 def cmd_download_models(args: argparse.Namespace) -> int:
     """Scan first; download missing weights only after consent."""
     from master_agent.setup import print_inventory_preamble
 
     print_inventory_preamble()
+    if getattr(args, "heartmula", False):
+        from master_agent.heartmula.doctor import cmd_download_heartmula
+
+        return cmd_download_heartmula(args)
     from master_agent.models.weights import (
         WEIGHT_FILES,
         MissingWeightsError,
@@ -1984,6 +2152,15 @@ def main(argv: list[str] | None = None) -> int:
         help="JSON word timestamps so long lipdub splits on pauses and never mid-word",
     )
     p.add_argument(
+        "--heartmula-transcribe",
+        action="store_true",
+        help=(
+            "when --words is omitted, transcribe --audio with HeartTranscriptor "
+            "into the same {w,s,e} list. Dry-run plans only. "
+            "Does not replace a faster-whisper --words file."
+        ),
+    )
+    p.add_argument(
         "--self-improve-dry",
         action="store_true",
         help="closed judge→revise→rejudge loop (quality_bar a/c/d); no Comfy queue",
@@ -2071,7 +2248,10 @@ def main(argv: list[str] | None = None) -> int:
 
     p = sub.add_parser("music", help="beat-synced music video from an audio track")
     p.add_argument("request", help="creative brief (natural language)")
-    p.add_argument("--audio", required=True, help="audio file (mp3/wav/...)")
+    p.add_argument("--audio", help="audio file (mp3/wav/...). Or HeartMuLa lyrics+tags")
+    p.add_argument("--heartmula-lyrics", help="generate the track with HeartMuLa when --audio is omitted")
+    p.add_argument("--heartmula-tags", help="comma-separated HeartMuLa tags, no spaces (piano,happy)")
+    p.add_argument("--heartmula-duration", type=float, default=None, help="generated track seconds (default 30)")
     p.add_argument("--visual", choices=["shots", "fractal"], default="shots",
                    help="shots = ComfyUI generation per shot; fractal = CPU beat-reactive zoom")
     p.add_argument("--variant", help="force catalog variant (shots mode)")
@@ -2112,7 +2292,11 @@ def main(argv: list[str] | None = None) -> int:
         help="plan → Comfy/LTX burn (I2V if --image) → unique check → Remotion",
     )
     rend_p.add_argument("request", nargs="?", default="music video", help="creative brief")
-    rend_p.add_argument("--audio", required=True, help="full-track audio (mp3/wav/...)")
+    rend_p.add_argument("--audio", help="full-track audio (mp3/wav/...). Or HeartMuLa lyrics+tags")
+    rend_p.add_argument("--heartmula-lyrics", help="generate the track when --audio is omitted")
+    rend_p.add_argument("--heartmula-tags", help="comma-separated HeartMuLa tags, no spaces")
+    rend_p.add_argument("--heartmula-duration", type=float, default=None, help="generated track seconds (default 30)")
+    rend_p.add_argument("--heartmula-seed", type=int, default=None, help="torch seed before HeartMuLaGenPipeline")
     rend_p.add_argument("--out", default=str(Path("out") / "MV-FIXED.mp4"), help="1080p output")
     rend_p.add_argument("--plan", help="reuse a buddy.mv.beat_plan/v1 JSON (skip analyze)")
     rend_p.add_argument("--image", help="still / character lock → I2V (else T2V)")
@@ -2131,6 +2315,28 @@ def main(argv: list[str] | None = None) -> int:
     rend_p.add_argument("--json", action="store_true")
     rend_p.set_defaults(func=cmd_mv)
 
+    p = sub.add_parser(
+        "heartmula",
+        help="HeartMuLa: generate a track from lyrics+tags, or transcribe word timestamps",
+    )
+    hm = p.add_subparsers(dest="heartmula_command", required=True)
+    gen_p = hm.add_parser("generate", help="lyrics + tags → wav via heartlib (dry-run needs no package)")
+    gen_p.add_argument("--lyrics", required=True, help="lyric text, or a path heartlib can read")
+    gen_p.add_argument("--tags", required=True, help="comma-separated tags without spaces")
+    gen_p.add_argument("--duration", type=float, default=30.0, help="seconds (heartlib example uses 240)")
+    gen_p.add_argument("--seed", type=int, default=None, help="torch.manual_seed before the pipeline")
+    gen_p.add_argument("--out", required=True, help="output wav path")
+    gen_p.add_argument("--topk", type=int, default=50)
+    gen_p.add_argument("--temperature", type=float, default=1.0)
+    gen_p.add_argument("--cfg-scale", dest="cfg_scale", type=float, default=1.5)
+    gen_p.add_argument("--dry-run", action="store_true", help="print the plan; do not import heartlib")
+    gen_p.set_defaults(func=cmd_heartmula)
+    tr_p = hm.add_parser("transcribe", help="audio → words.json for lipdub --words")
+    tr_p.add_argument("--audio", required=True, help="music or vocal file")
+    tr_p.add_argument("--out", required=True, help="words JSON path")
+    tr_p.add_argument("--dry-run", action="store_true", help="print the plan; do not import heartlib")
+    tr_p.set_defaults(func=cmd_heartmula)
+
     p = sub.add_parser("download-flux", help="download Flux fp8 weights (~17GB, one-time)")
     p.set_defaults(func=cmd_download_flux)
 
@@ -2140,6 +2346,11 @@ def main(argv: list[str] | None = None) -> int:
     )
     p.add_argument("--ltx25", action="store_true", default=True, help="LTX 2.5 distilled split pack (default)")
     p.add_argument("--h3", action="store_true", help="MiniMax H3 GGUF + Comfy TE/VAE pack")
+    p.add_argument(
+        "--heartmula",
+        action="store_true",
+        help="HeartMuLa + HeartCodec + HeartTranscriptor attested slots (list missing; --yes fetches)",
+    )
     p.add_argument("--wan", action="store_true", help="Wan 2.2 GGUF/fp8 + Lightx2v 16GB pack")
     p.add_argument("--vace", action="store_true", help="VACE Skyreels Q4_K_M GGUF")
     p.add_argument("--krea", action="store_true", help="Krea-2 turbo NVFP4")

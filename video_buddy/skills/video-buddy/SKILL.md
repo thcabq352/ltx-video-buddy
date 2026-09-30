@@ -15,7 +15,7 @@ Local ComfyUI video studio in this repo (`video_buddy/`). Package is `master_age
 - LTX 2.5 (`ltx25_*` / aliases `t2v_i2v`, `flf2v`, …), MiniMax H3 (`h3_*` / `fl2va` / `ref2va`), LTX 2.3 (`base` / `eros` / `directors` / `lipsync`), Wan 2.2, music video, fractal, Movie Builder
 - Seedance 2.5 Draft → Final (Pack C). **Local-only is a hard requirement.** Generate on `http://127.0.0.1:8188` with `ltx25_t2v_i2v`, `ltx25_flf2v`, or `ltx25_msr`. Partner ids are a field-shape record and are not queued. See `references/local-only.md` and `video_buddy/docs/SEEDANCE_2_5_DRAFT.md`
 - Drive or lint a Comfy API graph (`comfy run`)
-- Inventory-first weights: `inventory`, then `doctor` (no fetch), then `download-models --ltx25` or `--h3` if a slot is confirmed missing. `--scan-only` never fetches. GGUF is the loader whenever a compatible file is on disk; fp8/bf16/EROS are fallbacks. 12GB: `VRAM_GB=12` and `FORCE_LOADER=gguf` (hides NVFP4/bf16 suggestions; does not block a lone bf16). Fully local LLM: `LLM_PROVIDER=ollama`.
+- Inventory-first weights: `inventory`, then `doctor` (no fetch), then `download-models --ltx25` or `--h3` if a slot is confirmed missing. `--heartmula` lists HeartMuLa slots and does not fetch until `--yes` (check free space first; prefer `HeartCodec-oss-20260123`). `--scan-only` never fetches. GGUF is the loader whenever a compatible file is on disk; fp8/bf16/EROS are fallbacks. 12GB: `VRAM_GB=12` and `FORCE_LOADER=gguf` (hides NVFP4/bf16 suggestions; does not block a lone bf16). Fully local LLM: `LLM_PROVIDER=ollama`. HeartMuLa is sequential with LTX on 16GB.
 - Character → Flux sheet → LoRA (CCC)
 
 ## When NOT to use
@@ -113,7 +113,7 @@ Full signatures: [TOOLS.md](TOOLS.md). Invoke MCP as `master-agent.<tool>`. CLI 
 | `create_character(description, name="", shots=0, train=False)` | `python -m master_agent character create "DESC" [--name N --shots N --train]` |
 | `train_lora(character_name, steps=0, lr=0, rank=0, validate=True)` | `python -m master_agent lora train NAME [--steps N --lr X --rank N --validate]` |
 
-CLI-only (no MCP tool): `about`, `curriculum`, `inventory`, `doctor`/`setup`, `workflows`, `capabilities`, `download-models`, `download-flux`, `comfy run`, `diagnose`, `budget`, `hermes`, `ui`, `fetch-object-info`, `power-tune`, `persona`, `soul`, `brief`, `fractal`, `music`, `mv plan`/`mv render`, `lora setup`/`validate`, `character list`.
+CLI-only (no MCP tool): `about`, `curriculum`, `inventory`, `doctor`/`setup`, `workflows`, `capabilities`, `download-models`, `download-flux`, `comfy run`, `diagnose`, `budget`, `hermes`, `ui`, `fetch-object-info`, `power-tune`, `persona`, `soul`, `brief`, `fractal`, `music`, `mv plan`/`mv render`, `heartmula generate`/`heartmula transcribe`, `lora setup`/`validate`, `character list`.
 
 Drive graphs with CLI first: `comfy run`. Director pipeline: `run`. Unattended: `--no-interview`.
 

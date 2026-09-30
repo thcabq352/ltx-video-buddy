@@ -77,3 +77,23 @@ Existing widgets only:
 
 If the pack names a channel and the graph has no matching loader, attach
 errors. Optional accelerators still bypass via the existing validator.
+
+## HeartMuLa classes (not a control channel)
+
+Tower Comfy Desk (2026-09-30) registered exactly two classes from
+`benjiyaya/HeartMuLa_ComfyUI` @ `fdb53c4`:
+
+| `class_type` | Display name |
+|---|---|
+| `HeartMuLa_Generate` | HeartMuLa Music Generator |
+| `HeartMuLa_Transcribe` | HeartMuLa Lyrics Transcriber |
+
+Attach does not patch their widgets and does not treat them as OpenPose /
+depth / edges / camera. They are payload nodes, not optional accelerators,
+so a missing class is not a TeaCache-style bypass. A recipe that names any
+other class containing `HeartMuLa` raises `AttachError`. Do not invent
+class names. Weights were not downloaded (empty model dirs). Buddy's own
+generate/transcribe path is heartlib, documented in
+[HEARTMULA.md](HEARTMULA.md). `HeartCodec-oss` returned 401; prefer
+`HeartCodec-oss-20260123`. Check disk before a multi-GB pull
+(F: ~28GB free on that tower check).
