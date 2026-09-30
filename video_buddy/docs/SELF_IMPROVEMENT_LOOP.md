@@ -108,5 +108,5 @@ until pass or `max_judge_rounds` (`--max-judge-rounds` / `MAX_JUDGE_ROUNDS`).
   `run "music video…"` without `--audio` will exhaust on rule **a** unless a
   track is provided (auto-route then muxes).
 - Vision / text-LLM legs are unchanged and optional. Cheap rules do not need them.
-- Kling / Partner Node is out of scope. Seedance 2.5 Draft pointers are docs-only (`SEEDANCE_2_5_DRAFT.md`); this loop does not queue or score them.
+- Kling / Partner Node is out of scope. Pack C Seedance renders on local Comfy only (`SEEDANCE_2_5_DRAFT.md`). This loop does not queue or score Partner graphs.
 - `--dry-run` (curriculum L3) is still plan/lint only.

@@ -15,7 +15,7 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parent
 SRC = ROOT / "skills" / "video-buddy"
-SKILL_FILES = ("SKILL.md", "TOOLS.md", "PROFILE.md")
+SKILL_FILES = ("SKILL.md", "TOOLS.md", "PROFILE.md", "references/local-only.md")
 
 
 def hermes_home(override: Path | None = None) -> Path:
@@ -41,7 +41,9 @@ def install_skill(*, dest: Path | None = None, home: Path | None = None) -> Path
     for name in SKILL_FILES:
         src = SRC / name
         if src.is_file():
-            shutil.copy2(src, target / name)
+            dest_path = target / name
+            dest_path.parent.mkdir(parents=True, exist_ok=True)
+            shutil.copy2(src, dest_path)
             copied.append(name)
     if "SKILL.md" not in copied:
         raise FileNotFoundError(f"SKILL.md not copied from {SRC}")

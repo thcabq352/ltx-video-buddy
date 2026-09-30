@@ -418,9 +418,9 @@ def run_pipeline(
 ) -> PipelineResult:
     run_id = uuid.uuid4().hex[:12]
     result = PipelineResult(run_id, request=request)
-    from master_agent.comfy.partner_pointers import partner_refusal
+    from master_agent.comfy.partner_pointers import route_pack_c
 
-    refusal = partner_refusal(request, variant)
+    variant, refusal = route_pack_c(request, variant)
     if refusal:
         result.status = "error"
         result.error = refusal
@@ -903,9 +903,9 @@ def dry_run_pipeline(
     inoutpaint: Optional[dict[str, Any]] = None,
 ) -> int:
     """Storyboard + patch + validate every segment without queueing. CLI exit code."""
-    from master_agent.comfy.partner_pointers import partner_refusal
+    from master_agent.comfy.partner_pointers import route_pack_c
 
-    refusal = partner_refusal(request, variant)
+    variant, refusal = route_pack_c(request, variant)
     if refusal:
         print(f"FAIL  {refusal}")
         return 2

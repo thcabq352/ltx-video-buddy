@@ -1,25 +1,47 @@
-"""Comfy Partner template pointers. Not queueable local graphs.
+"""Seedance 2.5 Draft field-shape records. Not an execution path.
 
-Video Buddy's catalog is on-disk Comfy graphs (LTX, MiniMax H3, Wan, Flux).
-It has no ByteDance / Partner HTTP client. These ids exist so ``workflows``
-and a refused ``run`` can point operators at official Comfy templates.
+Pack C video generation is local Comfy only (``http://127.0.0.1:8188``) on
+the existing LTX catalog. These ids remember the Partner node shape. The
+agent does not load, enable, or queue those graphs, and does not call
+comfy.org, BytePlus, ModelArk, or KIE.
 
 They are absent from ``WORKFLOW_FILES``, ``/api/variants``, and the studio
-picker. Do not add ``workflows/**/*_api.json`` for them: the catalog scanner
-would advertise a cloud graph as a local variant.
+picker. Do not add ``workflows/**/*seedance*.json``: the catalog scanner
+would advertise a hosted graph as a local variant.
 """
 
 from __future__ import annotations
 
 import re
 from dataclasses import dataclass
+from typing import Any
+from urllib.parse import urlparse
 
-# Official workflow_templates ids (index date 2026-09-25, min ComfyUI 0.37.3).
-# Scout widgets use model "Seedance 2.5 Draft" at 480p. Promote node is shared.
+# Recorded Partner shape (ComfyUI #16529). Not a queue target.
 PROMOTE_NODE = "ByteDance2DraftToFinalVideoNode"
 MODEL_OPTION = "Seedance 2.5 Draft"
 API_MODEL_ID = "dreamina-seedance-2-5-260628"
 DOC_REL = "docs/SEEDANCE_2_5_DRAFT.md"
+
+FORBIDDEN_CLASS_TYPES = frozenset(
+    {
+        "ByteDance2TextToVideoNode",
+        "ByteDance2FirstLastFrameNode",
+        "ByteDance2ReferenceNodeV2",
+        "ByteDance2DraftToFinalVideoNode",
+    }
+)
+
+# Hosts that would leave the machine for video inference. Matched against
+# the URL host, so a test double such as ``comfy.test`` is not included.
+CLOUD_VIDEO_HOST_MARKERS = (
+    "comfy.org",
+    "byteplus",
+    "modelark",
+    "volces.com",
+    "volcengineapi.com",
+    "kie.ai",
+)
 
 _REQUEST_RE = re.compile(
     r"(?i)(?:"
@@ -33,7 +55,7 @@ _REQUEST_RE = re.compile(
 
 
 class PartnerPointerError(ValueError):
-    """Raised when a caller asks Buddy to queue a Partner template."""
+    """Raised when a caller asks Buddy to queue a Partner / cloud Seedance graph."""
 
 
 @dataclass(frozen=True)
@@ -43,11 +65,13 @@ class PartnerPointer:
     mode: str
     title: str
     scout_node: str
+    executable: bool = False
 
     def keys(self) -> tuple[str, ...]:
         return (self.id, self.template)
 
     def as_list_item(self) -> dict[str, str | bool]:
+        local = local_variant_for_mode(self.mode)
         return {
             "id": self.id,
             "path": "",
@@ -55,10 +79,12 @@ class PartnerPointer:
             "kind": "pointer",
             "family": "partner",
             "queueable": False,
+            "executable": False,
             "template": self.template,
+            "localVariant": local,
             "description": (
-                f"Comfy Partner template {self.template}. Not a local graph. "
-                f"Scout {self.scout_node}; promote {PROMOTE_NODE}."
+                f"Field-shape record of {self.template}. Not executable. "
+                f"Generate on http://127.0.0.1:8188 with {local}."
             ),
         }
 
@@ -93,6 +119,15 @@ for _pointer in POINTERS:
         _BY_KEY[_key.lower()] = _pointer
 
 
+def partner_graphs_executable() -> bool:
+    """Hard closed. Partner Seedance graphs are never an execution path."""
+    from master_agent.config import PACK_C_LOCAL_ONLY
+
+    if PACK_C_LOCAL_ONLY.get("partnerGraphsExecutable"):
+        return True
+    return any(item.executable for item in POINTERS)
+
+
 def lookup_pointer(key: str | None) -> PartnerPointer | None:
     text = (key or "").strip().replace("\\", "/")
     if not text:
@@ -112,7 +147,7 @@ def request_asks_seedance(text: str | None) -> bool:
 
 
 def pointer_for_request(text: str | None) -> PartnerPointer:
-    """Best stub when the brief names Seedance but not a template id."""
+    """Field-shape stub when the brief names Seedance but not a template id."""
     raw = (text or "").lower()
     if any(
         token in raw
@@ -135,22 +170,129 @@ def pointer_for_request(text: str | None) -> PartnerPointer:
     return POINTERS[0]
 
 
-def format_refusal(pointer: PartnerPointer) -> str:
-    others = ", ".join(item.template for item in POINTERS)
+def local_variant_for_mode(mode: str) -> str:
+    from master_agent.config import PACK_C_LOCAL_ONLY
+
+    packs = PACK_C_LOCAL_ONLY["localPacks"]
+    return str(packs.get(mode) or packs["t2v"])
+
+
+def local_catalog_for_pack_c_brief(text: str | None) -> str | None:
+    """Local catalog id for a Pack C brief. None when the text is not Pack C.
+
+    First-last / flf maps to the local FLF graph. A single first frame maps
+    to the local I2V graph. Reference maps to the local multi-reference graph.
+    """
+    if not request_asks_seedance(text):
+        return None
+    from master_agent.config import PACK_C_LOCAL_ONLY
+
+    packs = PACK_C_LOCAL_ONLY["localPacks"]
+    raw = (text or "").lower()
+    if any(
+        token in raw
+        for token in ("r2v", "reference-to-video", "reference to video", "draft_r2v")
+    ):
+        return str(packs["r2v"])
+    if any(token in raw for token in ("flf2v", "flf", "first-last", "first last")):
+        return str(packs["flf"])
+    if any(
+        token in raw
+        for token in (
+            "i2v",
+            "image-to-video",
+            "image to video",
+            "first frame",
+            "draft_i2v",
+        )
+    ):
+        return str(packs["i2v"])
+    return str(packs["t2v"])
+
+
+def pack_c_video_url_allowed(url: str | None = None) -> bool:
+    """True only for loopback Comfy on port 8188."""
+    from master_agent.config import COMFYUI_URL
+
+    raw = (COMFYUI_URL if url is None else url).strip()
+    parsed = urlparse(raw)
+    host = (parsed.hostname or "").lower()
+    if parsed.scheme != "http" or host not in {"127.0.0.1", "localhost"}:
+        return False
+    port = parsed.port
+    if port is None:
+        port = 80
+    return port == 8188
+
+
+def cloud_video_host(url: str | None) -> str | None:
+    """Cloud video-inference host marker, if this URL would leave the machine."""
+    raw = (url or "").strip().lower()
+    if not raw:
+        return None
+    host = (urlparse(raw).hostname or "").lower()
+    for marker in CLOUD_VIDEO_HOST_MARKERS:
+        if marker in host:
+            return marker
+    return None
+
+
+def _explicit_local_variant(variant: str | None) -> bool:
+    forced = (variant or "").strip()
+    if not forced or forced.lower() == "auto":
+        return False
+    return lookup_pointer(forced) is None
+
+
+def format_local_only_refusal(pointer: PartnerPointer | None = None) -> str:
+    from master_agent.config import PACK_C_COMFY_URL
+
+    local = local_variant_for_mode(pointer.mode) if pointer is not None else local_variant_for_mode("t2v")
+    recorded = pointer.template if pointer is not None else "api_seedance2_5_draft_*"
     return (
-        "Seedance 2.5 Draft is a Comfy Partner template, not a Video Buddy graph. "
-        "Buddy does not call ByteDance.\n"
-        f"Open Comfy template {pointer.template} ({pointer.title}). "
-        f"Stub id {pointer.id}.\n"
-        f"Scout: model {MODEL_OPTION!r} on {pointer.scout_node} locks 480p and "
-        f"returns draft_task_id (API draft:true, model {API_MODEL_ID}). "
-        "Fix the seed (turn off randomize) before promote. "
-        f"Promote: {PROMOTE_NODE} (ByteDance Seedance 2.5 Draft to Final Video) "
-        "→ native 1080p. Draft id lasts about 7 days.\n"
-        f"Templates: {others}. Doc: video_buddy/{DOC_REL}. "
-        "To render on this machine instead, pass --variant ltx25_t2v_i2v "
-        "(or another on-disk catalog id)."
+        "Local-only is a hard requirement for Pack C Seedance Draft→Final. "
+        "No cloud APIs, no cloud services, no hosted inference. "
+        f"Partner template {recorded} is a field-shape record and is not executable. "
+        f"Generate on {PACK_C_COMFY_URL} with local catalog id {local}."
     )
+
+
+def format_nonlocal_refusal() -> str:
+    from master_agent.config import COMFYUI_URL, PACK_C_COMFY_URL
+
+    return (
+        "Local-only is a hard requirement for Pack C Seedance Draft→Final. "
+        "No cloud APIs, no cloud services, no hosted inference. "
+        f"Video generation stays on {PACK_C_COMFY_URL}. "
+        f"Refusing COMFYUI_URL {COMFYUI_URL!r}."
+    )
+
+
+def route_pack_c(
+    request: str | None,
+    variant: str | None,
+    *,
+    match_request: bool = True,
+) -> tuple[str | None, str | None]:
+    """Fail closed onto a local catalog id.
+
+    Returns ``(variant, error)``. ``error`` is set when this call would run
+    Partner/cloud Seedance or would send the Pack C burn off loopback.
+    A concrete local variant (``ltx25_t2v_i2v``, ``wan22``, ``h3_t2v``, …)
+    is kept. Partner stub ids are rewritten to the local pack for that mode.
+    """
+    pointer = lookup_pointer(variant)
+    asks = match_request and request_asks_seedance(request)
+    explicit_local = _explicit_local_variant(variant)
+    if pointer is None and not asks:
+        return variant, None
+    if not pack_c_video_url_allowed():
+        return None, format_nonlocal_refusal()
+    if pointer is not None:
+        return local_variant_for_mode(pointer.mode), None
+    if asks and not explicit_local:
+        return local_catalog_for_pack_c_brief(request), None
+    return variant, None
 
 
 def partner_refusal(
@@ -159,17 +301,57 @@ def partner_refusal(
     *,
     match_request: bool = True,
 ) -> str | None:
-    """Refusal text when this call would pretend to queue Seedance.
+    """Error when *this key* is still a Partner graph.
 
-    A concrete local variant (``ltx25_t2v_i2v``, ``base``, …) is honored even
-    if the brief mentions Seedance. ``None`` / ``auto`` follow the brief.
+    Entrances should call :func:`route_pack_c` first so a Seedance brief
+    becomes a local catalog id. A leftover pointer id fails closed here
+    and is not queued.
     """
-    named = lookup_pointer(variant)
-    if named is not None:
-        return format_refusal(named)
-    forced = (variant or "").strip().lower()
-    if forced and forced != "auto":
-        return None
-    if match_request and request_asks_seedance(request):
-        return format_refusal(pointer_for_request(request))
+    pointer = lookup_pointer(variant)
+    if pointer is not None:
+        return format_local_only_refusal(pointer)
+    if match_request and request_asks_seedance(request) and not _explicit_local_variant(variant):
+        if not pack_c_video_url_allowed():
+            return format_nonlocal_refusal()
+    return None
+
+
+def partner_class_types_in(workflow: Any) -> set[str]:
+    found: set[str] = set()
+
+    def walk(node: Any) -> None:
+        if isinstance(node, dict):
+            for key in ("class_type", "type"):
+                value = node.get(key)
+                if isinstance(value, str) and value in FORBIDDEN_CLASS_TYPES:
+                    found.add(value)
+            for value in node.values():
+                walk(value)
+        elif isinstance(node, list):
+            for item in node:
+                walk(item)
+
+    walk(workflow)
+    return found
+
+
+def reject_partner_or_cloud_queue(workflow: Any, base_url: str | None) -> str | None:
+    """Block Partner graphs and cloud video hosts before ``/prompt``."""
+    from master_agent.config import PACK_C_COMFY_URL
+
+    classes = partner_class_types_in(workflow)
+    if classes:
+        names = ", ".join(sorted(classes))
+        return (
+            "Local-only is a hard requirement for Pack C Seedance Draft→Final. "
+            f"Partner class {names} is not executable. "
+            f"Generate on {PACK_C_COMFY_URL} with a local LTX, Wan, or H3 graph."
+        )
+    host = cloud_video_host(base_url)
+    if host:
+        return (
+            "Local-only is a hard requirement. "
+            f"Refusing cloud video host {host!r}. "
+            f"Generate on {PACK_C_COMFY_URL}."
+        )
     return None

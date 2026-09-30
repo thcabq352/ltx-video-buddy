@@ -54,7 +54,7 @@ for the next I2V burn. Music-video mode keeps beat windows and does
 - Pick “cheaper GPU” graphs inside the director / LLM payload
 - Put `vram*` / `slot` / `weight_path` on the contract
 - Remap Kling, download weights, or auto-install Comfy packs
-- Queue Seedance 2.5 Draft. Those are Comfy Partner pointers (`docs/SEEDANCE_2_5_DRAFT.md`), not local graphs
+- Queue Partner Seedance graphs. Pack C fail-closes onto local Comfy (`docs/SEEDANCE_2_5_DRAFT.md`). Those stubs are field-shape records, not an execution path
 - Break TeaCache inject-when-registered, provenance sidecars, or MTV mode
 
 Tests (no GPU): `python -m pytest tests/test_brain_hands.py -q`

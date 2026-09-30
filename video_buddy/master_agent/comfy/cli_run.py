@@ -153,10 +153,15 @@ def prepare_run(
         looks_like_ltx_graph,
     )
 
-    from master_agent.comfy.partner_pointers import PartnerPointerError, partner_refusal
+    from master_agent.comfy.partner_pointers import (
+        PartnerPointerError,
+        partner_refusal,
+        reject_partner_or_cloud_queue,
+        route_pack_c,
+    )
 
     if mode == "generate":
-        refusal = partner_refusal("", variant, match_request=False)
+        variant, refusal = route_pack_c(prompt, variant)
         if refusal:
             raise PartnerPointerError(refusal)
     elif mode == "template":
@@ -167,6 +172,9 @@ def prepare_run(
     if mode == "raw":
         if not isinstance(workflow, dict):
             raise ValueError("raw mode requires a workflow dict")
+        blocked = reject_partner_or_cloud_queue(workflow, "http://127.0.0.1:8188")
+        if blocked:
+            raise PartnerPointerError(blocked)
         wf = apply_overrides(workflow, overrides)
     elif mode == "template":
         raw_path = Path(template_path or "")

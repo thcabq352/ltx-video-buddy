@@ -426,7 +426,7 @@ CAPABILITY_CATALOG: tuple[Capability, ...] = (
     ),
     Capability(
         "seedance25_draft",
-        "Seedance 2.5 Draft → Final (Partner pointer)",
+        "Seedance 2.5 Draft → Final (field-shape record, local Comfy only)",
         class_types=(
             "ByteDance2TextToVideoNode",
             "ByteDance2FirstLastFrameNode",
@@ -440,9 +440,10 @@ CAPABILITY_CATALOG: tuple[Capability, ...] = (
             "seedance25_draft_r2v",
         ),
         notes=(
-            "Not wired. Official Comfy templates api_seedance2_5_draft_{t2v,i2v,r2v}. "
-            "Buddy refuses the queue and points at docs/SEEDANCE_2_5_DRAFT.md. "
-            "No Partner HTTP client."
+            "Field-shape record only. Not executable. Local-only hard requirement: "
+            "generate on http://127.0.0.1:8188 (ltx25_t2v_i2v / ltx25_flf2v / ltx25_msr). "
+            "Template ids api_seedance2_5_draft_{t2v,i2v,r2v} are not queued. "
+            "No comfy.org, BytePlus, ModelArk, or KIE client."
         ),
     ),
 )
