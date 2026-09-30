@@ -156,9 +156,12 @@ flag. Research aliases (`t2v_i2v`, `flf2v`, …) resolve the same way.
 Inventory first: `python -m master_agent inventory`, then doctor. Buddy
 locates existing files under `MODELS_DIR`, Comfy `models/`,
 `EXTRA_MODELS_DIRS`, `extra_model_paths.yaml`, and the Hugging Face hub
-cache. **GGUF Q3/Q4 → NVFP4 (if `VRAM_GB` ≥ 14) → int8-convrot → bf16.**
-Below 14GB, or with `FORCE_LOADER=gguf`, NVFP4 and bf16 are not suggested.
-`sulphur_dev-Q3_K_S.gguf` counts as LTX 2.3. A Gemma heretic encoder counts
+cache. **If a compatible GGUF is on disk, use it** — at 16GB as well as
+12GB, with or without `FORCE_LOADER`. Otherwise **NVFP4 (if `VRAM_GB` ≥ 14)
+→ int8 / fp8 → bf16 / EROS**. Below 14GB, or with `FORCE_LOADER=gguf`,
+NVFP4 and bf16 are not suggested. A 16GB machine that only has bf16 or EROS
+still loads those files. `sulphur_dev-Q3_K_S.gguf` counts as LTX 2.3.
+A Gemma heretic encoder counts
 as the text encoder. Official bf16 Gemma is not required. Zero-byte files
 = missing.
 

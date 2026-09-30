@@ -772,6 +772,78 @@ def _resolved_family_name(weight_key: str) -> str | None:
     return name_from_local_path(found) or found.name
 
 
+_LTX23_GGUF_VARIANTS = frozenset({"base", "eros", "directors"})
+
+
+def _fresh_node_id(workflow: dict[str, Any]) -> str:
+    nums = []
+    for key in workflow:
+        try:
+            nums.append(int(key))
+        except (TypeError, ValueError):
+            continue
+    return str((max(nums) if nums else 0) + 1)
+
+
+def _apply_ltx23_gguf_model(workflow: dict[str, Any], variant: str) -> str | None:
+    """Point the MODEL edge at a local LTX 2.3 GGUF when one matches the slot.
+
+    CheckpointLoaderSimple stays in the graph for VAE (output 2) and the
+    text-projection checkpoint. fp8 / EROS remain the MODEL source only when
+    no compatible GGUF is on disk. Lipsync and in/outpaint are not rewritten.
+    """
+    if variant not in _LTX23_GGUF_VARIANTS:
+        return None
+    from master_agent.comfy.loader_names import name_from_local_path
+    from master_agent.models.weights import resolve_ltx23_gguf
+
+    found = resolve_ltx23_gguf(variant)
+    if found is None:
+        return None
+    unet_name = name_from_local_path(found) or found.name
+    wired = False
+    for src, node in list(workflow.items()):
+        if not isinstance(node, dict) or node.get("class_type") != "CheckpointLoaderSimple":
+            continue
+        consumers: list[tuple[str, str]] = []
+        for nid, other in workflow.items():
+            if not isinstance(other, dict):
+                continue
+            inputs = other.get("inputs") or {}
+            for key, value in inputs.items():
+                if not (isinstance(value, list) and len(value) == 2 and str(value[0]) == str(src)):
+                    continue
+                try:
+                    slot = int(value[1])
+                except (TypeError, ValueError):
+                    continue
+                if slot == 0:
+                    consumers.append((str(nid), key))
+        if not consumers:
+            continue
+        new_id = _fresh_node_id(workflow)
+        workflow[new_id] = {
+            "class_type": "UnetLoaderGGUF",
+            "inputs": {"unet_name": unet_name},
+            "_meta": {"title": "LTX 2.3 GGUF (preferred)"},
+        }
+        for nid, key in consumers:
+            workflow[nid]["inputs"][key] = [new_id, 0]
+        wired = True
+    for class_type in ("UNETLoader", "UnetLoaderGGUF", "DiffusionModelLoader"):
+        for _nid, node in _find_nodes_by_class(workflow, class_type):
+            inputs = node.get("inputs") or {}
+            current = str(inputs.get("unet_name") or inputs.get("ckpt_name") or "")
+            lowered = current.lower()
+            if not current or lowered.endswith(".gguf"):
+                continue
+            if "ltx-2.3" not in lowered and "ltx2.3" not in lowered and "sulphur" not in lowered:
+                continue
+            _set_family_unet_loader(node, unet_name, "LTX 2.3 GGUF (preferred)")
+            wired = True
+    return unet_name if wired else None
+
+
 def _apply_local_family_weights(workflow: dict[str, Any], variant: str) -> None:
     """16GB-class remaps for Wan / VACE / Krea / Flux / Qwen (GGUF vs UNET)."""
     from master_agent.models.vram_policy import family_for_slug
@@ -1742,6 +1814,7 @@ def load_and_patch_workflow(
     if is_h3_bundle(bundle):
         _apply_local_h3_weights(workflow, bundle or "h3_fl2va")
     _apply_local_family_weights(workflow, resolved_id or variant)
+    gguf_unet = _apply_ltx23_gguf_model(workflow, resolved_id or variant)
     if loras:
         _apply_typed_loras(workflow, loras)
     if multi_ref:
@@ -1807,6 +1880,7 @@ def load_and_patch_workflow(
         "checkpoint": checkpoint,
         "checkpoint_preferred": preferred,
         "checkpoint_fallback": preferred != checkpoint,
+        "gguf_unet": gguf_unet,
         "lora": lora,
         "filename_prefix": filename_prefix,
         "inoutpaint_default_length": defaulted_length,

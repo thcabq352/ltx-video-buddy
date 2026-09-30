@@ -144,8 +144,8 @@ H3_TE_PREFERENCE: tuple[str, ...] = (
 H3_TRANSFORMER_KEYS = frozenset({"h3_fl2va", "h3_ref2va"})
 
 # Official distilled split pack on gated Lightricks/LTX-2.5 (Hub file listing).
-# Download / default-wire names are the bf16 pack. 16GB-class installs may
-# already have comfy-int8-convrot / nvfp4 / GGUF Q4 — those still count.
+# The Hub download target stays bf16. The loader prefers a GGUF already on
+# disk, then NVFP4 / int8, and only then bf16 (see transformer_preference_order).
 WEIGHT_FILES: dict[str, WeightFile] = {
     "transformer": WeightFile(
         key="transformer",
@@ -156,7 +156,7 @@ WEIGHT_FILES: dict[str, WeightFile] = {
         size_bytes=42_000_000_000,
         mandatory=True,
         gated=True,
-        note="Official distilled transformer (bf16, 42 GB). 16GB-class: comfy-int8-convrot, nvfp4, or GGUF Q4 also count.",
+        note="Official distilled transformer (bf16, 42 GB). Loader prefers on-disk GGUF Q4, then NVFP4 / int8; bf16 is the fallback.",
         accepts=TRANSFORMER_PREFERENCE,
     ),
     "text_encoder": WeightFile(
@@ -771,25 +771,74 @@ def find_compatible_for_weight(weight: WeightFile, roots: Iterable[Path]) -> Pat
     return None
 
 
-def find_ltx23_compatible(roots: Iterable[Path] | None = None) -> Path | None:
-    """On-disk LTX 2.3 GGUF, including Sulphur Q3_K_S. None if the scan is empty."""
+def ltx23_gguf_names(variant: str | None = None) -> tuple[str, ...]:
+    """GGUF names for an LTX 2.3 slot, best first.
+
+    ``base`` / ``eros`` prefer the distilled QuantStack Q4_K_S. ``directors``
+    prefers the dev Q4_K_S. Sulphur Q3_K_S and the other #52 aliases follow.
+    """
+    from master_agent.models.vram_policy import LTX23_DEV_GGUF, LTX23_DISTILLED_GGUF
+
+    key = (variant or "base").strip().lower()
+    if key == "directors":
+        return LTX23_DEV_GGUF
+    return LTX23_DISTILLED_GGUF
+
+
+def _gguf_quant_rank(name: str) -> int:
+    base = name.lower()
+    if "q4" in base:
+        return 0
+    if "q3" in base:
+        return 1
+    if "q5" in base:
+        return 2
+    return 3
+
+
+def resolve_ltx23_gguf(
+    variant: str | None = None,
+    roots: Iterable[Path] | None = None,
+) -> Path | None:
+    """Best on-disk LTX 2.3 GGUF for ``variant``, or None.
+
+    Independent of ``FORCE_LOADER`` and ``VRAM_GB``. fp8 / bf16 / EROS are
+    not returned here — callers keep those as the fallback when this is None.
+    """
     search = list(roots) if roots is not None else model_search_roots()
-    exact = (
-        SULPHUR_Q3_GGUF,
-        "LTX-2.3-22B-distilled-1.1-Q4_K_S.gguf",
-        "LTX-2.3-dev-Q4_K_S.gguf",
-        "ltx-2.3-22b-distilled-Q3_K_S.gguf",
-        "LTX-2.3-distilled-Q3_K_S.gguf",
-    )
-    for name in exact:
+    for name in ltx23_gguf_names(variant):
         found = _search_name(name, search)
         if found is not None:
             return found
-    return _first_compatible(
-        search,
-        is_sulphur_or_ltx23_gguf,
-        folders=frozenset({"diffusion_models", "unet", "checkpoints", "gguf"}),
-    )
+    folders = frozenset({"diffusion_models", "unet", "checkpoints", "gguf"})
+    hits: list[Path] = []
+    for path in _iter_weight_files(search):
+        parts = {part.lower() for part in path.parts}
+        parent = path.parent.name.lower()
+        if not (parts & folders or parent in folders or parent == "models"):
+            continue
+        if is_sulphur_or_ltx23_gguf(path.name):
+            hits.append(path)
+    if not hits:
+        return None
+    want_dev = (variant or "").strip().lower() == "directors"
+
+    def _sort_key(path: Path) -> tuple[int, int, str]:
+        name = path.name.lower()
+        slot = 0 if (want_dev and "dev" in name) or (not want_dev and "distill" in name) else 1
+        return (slot, _gguf_quant_rank(name), name)
+
+    hits.sort(key=_sort_key)
+    return hits[0]
+
+
+def find_ltx23_compatible(roots: Iterable[Path] | None = None) -> Path | None:
+    """On-disk LTX 2.3 GGUF, including Sulphur Q3_K_S. None if the scan is empty.
+
+    The file returned is the one base/eros would load (QuantStack Q4 before
+    Sulphur). Directors use :func:`resolve_ltx23_gguf` with ``variant='directors'``.
+    """
+    return resolve_ltx23_gguf("base", roots)
 
 
 def _hf_hub_cache_dirs() -> list[Path]:

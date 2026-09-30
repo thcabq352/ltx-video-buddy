@@ -28,7 +28,7 @@ LLM_PANEL=local
 PANEL_JUDGE=ollama
 ```
 
-Unset `VRAM_GB` and Buddy uses `nvidia-smi` when it can. The 16GB figure is only the fallback when detection fails. Below 14GB, doctor does not suggest NVFP4 or bf16. `sulphur_dev-Q3_K_S.gguf` counts as an LTX 2.3 GGUF. A Gemma filename with `heretic` counts as the text encoder. Neither is a new download pack.
+Unset `VRAM_GB` and Buddy uses `nvidia-smi` when it can. The 16GB figure is only the fallback when detection fails. GGUF is the loader whenever a compatible file is already on disk, including on 16GB cards — `FORCE_LOADER=gguf` is only how a 12GB card hides NVFP4 and bf16 from suggestions. Below 14GB, doctor does not suggest NVFP4 or bf16. `sulphur_dev-Q3_K_S.gguf` counts as an LTX 2.3 GGUF. A Gemma filename with `heretic` counts as the text encoder. Neither is a new download pack. A machine with only bf16 or the EROS all-in-one keeps using those files.
 
 ```bash
 python -m master_agent inventory
@@ -187,13 +187,13 @@ See [`../REQUIRED-FILES.md`](../REQUIRED-FILES.md).
 
 ## 5. 16GB-class loader preference
 
-`VRAM_GB` is the env value, else `nvidia-smi`, else `16`. When several transformers are on disk:
+`VRAM_GB` is the env value, else `nvidia-smi`, else `16`. When several packs for one slot are on disk:
 
-1. **GGUF Q3/Q4** (`FORCE_LOADER=gguf`, or any card under 14GB) → `UnetLoaderGGUF`
+1. **GGUF** (QuantStack Q4_K_S, Sulphur Q3_K_S, then the other recognized aliases) → `UnetLoaderGGUF`. This is the default at any VRAM, not only under 14GB.
 2. Else **NVFP4** if `VRAM_GB` ≥ 14
-3. Else **int8-convrot**, then official bf16
+3. Else **int8 / fp8**, then official bf16 or the EROS all-in-one
 
-On a 12GB card, NVFP4 and bf16 are not suggested. A heavy file that is already on disk still counts as present so Buddy does not download a second copy.
+On a 12GB card, NVFP4 and bf16 are not suggested. A heavy file that is already on disk still counts as present so Buddy does not download a second copy. Leave `FORCE_LOADER` empty when the only local transformer is bf16.
 
 A machine that already has GGUF Q4 + NVFP4 loads **GGUF Q4**. Research JSON
 still says `ckpt_name: ltx-2.5-22b-distilled.safetensors` on
@@ -240,7 +240,7 @@ bf16/fp16 dual-UNET is never the default. Expected VRAM is a hypothesis.
 
 | Family | Default slug | Default pack | VRAM | Notes |
 |---|---|---|---|---|
-| LTX 2.3 | `base` / `eros` | EROS baked all-in-one | ~9.5–11G | QuantStack GGUF Q4_K_S optional; bf16 not default |
+| LTX 2.3 | `base` / `eros` / `directors` | GGUF Q4_K_S when on disk | ~9.5–13.5G | Sulphur Q3, then EROS/fp8, when no GGUF matches |
 | LTX 2.5 | `ltx25_t2v_i2v` | GGUF Q4_K_M | ~12.5G | Two-stage is the quality path |
 | MiniMax H3 | `h3_t2v` | GGUF Q4_K | ~13G | ≤12s / 0.8MP / 4 steps / CFG 1.0 |
 | Wan 2.2 | `wan22` | GGUF Q4_K_S or fp8 + Lightx2v | ~13.2G | Sequential high/low; no dual bf16 |

@@ -100,20 +100,20 @@ back to that sibling tree.
 |---|---|---|
 | Transformer | `ltx-2.5-22b-distilled-transformer-bf16.safetensors` | GGUF Q4_K_M, NVFP4, `comfy-int8-convrot`, research stub `ltx-2.5-22b-distilled.safetensors` |
 | Text encoder | `gemma4-12b-with-proj-ltx-2.5-bf16.safetensors` | Comfy int8, any Gemma `*heretic*` encoder (exact `gemma4-12b-heretic-ltx25-int8convrot.safetensors` or another heretic Gemma name) |
-| LTX 2.3 diffusion | EROS baked / fp8 / `LTX-2.3-*-Q4_K_S.gguf` | `sulphur_dev-Q3_K_S.gguf` and other LTX 2.3 Q3/Q4/Q5 GGUF names (not a download pack) |
+| LTX 2.3 diffusion | QuantStack `LTX-2.3-*-Q4_K_S.gguf` when that file is on disk | `sulphur_dev-Q3_K_S.gguf` and other LTX 2.3 Q3/Q4/Q5 GGUF names. fp8 and the EROS all-in-one are the fallback (not a download pack) |
 | Video VAE | `ltx-2.5-video-vae-bf16.safetensors` | `ltx-2.5-video-vae-conv-bf16.safetensors` |
 | Audio VAE | `ltx-2.5-audio-vae-bf16.safetensors` | — |
 | Duration head | `ltx-2.5-duration-head-bf16.safetensors` | optional (zero-byte is not present; does not block) |
 | Spatial upscaler | `ltx-2.5-latent-spatial-upscaler-x2-bf16-1.0.safetensors` | — |
 | IC-LoRA / MSR | `ltx-2.5-22b-ic-lora-ingredients-0.9.safetensors` | pixel-spatial IC-LoRA, stubs `ltx-2.5-ic-lora.safetensors` / `ltx-2.5-msr.safetensors` |
 
-**16GB-class GPU preference** (doctor + default loader, `VRAM_GB` default 16):
+**Loader preference** (doctor + default loader, any VRAM):
 
-1. **GGUF Q4** when present (`UnetLoaderGGUF`)
-2. Else **NVFP4** if `VRAM_GB` ≥ 14 (fits a ~16GB card)
-3. Else **int8-convrot**, then official bf16
+1. **GGUF** when a compatible file is already on disk (`UnetLoaderGGUF`). QuantStack Q4_K_S, then Sulphur Q3_K_S, then the other GGUF aliases this tree already recognizes.
+2. Else **NVFP4** if `VRAM_GB` ≥ 14
+3. Else **int8 / fp8**, then bf16 or the EROS all-in-one
 
-Set `VRAM_GB=12` and `FORCE_LOADER=gguf` on a 12GB card (RTX 4000 Ada). If `VRAM_GB` is unset, doctor reports `nvidia-smi` when that works, and only then falls back to 16. Below 14GB, NVFP4 and bf16 are not suggested.
+`FORCE_LOADER` is optional. Leave it empty on a 16GB+ machine that only has bf16 or EROS — those files still load. Set `VRAM_GB=12` and `FORCE_LOADER=gguf` on a 12GB card (RTX 4000 Ada) so doctor does not suggest NVFP4 or bf16. If `VRAM_GB` is unset, doctor reports `nvidia-smi` when that works, and only then falls back to 16.
 Official bf16 Gemma is not required if a working int8 / heretic TE is present.
 
 Local LLM only (no cloud fallback): `LLM_PROVIDER=ollama` in `.env`. `auto` tries Ollama, then llama.cpp, then Grok.
@@ -216,7 +216,7 @@ python -m master_agent download-models --flux-pack
 | Krea-2 | `krea2_turbo_nvfp4.safetensors` | Comfy-Org/Krea-2 |
 | Flux | `flux1-dev-Q4_K_S.gguf` (else `flux1-dev-fp8`) | city96/FLUX.1-dev-gguf; Comfy-Org/flux1-dev |
 | Qwen Edit | `Qwen-Image-Edit-2509-Q5_0.gguf` | QuantStack/Qwen-Image-Edit-2509-GGUF |
-| LTX 2.3 | EROS baked all-in-one | QuantStack/LTX-2.3-GGUF is optional / tight |
+| LTX 2.3 | QuantStack Q4_K_S GGUF when on disk (else EROS / fp8) | QuantStack/LTX-2.3-GGUF is not a download pack |
 
 K3NK AIO I2V: **no attested pack** (Hub search only found LoRAs). Not a default.
 Do not invent filenames. Heavy graphs (Movie Builder, CCC ADV, AI-VFX 1.0)

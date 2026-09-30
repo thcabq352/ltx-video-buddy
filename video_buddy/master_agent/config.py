@@ -200,7 +200,11 @@ def _resolve_vram_gb() -> tuple[float, str]:
 
 
 VRAM_GB, VRAM_SOURCE = _resolve_vram_gb()
-# gguf | nvfp4 | int8 | bf16 | "" (auto from VRAM_GB)
+# gguf | nvfp4 | int8 | bf16 | "" (auto).
+# Empty is GGUF-first at any VRAM: a compatible GGUF on disk wins.
+# fp8 / bf16 / EROS load only when that slot has no GGUF.
+# "gguf" hides NVFP4 and bf16 from suggestions (12GB cards). A lone bf16
+# file on disk is still used so a 16GB+ machine without GGUF keeps working.
 FORCE_LOADER = (os.getenv("FORCE_LOADER") or "").strip().lower()
 MAX_WIDTH = int(os.getenv("MAX_WIDTH", "768"))
 MAX_HEIGHT = int(os.getenv("MAX_HEIGHT", "512"))
@@ -347,10 +351,11 @@ POLL_INTERVAL_S = float(os.getenv("POLL_INTERVAL_S", "2"))
 JOB_TIMEOUT_S = float(os.getenv("JOB_TIMEOUT_S", "1800"))
 COMFYUI_VRAM_FLAG = os.getenv("COMFYUI_VRAM_FLAG", "--normalvram")
 
-# Expected model filenames (16GB tier) — used for preflight checks
-# CheckpointLoaderSimple needs an all-in-one .safetensors. On this 16GB install we
-# use the community EROS baked all-in-one until official Lightricks
-# ltx-2.3-22b-dev.safetensors is placed in models/checkpoints/.
+# Expected model filenames (16GB tier) — used for preflight checks.
+# CheckpointLoaderSimple still needs an all-in-one .safetensors for VAE and
+# text projection on base / eros / directors. The MODEL slot prefers a
+# compatible GGUF when one is on disk (QuantStack Q4_K_S, then Sulphur Q3_K_S).
+# EROS is that checkpoint fallback, not the diffusion pick.
 DEFAULT_ALL_IN_ONE_CKPT = (
     "LTX2.3_DISTILLED-1.1_BAKED_LTX_10Eros_v14_r768.safetensors"
 )
@@ -360,19 +365,20 @@ OFFICIAL_DEV_CKPT = "ltx-2.3-22b-dev.safetensors"
 MODEL_FILES: dict[str, dict[str, str]] = {
     "base": {
         "checkpoint": DEFAULT_ALL_IN_ONE_CKPT,
-        "diffusion": "ltx-2.3-22b-distilled-1.1_transformer_only_fp8_scaled.safetensors",
+        "diffusion": "LTX-2.3-22B-distilled-1.1-Q4_K_S.gguf",
         "lora": "ltx-2.3-22b-distilled-1.1_lora-dynamic_fro09_avg_rank_111_bf16.safetensors",
         "vae": "taeltx2_3.safetensors",
         "text_encoder": "gemma_3_12B_it_fp4_mixed.safetensors",
     },
     "eros": {
         "checkpoint": DEFAULT_ALL_IN_ONE_CKPT,
+        "diffusion": "LTX-2.3-22B-distilled-1.1-Q4_K_S.gguf",
         "vae": "taeltx2_3.safetensors",
         "text_encoder": "gemma_3_12B_it_fp4_mixed.safetensors",
     },
     "directors": {
         "checkpoint": DEFAULT_ALL_IN_ONE_CKPT,
-        "diffusion": "ltx-2.3-22b-dev_transformer_only_fp8_scaled.safetensors",
+        "diffusion": "LTX-2.3-dev-Q4_K_S.gguf",
         "lora": "ltx-2.3-22b-distilled-1.1_lora-dynamic_fro09_avg_rank_111_bf16.safetensors",
         "vae": "taeltx2_3.safetensors",
         "text_encoder": "gemma_3_12B_it_fp4_mixed.safetensors",

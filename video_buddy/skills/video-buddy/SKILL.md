@@ -14,7 +14,7 @@ Local ComfyUI video studio in this repo (`video_buddy/`). Package is `master_age
 - Local brief → storyboard → validate → render → judge → stitch on **this** machine
 - LTX 2.5 (`ltx25_*` / aliases `t2v_i2v`, `flf2v`, …), MiniMax H3 (`h3_*` / `fl2va` / `ref2va`), LTX 2.3 (`base` / `eros` / `directors` / `lipsync`), Wan 2.2, music video, fractal, Movie Builder
 - Drive or lint a Comfy API graph (`comfy run`)
-- Inventory-first weights: `inventory`, then `doctor` (no fetch), then `download-models --ltx25` or `--h3` if a slot is confirmed missing. `--scan-only` never fetches. 12GB: `VRAM_GB=12` and `FORCE_LOADER=gguf`. Fully local LLM: `LLM_PROVIDER=ollama`.
+- Inventory-first weights: `inventory`, then `doctor` (no fetch), then `download-models --ltx25` or `--h3` if a slot is confirmed missing. `--scan-only` never fetches. GGUF is the loader whenever a compatible file is on disk; fp8/bf16/EROS are fallbacks. 12GB: `VRAM_GB=12` and `FORCE_LOADER=gguf` (hides NVFP4/bf16 suggestions; does not block a lone bf16). Fully local LLM: `LLM_PROVIDER=ollama`.
 - Character → Flux sheet → LoRA (CCC)
 
 ## When NOT to use

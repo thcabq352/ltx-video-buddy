@@ -277,7 +277,7 @@ def check_ltx23_weights() -> dict[str, Any]:
         return _row(
             "ltx23-weights",
             True,
-            f"compatible {found.name} at {found} — not downloading official bf16/fp8",
+            f"GGUF-first {found.name} at {found} — fp8/EROS only if no GGUF matches",
         )
     return _row(
         "ltx23-weights",
