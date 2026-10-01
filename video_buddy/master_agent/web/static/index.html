@@ -310,7 +310,7 @@
           <div class="meter" id="c-budget-meter"><i id="c-budget-fill"></i></div>
         </div>
         <div style="display:flex;align-items:flex-end">
-          <button type="button" class="btn ghost sm" id="c-budget-reset">Reset used</button>
+          <button type="button" class="btn ghost sm" id="c-budget-reset" title="Clear used VRAM-min and continue a budget-paused generate">Reset used</button>
         </div>
       </div>
       <div class="muted" id="c-budget-pending">No scenes held for review.</div>
@@ -1691,16 +1691,31 @@ $("wf-run")?.addEventListener("click", async () => {
 })();
 
 // models
+function formatMissing(missing) {
+  if (Array.isArray(missing)) return missing.filter(Boolean).join(", ");
+  if (missing && typeof missing === "object") {
+    return Object.entries(missing)
+      .map(([slot, name]) => slot + ": " + name)
+      .join(", ");
+  }
+  return "";
+}
 async function loadModels() {
-  const m = await api("/api/models").catch(() => null);
-  if (!m) { $("models-body").innerHTML = '<span class="muted">failed to load</span>'; return; }
-  const bundles = Object.entries(m.bundles || {}).map(([k, v]) =>
-    `<tr><td>${esc(k)}</td><td>${v.runnable ? '<span class="score hi">runnable</span>' : '<span class="score lo">incomplete</span>'}</td>
-     <td class="muted">${esc((v.missing || []).join(", "))}</td></tr>`).join("");
-  const files = (m.files || []).map(f => `<tr><td>${esc(f.name)}</td>
-    <td>${f.size_gb} GB</td><td class="muted">${esc(f.dir)}</td></tr>`).join("");
-  $("models-body").innerHTML = `<b>Bundles</b><table>${bundles || '<tr><td class="muted">none</td></tr>'}</table>
-    <br><b>Files</b><table>${files || '<tr><td class="muted">none</td></tr>'}</table>`;
+  try {
+    const m = await api("/api/models").catch(() => null);
+    if (!m) { $("models-body").innerHTML = '<span class="muted">failed to load</span>'; return; }
+    const bundles = Object.entries(m.bundles || {}).map(([k, v]) =>
+      `<tr><td>${esc(k)}</td><td>${v.runnable ? '<span class="score hi">runnable</span>' : '<span class="score lo">incomplete</span>'}</td>
+       <td class="muted">${esc(formatMissing(v.missing))}</td></tr>`).join("");
+    const files = (m.files || []).map(f => `<tr><td>${esc(f.name)}</td>
+      <td>${f.size_gb} GB</td><td class="muted">${esc(f.dir)}</td></tr>`).join("");
+    $("models-body").innerHTML = `<b>Bundles</b><table>${bundles || '<tr><td class="muted">none</td></tr>'}</table>
+      <br><b>Files</b><table>${files || '<tr><td class="muted">none</td></tr>'}</table>`;
+  } catch (e) {
+    if ($("models-body")) {
+      $("models-body").innerHTML = '<span class="muted">failed to load</span>';
+    }
+  }
 }
 
 function bindDial(id, labelId) {
@@ -1749,9 +1764,10 @@ function paintControl(c) {
   if ($("c-budget-meter")) $("c-budget-meter").classList.toggle("hot", pct >= 90 || !!c.budget?.paused);
   const pending = c.budget?.pending || [];
   if ($("c-budget-pending")) {
-    $("c-budget-pending").textContent = pending.length
+    const held = pending.length
       ? ("Held for review: " + pending.map(p => p.id + " (" + Number(p.vram_min).toFixed(2) + " VRAM-min)").join(", "))
       : "No scenes held for review.";
+    $("c-budget-pending").textContent = c.resume_note ? (c.resume_note + " " + held) : held;
   }
   const fillSelect = (id, items, active) => {
     const el = $(id);

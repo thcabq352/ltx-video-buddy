@@ -882,7 +882,16 @@ def api_control_post(req: ControlUpdate):
     store = get_versioned_config()
     if updates:
         store.set_values(updates, session=session, sync_budget=True)
+    resume_note = ""
     if req.reset_budget:
         get_project_budget().reset_used()
         store.sync_used(0.0)
-    return _control_payload()
+        from master_agent.orchestrator.pipeline import resume_after_budget_clear
+
+        continued = resume_after_budget_clear()
+        if continued:
+            resume_note = "Continuing paused generate: " + ", ".join(continued)
+    payload = _control_payload()
+    if resume_note:
+        payload["resume_note"] = resume_note
+    return payload

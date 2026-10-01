@@ -1099,7 +1099,7 @@ def _weight_family(name: str) -> str:
     base = str(name or "").lower().replace("\\", "/").rsplit("/", 1)[-1]
     if not base:
         return ""
-    if any(tok in base for tok in ("ltx", "10eros", "taeltx", "gemma", "eros")):
+    if any(tok in base for tok in ("ltx", "10eros", "taeltx", "gemma", "eros", "sulphur")):
         return "ltx"
     if any(tok in base for tok in ("wan", "umt5", "lightx2v", "fusionx")):
         return "wan"
@@ -1600,6 +1600,51 @@ def _wire_h3_reference_media(workflow: dict[str, Any], values: dict[str, Any]) -
             inputs["prompt"] = inject_spoken_line(str(inputs.get("prompt") or ""), str(line))
 
 
+def _loader_name(path: Path) -> str:
+    from master_agent.comfy.loader_names import name_from_local_path
+
+    return name_from_local_path(path) or path.name
+
+
+def _prefer_on_disk_checkpoint(name: Optional[str], variant: str) -> Optional[str]:
+    """Point the checkpoint slot at a local LTX 2.3 GGUF when the literal is absent.
+
+    base / eros / directors only. An on-disk all-in-one (EROS, dev fp8) stays
+    put so VAE and text projection keep a real checkpoint. Lipsync and the
+    dev-fp8 render variants are not rewritten.
+    """
+    if not name or variant not in _LTX23_GGUF_VARIANTS:
+        return name
+    if resolve_model_path(name) is not None:
+        return name
+    from master_agent.models.weights import model_search_roots, resolve_ltx23_gguf
+
+    found = resolve_ltx23_gguf(variant, model_search_roots())
+    if found is None:
+        return name
+    return _loader_name(found)
+
+
+def _prefer_on_disk_text_encoder(name: Optional[str]) -> Optional[str]:
+    """Use a local ``*heretic*`` Gemma when the configured encoder file is absent."""
+    if not name or resolve_model_path(name) is not None:
+        return name
+    if "gemma" not in name.lower():
+        return name
+    from master_agent.models.weights import (
+        WEIGHT_FILES,
+        find_compatible_for_weight,
+        model_search_roots,
+    )
+
+    found = find_compatible_for_weight(
+        WEIGHT_FILES["text_encoder"], model_search_roots()
+    )
+    if found is None:
+        return name
+    return _loader_name(found)
+
+
 def load_and_patch_workflow(
     variant: str,
     *,
@@ -1726,8 +1771,9 @@ def load_and_patch_workflow(
         checkpoint = None
     else:
         checkpoint = resolve_checkpoint_name(preferred) if preferred else None
+        checkpoint = _prefer_on_disk_checkpoint(checkpoint, resolved_id or variant)
     lora = models.get("lora")
-    text_encoder = models.get("text_encoder")
+    text_encoder = _prefer_on_disk_text_encoder(models.get("text_encoder"))
     clip_l = models.get("clip_l")
     t5xxl = models.get("t5xxl")
     vae_name = models.get("vae")

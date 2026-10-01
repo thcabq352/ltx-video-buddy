@@ -100,6 +100,33 @@ class JobManager:
         """One-GPU-at-a-time lock shared with A2A / Hermes facade submits."""
         return self._run_gate
 
+    def resume_paused(self) -> list[str]:
+        """Continue in-memory generates that paused on the render budget.
+
+        The same job id stays in the registry so the studio poll keeps
+        watching it. Disk records for these run ids must not be resumed
+        again in this process.
+        """
+        with self._lock:
+            paused = [
+                job
+                for job in self._jobs.values()
+                if job.kind == "run"
+                and job.status == "paused"
+                and isinstance((job.result or {}).get("resume"), dict)
+            ]
+        resumed: list[str] = []
+        for job in paused:
+            resume = dict(job.result["resume"])
+            job.params = dict(job.params)
+            job.params["_resume"] = resume
+            job.status = "queued"
+            job.error = None
+            job.finished_at = None
+            threading.Thread(target=self._work, args=(job,), daemon=True).start()
+            resumed.append(str(resume.get("run_id") or job.id))
+        return resumed
+
     # ── workers ───────────────────────────────────────────
 
     def _work(self, job: Job) -> None:
@@ -254,6 +281,7 @@ class JobManager:
             video_name = client.upload_image(Path(p["video_path"]))
             print(f"uploaded video -> ComfyUI: {video_name}")
 
+        resume = p.get("_resume") if isinstance(p.get("_resume"), dict) else None
         result = run_pipeline(
             job.request,
             variant=p.get("variant"),
@@ -269,6 +297,7 @@ class JobManager:
             storyboard_mode=p.get("storyboard"),
             llm_panel=p.get("llm_panel"),
             client=client,
+            resume=resume,
         )
         d = result.to_dict()
         d.pop("messages", None)

@@ -6,6 +6,7 @@ Run: .venv/Scripts/python.exe -m unittest tests.test_web -v
 from __future__ import annotations
 
 import json
+import subprocess
 import unittest
 from pathlib import Path
 from tempfile import TemporaryDirectory
@@ -38,6 +39,13 @@ class TestStudioHtml(unittest.TestCase):
         self.assertIn("Drive Comfy from the CLI first", html)
         self.assertIn("/api/variants", html)
         self.assertIn("loadVariants", html)
+        self.assertIn("function formatMissing", html)
+        self.assertIn("formatMissing(v.missing)", html)
+        self.assertIn("Clear used VRAM-min and continue a budget-paused generate", html)
+
+    def test_models_tab_missing_renderer(self):
+        script = Path(__file__).resolve().parent / "test_models_tab_missing.js"
+        subprocess.check_call(["node", str(script)], cwd=script.parent)
 
 
 class TestHealth(unittest.TestCase):
@@ -392,6 +400,18 @@ class TestControlApi(unittest.TestCase):
                 self.assertEqual(p.status_code, 200)
                 hist = p.json()["history"]
                 self.assertTrue(any(h.get("key") == "learning_rate" and h.get("session") == "web-test" for h in hist))
+                with patch(
+                    "master_agent.orchestrator.pipeline.resume_after_budget_clear",
+                    return_value=["pipe-held"],
+                ):
+                    reset = client.post(
+                        "/api/control",
+                        json={"reset_budget": True, "session": "web-test"},
+                    )
+                self.assertEqual(reset.status_code, 200)
+                body = reset.json()
+                self.assertEqual(body["render_budget_used_vram_min"], 0)
+                self.assertIn("pipe-held", body.get("resume_note", ""))
         finally:
             (
                 cfg.JUDGE_STRICTNESS,
