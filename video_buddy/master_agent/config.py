@@ -59,6 +59,8 @@ OBJECT_INFO_CACHE = STATE_DIR / "object_info.json"
 # Model inventory output
 MODEL_INVENTORY_JSON = STATE_DIR / "model_inventory.json"
 
+# COMFY_MODE=managed|external and EXTERNAL_COMFY_ROOT: docs/MANAGED_COMFY.md.
+# external refuses comfy start/stop/restart. Pack downloads stay in MODELS_DIR.
 COMFYUI_URL = os.getenv("COMFYUI_URL", "http://127.0.0.1:8188").rstrip("/")
 COMFYUI_PORT = int(os.getenv("COMFYUI_PORT", "8188"))
 COMFYUI_OUTPUT_DIR = Path(

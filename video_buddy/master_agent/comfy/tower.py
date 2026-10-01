@@ -7,6 +7,9 @@ path are unchanged: they keep talking to whatever answers on ``COMFYUI_URL``.
 This module never runs ``comfy install`` or ``comfy update`` and never
 downloads models. ``comfy_mode=external`` (state file or ``COMFY_MODE``)
 refuses start, stop, and restart so a user-owned server is left alone.
+Managed start writes a Buddy-owned ``extra_model_paths.yaml`` under state
+and passes it with ``--extra-model-paths-config``. That file is not
+``comfy attach`` (WorkflowPatchPlan). See ``comfy/model_paths.py``.
 
 ``comfy attach`` in the CLI is still WorkflowPatchPlan. It is not this module.
 """
@@ -397,6 +400,7 @@ class ManagedComfyTower:
             "watching": _pid_alive(pid),
             "comfy_cli": resolve_comfy_cli(),
             "comfy_cli_present": comfy_cli_present(),
+            "extra_model_paths": str((st.extra or {}).get("extra_model_paths") or ""),
         }
 
     def _launch_args(self, extra_model_paths: Path | None) -> list[str]:
@@ -414,7 +418,7 @@ class ManagedComfyTower:
             emp = Path(extra_model_paths)
             if not emp.is_file():
                 raise TowerError(f"extra_model_paths not found: {emp}")
-            # ComfyUI flag, so it stays after `--`. Buddy does not write the file.
+            # ComfyUI flag, so it stays after `--`. This function only forwards the path.
             args.extend(["--extra-model-paths-config", str(emp)])
         return args
 
@@ -425,6 +429,42 @@ class ManagedComfyTower:
             workspace=self.workspace,
             timeout=300.0,
         )
+
+    def _remember_yaml(self, path: Path) -> None:
+        st = load_state()
+        extra = dict(st.extra or {})
+        extra["extra_model_paths"] = str(path)
+        self._sync_state(extra=extra)
+
+    def _yaml_for_launch(self, explicit: Path | None) -> Path:
+        """Buddy-owned YAML, or an existing file the caller already has.
+
+        Does not write into an attached Comfy tree.
+        """
+        from master_agent.comfy.model_paths import ModelPathsError, write_extra_model_paths
+
+        try:
+            if explicit is not None:
+                emp = Path(explicit).expanduser()
+                if not emp.is_file():
+                    raise TowerError(f"extra_model_paths not found: {emp}")
+                resolved = emp.resolve()
+            else:
+                resolved = write_extra_model_paths(directory=state_path().parent)
+        except ModelPathsError as exc:
+            raise TowerError(str(exc)) from exc
+        self._remember_yaml(resolved)
+        return resolved
+
+    def _maybe_write_external_yaml(self, enabled: bool, source: Path | None) -> Path | None:
+        if not enabled:
+            return None
+        from master_agent.comfy.model_paths import ModelPathsError, write_external_yaml_copy
+
+        try:
+            return write_external_yaml_copy(source)
+        except ModelPathsError as exc:
+            raise TowerError(str(exc)) from exc
 
     def start_watchdog(self) -> int | None:
         """Spawn a detached watchdog so crash recovery outlives ``comfy start``.
@@ -475,12 +515,19 @@ class ManagedComfyTower:
         extra_model_paths: Path | None = None,
         wait: bool = True,
         watch: bool = True,
+        write_yaml_into_external: bool = False,
     ) -> dict[str, Any]:
         """Launch managed Comfy in the background and optionally wait until ready.
 
         A server that is already answering, and that this module did not mark
         ``want_running``, is treated as foreign and left untouched.
+
+        The Buddy-owned model-paths YAML is written even when launch is then
+        refused (external mode), so the operator still has a snippet. The
+        attached tree is touched only when ``write_yaml_into_external`` is set.
         """
+        yaml_path = self._yaml_for_launch(extra_model_paths)
+        external_yaml = self._maybe_write_external_yaml(write_yaml_into_external, yaml_path)
         self._require_managed("start")
         launched = False
         with _LOCK:
@@ -502,7 +549,7 @@ class ManagedComfyTower:
                 )
             else:
                 try:
-                    self._launch(extra_model_paths)
+                    self._launch(yaml_path)
                 except TowerError as exc:
                     self._sync_state(want_running=False, last_error=str(exc))
                     raise
@@ -540,6 +587,8 @@ class ManagedComfyTower:
             "base_url": self.base_url,
             "workspace": str(self.workspace),
             "ready": ready,
+            "extra_model_paths": str(yaml_path),
+            "external_yaml": str(external_yaml or ""),
         }
 
     def stop(self) -> dict[str, Any]:
@@ -568,14 +617,30 @@ class ManagedComfyTower:
             "workspace": str(self.workspace),
         }
 
-    def restart(self, *, wait: bool = True, watch: bool = True) -> dict[str, Any]:
+    def restart(
+        self,
+        *,
+        extra_model_paths: Path | None = None,
+        wait: bool = True,
+        watch: bool = True,
+        write_yaml_into_external: bool = False,
+    ) -> dict[str, Any]:
         """Stop, then start. Increments ``restart_count`` after a successful start."""
+        yaml_path = self._yaml_for_launch(extra_model_paths)
+        external_yaml = self._maybe_write_external_yaml(write_yaml_into_external, yaml_path)
         self._require_managed("restart")
         try:
             self.stop()
         except TowerError as exc:
             log.warning("stop before restart: %s", exc)
-        result = self.start(wait=wait, watch=watch)
+        result = self.start(
+            extra_model_paths=yaml_path,
+            wait=wait,
+            watch=watch,
+            write_yaml_into_external=False,
+        )
+        if external_yaml is not None:
+            result["external_yaml"] = str(external_yaml)
         st = load_state()
         self._sync_state(restart_count=int(st.restart_count) + 1)
         result["status"] = "restarted"
@@ -600,7 +665,7 @@ class ManagedComfyTower:
             if not st.want_running or effective_mode(st) != "managed":
                 return {"status": "aborted", "base_url": self.base_url}
             try:
-                self._launch()
+                self._launch(self._yaml_for_launch(None))
             except TowerError as exc:
                 self._sync_state(last_error=str(exc))
                 raise
@@ -686,6 +751,7 @@ def cmd_tower(args: Any) -> int:
     no_wait = bool(getattr(args, "no_wait", False))
     no_watch = bool(getattr(args, "no_watch", False))
     extra = getattr(args, "extra_model_paths", None)
+    write_into_external = bool(getattr(args, "write_yaml_into_external", False))
 
     try:
         chosen_port = int(port) if port else None
@@ -702,23 +768,43 @@ def cmd_tower(args: Any) -> int:
         base_url=base_url,
     )
 
+    from master_agent.comfy.model_paths import ModelPathsError
+
     try:
+        if write_into_external and command not in {"status", "start", "restart"}:
+            print("FAIL  --write-yaml-into-external is only valid with status, start, or restart")
+            return 2
         if command == "status":
+            from master_agent.comfy.model_paths import (
+                write_external_yaml_copy,
+                write_extra_model_paths,
+            )
+
+            buddy_yaml = write_extra_model_paths(directory=state_path().parent)
             result = tower.status()
+            result["extra_model_paths"] = str(buddy_yaml)
+            if write_into_external:
+                result["external_yaml"] = str(write_external_yaml_copy(buddy_yaml))
         elif command == "start":
             result = tower.start(
                 extra_model_paths=Path(extra) if extra else None,
                 wait=not no_wait,
                 watch=not no_watch,
+                write_yaml_into_external=write_into_external,
             )
         elif command == "stop":
             result = tower.stop()
         elif command == "restart":
-            result = tower.restart(wait=not no_wait, watch=not no_watch)
+            result = tower.restart(
+                extra_model_paths=Path(extra) if extra else None,
+                wait=not no_wait,
+                watch=not no_watch,
+                write_yaml_into_external=write_into_external,
+            )
         else:
             print(f"FAIL  unknown comfy tower command: {command!r}")
             return 2
-    except TowerError as exc:
+    except (TowerError, ModelPathsError) as exc:
         print(f"FAIL  {exc}")
         return 1
 
@@ -738,6 +824,10 @@ def cmd_tower(args: Any) -> int:
             print(f"      workspace={result['workspace']}")
         if result.get("mode") or result.get("comfy_mode"):
             print(f"      comfy_mode={result.get('comfy_mode') or result.get('mode')}")
+        if result.get("extra_model_paths"):
+            print(f"      extra_model_paths={result['extra_model_paths']}")
+        if result.get("external_yaml"):
+            print(f"      external_yaml={result['external_yaml']}")
         if result.get("detail"):
             print(f"      {result['detail']}")
         if result.get("last_error"):

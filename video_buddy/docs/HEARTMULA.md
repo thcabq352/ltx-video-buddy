@@ -174,7 +174,7 @@ Same schema id: `buddy.clip.provenance/v1`. Optional `params.heartmula` when lyr
 
 | Variable | Role |
 |---|---|
-| `HEARTMULA_MODELS_DIR` | Checkpoint root (default `MODELS_DIR/heartmula`) |
+| `HEARTMULA_MODELS_DIR` | Checkpoint root (default `MODELS_DIR/heartmula`). Must stay inside `MODELS_DIR`; pack pulls will not write an attached Comfy tree. |
 | `HEARTMULA_MULA_REPO` | One of the three attested 3B ids |
 | `HEARTMULA_CODEC_REPO` | `HeartMuLa/HeartCodec-oss-20260123` only |
 | `HEARTMULA_TRANSCRIPTOR_REPO` | `HeartMuLa/HeartTranscriptor-oss` |

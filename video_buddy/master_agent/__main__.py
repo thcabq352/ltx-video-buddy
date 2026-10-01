@@ -2474,7 +2474,17 @@ def main(argv: list[str] | None = None) -> int:
         "--extra-model-paths",
         dest="extra_model_paths",
         default=None,
-        help="existing YAML passed to ComfyUI after -- (start/restart). Not written here.",
+        help="existing YAML passed to ComfyUI after -- (start/restart). "
+        "When omitted, Buddy writes state/extra_model_paths.yaml and passes that. "
+        "Does not write into an attached install.",
+    )
+    p.add_argument(
+        "--write-yaml-into-external",
+        dest="write_yaml_into_external",
+        action="store_true",
+        help="status/start/restart: also copy extra_model_paths.yaml into the "
+        "attached Comfy root (EXTERNAL_COMFY_ROOT or COMFYUI_ROOT). "
+        "Off by default. Never writes weight files.",
     )
     p.add_argument(
         "--no-wait",
