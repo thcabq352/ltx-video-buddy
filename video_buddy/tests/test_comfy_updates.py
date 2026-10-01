@@ -28,7 +28,7 @@ from master_agent.setup import check_pack_pins, fix, print_report, snapshot
 
 def _git(repo: Path, sha: str) -> None:
     git = repo / ".git"
-    (git / "refs" / "heads").mkdir(parents=True)
+    (git / "refs" / "heads").mkdir(parents=True, exist_ok=True)
     (git / "HEAD").write_text("ref: refs/heads/main\n", encoding="utf-8")
     (git / "refs" / "heads" / "main").write_text(sha + "\n", encoding="utf-8")
 
@@ -142,13 +142,14 @@ def test_commit_pin_yes_does_not_update_until_nodes_flag(tmp_path: Path, quiet_c
     held = apply_update(yes=True, workspace=ws)
     assert held["updated"] is False
     assert calls == []
-    assert "keep.safetensors" in str(ws)
+    assert (ws / "models" / "checkpoints" / "keep.safetensors").read_bytes() == b"weight"
 
     moved = apply_update(yes=True, nodes=True, workspace=ws)
     assert moved["updated"] is True
     assert calls[0][:2] == ["node", "save-snapshot"]
     assert calls[1] == ["node", "update", "all"]
-    assert "save-snapshot" in Path(moved["snapshot"]).name
+    assert Path(moved["snapshot"]).name.startswith("pre-update-")
+    assert Path(moved["snapshot"]).is_file()
     assert SNAPSHOT_NOTE in "\n".join(moved["lines"])
     assert (ws / "models" / "checkpoints" / "keep.safetensors").read_bytes() == b"weight"
     assert "wipe_version" not in Path(updates.__file__).read_text(encoding="utf-8")
