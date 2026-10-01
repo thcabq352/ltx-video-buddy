@@ -1075,6 +1075,64 @@ h3_r2v:
     seed: { class_type: KSampler, index: 0, input: seed }
     frames: { class_type: MiniMaxH3ReferenceToVideo, index: 0, input: length }
 
+# --- Sulphur LTX 2.3 studio pack ---
+# Runtime files are API graphs. UI sources live in workflows/sulphur/ and are
+# not manifest slugs (the linter rejects UI format). LoRA weights stay on
+# the tower. No lora field: do not spray a bundle name over graph tokens.
+# Prompt / size widgets are linked; master_agent.comfy.sulphur writes scalars.
+
+ltx23_i2v_base:
+  file: sulphur/ltx23_i2v_base_api.json
+  format: api
+  description: >
+    LTX 2.3 Sulphur image-to-video, base two-stage. Local LoRA weights stay
+    on the tower. Not a download pack.
+  vram_class: heavy
+  vram_peak_gb: 14.8
+  safer_alternate: base
+  fields:
+    filename_prefix: { class_type: SaveVideo, index: 0, input: filename_prefix }
+    seed: { class_type: RandomNoise, index: 0, input: noise_seed }
+
+ltx23_i2v_distilled:
+  file: sulphur/ltx23_i2v_distilled.json
+  format: api
+  description: >
+    LTX 2.3 Sulphur image-to-video, distilled API graph from the tower.
+    Local LoRA weights stay on the tower. Not a download pack.
+  vram_class: heavy
+  vram_peak_gb: 14.8
+  safer_alternate: base
+  fields:
+    filename_prefix: { class_type: SaveVideo, index: 0, input: filename_prefix }
+    seed: { class_type: RandomNoise, index: 0, input: noise_seed }
+
+ltx23_t2v_base:
+  file: sulphur/ltx23_t2v_base_api.json
+  format: api
+  description: >
+    LTX 2.3 Sulphur text-to-video, base two-stage. Local LoRA weights stay
+    on the tower. Not a download pack.
+  vram_class: heavy
+  vram_peak_gb: 14.8
+  safer_alternate: base
+  fields:
+    filename_prefix: { class_type: SaveVideo, index: 0, input: filename_prefix }
+    seed: { class_type: RandomNoise, index: 0, input: noise_seed }
+
+ltx23_t2v_distilled:
+  file: sulphur/ltx23_t2v_distilled_api.json
+  format: api
+  description: >
+    LTX 2.3 Sulphur text-to-video, distilled two-stage. Local LoRA weights
+    stay on the tower. Not a download pack.
+  vram_class: heavy
+  vram_peak_gb: 14.8
+  safer_alternate: base
+  fields:
+    filename_prefix: { class_type: SaveVideo, index: 0, input: filename_prefix }
+    seed: { class_type: RandomNoise, index: 0, input: noise_seed }
+
 # --- Seedance 2.5 Draft (Pack C field-shape record, not executable) ---
 # Local-only is a hard requirement. No ``file:`` key on purpose. A path
 # here would enter WORKFLOW_FILES once the JSON existed. Generate on

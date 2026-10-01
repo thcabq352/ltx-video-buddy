@@ -294,6 +294,10 @@ VARIANT_GEN: dict[str, dict[str, int]] = {
     "ltx25_t2a": {"fps": 24, "frame_snap": 8},
     "ltx23_inoutpaint": {"fps": 24, "frame_snap": 8},
     "ltx25_inoutpaint": {"fps": 24, "frame_snap": 8},
+    "ltx23_i2v_base": {"fps": 24, "frame_snap": 8},
+    "ltx23_i2v_distilled": {"fps": 24, "frame_snap": 8},
+    "ltx23_t2v_base": {"fps": 24, "frame_snap": 8},
+    "ltx23_t2v_distilled": {"fps": 24, "frame_snap": 8},
     "h3_t2v": {"fps": 24, "frame_snap": 17},
     "h3_i2v": {"fps": 24, "frame_snap": 17},
     "h3_flf": {"fps": 24, "frame_snap": 17},
@@ -617,6 +621,10 @@ _WORKFLOW_FILE_SEEDS: dict[str, str] = {
     "h3_i2v": "minimax-h3/MiniMax-H3_I2V_FL2VA_api.json",
     "h3_flf": "minimax-h3/MiniMax-H3_FLF_FL2VA_api.json",
     "h3_r2v": "minimax-h3/MiniMax-H3_R2V_REF2VA_api.json",
+    "ltx23_i2v_base": "sulphur/ltx23_i2v_base_api.json",
+    "ltx23_i2v_distilled": "sulphur/ltx23_i2v_distilled.json",
+    "ltx23_t2v_base": "sulphur/ltx23_t2v_base_api.json",
+    "ltx23_t2v_distilled": "sulphur/ltx23_t2v_distilled_api.json",
 }
 
 
