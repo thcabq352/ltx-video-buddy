@@ -43,4 +43,5 @@ jobs:
             video_buddy/tests/test_heartmula.py \
             video_buddy/tests/test_sulphur_workflows.py \
             video_buddy/tests/test_managed_comfy_tower.py \
-            video_buddy/tests/test_model_paths.py
+            video_buddy/tests/test_model_paths.py \
+            video_buddy/tests/test_model_selector.py

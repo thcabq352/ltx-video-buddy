@@ -18,6 +18,8 @@ Commands:
   download-flux       One-time Flux fp8 weights download (~17GB)
   inventory           List discovered weights (paths + roles) before doctor
   download-models     Scan packs; --scan-only / --use-existing / --download; --yes to fetch
+  models manifest     Print the capability-grouped selector catalog
+  models select       LTX 2.3|2.5 checklist, totals, disk gate, Soundtrack Studio
   setup | doctor      Scan deps + weights (--fix-models after inventory; --scan-only never fetches)
   workflows           List default catalog variants (no env flags)
   comfy run           Drive ComfyUI from the CLI (prepare + lint + queue)
@@ -363,6 +365,13 @@ def cmd_run(args: argparse.Namespace) -> int:
             print("known default catalog:")
             for vid in default_variant_ids():
                 print(f"  {vid}")
+            return 2
+
+        from master_agent.models.selector import job_version_block
+
+        blocked = job_version_block(args.variant)
+        if blocked:
+            print(f"FAIL  {blocked}")
             return 2
 
     attach_recipe = None
@@ -1274,6 +1283,12 @@ def cmd_heartmula(args: argparse.Namespace) -> int:
 
 def cmd_download_models(args: argparse.Namespace) -> int:
     """Scan first; download missing weights only after consent."""
+    if getattr(args, "selector", False):
+        from master_agent.models.selector import cmd_models_select
+
+        if getattr(args, "heartmula", False):
+            args.soundtrack = True
+        return cmd_models_select(args)
     from master_agent.setup import print_inventory_preamble
 
     print_inventory_preamble()
@@ -1903,6 +1918,67 @@ def cmd_comfy(args: argparse.Namespace) -> int:
     return 0
 
 
+def cmd_models_manifest(args: argparse.Namespace) -> int:
+    from master_agent.models.selector import cmd_models_manifest as _manifest
+
+    return _manifest(args)
+
+
+def cmd_models_select(args: argparse.Namespace) -> int:
+    from master_agent.models.selector import cmd_models_select as _select
+
+    return _select(args)
+
+
+def _add_selector_flags(parser: argparse.ArgumentParser, *, include_optional: bool = True) -> None:
+    """Flags shared by ``models select`` and ``download-models --selector``.
+
+    ``download-models`` already uses ``--optional`` as a store_true for the
+    pack fetch. That parser omits the selector's repeatable ``--optional``
+    and treats its existing flag as ``--all-optional`` when ``--selector`` is set.
+    """
+    parser.add_argument(
+        "--version",
+        dest="ltx_version",
+        choices=["2.3", "2.5"],
+        help="LTX radio. Swaps the whole video-generation checklist.",
+    )
+    if include_optional:
+        parser.add_argument(
+            "--optional",
+            action="append",
+            default=None,
+            help="optional row id (repeatable, or comma-separated). Required rows stay on.",
+        )
+    parser.add_argument(
+        "--all-optional",
+        action="store_true",
+        help="select every optional video row for the chosen version",
+    )
+    parser.add_argument(
+        "--soundtrack",
+        action="store_true",
+        help="Enable Soundtrack Studio (existing download-models --heartmula consent path)",
+    )
+    parser.add_argument(
+        "--mbps",
+        type=float,
+        default=50.0,
+        help="assumed link speed in megabits/s for the download ETA (default 50)",
+    )
+    switch = parser.add_mutually_exclusive_group()
+    switch.add_argument(
+        "--keep",
+        action="store_true",
+        help="when switching versions, keep the previous pack on disk",
+    )
+    switch.add_argument(
+        "--wipe",
+        action="store_true",
+        help="when switching versions, delete the previous pack under MODELS_DIR",
+    )
+
+
 def main(argv: list[str] | None = None) -> int:
     # Windows console is cp1252 — never crash on LLM-emitted unicode (e.g. →)
     for stream in (sys.stdout, sys.stderr):
@@ -2379,7 +2455,34 @@ def main(argv: list[str] | None = None) -> int:
     fetch.add_argument("--scan-only", action="store_true", help="inventory and report only; never fetch (overrides --yes)")
     fetch.add_argument("--use-existing", action="store_true", help="keep whatever is on disk; do not download")
     fetch.add_argument("--download", action="store_true", help="fetch confirmed-missing files after --yes or a y/n prompt")
+    p.add_argument(
+        "--selector",
+        action="store_true",
+        help="open the LTX 2.3|2.5 model selector instead of a pack scan",
+    )
+    _add_selector_flags(p, include_optional=False)
     p.set_defaults(func=cmd_download_models)
+
+    p = sub.add_parser(
+        "models",
+        help="model selector: manifest | select (LTX 2.3|2.5 checklist; no comfy install)",
+    )
+    models_sub = p.add_subparsers(dest="models_command", required=True)
+    manifest_p = models_sub.add_parser("manifest", help="print the capability-grouped catalog JSON")
+    manifest_p.set_defaults(func=cmd_models_manifest)
+    select_p = models_sub.add_parser(
+        "select",
+        help="radio 2.3|2.5, required and optional rows, running total, disk gate",
+    )
+    _add_selector_flags(select_p)
+    select_p.add_argument("--yes", action="store_true", help="consent: download the selected missing set")
+    select_p.add_argument("--json", action="store_true")
+    select_p.add_argument(
+        "--scan-only",
+        action="store_true",
+        help="print the checklist only; do not download or write selector state",
+    )
+    select_p.set_defaults(func=cmd_models_select)
 
     p = sub.add_parser("character", help="CCC stage: create | list")
     p.add_argument("character_command", choices=["create", "list"])

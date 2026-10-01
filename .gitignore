@@ -41,6 +41,7 @@ video_buddy/outputs/**
 video_buddy/ComfyUI_windows_portable/
 video_buddy/ComfyUI/
 video_buddy/state/managed_comfy.json
+video_buddy/state/model_selector.json
 video_buddy/state/extra_model_paths.yaml
 video_buddy/ai-toolkit/
 video_buddy/blender-*/

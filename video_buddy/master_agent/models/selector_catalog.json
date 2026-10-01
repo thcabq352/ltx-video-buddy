@@ -1,0 +1,490 @@
+{
+  "schema": "buddy.model_selector/v1",
+  "group_by": "capability",
+  "eta_mbps_default": 50.0,
+  "versions": [
+    "2.3",
+    "2.5"
+  ],
+  "capabilities": [
+    {
+      "id": "video_generation",
+      "label": "Video generation",
+      "note": "The 2.3 / 2.5 radio swaps this checklist.",
+      "models": [
+        {
+          "id": "ltx23.diffusion",
+          "label": "LTX-2.3-22B-distilled-1.1-Q4_K_S.gguf",
+          "filename": "LTX-2.3-22B-distilled-1.1-Q4_K_S.gguf",
+          "accepts": [
+            "LTX-2.3-22B-distilled-1.1-Q4_K_S.gguf",
+            "ltx-2.3-22b-distilled-Q3_K_S.gguf",
+            "LTX-2.3-distilled-Q3_K_S.gguf",
+            "sulphur_dev-Q3_K_S.gguf",
+            "LTX-2.3-dev-Q4_K_S.gguf",
+            "ltx-2.3-22b-dev-fp8.safetensors",
+            "LTX2.3_DISTILLED-1.1_BAKED_LTX_10Eros_v14_r768.safetensors"
+          ],
+          "size_bytes": null,
+          "required": true,
+          "package": "ltx23_core",
+          "version": "2.3",
+          "capability": "video_generation",
+          "downloadable": false,
+          "weight_key": null,
+          "local_only": false,
+          "note": "LTX 2.3 diffusion. A local GGUF alias, the dev fp8 checkpoint, or the EROS all-in-one counts as already on disk. Byte size is not attested here, so this row is not fetched.",
+          "size_label": "size not attested",
+          "required_label": "required for generation",
+          "locked": true
+        },
+        {
+          "id": "ltx23.text_encoder",
+          "label": "gemma_3_12B_it_fp4_mixed.safetensors",
+          "filename": "gemma_3_12B_it_fp4_mixed.safetensors",
+          "accepts": [
+            "gemma_3_12B_it_fp4_mixed.safetensors",
+            "gemma_3_12B_it_fp8_scaled.safetensors"
+          ],
+          "size_bytes": null,
+          "required": true,
+          "package": "ltx23_core",
+          "version": "2.3",
+          "capability": "video_generation",
+          "downloadable": false,
+          "weight_key": null,
+          "local_only": false,
+          "note": "Gemma text encoder used by the LTX 2.3 graphs. A heretic Gemma encoder already on disk also counts. Byte size is not attested here, so this row is not fetched.",
+          "size_label": "size not attested",
+          "required_label": "required for generation",
+          "locked": true
+        },
+        {
+          "id": "ltx23.vae",
+          "label": "taeltx2_3.safetensors",
+          "filename": "taeltx2_3.safetensors",
+          "accepts": [
+            "taeltx2_3.safetensors",
+            "LTX23_video_vae_bf16.safetensors"
+          ],
+          "size_bytes": null,
+          "required": true,
+          "package": "ltx23_core",
+          "version": "2.3",
+          "capability": "video_generation",
+          "downloadable": false,
+          "weight_key": null,
+          "local_only": false,
+          "note": "LTX 2.3 video VAE. Byte size is not attested here, so this row is not fetched.",
+          "size_label": "size not attested",
+          "required_label": "required for generation",
+          "locked": true
+        },
+        {
+          "id": "ltx23.upscaler",
+          "label": "ltx-2.3-spatial-upscaler-x2-1.1.safetensors",
+          "filename": "ltx-2.3-spatial-upscaler-x2-1.1.safetensors",
+          "accepts": [
+            "ltx-2.3-spatial-upscaler-x2-1.1.safetensors",
+            "ltx-2.3-spatial-upscaler-x2-1.0.safetensors"
+          ],
+          "size_bytes": null,
+          "required": false,
+          "package": "latent_upscaler",
+          "version": "2.3",
+          "capability": "video_generation",
+          "downloadable": false,
+          "weight_key": null,
+          "local_only": false,
+          "note": "Optional spatial upscaler. Scan only.",
+          "size_label": "size not attested",
+          "required_label": "",
+          "locked": false
+        },
+        {
+          "id": "ltx23.distilled_lora",
+          "label": "ltx-2.3-22b-distilled-lora-384-1.1.safetensors",
+          "filename": "ltx-2.3-22b-distilled-lora-384-1.1.safetensors",
+          "accepts": [
+            "ltx-2.3-22b-distilled-lora-384-1.1.safetensors",
+            "ltx-2.3-22b-distilled-lora-384.safetensors"
+          ],
+          "size_bytes": null,
+          "required": false,
+          "package": "distilled_lora",
+          "version": "2.3",
+          "capability": "video_generation",
+          "downloadable": false,
+          "weight_key": null,
+          "local_only": false,
+          "note": "Optional distilled LoRA. Scan only.",
+          "size_label": "size not attested",
+          "required_label": "",
+          "locked": false
+        },
+        {
+          "id": "ltx23.inoutpaint_lora",
+          "label": "ltx-2.3-22b-ic-lora-in-outpainting-0.9.safetensors",
+          "filename": "ltx-2.3-22b-ic-lora-in-outpainting-0.9.safetensors",
+          "accepts": [
+            "ltx-2.3-22b-ic-lora-in-outpainting-0.9.safetensors"
+          ],
+          "size_bytes": 1310000000,
+          "required": false,
+          "package": "inoutpaint",
+          "version": "2.3",
+          "capability": "video_generation",
+          "downloadable": false,
+          "weight_key": null,
+          "local_only": false,
+          "note": "Optional In-Outpainting IC-LoRA, about 1.31 GB. Doctor does not download it; the selector does not either.",
+          "size_label": "1.3 GB",
+          "required_label": "",
+          "locked": false
+        },
+        {
+          "id": "ltx25.transformer",
+          "label": "ltx-2.5-22b-distilled-transformer-bf16.safetensors",
+          "filename": "ltx-2.5-22b-distilled-transformer-bf16.safetensors",
+          "accepts": [
+            "ltx-2.5-22b-distilled-transformer-bf16-Q4_K_M.gguf",
+            "ltx-2.5-22b-distilled-transformer-nvfp4.safetensors",
+            "ltx-2.5-22b-distilled-transformer-comfy-int8-convrot.safetensors",
+            "ltx-2.5-22b-distilled-transformer-bf16.safetensors",
+            "ltx-2.5-22b-distilled.safetensors"
+          ],
+          "size_bytes": 42000000000,
+          "required": true,
+          "package": "ltx25_core",
+          "version": "2.5",
+          "capability": "video_generation",
+          "downloadable": true,
+          "weight_key": "transformer",
+          "local_only": false,
+          "note": "Official distilled transformer (bf16, 42 GB). Loader prefers on-disk GGUF Q4, then NVFP4 / int8; bf16 is the fallback.",
+          "size_label": "42.0 GB",
+          "required_label": "required for generation",
+          "locked": true
+        },
+        {
+          "id": "ltx25.text_encoder",
+          "label": "gemma4-12b-with-proj-ltx-2.5-bf16.safetensors",
+          "filename": "gemma4-12b-with-proj-ltx-2.5-bf16.safetensors",
+          "accepts": [
+            "gemma4-12b-heretic-ltx25-int8convrot.safetensors",
+            "gemma4-12b-with-proj-ltx-2.5-comfy-int8-convrot.safetensors",
+            "gemma4-12b-with-proj-ltx-2.5-bf16.safetensors"
+          ],
+          "size_bytes": 26300000000,
+          "required": true,
+          "package": "ltx25_core",
+          "version": "2.5",
+          "capability": "video_generation",
+          "downloadable": true,
+          "weight_key": "text_encoder",
+          "local_only": false,
+          "note": "Official Gemma 4 12B + LTX 2.5 projection (bf16, 26.3 GB). Comfy int8 or heretic int8 also count.",
+          "size_label": "26.3 GB",
+          "required_label": "required for generation",
+          "locked": true
+        },
+        {
+          "id": "ltx25.video_vae",
+          "label": "ltx-2.5-video-vae-bf16.safetensors",
+          "filename": "ltx-2.5-video-vae-bf16.safetensors",
+          "accepts": [
+            "ltx-2.5-video-vae-bf16.safetensors",
+            "ltx-2.5-video-vae-conv-bf16.safetensors"
+          ],
+          "size_bytes": 1500000000,
+          "required": true,
+          "package": "ltx25_core",
+          "version": "2.5",
+          "capability": "video_generation",
+          "downloadable": true,
+          "weight_key": "video_vae",
+          "local_only": false,
+          "note": "Video VAE (bf16). The conv-bf16 variant also counts.",
+          "size_label": "1.5 GB",
+          "required_label": "required for generation",
+          "locked": true
+        },
+        {
+          "id": "ltx25.audio_vae",
+          "label": "ltx-2.5-audio-vae-bf16.safetensors",
+          "filename": "ltx-2.5-audio-vae-bf16.safetensors",
+          "accepts": [
+            "ltx-2.5-audio-vae-bf16.safetensors"
+          ],
+          "size_bytes": 365000000,
+          "required": true,
+          "package": "ltx25_core",
+          "version": "2.5",
+          "capability": "video_generation",
+          "downloadable": true,
+          "weight_key": "audio_vae",
+          "local_only": false,
+          "note": "Audio VAE (bf16). Required for T2A / A2V and AV joint graphs.",
+          "size_label": "365 MB",
+          "required_label": "required for generation",
+          "locked": true
+        },
+        {
+          "id": "ltx25.spatial_upscaler",
+          "label": "ltx-2.5-latent-spatial-upscaler-x2-bf16-1.0.safetensors",
+          "filename": "ltx-2.5-latent-spatial-upscaler-x2-bf16-1.0.safetensors",
+          "accepts": [
+            "ltx-2.5-latent-spatial-upscaler-x2-bf16-1.0.safetensors"
+          ],
+          "size_bytes": 996000000,
+          "required": true,
+          "package": "ltx25_core",
+          "version": "2.5",
+          "capability": "video_generation",
+          "downloadable": true,
+          "weight_key": "spatial_upscaler",
+          "local_only": false,
+          "note": "2\u00d7 latent spatial upscaler \u2014 official pack (required for two-stage; part of the Hub split).",
+          "size_label": "996 MB",
+          "required_label": "required for generation",
+          "locked": true
+        },
+        {
+          "id": "ltx25.duration_head",
+          "label": "ltx-2.5-duration-head-bf16.safetensors",
+          "filename": "ltx-2.5-duration-head-bf16.safetensors",
+          "accepts": [
+            "ltx-2.5-duration-head-bf16.safetensors"
+          ],
+          "size_bytes": 3800000,
+          "required": false,
+          "package": "duration_head",
+          "version": "2.5",
+          "capability": "video_generation",
+          "downloadable": true,
+          "weight_key": "duration_head",
+          "local_only": false,
+          "note": "Optional duration-head model patch (3.8 MB). No shipped LTX 2.5 graph loads it. Zero-byte placeholders still count as not present.",
+          "size_label": "4 MB",
+          "required_label": "",
+          "locked": false
+        },
+        {
+          "id": "ltx25.text_enhancer",
+          "label": "gemma4_e2b_it_bf16.safetensors",
+          "filename": "gemma4_e2b_it_bf16.safetensors",
+          "accepts": [
+            "gemma4_e2b_it_bf16.safetensors"
+          ],
+          "size_bytes": 10300000000,
+          "required": false,
+          "package": "text_enhancer",
+          "version": "2.5",
+          "capability": "video_generation",
+          "downloadable": true,
+          "weight_key": "text_enhancer",
+          "local_only": false,
+          "note": "Optional LTX 2.5 text-enhancer CLIP. When absent, the enhancer CLIPLoader is retargeted at the resolved Gemma TE.",
+          "size_label": "10.3 GB",
+          "required_label": "",
+          "locked": false
+        },
+        {
+          "id": "ltx25.ic_lora",
+          "label": "ltx-2.5-22b-ic-lora-ingredients-0.9.safetensors",
+          "filename": "ltx-2.5-22b-ic-lora-ingredients-0.9.safetensors",
+          "accepts": [
+            "ltx-2.5-22b-ic-lora-ingredients-0.9.safetensors",
+            "ltx-2.5-22b-ic-lora-pixel-spatial-upscaler-x2-1.0.safetensors",
+            "ltx-2.5-ic-lora.safetensors",
+            "ltx-2.5-msr.safetensors",
+            "ltx-2.3-22b-ic-lora-ingredients-0.9.safetensors",
+            "ltx-2.3-22b-ic-lora-deblur-0.9.safetensors"
+          ],
+          "size_bytes": 1310000000,
+          "required": false,
+          "package": "ic_lora",
+          "version": "2.5",
+          "capability": "video_generation",
+          "downloadable": true,
+          "weight_key": "ic_lora",
+          "local_only": false,
+          "note": "Official IC-LoRA Ingredients (~1.31 GB) for ltx25_msr and ltx25_v2v_ic_lora. Comfy's LTXICLoRALoaderModelOnly reads models/loras/. A pixel-spatial IC-LoRA in that folder also satisfies the slot scan, but those two graphs still name the Ingredients file.",
+          "size_label": "1.3 GB",
+          "required_label": "",
+          "locked": false
+        },
+        {
+          "id": "ltx25.distilled_lora",
+          "label": "ltx-2.5-22b-distilled-lora-450-bf16.safetensors",
+          "filename": "ltx-2.5-22b-distilled-lora-450-bf16.safetensors",
+          "accepts": [
+            "ltx-2.5-22b-distilled-lora-450-bf16.safetensors"
+          ],
+          "size_bytes": 8900000000,
+          "required": false,
+          "package": "distilled_lora",
+          "version": "2.5",
+          "capability": "video_generation",
+          "downloadable": true,
+          "weight_key": "distilled_lora",
+          "local_only": false,
+          "note": "Optional distilled LoRA (450). Not required for the default distilled transformer pack.",
+          "size_label": "8.9 GB",
+          "required_label": "",
+          "locked": false
+        },
+        {
+          "id": "ltx25.temporal_upscaler",
+          "label": "ltx-2.5-latent-temporal-upscaler-x2-bf16-1.0.safetensors",
+          "filename": "ltx-2.5-latent-temporal-upscaler-x2-bf16-1.0.safetensors",
+          "accepts": [
+            "ltx-2.5-latent-temporal-upscaler-x2-bf16-1.0.safetensors"
+          ],
+          "size_bytes": 262000000,
+          "required": false,
+          "package": "temporal_upscaler",
+          "version": "2.5",
+          "capability": "video_generation",
+          "downloadable": true,
+          "weight_key": "temporal_upscaler",
+          "local_only": false,
+          "note": "Optional 2\u00d7 latent temporal upscaler.",
+          "size_label": "262 MB",
+          "required_label": "",
+          "locked": false
+        }
+      ]
+    },
+    {
+      "id": "soundtrack",
+      "label": "Soundtrack",
+      "toggle": {
+        "id": "soundtrack_studio",
+        "label": "Enable Soundtrack Studio",
+        "wraps": "download-models --heartmula"
+      },
+      "models": [
+        {
+          "id": "soundtrack.mula",
+          "label": "HeartMuLa",
+          "filename": "HeartMuLa",
+          "accepts": [],
+          "size_bytes": 15752486168,
+          "required": false,
+          "package": "soundtrack_studio",
+          "version": null,
+          "capability": "soundtrack",
+          "downloadable": true,
+          "weight_key": null,
+          "local_only": false,
+          "note": "Enable Soundtrack Studio. Fetch stays on download-models --heartmula (existing heartlib consent path).",
+          "size_label": "15.8 GB",
+          "required_label": "",
+          "locked": false
+        },
+        {
+          "id": "soundtrack.codec",
+          "label": "HeartCodec",
+          "filename": "HeartCodec",
+          "accepts": [],
+          "size_bytes": 6638383908,
+          "required": false,
+          "package": "soundtrack_studio",
+          "version": null,
+          "capability": "soundtrack",
+          "downloadable": true,
+          "weight_key": null,
+          "local_only": false,
+          "note": "Enable Soundtrack Studio. Fetch stays on download-models --heartmula (existing heartlib consent path).",
+          "size_label": "6.6 GB",
+          "required_label": "",
+          "locked": false
+        },
+        {
+          "id": "soundtrack.transcriptor",
+          "label": "HeartTranscriptor",
+          "filename": "HeartTranscriptor",
+          "accepts": [],
+          "size_bytes": 3055544304,
+          "required": false,
+          "package": "soundtrack_studio",
+          "version": null,
+          "capability": "soundtrack",
+          "downloadable": true,
+          "weight_key": null,
+          "local_only": false,
+          "note": "Enable Soundtrack Studio. Fetch stays on download-models --heartmula (existing heartlib consent path).",
+          "size_label": "3.1 GB",
+          "required_label": "",
+          "locked": false
+        }
+      ]
+    },
+    {
+      "id": "local_studio",
+      "label": "Local studio",
+      "note": "Optional on-disk flags. No Hub pull.",
+      "models": [
+        {
+          "id": "local.sulphur_gguf",
+          "label": "Sulphur GGUF",
+          "filename": "sulphur_dev-Q3_K_S.gguf",
+          "accepts": [
+            "sulphur_dev-Q3_K_S.gguf"
+          ],
+          "size_bytes": null,
+          "required": false,
+          "package": "local_sulphur",
+          "version": null,
+          "capability": "local_studio",
+          "downloadable": false,
+          "weight_key": null,
+          "local_only": true,
+          "note": "Detect a Sulphur GGUF already on disk. Buddy does not download it.",
+          "size_label": "size not attested",
+          "required_label": "",
+          "locked": false
+        },
+        {
+          "id": "local.sulphur_lora",
+          "label": "Sulphur LoRA",
+          "filename": "",
+          "accepts": [],
+          "size_bytes": null,
+          "required": false,
+          "package": "local_sulphur",
+          "version": null,
+          "capability": "local_studio",
+          "downloadable": false,
+          "weight_key": null,
+          "local_only": true,
+          "note": "Detect files under models/loras/sulphur/. Buddy does not download them.",
+          "size_label": "size not attested",
+          "required_label": "",
+          "locked": false
+        },
+        {
+          "id": "local.eros",
+          "label": "EROS checkpoint",
+          "filename": "LTX2.3_DISTILLED-1.1_BAKED_LTX_10Eros_v14_r768.safetensors",
+          "accepts": [
+            "LTX2.3_DISTILLED-1.1_BAKED_LTX_10Eros_v14_r768.safetensors"
+          ],
+          "size_bytes": null,
+          "required": false,
+          "package": "local_eros",
+          "version": null,
+          "capability": "local_studio",
+          "downloadable": false,
+          "weight_key": null,
+          "local_only": true,
+          "note": "Local all-in-one checkpoint. Buddy does not download it.",
+          "size_label": "size not attested",
+          "required_label": "",
+          "locked": false
+        }
+      ]
+    }
+  ]
+}
