@@ -441,6 +441,43 @@ def check_vram_policy() -> dict[str, Any]:
         return _row("vram-policy", False, f"policy failed: {exc}")
 
 
+def check_hardware() -> dict[str, Any]:
+    """NVIDIA / AMD / ROCm routing sentence. Never a failed install check."""
+    try:
+        from master_agent.comfy.hardware import scan_hardware
+
+        scan = scan_hardware()
+    except Exception as exc:
+        scan = {
+            "sentence": f"Hardware scan failed ({exc}). This scan does not block install.",
+            "band": "unknown",
+        }
+    row = _row("hardware", True, str(scan.get("sentence") or ""))
+    row["blocks_install"] = False
+    row["band"] = scan.get("band") or "unknown"
+    return row
+
+
+def check_pack_pins() -> dict[str, Any]:
+    """Report stale Comfy pins. Does not run ``comfy update``."""
+    try:
+        from master_agent.comfy.updates import scan_packs
+
+        report = scan_packs()
+    except Exception as exc:
+        return _row("pack-pins", True, f"Pack scan failed ({exc}). No update ran.")
+    stale = report.get("stale") or []
+    if not stale:
+        return _row("pack-pins", True, "nothing stale vs known pins. No update ran.")
+    names = ", ".join(str(item.get("name")) for item in stale)
+    return _row(
+        "pack-pins",
+        False,
+        f"stale: {names}. No update ran.",
+        fix="python -m master_agent comfy update --yes",
+    )
+
+
 def snapshot() -> list[dict[str, Any]]:
     return [
         check_python(),
@@ -452,6 +489,8 @@ def snapshot() -> list[dict[str, Any]]:
         check_ollama(),
         check_comfy(),
         check_vram_policy(),
+        check_hardware(),
+        check_pack_pins(),
         check_ltx_guide(),
         check_ltx25_weights(),
         check_ltx23_weights(),
@@ -477,12 +516,15 @@ _WEIGHT_ROWS = frozenset(
     }
 )
 
-# Optional HeartMuLa pack: report the slots, do not fail doctor when absent.
+# Optional or report-only rows: show them, and do not fail doctor.
+# Hardware never blocks install. Stale packs wait for an explicit comfy update.
 _OPTIONAL_INFO_ROWS = frozenset(
     {
         "heartlib",
         "heartmula-weights",
         "heartmula-comfy",
+        "hardware",
+        "pack-pins",
     }
 )
 
@@ -605,6 +647,7 @@ def install_ollama_models(*, consent: bool = False) -> None:
 
 
 def fix(*, pull_ollama: bool = False) -> int:
+    """Install local tooling. Does not run ``comfy install`` or ``comfy update``."""
     print("VIDEO BUDDY setup --fix")
     if sys.version_info[:2] < MIN_PY:
         print(f"FAIL  Python {MIN_PY[0]}.{MIN_PY[1]}+ required")
