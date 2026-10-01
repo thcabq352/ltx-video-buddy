@@ -284,6 +284,10 @@ HEAVY_SLUGS: frozenset[str] = frozenset(
         "vb_aivfx_preprocess",
         "ltx23_lipsync_v08",
         "ltx25_inoutpaint",
+        "ltx23_i2v_base",
+        "ltx23_i2v_distilled",
+        "ltx23_t2v_base",
+        "ltx23_t2v_distilled",
     }
 )
 
@@ -475,6 +479,30 @@ def _build_rows() -> dict[str, WorkflowVramRow]:
                 expected_vram_gb=vram,
                 vram_class=klass,
                 notes=ltx23_notes,
+            )
+        )
+
+    sulphur_notes = (
+        "Sulphur LTX 2.3 two-stage studio graph. LoRA weights stay on the tower "
+        "under models/loras/ or models/loras/sulphur/. Not a download pack. "
+        "Linked image size is left alone on i2v."
+    )
+    for slug in (
+        "ltx23_i2v_base",
+        "ltx23_i2v_distilled",
+        "ltx23_t2v_base",
+        "ltx23_t2v_distilled",
+    ):
+        add(
+            WorkflowVramRow(
+                slug=slug,
+                family="ltx23",
+                default_pack=LTX23_DEV_GGUF[0],
+                expected_vram_gb=14.8,
+                vram_class="heavy",
+                safer_alternate="base",
+                prepare_warning=_warn_heavy("Sulphur LTX 2.3 two-stage", "base"),
+                notes=sulphur_notes,
             )
         )
 

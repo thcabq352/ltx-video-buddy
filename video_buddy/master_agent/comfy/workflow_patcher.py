@@ -287,6 +287,20 @@ def _set_input(node: dict[str, Any], key: str, value: Any) -> bool:
     return True
 
 
+def _write_widget(node: dict[str, Any], key: str, value: Any, *, preserve_links: bool) -> bool:
+    """Set a widget. When ``preserve_links`` is set, leave graph links in place.
+
+    Missing keys are also left missing so a linked two-stage graph does not
+    grow a scalar that bypasses the primitive chain. Other variants pass
+    ``preserve_links=False`` and keep the old always-write behavior.
+    """
+    if preserve_links:
+        inputs = node.get("inputs") or {}
+        if key not in inputs or _is_node_link(inputs.get(key)):
+            return False
+    return _set_input(node, key, value)
+
+
 def _apply_named_fields(
     workflow: dict[str, Any],
     field_map: dict[str, Any],
@@ -1165,6 +1179,7 @@ def _heuristic_patch(
 ) -> None:
     """Best-effort patching by common ComfyUI / LTX class types."""
     locked = locks or set()
+    preserve_links = bool(values.get("preserve_links"))
     prompt = values.get("prompt")
     negative = values.get("negative_prompt")
     seed = values.get("seed")
@@ -1241,24 +1256,29 @@ def _heuristic_patch(
     ):
         for _nid, node in _find_nodes_by_class(workflow, class_type):
             if width is not None:
-                _set_input(node, "width", width)
+                _write_widget(node, "width", width, preserve_links=preserve_links)
             if height is not None:
-                _set_input(node, "height", height)
+                _write_widget(node, "height", height, preserve_links=preserve_links)
             # EmptyLatentImage (Flux t2i) has no length/frames input
             if frames is not None and class_type != "EmptyLatentImage":
                 write = ltx_frames if class_type in LTX_LENGTH_CLASSES else frames
                 for k in ("length", "frames", "num_frames", "frame_count"):
                     if k in (node.get("inputs") or {}) or k == "length":
-                        _set_input(node, k, write)
+                        _write_widget(node, k, write, preserve_links=preserve_links)
                         break
 
     if frames is not None:
         paired = ltx_frames if ltx_frames is not None else int(frames)
         for class_type in LTX_AUDIO_CLASSES:
             for _nid, node in _find_nodes_by_class(workflow, class_type):
-                _set_input(node, "frames_number", int(paired))
+                _write_widget(node, "frames_number", int(paired), preserve_links=preserve_links)
                 if values.get("fps"):
-                    _set_input(node, "frame_rate", int(values.get("fps") or 24))
+                    _write_widget(
+                        node,
+                        "frame_rate",
+                        int(values.get("fps") or 24),
+                        preserve_links=preserve_links,
+                    )
         for class_type in ("MiniMaxH3ImageToVideo", "MiniMaxH3ReferenceToVideo"):
             for _nid, node in _find_nodes_by_class(workflow, class_type):
                 if prompt is not None:
@@ -1277,14 +1297,19 @@ def _heuristic_patch(
         ):
             for _nid, node in _find_nodes_by_class(workflow, class_type):
                 if values.get("fps") and class_type == "LTXVConditioning":
-                    _set_input(node, "frame_rate", int(values.get("fps") or 24))
+                    _write_widget(
+                        node,
+                        "frame_rate",
+                        int(values.get("fps") or 24),
+                        preserve_links=preserve_links,
+                    )
                 if class_type == "LTXVImgToVideo":
                     if width is not None:
-                        _set_input(node, "width", width)
+                        _write_widget(node, "width", width, preserve_links=preserve_links)
                     if height is not None:
-                        _set_input(node, "height", height)
+                        _write_widget(node, "height", height, preserve_links=preserve_links)
                     write = ltx_frames if ltx_frames is not None else int(frames)
-                    _set_input(node, "length", write)
+                    _write_widget(node, "length", write, preserve_links=preserve_links)
                     if values.get("image_name") or values.get("first_image"):
                         _set_input(node, "image", values.get("first_image") or values.get("image_name"))
                     if values.get("last_image"):
@@ -1305,7 +1330,12 @@ def _heuristic_patch(
                     _set_input(node, "strength", float(i2v_strength))
         for _nid, node in _find_nodes_by_class(workflow, "CreateVideo"):
             if values.get("fps"):
-                _set_input(node, "fps", float(values.get("fps") or 24))
+                _write_widget(
+                    node,
+                    "fps",
+                    float(values.get("fps") or 24),
+                    preserve_links=preserve_links,
+                )
         # Sampler selection only when the caller or the variant config asks.
         # Authored names such as euler_ancestral_cfg_pp stay put.
         sampler_name = values.get("sampler_name")
@@ -1846,6 +1876,11 @@ def load_and_patch_workflow(
         for i, seg in enumerate(segment_prompts):
             values[f"segment_{i}"] = seg
 
+    from master_agent.comfy.sulphur import is_sulphur_variant, patch_sulphur_graph
+
+    if is_sulphur_variant(resolved_id) or is_sulphur_variant(variant):
+        values["preserve_links"] = True
+
     locks = _prompt_locks(workflow, field_map)
     _apply_named_fields(workflow, field_map, values)
     _remap_stub_filenames(workflow)
@@ -1855,6 +1890,15 @@ def load_and_patch_workflow(
     if is_ltx25_bundle(bundle):
         _rewrite_ltx25_checkpoint_loader(workflow)
     _heuristic_patch(workflow, values, locks=locks)
+    if values.get("preserve_links"):
+        patch_sulphur_graph(
+            workflow,
+            prompt=run_prompt,
+            negative_prompt=negative_prompt,
+            width=width,
+            height=height,
+            frames=frames,
+        )
     if is_ltx25_bundle(bundle):
         _apply_local_ltx25_weights(workflow)
     if is_h3_bundle(bundle):
