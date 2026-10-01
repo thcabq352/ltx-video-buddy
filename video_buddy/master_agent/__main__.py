@@ -26,6 +26,7 @@ Commands:
   comfy attach        Apply previs buddy.comfy.attach/v1 (dry-run; --submit to /prompt)
   comfy start|stop|status|restart
                       Managed local ComfyUI via comfy-cli (not attach / not generate)
+  comfy update        Report stale pins; update only with --yes, snapshot first
   diagnose            9-frame hull fire (sec/step); does not spend shift budget
   budget              status | reset-shift  (VRAM-min shift ledger)
   hermes              status | register  (profile ltx + discovery)
@@ -1824,6 +1825,10 @@ def cmd_comfy(args: argparse.Namespace) -> int:
         from master_agent.comfy.tower import cmd_tower
 
         return cmd_tower(args)
+    if command == "update":
+        from master_agent.comfy.updates import cmd_update
+
+        return cmd_update(args)
     if command == "attach":
         return cmd_comfy_attach(args)
     from master_agent.comfy.cli_run import LintError, execute_prepared, lint_or_raise, prepare_run
@@ -2506,11 +2511,11 @@ def main(argv: list[str] | None = None) -> int:
 
     p = sub.add_parser(
         "comfy",
-        help="drive ComfyUI: run/attach graphs, or start/stop/status/restart a managed local server",
+        help="drive ComfyUI: run/attach graphs, managed start/stop/status/restart, or opt-in update",
     )
     p.add_argument(
         "comfy_command",
-        choices=["run", "attach", "start", "stop", "status", "restart"],
+        choices=["run", "attach", "start", "stop", "status", "restart", "update"],
     )
     p.add_argument("--mode", choices=["raw", "template", "generate"], default="generate")
     p.add_argument("--json", dest="workflow_json", help="pasted/path API workflow JSON (raw)")
@@ -2603,7 +2608,30 @@ def main(argv: list[str] | None = None) -> int:
         "--as-json",
         dest="as_json",
         action="store_true",
-        help="start/stop/status/restart: print JSON (comfy --json remains the workflow path)",
+        help="start/stop/status/restart/update: print JSON (comfy --json remains the workflow path)",
+    )
+    p.add_argument(
+        "--yes",
+        action="store_true",
+        help="comfy update: opt in. Without this flag the command only reports stale packs.",
+    )
+    p.add_argument(
+        "--core",
+        dest="update_core",
+        action="store_true",
+        help="comfy update: with --yes, update ComfyUI core after a node snapshot",
+    )
+    p.add_argument(
+        "--nodes",
+        dest="update_nodes",
+        action="store_true",
+        help="comfy update: with --yes, update custom nodes after a node snapshot",
+    )
+    p.add_argument(
+        "--cli",
+        dest="update_cli",
+        action="store_true",
+        help="comfy update: with --yes, pip-install the pinned comfy-cli (does not float to latest)",
     )
     p.set_defaults(func=cmd_comfy)
 

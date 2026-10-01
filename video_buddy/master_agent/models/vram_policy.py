@@ -9,6 +9,10 @@ Do not invent weight files. Every filename is attested in
 (QuantStack Wan2.2 / LTX-2.3 GGUF, city96 FLUX.1-dev-gguf, Comfy-Org/Krea-2).
 K3NK AIO I2V packs were searched and are **not** attested — they stay
 off the default table.
+
+``hardware_route`` is the doctor sentence for NVIDIA / AMD / ROCm and the
+12GB / 8GB bands. It recommends a pack. It does not block install. Loader
+preference in this module stays GGUF-first when a GGUF file is on disk.
 """
 
 from __future__ import annotations
@@ -20,6 +24,11 @@ TARGET_GPU = "NVIDIA RTX 5060 Ti"
 TARGET_VRAM_GB = 16.0
 NVFP4_MIN_VRAM_GB = 14.0
 PEAK_HEADROOM_GB = (12.0, 14.0)
+# Doctor routing bands. 12GB and above can take full checkpoints.
+# Above 8GB and below 12GB routes to GGUF. 8GB and below is the ≤8 band.
+FULL_CHECKPOINT_MIN_GB = 12.0
+LOW_VRAM_MAX_GB = 8.0
+_SULPHUR_LESS = " Sulphur GGUF can run on less."
 
 # Quantization rank: lower is the 16GB pick.
 _KIND_RANK = {
@@ -884,6 +893,119 @@ def format_vram_table() -> str:
     return "\n".join(lines) + "\n"
 
 
+@dataclass(frozen=True)
+class HardwareRoute:
+    """One routing sentence. ``blocks_install`` stays false."""
+
+    vendor: str
+    band: str
+    sentence: str
+    blocks_install: bool = False
+
+
+def vram_band(vram_gb: float | None) -> str:
+    """``full`` (≥12), ``gguf`` (above 8 and below 12), ``low`` (≤8), or ``unknown``."""
+    if vram_gb is None:
+        return "unknown"
+    gb = float(vram_gb)
+    if gb >= FULL_CHECKPOINT_MIN_GB:
+        return "full"
+    if gb > LOW_VRAM_MAX_GB:
+        return "gguf"
+    return "low"
+
+
+def _fmt_gb(vram_gb: float) -> str:
+    gb = float(vram_gb)
+    rounded = round(gb)
+    if abs(gb - rounded) < 0.05:
+        return f"{int(rounded)}GB"
+    text = f"{gb:.1f}".rstrip("0").rstrip(".")
+    return f"{text}GB"
+
+
+def _card_label(vendor: str, gpu_name: str, vram_gb: float | None) -> str:
+    name = " ".join((gpu_name or "").split())
+    if vendor == "nvidia":
+        if not name:
+            name = "NVIDIA GPU"
+        elif not name.lower().startswith("nvidia"):
+            name = f"NVIDIA {name}"
+    elif vendor == "amd":
+        plain = name[4:] if name.lower().startswith("amd ") else name
+        if not plain or plain.lower() == "amd":
+            plain = "GPU"
+        name = f"AMD {plain}"
+    else:
+        name = ""
+    gb = _fmt_gb(vram_gb) if vram_gb is not None else ""
+    return " ".join(part for part in (name, gb) if part)
+
+
+def _pack_clause(band: str) -> str:
+    if band == "full":
+        return "full checkpoints are in range."
+    if band == "gguf":
+        return "use GGUF." + _SULPHUR_LESS
+    if band == "low":
+        return "use GGUF or CPU, or upgrade." + _SULPHUR_LESS
+    return ""
+
+
+def hardware_route(
+    *,
+    vendor: str,
+    vram_gb: float | None,
+    rocm: bool = False,
+    gpu_name: str = "",
+) -> HardwareRoute:
+    """Route a detected card to one sentence. Never a hard install failure."""
+    vendor_key = (vendor or "unknown").strip().lower()
+    if vendor_key in {"none", "cpu", ""}:
+        vendor_key = "unknown"
+    band = vram_band(vram_gb)
+    card = _card_label(vendor_key, gpu_name, vram_gb)
+    pack = _pack_clause(band)
+    if vendor_key == "nvidia":
+        if band == "unknown":
+            sentence = (
+                f"{card}: VRAM was not detected. Use GGUF until VRAM_GB is set. "
+                "This scan does not block install."
+            )
+        else:
+            sentence = f"{card}: {pack}"
+    elif vendor_key == "amd":
+        if rocm:
+            if band == "unknown":
+                sentence = (
+                    f"{card} with ROCm: slower, and it works. "
+                    "VRAM was not detected; use GGUF until VRAM_GB is set."
+                )
+            else:
+                sentence = f"{card} with ROCm: slower, and it works; {pack}"
+        else:
+            sulphur = _SULPHUR_LESS if band in {"gguf", "low", "unknown"} else ""
+            sentence = f"{card} without ROCm: install ROCm first, or use GGUF.{sulphur}"
+    elif band == "unknown":
+        sentence = (
+            "No GPU detected: use GGUF or CPU, or upgrade."
+            + _SULPHUR_LESS
+            + " This scan does not block install."
+        )
+    else:
+        shown = _fmt_gb(vram_gb) if vram_gb is not None else ""
+        sentence = (
+            f"{shown} reported with no identified GPU: {pack} "
+            "This scan does not block install."
+        )
+    return HardwareRoute(
+        vendor=vendor_key,
+        band=band,
+        sentence=" ".join(sentence.split()),
+        blocks_install=False,
+    )
+
+
 def format_doctor_line() -> str:
     """Doctor row: detected VRAM, loader pick, and the 16GB policy card."""
     from master_agent.config import FORCE_LOADER, VRAM_GB, VRAM_SOURCE
@@ -956,14 +1078,19 @@ __all__ = [
     "downscale_ladder_for",
     "expected_vram_gb",
     "family_for_slug",
+    "FULL_CHECKPOINT_MIN_GB",
+    "HardwareRoute",
+    "LOW_VRAM_MAX_GB",
     "format_doctor_line",
     "format_vram_table",
+    "hardware_route",
     "is_16gb_default",
     "heavy_not_suggested",
     "pack_kind",
     "preference_order",
     "prepare_warning",
     "safer_alternate",
+    "vram_band",
     "vram_class",
     "workflow_row",
     "workflow_vram_rows",

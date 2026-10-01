@@ -89,7 +89,8 @@ only consent to write into the attached tree.
 - `--extra-model-paths-config` pointing at the Buddy YAML, unless you passed
   `--extra-model-paths` with an existing file
 
-This module does not run `comfy install` or `comfy update`.
+Managed start, stop, status, and restart do not run `comfy install` or `comfy update`.
+Startup prints the hardware sentence and any stale pins. It does not update.
 
 ## Model selector (CLI)
 
@@ -161,10 +162,77 @@ export COMFYUI_URL=http://127.0.0.1:8188
 export EXTERNAL_COMFY_ROOT=/path/to/your/ComfyUI
 python -m master_agent comfy status
 python -m master_agent comfy start   # must fail; Buddy does not touch that process
+
+# report only — no comfy install, no comfy update, no weight download
+python -m master_agent doctor
+python -m master_agent comfy update
 ```
 
 `python -m master_agent download-models` still lists missing files and does
 not fetch until `--yes`. Those bytes go to `MODELS_DIR` only.
+
+## Hardware scan
+
+`doctor` and managed `comfy start` / `comfy status` / `comfy restart` print one
+routing sentence. The row is `hardware`. It stays OK, and it does not stop
+`comfy start` or `setup --fix`.
+
+| What the scan sees | Sentence |
+|---|---|
+| NVIDIA, 12GB and above | Full checkpoints are in range. |
+| NVIDIA, above 8GB and below 12GB | Use GGUF. Sulphur GGUF can run on less. |
+| NVIDIA, 8GB and below | Use GGUF or CPU, or upgrade. Sulphur GGUF can run on less. |
+| AMD with ROCm | Slower, and it works. The same VRAM bands pick the pack. |
+| AMD without ROCm | Install ROCm first, or use GGUF. |
+| No GPU | Use GGUF or CPU, or upgrade. The scan does not block install. |
+
+`VRAM_GB`, when set, is the number in that sentence. The `vram-policy` row
+still prefers an on-disk GGUF when one is present.
+
+## Stale packs
+
+Startup compares installed `comfy-cli` with the pin in `requirements.txt`
+(`comfy-cli==1.20.0`) and compares custom nodes with
+`master_agent/comfy/pack_pins.json`. A missing optional node is not stale.
+ComfyUI core has no pin in this repo, so a core checkout is reported and is
+not marked stale.
+
+`doctor`, `setup --fix`, `comfy start`, and `comfy status` do not run
+`comfy update` or `comfy node update`.
+
+```bash
+python -m master_agent comfy update
+python -m master_agent comfy update --yes
+python -m master_agent comfy update --core --yes
+python -m master_agent comfy update --nodes --yes
+python -m master_agent comfy update --cli --yes
+```
+
+`--yes` or a `y` at the prompt is the opt-in. A non-interactive run without
+`--yes` prints the stale list and stops. `COMFY_MODE=external` refuses core
+and node updates.
+
+`--cli` pip-installs the requirements pin. It does not run `comfy update cli`.
+
+A commit pin that does not match HEAD is reported. Bare `--yes` does not run
+`comfy node update` for that pin. `--nodes --yes` moves custom nodes forward
+after a snapshot, and it does not check out the pinned commit.
+
+## Snapshots and weight keep/wipe
+
+Before `comfy update comfy` or `comfy node update`, Buddy runs:
+
+```bash
+comfy node save-snapshot --output video_buddy/state/comfy_snapshots/pre-update-….json
+```
+
+That file records custom nodes and Python dependencies. It does not roll back
+files under `MODELS_DIR`. Restore nodes with `comfy node restore-snapshot`
+on the same managed workspace. That restore is not a weight rollback.
+
+Switching LTX 2.3 and 2.5 still uses `models select --keep` or `--wipe`.
+That prompt keeps or deletes files under `MODELS_DIR`. It is a different
+action from the node snapshot.
 
 Selector checklist (no fetch). Leave off `--yes` until you mean to pull:
 

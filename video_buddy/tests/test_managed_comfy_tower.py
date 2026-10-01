@@ -434,6 +434,7 @@ def test_comfy_help_lists_lifecycle_without_dropping_run(capsys):
         "stop",
         "status",
         "restart",
+        "update",
         "--as-json",
         "--no-watch",
         "--write-yaml-into-external",

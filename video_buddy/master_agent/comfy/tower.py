@@ -4,8 +4,9 @@ Buddy can own a local ComfyUI process under ``MANAGED_COMFY_ROOT`` (default
 ``PROJECT_ROOT/ComfyUI``). The HTTP client, graph ops, linter, and generate
 path are unchanged: they keep talking to whatever answers on ``COMFYUI_URL``.
 
-This module never runs ``comfy install`` or ``comfy update`` and never
-downloads models. ``comfy_mode=external`` (state file or ``COMFY_MODE``)
+``start``, ``stop``, ``status``, and ``restart`` never run ``comfy install``
+or ``comfy update`` and never download models. Opt-in updates live in
+``comfy/updates.py``. ``comfy_mode=external`` (state file or ``COMFY_MODE``)
 refuses start, stop, and restart so a user-owned server is left alone.
 Managed start writes a Buddy-owned ``extra_model_paths.yaml`` under state
 and passes it with ``--extra-model-paths-config``. That file is not
@@ -808,6 +809,18 @@ def cmd_tower(args: Any) -> int:
         print(f"FAIL  {exc}")
         return 1
 
+    if command in {"start", "status", "restart"}:
+        try:
+            from master_agent.comfy.updates import startup_report
+
+            result["startup"] = startup_report(tower.workspace)
+        except Exception as exc:
+            result["startup"] = {
+                "updated": False,
+                "blocks_install": False,
+                "lines": [f"Startup check failed ({exc}). No update ran."],
+            }
+
     if _wants_json(args):
         print(json.dumps(result, indent=2, default=str))
     else:
@@ -817,6 +830,10 @@ def cmd_tower(args: Any) -> int:
         else:
             mark = "OK"
             label = str(result.get("status") or "done")
+        startup = result.get("startup") if isinstance(result.get("startup"), dict) else None
+        if startup:
+            for line in startup.get("lines") or []:
+                print(line)
         print(f"{mark:4}  comfy {command}: {label}")
         if result.get("base_url"):
             print(f"      url={result['base_url']}")
