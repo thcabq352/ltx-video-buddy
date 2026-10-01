@@ -30,6 +30,8 @@ PANEL_JUDGE=ollama
 
 Unset `VRAM_GB` and Buddy uses `nvidia-smi` when it can. The 16GB figure is only the fallback when detection fails. GGUF is the loader whenever a compatible file is already on disk, including on 16GB cards — `FORCE_LOADER=gguf` is only how a 12GB card hides NVFP4 and bf16 from suggestions. Below 14GB, doctor does not suggest NVFP4 or bf16. `sulphur_dev-Q3_K_S.gguf` counts as an LTX 2.3 GGUF. A Gemma filename with `heretic` counts as the text encoder. Neither is a new download pack. A machine with only bf16 or the EROS all-in-one keeps using those files.
 
+Default Generate uses that same scan. When the distilled all-in-one or `gemma_3_12B_it_fp4_mixed.safetensors` is not on disk, base / eros / directors point the checkpoint and UNet at a local LTX 2.3 GGUF (`sulphur_dev-Q3_K_S.gguf` counts) and the text encoder at a `*heretic*` Gemma. Validation warns instead of failing when that stand-in is already present, so a missing catalog literal is not by itself a failed generate. The Models tab prints each missing bundle slot as `slot: filename`. **Reset used**, and `python -m master_agent budget reset-shift`, clear the render-budget hold and continue a generate that paused on that hold, from the segment where it stopped. Segmented lipdub pauses are not resumed. Using both the studio button and the CLI reset in the same window can start that run twice.
+
 ```bash
 python -m master_agent inventory
 python -m master_agent doctor --scan-only          # never fetch

@@ -1628,6 +1628,11 @@ def cmd_budget(args: argparse.Namespace) -> int:
             f"OK    shift reset previous_shift_id={row['previous_shift_id']} "
             f"previous_used={row['previous_used']} now={store.shift_id}"
         )
+        from master_agent.orchestrator.pipeline import resume_after_budget_clear
+
+        continued = resume_after_budget_clear(background=False)
+        if continued:
+            print("OK    continuing paused generate: " + ", ".join(continued))
     snap = store.snapshot()
     if args.json:
         print(json.dumps(snap, indent=1))

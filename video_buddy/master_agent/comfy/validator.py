@@ -279,6 +279,44 @@ def _dynamic_child_present(
     return child in inputs and child in known
 
 
+def _weight_widget_note(value: str, inventory: Optional[Inventory]) -> Optional[str]:
+    """Warn (do not error) when the widget name or a compatible file is on disk.
+
+    Cached ``model_inventory.json`` can miss a file that is already under
+    MODELS_DIR / Comfy / extra_model_paths. A distilled or fp4 literal also
+    must not fail validation when Sulphur GGUF or a ``*heretic*`` Gemma
+    encoder is the file that is actually present. This does not download.
+    """
+    present = (
+        f"'{value}' not in server combo choices but exists in local "
+        "inventory (server may need a refresh, or cache is stale)"
+    )
+    if inventory is not None and inventory.resolve(value) is not None:
+        return present
+    try:
+        from master_agent.models.weights import find_weight_file, satisfying_weight
+    except Exception:
+        return None
+    try:
+        exact = find_weight_file(value)
+    except Exception:
+        exact = None
+    if exact is not None:
+        return present
+    try:
+        alt = satisfying_weight(value)
+    except Exception:
+        alt = None
+    if alt is None:
+        return None
+    if alt.name.lower() == Path(value).name.lower():
+        return present
+    return (
+        f"'{value}' is not on disk; compatible local file '{alt.name}' "
+        "satisfies this slot"
+    )
+
+
 def _validate_scalar(
     report: ValidationReport,
     node_id: str,
@@ -295,13 +333,9 @@ def _validate_scalar(
             isinstance(value, str) and value.lower().endswith(WEIGHT_SUFFIXES)
         )
         if looks_like_model and isinstance(value, str):
-            if inventory is not None and inventory.resolve(value) is not None:
-                report.warn(
-                    node_id,
-                    input_name,
-                    f"'{value}' not in server combo choices but exists in local "
-                    "inventory (server may need a refresh, or cache is stale)",
-                )
+            note = _weight_widget_note(value, inventory)
+            if note is not None:
+                report.warn(node_id, input_name, note)
             else:
                 report.error(
                     node_id,

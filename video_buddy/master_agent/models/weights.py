@@ -771,6 +771,40 @@ def find_compatible_for_weight(weight: WeightFile, roots: Iterable[Path]) -> Pat
     return None
 
 
+def satisfying_weight(
+    expected: str,
+    roots: Iterable[Path] | None = None,
+) -> Path | None:
+    """On-disk file that can stand in for a loader literal. Never downloads.
+
+    Exact names win (``find_weight_file``). Otherwise a Gemma ``*heretic*``
+    encoder stands in for a Gemma text-encoder name, and an LTX 2.3 GGUF
+    (QuantStack or ``sulphur_dev-Q3_K_S.gguf``) stands in for an LTX 2.3
+    checkpoint / diffusion name. VAE and LoRA names are not widened.
+    """
+    if not expected:
+        return None
+    exact = find_weight_file(expected, roots)
+    if exact is not None:
+        return exact
+    low = expected.lower()
+    if any(tok in low for tok in ("vae", "lora")):
+        return None
+    scan = list(roots) if roots is not None else model_search_roots()
+    if "gemma" in low:
+        return find_compatible_for_weight(WEIGHT_FILES["text_encoder"], scan)
+    compact = _compact_name(_basename(expected))
+    if (
+        "ltx23" in compact
+        or "ltx2.3" in low
+        or "ltx-2.3" in low
+        or "sulphur" in low
+    ):
+        variant = "directors" if ("dev" in low and "distill" not in low) else "base"
+        return resolve_ltx23_gguf(variant, scan)
+    return None
+
+
 def ltx23_gguf_names(variant: str | None = None) -> tuple[str, ...]:
     """GGUF names for an LTX 2.3 slot, best first.
 

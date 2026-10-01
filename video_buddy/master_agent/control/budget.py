@@ -104,6 +104,7 @@ class RenderBudget:
         self.log.append(row)
         self.used = 0.0
         self.paused = False
+        self.pending = []
         self.shift_id = uuid.uuid4().hex[:12]
         self.shift_started_at = _now()
         self.persist()
