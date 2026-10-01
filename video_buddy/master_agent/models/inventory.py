@@ -184,6 +184,8 @@ def scan_inventory(
     write: bool = True,
     out_path: Path = MODEL_INVENTORY_JSON,
 ) -> Inventory:
+    # Order is load-bearing: MODELS_DIR (project), then Comfy models, then
+    # YAML / extra / HF roots labeled "search". First name wins in by_name().
     entries = _scan_root(models_dir, "project")
     entries += _scan_root(comfyui_root / "models", "comfyui")
     seen: set[Path] = set()

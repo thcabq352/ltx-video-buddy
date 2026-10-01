@@ -119,7 +119,8 @@ Do **not** assume a download. Buddy scans, in order of search roots:
 - `MODELS_DIR` (default `video_buddy/models/`)
 - `COMFYUI_ROOT/models`
 - `EXTRA_MODELS_DIRS` / `LTX_MODELS_DIRS` (pathsep or comma — extra volumes)
-- Comfy `extra_model_paths.yaml` `base_path` / folder entries
+- Comfy `extra_model_paths.yaml` `base_path` / folder entries, including the
+  Buddy-owned file at `state/extra_model_paths.yaml`
 - `PROJECT_ROOT/models`, portable Comfy `models/`, `./models`
 - Hugging Face hub snapshots (`HF_HOME` / `HUGGINGFACE_HUB_CACHE` /
   `~/.cache/huggingface/hub/models--Lightricks--LTX-2.5/`)

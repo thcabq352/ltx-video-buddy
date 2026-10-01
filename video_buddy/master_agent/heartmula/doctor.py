@@ -232,6 +232,9 @@ def download_missing_slots(
     written: list[Path] = []
     for row in missing:
         dest = base / row["dest_rel"]
+        from master_agent.models.download import assert_pack_download_destination
+
+        assert_pack_download_destination(dest)
         dest.parent.mkdir(parents=True, exist_ok=True)
         progress(f"Downloading {row['repo_id']}/{row['filename']} ...")
         cached = hf_hub_download(repo_id=row["repo_id"], filename=row["filename"])

@@ -2,8 +2,9 @@
 
 Inventory first. Do not assume a download is needed.
 
-1. Scan ``MODELS_DIR``, ``COMFYUI_ROOT/models``, ``EXTRA_MODELS_DIRS``,
-   Comfy ``extra_model_paths.yaml`` bases, common relative ``models/`` trees,
+1. Scan ``MODELS_DIR``, then ``COMFYUI_ROOT/models``, then
+   ``EXTRA_MODELS_DIRS``, Comfy ``extra_model_paths.yaml`` bases (including
+   Buddy ``state/extra_model_paths.yaml``), common relative ``models/`` trees,
    and Hugging Face hub snapshots.
 2. If every mandatory slot is already filled (any accepted local name) →
    proceed silently and wire the graph to those files.
@@ -945,13 +946,16 @@ def _hf_hub_snapshot_roots() -> list[Path]:
 
 def _extra_model_paths_yaml_roots() -> list[Path]:
     """Comfy ``extra_model_paths.yaml`` base_path / folder entries (other volumes)."""
-    from master_agent.config import COMFYUI_ROOT, PORTABLE_ROOT, PROJECT_ROOT
+    from master_agent.config import COMFYUI_ROOT, PORTABLE_ROOT, PROJECT_ROOT, STATE_DIR
 
+    # Comfy / portable copies first, then the Buddy-owned file under state/.
+    # model_search_roots() still walks MODELS_DIR, then Comfy models, then these.
     candidates = (
         Path(COMFYUI_ROOT) / "extra_model_paths.yaml",
         Path(COMFYUI_ROOT).parent / "extra_model_paths.yaml",
         Path(PORTABLE_ROOT) / "extra_model_paths.yaml",
         Path(PROJECT_ROOT) / "extra_model_paths.yaml",
+        Path(STATE_DIR) / "extra_model_paths.yaml",
         Path.cwd() / "extra_model_paths.yaml",
     )
     roots: list[Path] = []
@@ -1697,10 +1701,11 @@ def download_named_file(
         )
         return None
     from master_agent.config import MODELS_DIR
-    from master_agent.models.download import download_hub_file
+    from master_agent.models.download import assert_pack_download_destination, download_hub_file
 
     root = Path(dest_root or MODELS_DIR)
     dest = root / weight.dest_folder / weight.filename
+    assert_pack_download_destination(dest)
     return download_hub_file(
         repo_id=weight.repo_id,
         repo_filename=weight.repo_filename,
@@ -1747,10 +1752,11 @@ def download_files(
             ),
             list(still_missing),
         )
-    from master_agent.models.download import download_hub_file
+    from master_agent.models.download import assert_pack_download_destination, download_hub_file
 
     for weight in still_missing:
         dest = root / weight.dest_folder / weight.filename
+        assert_pack_download_destination(dest)
         paths.append(
             download_hub_file(
                 repo_id=weight.repo_id,

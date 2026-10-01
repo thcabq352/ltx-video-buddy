@@ -123,6 +123,11 @@ def test_launch_argv_is_local_loopback_and_hides_browser(isolated):
         "--listen",
         "127.0.0.1",
     ]
+    yaml_path = (isolated["state_dir"] / "extra_model_paths.yaml").resolve()
+    assert yaml_path.is_file()
+    assert tail[-2:] == ["--extra-model-paths-config", str(yaml_path)]
+    assert not (isolated["workspace"] / "extra_model_paths.yaml").exists()
+    assert "is_default: true" in yaml_path.read_text(encoding="utf-8")
     assert "0.0.0.0" not in cmd
     assert "cloud" not in cmd
     assert isolated["popens"], "start should spawn a detached watchdog"
@@ -168,6 +173,25 @@ def test_external_mode_refuses_start_stop_restart(isolated):
             action()
     assert isolated["calls"] == []
     assert isolated["kills"] == []
+
+
+def test_external_start_writes_buddy_yaml_not_attached_tree(isolated, monkeypatch):
+    external = isolated["root"] / "external-comfy"
+    (external / "models" / "checkpoints").mkdir(parents=True)
+    sentinel = external / "models" / "checkpoints" / "keep.safetensors"
+    sentinel.write_bytes(b"user-weight")
+    monkeypatch.setenv("EXTERNAL_COMFY_ROOT", str(external))
+    monkeypatch.setenv("COMFY_MODE", "external")
+    with pytest.raises(TowerError, match="comfy_mode=external"):
+        ManagedComfyTower().start()
+    assert isolated["calls"] == []
+    assert not (external / "extra_model_paths.yaml").exists()
+    assert sentinel.read_bytes() == b"user-weight"
+    buddy = isolated["state_dir"] / "extra_model_paths.yaml"
+    assert buddy.is_file()
+    text = buddy.read_text(encoding="utf-8")
+    assert "is_default: true" in text
+    assert external.joinpath("models").resolve().as_posix() in text
 
 
 def test_env_external_overrides_managed_state(isolated, monkeypatch):
@@ -403,7 +427,17 @@ def test_comfy_help_lists_lifecycle_without_dropping_run(capsys):
         main(["comfy", "--help"])
     assert exc.value.code == 0
     text = capsys.readouterr().out
-    for token in ("run", "attach", "start", "stop", "status", "restart", "--as-json", "--no-watch"):
+    for token in (
+        "run",
+        "attach",
+        "start",
+        "stop",
+        "status",
+        "restart",
+        "--as-json",
+        "--no-watch",
+        "--write-yaml-into-external",
+    ):
         assert token in text
 
 

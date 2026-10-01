@@ -181,6 +181,20 @@ python -m master_agent download-models --heartmula    # list only; check disk fi
 python -m master_agent download-models --heartmula --yes
 ```
 
+### Managed Comfy and external mode
+
+`comfy start|stop|status|restart` drives a Buddy-owned local ComfyUI via
+comfy-cli. `COMFY_MODE=external` refuses start, stop, and restart. Point the
+HTTP client at your server with `COMFYUI_URL`. Point the attached install
+with `EXTERNAL_COMFY_ROOT` (or `COMFYUI_ROOT`). Buddy writes
+`state/extra_model_paths.yaml` and passes it as `--extra-model-paths-config`.
+That file is not `comfy attach` (WorkflowPatchPlan). Buddy never deletes or
+writes weights inside an attached tree. Pack downloads land only in
+`MODELS_DIR`. Copying the YAML into the attached tree requires
+`--write-yaml-into-external`.
+
+Details: [`video_buddy/docs/MANAGED_COMFY.md`](video_buddy/docs/MANAGED_COMFY.md).
+
 Legacy Mickmumpitz / LTX 2.3 packs still use `python state/download_models.py`
 when you need those older filenames. Full operator docs:
 [`video_buddy/README.md`](video_buddy/README.md) ·
@@ -220,6 +234,7 @@ docs and `EXAMPLE` files are skipped. See
 
 - [Operator manual](video_buddy/README.md) — full CLI/web/MCP reference and changelog
 - [Doctor / download-models / catalog](video_buddy/docs/QUICKSTART.md) — inventory-first LTX 2.5 flow
+- [Managed Comfy / external mode](video_buddy/docs/MANAGED_COMFY.md) — Buddy-owned model paths; no writes into an attached install
 - [Required files](video_buddy/REQUIRED-FILES.md) — accepted local names + Hub catalog
 - [MiniMax H3 demo](docs/demo/) — photoreal BMX still + run sidecar
 - [MiniMax H3 showcase](docs/showcase/h3-bmx/) — pointer to `docs/demo/`

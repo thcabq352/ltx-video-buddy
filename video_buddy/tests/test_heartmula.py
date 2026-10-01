@@ -188,6 +188,7 @@ def test_yes_copies_with_mocked_hub(tmp_path, monkeypatch):
     import huggingface_hub
 
     monkeypatch.setattr(huggingface_hub, "hf_hub_download", fake_download)
+    monkeypatch.setattr("master_agent.config.MODELS_DIR", root)
     written = download_missing_slots(yes=True, progress=lambda _m: None, root=root)
     assert written
     assert (root / "tokenizer.json").read_bytes() == b"not-a-real-weight"
