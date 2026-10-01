@@ -288,6 +288,7 @@ HEAVY_SLUGS: frozenset[str] = frozenset(
 )
 
 _FAMILY_BY_PREFIX: tuple[tuple[tuple[str, ...], str], ...] = (
+    (("heartmula", "heartcodec", "hearttranscriptor"), "heartmula"),
     (("ltx25", "ltx-2.5", "t2v_i2v", "flf2v", "msr", "v2v_ic", "a2v", "t2a"), "ltx25"),
     (("h3", "fl2va", "ref2va", "minimax"), "h3"),
     (("wan22", "vb_wan22", "wan"), "wan22"),
@@ -309,6 +310,8 @@ _FAMILY_BY_PREFIX: tuple[tuple[tuple[str, ...], str], ...] = (
 
 def family_for_slug(slug: str) -> str:
     key = (slug or "").strip().lower().replace("\\", "/")
+    if "heartmula" in key or key in {"heartcodec", "hearttranscriptor"}:
+        return "heartmula"
     if key in {
         "base",
         "eros",
@@ -690,6 +693,27 @@ def _build_rows() -> dict[str, WorkflowVramRow]:
     )
     add(
         WorkflowVramRow(
+            slug="heartmula",
+            family="heartmula",
+            default_pack="HeartMuLa-oss-3B-happy-new-year",
+            expected_vram_gb=12.0,
+            vram_class="tight",
+            prepare_warning=(
+                "Sequential with LTX on 16GB. heartlib lazy_load unloads HeartMuLa "
+                "before HeartCodec. Do not keep HeartMuLa and LTX resident together."
+            ),
+            notes=(
+                "HeartMuLa 3B bf16 + HeartCodec fp32. About 8–16GB depending on "
+                "dtype and whether lazy_load is on. heartlib has no nf4/fp4. "
+                "Sequential with LTX — a 16GB card cannot hold both. "
+                "Default Hub ids: HeartMuLa-oss-3B-happy-new-year into "
+                "HeartMuLa-oss-3B, HeartCodec-oss-20260123 into HeartCodec-oss. "
+                "HeartCodec-oss returned 401 (tower + Hub lookup)."
+            ),
+        )
+    )
+    add(
+        WorkflowVramRow(
             slug="vb_tag_review",
             family="dataset",
             default_pack="qwen3vl",
@@ -707,6 +731,14 @@ _ROWS = _build_rows()
 def _fallback_row(slug: str) -> WorkflowVramRow:
     family = family_for_slug(slug)
     templates = {
+        "heartmula": WorkflowVramRow(
+            slug,
+            family,
+            "HeartMuLa-oss-3B-happy-new-year",
+            12.0,
+            "tight",
+            notes="Sequential with LTX. lazy_load bf16 + fp32 codec. No nf4/fp4 in heartlib.",
+        ),
         "ltx25": WorkflowVramRow(slug, family, _LTX25[0], 12.5, "safe", notes="Inherits LTX 2.5 16GB pick."),
         "h3": WorkflowVramRow(slug, family, _H3[0], 13.0, "tight", notes="Inherits H3 16GB pick."),
         "ltx23": WorkflowVramRow(
@@ -790,6 +822,13 @@ def format_vram_table() -> str:
         ),
         ("LTX 2.5", "ltx25_t2v_i2v (default 2.5)", _LTX25[0], 12.5, "GGUF Q4 → NVFP4 → int8 → bf16; two-stage is quality"),
         ("MiniMax H3", "h3_t2v / i2v / flf / r2v", _H3[0], 13.0, "Q4_K + NVFP4 TE; ≤12s / 0.8MP / 4 steps / CFG 1.0"),
+        (
+            "HeartMuLa",
+            "heartmula (not an LTX slug)",
+            "HeartMuLa-oss-3B-happy-new-year",
+            12.0,
+            "bf16 + lazy_load; sequential with LTX; codec fp32; no nf4/fp4",
+        ),
         ("Wan 2.2", "wan22", WAN22_HIGH_PREFERENCE[0], 13.2, "GGUF Q4_K_S or fp8 + Lightx2v; sequential high/low; no dual bf16"),
         ("AI-VFX / VACE", "vb_aivfx_adv_13", _VACE[0], 13.6, "Q4_K_M GGUF default; v1.0 e4m3fn is heavy"),
         ("Movie Builder", "vb_movie_builder", "flux-2-klein-9b-fp8.safetensors", 15.8, "HEAVY — safer: ltx25_t2v_i2v"),

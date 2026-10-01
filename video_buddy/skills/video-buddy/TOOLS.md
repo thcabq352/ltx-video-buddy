@@ -45,7 +45,7 @@ is hours. Prefer ~900s MCP timeout.
 | `comfy run` | Prepare, lint, queue, copy into `outputs/`. `--prepare` stops before GPU. Modes: `generate` / `template` / `raw`. |
 | `comfy attach` | Apply previs `buddy.comfy.attach/v1` / WorkflowPatchPlan JSON. Default dry-run (patch + `/object_info`). `--submit` POSTs `/prompt`. |
 | `run "BRIEF"` | Director pipeline. `--dry-run` plan+lint only. `--self-improve-dry` closes judge→revise→rejudge (quality_bar a/c/d, no Comfy). `--attach RECIPE.json` patches a previs pack. `--no-interview` for unattended. `--variant` forces a catalog slug. Every clip writes `shot-N.buddy.json` + run-row ClipProvenance. |
-| `download-models` | List confirmed-missing slots. `--ltx25` / `--h3` / `--wan` / … `--scan-only` never fetches. `--use-existing` does not download. `--download` asks first. `--yes` only after the ask. |
+| `download-models` | List confirmed-missing slots. `--ltx25` / `--h3` / `--heartmula` / `--wan` / … `--heartmula` prefers `HeartCodec-oss-20260123` (`HeartCodec-oss` returned 401) and does not fetch until `--yes`. Check free space first. `--scan-only` never fetches. `--use-existing` does not download. `--download` asks first. `--yes` only after the ask. |
 | `download-flux` | One-time Flux fp8 weights (~17GB). |
 | `validate` | One file or `--all`. `--offline` / `--strict` (illegal LTX frames = ERROR). |
 | `scan-models` | Scan `models/` → inventory. |
@@ -58,9 +58,11 @@ is hours. Prefer ~900s MCP timeout.
 | `soul list\|show\|set` | Standing values (`studio`, `play`). |
 | `brief "idea"` | Interview only. `--go` chains into generation. |
 | `fractal` | CPU Mandelbrot/Julia. No Comfy. |
-| `music "BRIEF" --audio FILE` | Beat-synced MV (ffmpeg mux). `--visual fractal` is CPU-only. |
+| `music "BRIEF" --audio FILE` | Beat-synced MV (ffmpeg mux). `--visual fractal` is CPU-only. `--audio` wins over `--heartmula-lyrics` / `--heartmula-tags`. |
 | `mv plan --audio FILE` | Write `buddy.mv.beat_plan/v1` (30 fps windows). |
-| `mv render --audio FILE --out out/MV-FIXED.mp4` | Comfy/LTX unique burns → Remotion stitch. `--dry-run` = no GPU. `--image` = I2V. |
+| `mv render --audio FILE --out out/MV-FIXED.mp4` | Comfy/LTX unique burns → Remotion stitch. `--dry-run` = no GPU. `--image` = I2V. Optional HeartMuLa track when `--audio` is omitted. |
+| `heartmula generate --lyrics TEXT --tags TAGS --out track.wav` | heartlib plan. `--dry-run` writes nothing and does not import heartlib. |
+| `heartmula transcribe --audio FILE --out words.json` | `{w,s,e}` for lipdub. Skipped when `run --words` is set. |
 | `character create\|list` | CCC stage. `--train` chains LoRA. |
 | `lora setup\|train\|validate` | ai-toolkit Flux LoRA. |
 | `power-tune` | Dry-run power mode: patch + LLM graph ops + validate, no GPU. |

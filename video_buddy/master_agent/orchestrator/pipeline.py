@@ -144,6 +144,7 @@ class PipelineResult:
         self.provenance: dict[str, Any] = {}
         self.provenance_history: list[dict[str, Any]] = []
         self.provenance_sidecar: str = ""
+        self.heartmula: dict[str, Any] = {}
 
     def log(self, msg: str) -> None:
         self.messages.append(msg)
@@ -180,7 +181,7 @@ class PipelineResult:
             "provenance": self.provenance,
             "provenance_history": self.provenance_history,
             "provenance_sidecar": self.provenance_sidecar,
-        }
+        } | ({"heartmula": self.heartmula} if getattr(self, "heartmula", None) else {})
 
 
 def _write_record(result: PipelineResult) -> None:
@@ -392,6 +393,7 @@ def run_pipeline(
     revise_enabled: Optional[bool] = None,
     spoken_line: Optional[str] = None,
     voice_sample: Optional[dict[str, Any]] = None,
+    heartmula: Optional[dict[str, Any]] = None,
     max_judge_rounds: int = MAX_JUDGE_ROUNDS,
     max_full_judge_rounds: int = MAX_FULL_JUDGE_ROUNDS,
     judge_threshold: float = JUDGE_SCORE_THRESHOLD,
@@ -418,6 +420,7 @@ def run_pipeline(
 ) -> PipelineResult:
     run_id = uuid.uuid4().hex[:12]
     result = PipelineResult(run_id, request=request)
+    result.heartmula = dict(heartmula or {})
     from master_agent.comfy.partner_pointers import route_pack_c
 
     variant, refusal = route_pack_c(request, variant)
@@ -504,6 +507,7 @@ def run_pipeline(
             max_judge_rounds=max_judge_rounds,
             dry_run=dry_run,
             tripod=bool(tripod),
+            heartmula=result.heartmula or None,
         )
 
     talking = None
@@ -583,6 +587,7 @@ def run_pipeline(
             revise_enabled=revise_enabled,
             spoken_line=spoken_line,
             voice_sample=voice_sample,
+            heartmula=result.heartmula or None,
             max_judge_rounds=max_judge_rounds,
             power_mode=power_mode,
             attach_recipe=attach_recipe,
@@ -696,6 +701,7 @@ def run_pipeline(
             revise_enabled=revise_enabled,
             spoken_line=spoken_line,
             voice_sample=voice_sample,
+            heartmula=result.heartmula or None,
             max_judge_rounds=max_judge_rounds,
             power_mode=power_mode,
             attach_recipe=attach_recipe,
@@ -901,8 +907,12 @@ def dry_run_pipeline(
     pause_reset_strength: Optional[float] = None,
     pause_reset_min_s: Optional[float] = None,
     inoutpaint: Optional[dict[str, Any]] = None,
+    heartmula: Optional[dict[str, Any]] = None,
 ) -> int:
     """Storyboard + patch + validate every segment without queueing. CLI exit code."""
+    if heartmula:
+        source = heartmula.get("transcribe_source") or "heartmula"
+        print(f"heartmula: {source} (dry-run plan; no GPU)")
     from master_agent.comfy.partner_pointers import route_pack_c
 
     variant, refusal = route_pack_c(request, variant)

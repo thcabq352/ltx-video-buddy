@@ -36,6 +36,7 @@ def render_music_video(
     height: int = 512,
     fps: int = 30,
     work_dir: str | Path | None = None,
+    heartmula: dict[str, Any] | None = None,
     log=print,
 ) -> dict[str, Any]:
     """Run plan → unique Comfy/LTX burns → uniqueness gate → Remotion stitch.
@@ -79,6 +80,7 @@ def render_music_video(
         height=height,
         dry_run=dry_run,
         run_id=run_id,
+        heartmula=heartmula,
         log=log,
     )
     clip_pairs = [(int(row["index"]), Path(row["clip"])) for row in burns]
@@ -117,6 +119,7 @@ def render_music_video(
         "variant": burns[0]["variant"] if burns else variant,
         "image": str(image) if image else None,
         "prompt": prompt,
+        "heartmula": heartmula,
     }
     rec_path = dest / "mv-record.json"
     rec_path.write_text(json.dumps(record, indent=1, default=str) + "\n", encoding="utf-8")

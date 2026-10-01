@@ -39,4 +39,5 @@ jobs:
             video_buddy/tests/test_lipdub_likeness.py \
             video_buddy/tests/test_a2a.py \
             video_buddy/tests/test_knowledge_ingest.py \
-            video_buddy/tests/test_seedance_partner_pointers.py
+            video_buddy/tests/test_seedance_partner_pointers.py \
+            video_buddy/tests/test_heartmula.py
