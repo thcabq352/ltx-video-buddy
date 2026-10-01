@@ -22,6 +22,8 @@ Commands:
   workflows           List default catalog variants (no env flags)
   comfy run           Drive ComfyUI from the CLI (prepare + lint + queue)
   comfy attach        Apply previs buddy.comfy.attach/v1 (dry-run; --submit to /prompt)
+  comfy start|stop|status|restart
+                      Managed local ComfyUI via comfy-cli (not attach / not generate)
   diagnose            9-frame hull fire (sec/step); does not spend shift budget
   budget              status | reset-shift  (VRAM-min shift ledger)
   hermes              status | register  (profile ltx + discovery)
@@ -1802,7 +1804,12 @@ def cmd_comfy_attach(args: argparse.Namespace) -> int:
 
 
 def cmd_comfy(args: argparse.Namespace) -> int:
-    if getattr(args, "comfy_command", "run") == "attach":
+    command = getattr(args, "comfy_command", "run")
+    if command in {"start", "stop", "status", "restart"}:
+        from master_agent.comfy.tower import cmd_tower
+
+        return cmd_tower(args)
+    if command == "attach":
         return cmd_comfy_attach(args)
     from master_agent.comfy.cli_run import LintError, execute_prepared, lint_or_raise, prepare_run
 
@@ -2396,9 +2403,12 @@ def main(argv: list[str] | None = None) -> int:
 
     p = sub.add_parser(
         "comfy",
-        help="drive ComfyUI from the CLI: prepare, lint, queue, copy into outputs/",
+        help="drive ComfyUI: run/attach graphs, or start/stop/status/restart a managed local server",
     )
-    p.add_argument("comfy_command", choices=["run", "attach"])
+    p.add_argument(
+        "comfy_command",
+        choices=["run", "attach", "start", "stop", "status", "restart"],
+    )
     p.add_argument("--mode", choices=["raw", "template", "generate"], default="generate")
     p.add_argument("--json", dest="workflow_json", help="pasted/path API workflow JSON (raw)")
     p.add_argument("--template", help="template slug or path under workflows/")
@@ -2442,6 +2452,46 @@ def main(argv: list[str] | None = None) -> int:
         help="attach: patch + validate only (default; mutually exclusive with --submit)",
     )
     p.add_argument("--runs-dir", dest="runs_dir", help=argparse.SUPPRESS)
+    p.add_argument(
+        "--workspace",
+        default=None,
+        help="managed Comfy workspace (start/stop/status/restart); "
+        "default MANAGED_COMFY_ROOT or PROJECT_ROOT/ComfyUI",
+    )
+    p.add_argument(
+        "--port",
+        type=int,
+        default=None,
+        help="managed Comfy listen port (default 8188). Loopback only.",
+    )
+    p.add_argument(
+        "--base-url",
+        dest="base_url",
+        default=None,
+        help="managed health-check URL (default COMFYUI_URL)",
+    )
+    p.add_argument(
+        "--extra-model-paths",
+        dest="extra_model_paths",
+        default=None,
+        help="existing YAML passed to ComfyUI after -- (start/restart). Not written here.",
+    )
+    p.add_argument(
+        "--no-wait",
+        action="store_true",
+        help="start/restart: return after comfy launch, before /system_stats is ready",
+    )
+    p.add_argument(
+        "--no-watch",
+        action="store_true",
+        help="start/restart: do not spawn the crash-restart watchdog",
+    )
+    p.add_argument(
+        "--as-json",
+        dest="as_json",
+        action="store_true",
+        help="start/stop/status/restart: print JSON (comfy --json remains the workflow path)",
+    )
     p.set_defaults(func=cmd_comfy)
 
     p = sub.add_parser(
