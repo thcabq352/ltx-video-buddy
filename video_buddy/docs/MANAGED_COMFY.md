@@ -91,6 +91,54 @@ only consent to write into the attached tree.
 
 This module does not run `comfy install` or `comfy update`.
 
+## Model selector (CLI)
+
+Phase C is the checklist only. The web UI port is later. This command does
+not run `comfy install` or `comfy update`.
+
+The catalog is grouped by capability: video generation, soundtrack, and
+local studio. `models manifest` prints that JSON. The 2.3 / 2.5 radio swaps
+the video-generation rows. Required rows stay on and read **required for
+generation**. Optional rows show a size when the repo already attests one.
+
+```bash
+cd video_buddy
+python -m master_agent models manifest
+python -m master_agent models select --version 2.5
+python -m master_agent models select --version 2.3
+python -m master_agent download-models --selector --version 2.5 --scan-only
+```
+
+`--scan-only` prints the running download total, the ETA (default 50 Mbit/s,
+override with `--mbps`), and free space on `MODELS_DIR`. It does not fetch
+and does not write `state/model_selector.json`.
+
+A fetch still needs `--yes`, and only after the free-space check passes.
+Files already on disk are skipped. Bytes go to `MODELS_DIR` through the
+existing download guards.
+
+```bash
+python -m master_agent models select --version 2.5 --yes
+python -m master_agent models select --version 2.5 --soundtrack --yes
+```
+
+`--soundtrack` is **Enable Soundtrack Studio**. It calls the existing
+`download-models --heartmula` consent path (`download_missing_slots`). It
+does not add a new music runtime.
+
+Switching the radio asks whether to keep the previous pack or wipe it from
+`MODELS_DIR`. Non-interactive runs pass `--keep` or `--wipe`. Keeping both
+turns on per-job version: an LTX 2.3 job uses 2.3 files and an LTX 2.5 job
+uses 2.5 files. If the requested version is missing, Buddy reports that and
+offers `models select --version …`. It does not silently run the other pack.
+
+Sulphur GGUF, Sulphur LoRA (`models/loras/sulphur/`), and the EROS checkpoint
+are local detect flags. The selector does not download them and does not
+store a Hub URL for them.
+
+LTX 2.3 rows whose byte size is not attested in this repo are listed and are
+not fetched. LTX 2.5 rows and Soundtrack Studio are the download paths.
+
 ## Try this on the tower after merge
 
 Do not treat a checkout of this change as a reason to download weights or to
@@ -117,3 +165,12 @@ python -m master_agent comfy start   # must fail; Buddy does not touch that proc
 
 `python -m master_agent download-models` still lists missing files and does
 not fetch until `--yes`. Those bytes go to `MODELS_DIR` only.
+
+Selector checklist (no fetch). Leave off `--yes` until you mean to pull:
+
+```bash
+python -m master_agent models manifest
+python -m master_agent models select --version 2.5 --scan-only
+python -m master_agent models select --version 2.3 --scan-only
+python -m master_agent download-models --selector --version 2.5 --scan-only
+```
