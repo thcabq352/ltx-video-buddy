@@ -31,12 +31,35 @@ from master_agent.llm import get_llm, normalize_provider_name, provider_availabl
 
 
 def _local_member() -> str:
-    """``ollama:<model>`` when Ollama is up, else ``llamacpp:<model>``."""
+    """``llamacpp:<model>`` when llama.cpp is up, else ``ollama:<model>``.
+
+    An explicit ``LLM_PROVIDER=ollama`` or ``llamacpp`` stays on that backend.
+    """
+    from master_agent.config import LLM_PROVIDER
+    from master_agent.llm import normalize_provider_name
+
+    pinned = normalize_provider_name(LLM_PROVIDER)
+    if pinned == "ollama":
+        return f"ollama:{OLLAMA_MODEL}"
+    if pinned == "llamacpp" or provider_available("llamacpp"):
+        return f"llamacpp:{LLAMACPP_MODEL}"
     if provider_available("ollama"):
         return f"ollama:{OLLAMA_MODEL}"
-    if provider_available("llamacpp"):
-        return f"llamacpp:{LLAMACPP_MODEL}"
-    return f"ollama:{OLLAMA_MODEL}"
+    return f"llamacpp:{LLAMACPP_MODEL}"
+
+
+_USES_LOCAL = frozenset(
+    {
+        "default",
+        "local",
+        "both",
+        "panel",
+        "grok+local",
+        "grok-local",
+        "grok_local",
+        "duo",
+    }
+)
 
 
 def _presets() -> dict[str, str]:
@@ -97,8 +120,16 @@ def _skip_reason(spec: str) -> str:
 
 def resolve_panel(spec: str | None) -> PanelResolution:
     """Preset name or comma list -> available members (+ skipped with reasons)."""
+    from master_agent.llm import prepare_local_llm
+
     raw = (spec or LLM_PANEL or "default").strip()
-    expanded = _presets().get(raw.lower(), raw)
+    key = raw.lower()
+    wants_llama = key in _USES_LOCAL or any(
+        normalize_provider_name(part) == "llamacpp" for part in raw.split(",")
+    )
+    if wants_llama:
+        prepare_local_llm()
+    expanded = _presets().get(key, raw)
     out = PanelResolution()
     seen: set[str] = set()
     for part in expanded.split(","):

@@ -1,8 +1,8 @@
-"""LLM client — local Ollama or llama.cpp first, Grok optional.
+"""LLM client — llama.cpp first, then Ollama, then Grok.
 
-Provider chain for ``auto`` (default): ollama -> llamacpp -> grok.
-Main model: ``qwen3-vl-heretic`` (local Qwen3-VL 9B-class; see
-``OLLAMA_MODEL`` / ``LLAMACPP_MODEL``).
+Provider chain for ``auto`` (default, and when unset): llamacpp -> ollama -> grok.
+llama.cpp is the preferred local backend. Main model: ``qwen3-vl-heretic``
+(local Qwen3-VL 9B-class; see ``LLAMACPP_MODEL`` / ``OLLAMA_MODEL``).
 
 Both local backends speak OpenAI-compat chat at ``{base}/v1``.
 Ollama also has native ``/api/chat`` and ``/api/embed``; llama.cpp uses
@@ -11,11 +11,14 @@ Ollama also has native ``/api/chat`` and ``/api/embed``; llama.cpp uses
 
 from __future__ import annotations
 
+import logging
 import os
 import socket
 import time
 from typing import Any
 from urllib.parse import urlparse
+
+log = logging.getLogger(__name__)
 
 from langchain_openai import ChatOpenAI
 
@@ -30,7 +33,7 @@ from master_agent.config import (
     XAI_BASE_URL,
 )
 
-AUTO_CHAIN = ("ollama", "llamacpp", "grok")
+AUTO_CHAIN = ("llamacpp", "ollama", "grok")
 
 # Canonical local name -> accepted LLM_PROVIDER / panel prefixes
 _LLAMACPP_ALIASES = frozenset(
@@ -132,18 +135,18 @@ def provider_available(spec: str) -> bool:
 
 
 def preferred_local_provider() -> str | None:
-    """Ollama if reachable, else llama.cpp. Used by panel ``default`` / ``local``."""
-    if provider_available("ollama"):
-        return "ollama"
+    """llama.cpp if reachable, else Ollama. Used by panel ``default`` / ``local``."""
     if provider_available("llamacpp"):
         return "llamacpp"
+    if provider_available("ollama"):
+        return "ollama"
     return None
 
 
 def active_local_backend() -> str | None:
     """Local backend for vision / embeddings, honoring an explicit ``LLM_PROVIDER``.
 
-    ``auto`` (and cloud-only providers) try ollama then llamacpp.
+    ``auto`` (and cloud-only providers) try llamacpp then ollama.
     An explicit ``llamacpp`` / ``ollama`` does **not** silently hop to the other.
     """
     name = normalize_provider_name(LLM_PROVIDER)
@@ -154,33 +157,67 @@ def active_local_backend() -> str | None:
     return preferred_local_provider()
 
 
+def active_backend() -> str | None:
+    """Backend ``auto`` would use, or the pinned provider when that one is up."""
+    name = normalize_provider_name(LLM_PROVIDER)
+    if name in ("", "auto"):
+        for candidate in AUTO_CHAIN:
+            if provider_available(candidate):
+                return candidate
+        return None
+    if provider_available(name):
+        return name
+    return None
+
+
+def prepare_local_llm(spec: str | None = None) -> None:
+    """Start the managed llama.cpp server when *spec* wants it. Never raises."""
+    raw = LLM_PROVIDER if spec is None else spec
+    name = normalize_provider_name(raw)
+    if name not in ("auto", "llamacpp"):
+        return
+    try:
+        from master_agent.llamacpp_server import ensure_started
+
+        ensure_started(fall_through=name != "llamacpp")
+    except Exception as exc:
+        log.warning("llama.cpp autostart failed: %s", exc)
+
+
 def local_llm_health() -> dict[str, Any]:
-    """Reachability for each local backend — never conflates Ollama with llama.cpp."""
+    """Reachability for llama.cpp, Ollama, and Grok — each reported separately."""
     ollama_up = _ollama_up()
     llamacpp_up = _llamacpp_up()
+    grok_up = provider_available("grok")
     preferred = preferred_local_provider()
     return {
-        "ollama": {
-            "up": ollama_up,
-            "url": OLLAMA_URL,
-            "model": OLLAMA_MODEL,
-        },
         "llamacpp": {
             "up": llamacpp_up,
             "url": LLAMACPP_URL,
             "model": LLAMACPP_MODEL,
         },
+        "ollama": {
+            "up": ollama_up,
+            "url": OLLAMA_URL,
+            "model": OLLAMA_MODEL,
+        },
+        "grok": {
+            "up": grok_up,
+            "url": "cloud",
+            "model": os.getenv("SPACEXAI_MODEL", SPACEXAI_MODEL),
+        },
         "preferred": preferred,
         "provider": LLM_PROVIDER,
-        "active": active_local_backend(),
+        "active": active_backend(),
     }
 
 
 def attach_llm_health(out: dict[str, Any]) -> dict[str, Any]:
     """Fill health dict keys used by MCP / studio. ``ollama`` stays a bool."""
     detail = local_llm_health()
-    out["ollama"] = detail["ollama"]["up"]
     out["llamacpp"] = detail["llamacpp"]["up"]
+    out["ollama"] = detail["ollama"]["up"]
+    out["grok"] = detail["grok"]["up"]
     out["local_llm"] = detail
     return out
 
@@ -188,14 +225,14 @@ def attach_llm_health(out: dict[str, Any]) -> dict[str, Any]:
 def format_local_llm_health(detail: dict[str, Any] | None = None) -> str:
     data = detail or local_llm_health()
     lines = []
-    for key in ("ollama", "llamacpp"):
+    for key in ("llamacpp", "ollama", "grok"):
         row = data.get(key) or {}
         mark = "up  " if row.get("up") else "down"
         lines.append(
             f"      {key:<8} {mark}  {row.get('url')}  model={row.get('model')}"
         )
-    pref = data.get("preferred") or "none"
-    lines.append(f"      local    {pref}   provider {data.get('provider')}")
+    active = data.get("active") or "none"
+    lines.append(f"      active   {active}   provider {data.get('provider')}")
     return "\n".join(lines) + "\n"
 
 
@@ -288,8 +325,9 @@ def _grok_llm(temperature: float) -> ChatOpenAI:
 
 
 def get_llm(temperature: float = 0.2, provider: str | None = None) -> ChatOpenAI:
-    """Build a chat model for a provider spec; ``auto`` tries ollama -> llamacpp -> grok."""
+    """Build a chat model. ``auto`` tries llamacpp -> ollama -> grok."""
     spec = (provider or LLM_PROVIDER or "auto").strip().lower()
+    prepare_local_llm(spec)
     if spec != "auto":
         return _llm_for(spec, temperature)
     errors: list[str] = []
@@ -301,7 +339,7 @@ def get_llm(temperature: float = 0.2, provider: str | None = None) -> ChatOpenAI
         except Exception as e:
             errors.append(f"{candidate}: {e}")
     raise RuntimeError(
-        "No LLM provider available (tried ollama -> llamacpp -> grok). "
+        "No LLM provider available (tried llamacpp -> ollama -> grok). "
         + "; ".join(errors)
     )
 
