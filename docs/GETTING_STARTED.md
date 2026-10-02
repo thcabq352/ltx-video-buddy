@@ -42,7 +42,7 @@ Do these in order. Do not jump to Part 2.
 
 | Lesson | Name | Do |
 |---|---|---|
-| L0 | tree | This tree is `video_buddy` / `master_agent`. Not `ltx_director/`, `SOS/`, or `lot/`. |
+| L0 | tree | This tree is `video_buddy` / `master_agent`. |
 | L1 | about | `python -m master_agent about` before any GPU claim. |
 | L2 | health | `python -m master_agent health`. Comfy **:8188** up. Studio `:8189` is not proof. |
 | L3 | dry-run | `python -m master_agent run "BRIEF" --dry-run`. Plan and lint only. No queue. No shift-budget spend. |

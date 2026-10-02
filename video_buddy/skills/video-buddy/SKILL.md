@@ -25,7 +25,7 @@ Local ComfyUI video studio in this repo (`video_buddy/`). Package is `master_age
 | Grok / Imagine cloud clip, no local Comfy | default cloud video skills — not Buddy |
 | Pixie Forge brand / scotty.fyi / HyperFrames | `hermes -p forge` |
 | Generic node poke on a **different** Comfy install | that install's MCP, not `master-agent` |
-| Sibling trees (`ltx_director/`, `SOS/`, `lot/`) | those packages — L0 is this tree only |
+| A checkout other than this `video_buddy/` tree | that checkout's own docs — L0 is this package only |
 
 ## Hermes profile (primary)
 
@@ -55,7 +55,7 @@ Do L0→L5 in order. Print the card: `python -m master_agent curriculum`. Part 2
 
 | Lesson | Do |
 |---|---|
-| L0 tree | This tree: `video_buddy` / `master_agent`. Not sibling studios. |
+| L0 tree | This tree: `video_buddy` / `master_agent`. |
 | L1 about | `python -m master_agent about` — studio card before any GPU claim. |
 | L2 health | `python -m master_agent health` — Comfy **:8188** up. Studio `:8189` is not proof. |
 | L3 dry-run | `python -m master_agent run "BRIEF" --dry-run` — plan/lint only. No queue, no shift-budget spend. |

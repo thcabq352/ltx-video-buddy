@@ -3,8 +3,8 @@
 Brain ranks stories. Hands answers *possible-right-now* from a live /
 ``object_info`` / inventory snapshot and owns the 8s last-frame chain.
 
-Sibling: your-video-buddy ``Hands.can_fulfill`` → ``FitResult``
-(repo ``docs/ARCHITECTURE.md``, PR #9). This tree is the Python live orchestrator.
+``can_fulfill`` returns ``FitResult`` (repo ``docs/ARCHITECTURE.md``).
+This tree is the Python live orchestrator.
 Hands may use VRAM / weight inventory internally. Those keys never enter
 the contract the brain writes.
 """
@@ -97,7 +97,7 @@ def plan_last_frame_chain(story_duration_s: float) -> LastFrameChain:
 
 @dataclass
 class FitResult:
-    """Rust ``FitResult`` shape: fit or reject with a reason."""
+    """Fit or reject with a reason."""
 
     ok: bool
     reason: Optional[str] = None

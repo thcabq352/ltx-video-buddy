@@ -1,4 +1,4 @@
-"""Lot school rubrics ported to Python. Never blocks export.
+"""School rubrics. Never blocks export.
 
 Run: .venv/Scripts/python.exe -m pytest tests/test_school.py -q
 """

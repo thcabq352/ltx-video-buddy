@@ -14,12 +14,9 @@ generate and revise. **The sidecar is the source of truth across attempts**
 
 ## Wire compatibility
 
-Schema id and field names match buddy-core **ClipProvenance** from sibling
-`your-video-buddy` PR #7 (`cursor/close-improve-loop-1c25`, agent
-`bc-39743643`). That repo / PR was **not fetchable** from this environment
-(404). This is **not** a second schema — it is the PR #7 shape Scott
-listed. If the Rust struct lands extra keys, add them without dropping
-these.
+This repository owns schema id `buddy.clip.provenance/v1`. Field names
+below are the contract. Do not invent a second schema. Extra keys may be
+added without dropping these.
 
 Do not write `<stem>.provenance.json` for new clips. A read-only fallback
 still opens a legacy `.provenance.json` if a `.buddy.json` is missing.

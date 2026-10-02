@@ -7,7 +7,7 @@ Every clip stores schema `buddy.clip.provenance/v1`.
 
 The sidecar is the source of truth across attempts. The orchestrator reads it before a revise. Do not write `<stem>.provenance.json` for new clips. A read-only fallback still opens a legacy `.provenance.json` when the `.buddy.json` is missing. The public H3 still uses that older name: [`docs/demo/H3-SHOWCASE-BMX-8s.provenance.json`](demo/H3-SHOWCASE-BMX-8s.provenance.json).
 
-Field names match the buddy-core ClipProvenance shape. If a sibling struct adds keys, add them here without dropping these and without a second schema id.
+This repository owns `buddy.clip.provenance/v1`. Add optional keys on this schema id. Do not invent a second schema id, and do not drop the required fields below.
 
 ## Required shape
 

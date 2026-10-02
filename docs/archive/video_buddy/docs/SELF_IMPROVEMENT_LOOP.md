@@ -2,10 +2,8 @@
 
 # Self-improvement loop (live Python orchestrator)
 
-The intended loop lives in this repo’s `master_agent` orchestrator — not in
-sibling `your-video-buddy`. That sibling owns the Rust iteration controller /
-judge scaffold; this tree owns the **live** judge → revise → re-run → re-judge
-path on the tower.
+The intended loop lives in this repo’s `master_agent` orchestrator. This
+tree owns judge → revise → re-run → re-judge on the tower.
 
 ## Intended loop
 
@@ -51,7 +49,7 @@ recorded as `accept`.
 | No dry-run closed loop for CI | `Orchestrator.run(dry_run=True)` and `--self-improve-dry` |
 | Prompts / provenance not stored with clips | `master_agent/provenance.py` — sidecar + run-row ClipProvenance |
 
-## Quality Bar rule ids (buddy-core strings)
+## Quality Bar rule ids
 
 These are plain strings / JSON — not a parallel iteration-controller API.
 
