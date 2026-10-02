@@ -55,7 +55,7 @@ class TestProviderAliases:
         assert normalize_provider_name("ollama") == "ollama"
 
     def test_auto_chain_order(self):
-        assert AUTO_CHAIN == ("ollama", "llamacpp", "grok")
+        assert AUTO_CHAIN == ("llamacpp", "ollama", "grok")
 
 
 class TestChatBaseUrl:
@@ -84,7 +84,8 @@ class TestChatBaseUrl:
         assert openai_compat_base("http://127.0.0.1:8080/v1") == "http://127.0.0.1:8080/v1"
 
     def test_get_llm_llamacpp_builds_client(self):
-        llm = get_llm(provider="llamacpp")
+        with patch("master_agent.llm.endpoint_up", return_value=True):
+            llm = get_llm(provider="llamacpp")
         base = getattr(llm, "openai_api_base", None) or getattr(llm, "base_url", "")
         assert "/v1" in str(base)
         assert "8080" in str(base)
@@ -107,16 +108,64 @@ class TestAutoDiscovery:
         assert got == "LLAMACPP_CLIENT"
         build.assert_called_once()
 
-    def test_auto_prefers_ollama(self):
+    def test_auto_prefers_llamacpp(self):
         with patch("master_agent.llm.endpoint_up", side_effect=_up_only("ollama", "llamacpp")), patch(
+            "master_agent.llm._llamacpp_llm", return_value="LLAMACPP_CLIENT"
+        ) as build:
+            got = get_llm(provider="auto")
+        assert got == "LLAMACPP_CLIENT"
+        build.assert_called_once()
+
+    def test_auto_uses_ollama_when_llamacpp_down(self, capsys):
+        from master_agent.llamacpp_server import reset_state
+
+        reset_state()
+        with patch("master_agent.llm.endpoint_up", side_effect=_up_only("ollama")), patch(
+            "master_agent.llamacpp_server.resolve_binary", return_value=None
+        ), patch(
             "master_agent.llm._ollama_llm", return_value="OLLAMA_CLIENT"
         ) as build:
             got = get_llm(provider="auto")
         assert got == "OLLAMA_CLIENT"
         build.assert_called_once()
+        err = capsys.readouterr().err
+        assert "llama.cpp binary not found" in err
+        assert "Falling through to Ollama" in err
 
-    def test_preferred_local_ollama_first(self):
+    def test_auto_uses_grok_last(self):
+        from master_agent.llamacpp_server import reset_state
+
+        reset_state()
+        with patch("master_agent.llm.endpoint_up", side_effect=_up_only()), patch(
+            "master_agent.llamacpp_server.resolve_binary", return_value=None
+        ), patch("master_agent.llm.has_valid_api_key", return_value=True), patch(
+            "master_agent.llm._grok_llm", return_value="GROK_CLIENT"
+        ) as build:
+            got = get_llm(provider="auto")
+        assert got == "GROK_CLIENT"
+        build.assert_called_once()
+
+    def test_pin_ollama_does_not_start_llamacpp(self):
+        with patch("master_agent.llamacpp_server.ensure_started") as start, patch(
+            "master_agent.llm._ollama_llm", return_value="OLLAMA_CLIENT"
+        ), patch("master_agent.llm._llamacpp_llm") as llama:
+            got = get_llm(provider="ollama")
+        assert got == "OLLAMA_CLIENT"
+        start.assert_not_called()
+        llama.assert_not_called()
+
+    def test_pin_llamacpp_does_not_use_ollama(self):
+        with patch("master_agent.llm.endpoint_up", side_effect=_up_only("ollama", "llamacpp")), patch(
+            "master_agent.llm._llamacpp_llm", return_value="LLAMACPP_CLIENT"
+        ), patch("master_agent.llm._ollama_llm") as ollama:
+            got = get_llm(provider="llamacpp")
+        assert got == "LLAMACPP_CLIENT"
+        ollama.assert_not_called()
+
+    def test_preferred_local_llamacpp_first(self):
         with patch("master_agent.llm.endpoint_up", side_effect=_up_only("ollama", "llamacpp")):
+            assert preferred_local_provider() == "llamacpp"
+        with patch("master_agent.llm.endpoint_up", side_effect=_up_only("ollama")):
             assert preferred_local_provider() == "ollama"
         with patch("master_agent.llm.endpoint_up", side_effect=_up_only("llamacpp")):
             assert preferred_local_provider() == "llamacpp"
@@ -131,6 +180,9 @@ class TestHealth:
         assert detail["ollama"]["up"] is False
         assert detail["llamacpp"]["up"] is True
         assert detail["preferred"] == "llamacpp"
+        assert detail["active"] == "llamacpp"
+        assert "grok" in detail
+        assert "up" in detail["grok"]
         assert "8080" in detail["llamacpp"]["url"]
         with patch("master_agent.llm.endpoint_up", side_effect=_up_only("llamacpp")):
             reset_endpoint_cache()
@@ -140,8 +192,8 @@ class TestHealth:
         assert out["llamacpp"] is True
         assert out["local_llm"]["llamacpp"]["up"] is True
         text = format_local_llm_health(detail)
-        assert "llamacpp" in text
-        assert "up" in text
+        assert text.index("llamacpp") < text.index("ollama") < text.index("grok")
+        assert "active   llamacpp" in text
 
     def test_only_ollama_does_not_claim_llamacpp(self):
         with patch("master_agent.llm.endpoint_up", side_effect=_up_only("ollama")):
@@ -149,6 +201,21 @@ class TestHealth:
         assert detail["ollama"]["up"] is True
         assert detail["llamacpp"]["up"] is False
         assert detail["preferred"] == "ollama"
+        assert detail["active"] == "ollama"
+        assert detail["grok"]["url"] == "cloud"
+
+    def test_active_is_grok_when_both_local_are_down(self):
+        with patch("master_agent.llm.endpoint_up", side_effect=_up_only()), patch(
+            "master_agent.llm.has_valid_api_key", return_value=True
+        ):
+            detail = local_llm_health()
+        assert detail["llamacpp"]["up"] is False
+        assert detail["ollama"]["up"] is False
+        assert detail["grok"]["up"] is True
+        assert detail["preferred"] is None
+        assert detail["active"] == "grok"
+        text = format_local_llm_health(detail)
+        assert "active   grok" in text
 
 
 class TestEmbeddingsPath:

@@ -28,7 +28,21 @@ async def _lifespan(_app: FastAPI):
 
     print(announce_config(), flush=True)
     schedule_knowledge_ingest()
-    yield
+    try:
+        from master_agent.llm import prepare_local_llm
+
+        prepare_local_llm()
+    except Exception:
+        pass
+    try:
+        yield
+    finally:
+        try:
+            from master_agent.llamacpp_server import stop
+
+            stop()
+        except Exception:
+            pass
 
 
 app = FastAPI(title="VIDEO BUDDY", docs_url=None, redoc_url=None, lifespan=_lifespan)

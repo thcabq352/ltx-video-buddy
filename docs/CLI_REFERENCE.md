@@ -37,6 +37,20 @@ python -m master_agent power-tune "neon rain" --variant base --json
 
 `comfy` subcommands: `run`, `attach`, `start`, `stop`, `status`, `restart`, `update`. Process ownership and the attach schema: [Comfy](COMFY.md).
 
+## LLM provider
+
+`LLM_PROVIDER` defaults to `auto` when unset. Order: llama.cpp, then Ollama, then Grok. llama.cpp is the preferred local backend. `ollama` or `llamacpp` pins that backend and does not hop.
+
+| Env | Default |
+|---|---|
+| `LLAMACPP_URL` | `http://127.0.0.1:8080` |
+| `LLAMACPP_MODEL` | `OLLAMA_MODEL` (`qwen3-vl-heretic`) |
+| `LLAMACPP_BIN` | `llama-server` on `PATH` |
+| `OLLAMA_URL` | `http://127.0.0.1:11434` |
+| `OLLAMA_MODEL` | `qwen3-vl-heretic` |
+
+Buddy starts `llama-server --models-dir $MODELS_DIR` (default `video_buddy/models/`) and stops that process on shutdown. A missing binary warns and auto falls through to Ollama. `health` prints llama.cpp, Ollama, and Grok separately. See [Architecture](ARCHITECTURE.md#local-model).
+
 ## Models
 
 ```bash

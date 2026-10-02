@@ -107,18 +107,20 @@ SPACEXAI_MODEL = os.getenv("SPACEXAI_MODEL", "grok-4.5")
 # Directing only. Pack C video generation does not call this host.
 XAI_BASE_URL = "https://api.x.ai/v1"
 
-# Local Ollama — MAIN LLM (user pivot: local-only first).
-# Local text + vision: Qwen3-VL Heretic (9B-class, already on this machine)
+# Local text + vision: Qwen3-VL Heretic (9B-class). llama.cpp is preferred;
+# Ollama is the second local backend.
 OLLAMA_URL = os.getenv("OLLAMA_URL", "http://127.0.0.1:11434").rstrip("/")
 OLLAMA_MODEL = os.getenv("OLLAMA_MODEL", "qwen3-vl-heretic")
 
-# llama.cpp OpenAI-compat server (llama-server --api). Default :8080 — do not
-# collide with Hermes 8642 or the studio facade 8189.
+# llama.cpp OpenAI-compat server (llama-server). Default :8080 — do not
+# collide with Hermes 8642 or the studio facade 8189. Buddy starts this
+# process against MODELS_DIR when LLM_PROVIDER is auto or llamacpp.
 LLAMACPP_URL = os.getenv("LLAMACPP_URL", "http://127.0.0.1:8080").rstrip("/")
 LLAMACPP_MODEL = (os.getenv("LLAMACPP_MODEL") or OLLAMA_MODEL).strip()
+LLAMACPP_BIN = (os.getenv("LLAMACPP_BIN") or "").strip()
 
 # LLM provider selection:
-#   auto (ollama -> llamacpp -> grok)
+#   auto (default; llamacpp -> ollama -> grok)
 #   ollama[:model] | llamacpp[:model] (aliases: llama.cpp, llama-cpp)
 #   grok
 LLM_PROVIDER = (os.getenv("LLM_PROVIDER", "auto") or "auto").strip().lower()

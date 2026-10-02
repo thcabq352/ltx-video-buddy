@@ -75,25 +75,25 @@ Hard rules:
 |---|---|---|
 | **:8188** | ComfyUI API | `health` / MCP `health` shows Comfy up |
 | **:8189** | Optional studio dashboard (`python -m master_agent ui`) | Human UI only. A live tab is **not** Comfy. |
-| **:8080** | llama.cpp `llama-server` (optional local LLM) | MCP `health.llamacpp` / `local_llm.llamacpp` |
-| **:11434** | Ollama (optional local LLM) | MCP `health.ollama` — not implied by llama.cpp |
+| **:8080** | llama.cpp `llama-server` (preferred local LLM) | MCP `health.llamacpp` / `local_llm.llamacpp` |
+| **:11434** | Ollama (second local LLM) | MCP `health.ollama` — not implied by llama.cpp |
 
 Do not bind **8642** (Hermes API) or treat llama.cpp as Ollama.
 
-## Ollama vs llama.cpp
+## llama.cpp vs Ollama
 
-Buddy does not force Ollama. Jason / Scott can run Hermes + llama.cpp only.
+llama.cpp is the preferred local backend. Buddy starts `llama-server` (`LLAMACPP_BIN` or `PATH`) against `MODELS_DIR` and stops it on shutdown. If that binary is missing, auto warns and uses Ollama. Pin `llamacpp` or `ollama` to force one backend.
 
-| | Ollama | llama.cpp |
+| | llama.cpp | Ollama |
 |---|---|---|
-| Env | `OLLAMA_URL`, `OLLAMA_MODEL` | `LLAMACPP_URL`, `LLAMACPP_MODEL` |
-| Provider | `LLM_PROVIDER=ollama` or `auto` | `LLM_PROVIDER=llamacpp` (aliases `llama.cpp`, `llama-cpp`) |
+| Env | `LLAMACPP_URL`, `LLAMACPP_MODEL`, `LLAMACPP_BIN` | `OLLAMA_URL`, `OLLAMA_MODEL` |
+| Provider | `LLM_PROVIDER=llamacpp` (aliases `llama.cpp`, `llama-cpp`) or `auto` | `LLM_PROVIDER=ollama` |
 | Chat / storyboard | `{url}/v1/chat/completions` | `{url}/v1/chat/completions` |
-| Embeddings | `/api/embed` | `/v1/embeddings` (KB no-ops if missing) |
-| Vision judge | `/api/chat` + images | multimodal `/v1/chat/completions`; heuristic-only if the GGUF is text-only |
+| Embeddings | `/v1/embeddings` (KB no-ops if missing) | `/api/embed` |
+| Vision judge | multimodal `/v1/chat/completions`; heuristic-only if the GGUF is text-only | `/api/chat` + images |
 
-`auto` order: ollama → llamacpp → grok. Panels accept `llamacpp[:model]`.
-`health` reports each backend separately.
+`auto` order: llamacpp → ollama → grok. Panels accept `llamacpp[:model]`.
+`health` reports llama.cpp, Ollama, and Grok separately.
 
 ## MCP tools ↔ CLI
 
