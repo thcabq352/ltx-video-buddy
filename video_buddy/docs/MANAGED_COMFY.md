@@ -94,8 +94,8 @@ Startup prints the hardware sentence and any stale pins. It does not update.
 
 ## Model selector (CLI)
 
-Phase C is the checklist only. The web UI port is later. This command does
-not run `comfy install` or `comfy update`.
+Phase C is the checklist. The studio Models tab calls the same functions.
+This command does not run `comfy install` or `comfy update`.
 
 The catalog is grouped by capability: video generation, soundtrack, and
 local studio. `models manifest` prints that JSON. The 2.3 / 2.5 radio swaps
@@ -139,6 +139,50 @@ store a Hub URL for them.
 
 LTX 2.3 rows whose byte size is not attested in this repo are listed and are
 not fetched. LTX 2.5 rows and Soundtrack Studio are the download paths.
+
+## Model selector (web)
+
+The studio Models tab is that same checklist. Start the dashboard, then open
+Models:
+
+```bash
+cd video_buddy
+python -m master_agent ui --port 8189
+```
+
+The page calls `catalog_document`, `assess`, and `apply_selection` in
+`master_agent/models/selector.py`. It does not keep a second catalog.
+Generate still uses the Comfy HTTP client on `:8188`. This tab does not
+queue a job and does not run `comfy update`.
+
+What you see:
+
+- LTX 2.3 / 2.5 radio. Required rows stay locked and read **required for generation**.
+- Optional rows with the size this repo already attests.
+- **Enable Soundtrack Studio** (HeartMuLa). One toggle, the existing `--heartmula` path.
+- A live download total and ETA. The ETA uses the Mbit/s field (default 50).
+- Free space on `MODELS_DIR`. A short disk disables download.
+- Files already on disk are marked skipped.
+- Sulphur GGUF, Sulphur LoRA, and the EROS checkpoint are local detect flags.
+- LTX 2.3 rows without an attested fetch stay scan-only.
+
+**Scan only** posts `scan_only: true`. That does not download and does not
+write `state/model_selector.json`. **Download selected** stays idle until
+the agreement checkbox is checked. That sends `yes: true`, the same consent
+as `--yes`. Switching the radio still asks you to keep or wipe the previous
+pack under `MODELS_DIR`.
+
+Scan-only smoke (no weight download):
+
+```bash
+curl -s 'http://127.0.0.1:8189/api/models/selector?version=2.5'
+curl -s -X POST http://127.0.0.1:8189/api/models/selector/plan \
+  -H 'content-type: application/json' \
+  -d '{"version":"2.3","optional_ids":[],"soundtrack":false,"mbps":50}'
+curl -s -X POST http://127.0.0.1:8189/api/models/selector/apply \
+  -H 'content-type: application/json' \
+  -d '{"version":"2.5","optional_ids":[],"soundtrack":false,"mbps":50,"scan_only":true,"yes":false}'
+```
 
 ## Try this on the tower after merge
 
