@@ -16,7 +16,7 @@ links the dailies. Keep the daily files.
 
 ## EXAMPLE entry — not a recorded failure
 
-Field lessons already live in [`video_buddy/AGENTS.md`](../../video_buddy/AGENTS.md)
+Field lessons already live in [`docs/AGENTS.md`](../../docs/AGENTS.md)
 (for example LTX length 8 collapsing to one frame). Do not copy them
 here unless a machine re-hit them and you are logging that incident.
 The block below only shows the shape.

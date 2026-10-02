@@ -51,7 +51,7 @@ They are the originating machine’s notes, not a published benchmark.
 
 This sidecar is the original `.provenance.json` from the showcase run. New
 Buddy clips write `shot-N.buddy.json` instead — see
-[`video_buddy/docs/CLIP_PROVENANCE.md`](../../video_buddy/docs/CLIP_PROVENANCE.md).
+[`docs/PROVENANCE.md`](../PROVENANCE.md).
 
 ## Reproduce (local Comfy + H3 weights)
 

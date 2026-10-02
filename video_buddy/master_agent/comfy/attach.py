@@ -1,7 +1,7 @@
 """Consume a previs ``buddy.comfy.attach/v1`` / WorkflowPatchPlan recipe.
 
-Contract: ``video_buddy/docs/COMFY_ATTACH_CONTRACT.md`` (vendored in this
-tree; do not invent a second schema).
+Contract: ``docs/COMFY.md`` (repo root, attach section; do not invent a
+second schema).
 
 Buddy only patches compatible LTX/Wan API graphs (existing loaders + prompt
 widgets). It does not invent topology, face scores, or a live Comfy success.

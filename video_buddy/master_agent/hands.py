@@ -4,7 +4,7 @@ Brain ranks stories. Hands answers *possible-right-now* from a live /
 ``object_info`` / inventory snapshot and owns the 8s last-frame chain.
 
 Sibling: your-video-buddy ``Hands.can_fulfill`` → ``FitResult``
-(``docs/BRAIN_HANDS.md``, PR #9). This tree is the Python live orchestrator.
+(repo ``docs/ARCHITECTURE.md``, PR #9). This tree is the Python live orchestrator.
 Hands may use VRAM / weight inventory internally. Those keys never enter
 the contract the brain writes.
 """

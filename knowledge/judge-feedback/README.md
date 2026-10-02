@@ -7,7 +7,7 @@ same verdict shows up more than once. Schema:
 [`../AGENTS.md`](../AGENTS.md).
 
 Quality-bar codes the live judge already uses (see
-[`video_buddy/docs/SELF_IMPROVEMENT_LOOP.md`](../../video_buddy/docs/SELF_IMPROVEMENT_LOOP.md)):
+[`docs/JUDGE.md`](../../docs/JUDGE.md)):
 
 | id | code | Meaning |
 |---|---|---|

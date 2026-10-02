@@ -255,7 +255,7 @@ def test_inventory_order_is_models_then_comfy_then_yaml_then_hf(tmp_path: Path, 
 
 
 def test_external_mode_docs_cover_the_contract():
-    doc = Path(__file__).resolve().parents[1].joinpath("docs", "MANAGED_COMFY.md")
+    doc = Path(__file__).resolve().parents[2].joinpath("docs", "COMFY.md")
     text = doc.read_text(encoding="utf-8")
     for phrase in (
         "COMFY_MODE=external",

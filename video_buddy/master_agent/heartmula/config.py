@@ -13,7 +13,7 @@ heartlib layout (what ``HeartMuLaGenPipeline.from_pretrained`` opens):
       HeartCodec-oss/            # HeartCodec-oss-20260123 contents
       HeartTranscriptor-oss/
 
-The ComfyUI custom node uses different folder names. See docs/HEARTMULA.md.
+The ComfyUI custom node uses different folder names. See repo docs/FEATURES.md.
 """
 
 from __future__ import annotations

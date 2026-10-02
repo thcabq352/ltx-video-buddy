@@ -28,7 +28,7 @@ digests and run records on that machine. Markdown here is what git carries.
    weight name (`gguf/minimax_h3_fl2va_pruned-Q4_K.gguf`). New clip
    sidecars use repo-relative outputs such as
    `outputs/<run_id>/shot-1.mp4`
-   ([`video_buddy/docs/CLIP_PROVENANCE.md`](../video_buddy/docs/CLIP_PROVENANCE.md)).
+   ([`docs/PROVENANCE.md`](../docs/PROVENANCE.md)).
    Write those. Drop drive letters and home directories
    (`C:\Users\...`, `/Users/...`, `/home/...`).
 
