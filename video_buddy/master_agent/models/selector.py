@@ -1,9 +1,12 @@
-"""CLI model selector (Stability Matrix pattern, not their code).
+"""Model selector (Stability Matrix pattern, not their code).
 
 The catalog is grouped by capability (video generation, soundtrack, local
 studio). An LTX 2.3 / 2.5 radio swaps the video-generation checklist.
 Required rows stay on and are labeled ``required for generation``. Optional
 rows carry sizes when this repo already attests a byte size.
+
+The studio Models tab calls ``catalog_document``, ``assess``, and
+``apply_selection``. It does not keep a second catalog.
 
 Downloads go through the existing consent paths (``download_files`` and
 ``download-models --heartmula``) and only after a free-space check. Files

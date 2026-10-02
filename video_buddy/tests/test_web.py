@@ -41,6 +41,13 @@ class TestStudioHtml(unittest.TestCase):
         self.assertIn("loadVariants", html)
         self.assertIn("function formatMissing", html)
         self.assertIn("formatMissing(v.missing)", html)
+        self.assertIn('id="selector-card"', html)
+        self.assertIn("Enable Soundtrack Studio", html)
+        self.assertIn("/api/models/selector", html)
+        self.assertIn("Scan only", html)
+        self.assertIn("download_label", html)
+        self.assertIn("eta_label", html)
+        self.assertIn("toggle.label", html)
         self.assertIn("Clear used VRAM-min and continue a budget-paused generate", html)
 
     def test_models_tab_missing_renderer(self):
