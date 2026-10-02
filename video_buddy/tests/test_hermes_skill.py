@@ -60,10 +60,16 @@ def registered_mcp_tools() -> list[str]:
 
 
 def registered_cli_commands() -> set[str]:
-    src = MAIN_PY.read_text(encoding="utf-8")
-    names = set(re.findall(r"sub\.add_parser\(\s*[\"']([^\"']+)[\"']", src))
-    for aliases in re.findall(r"aliases\s*=\s*\[([^\]]+)\]", src):
-        names.update(re.findall(r"[\"']([^\"']+)[\"']", aliases))
+    """Commands registered by the CLI dispatcher (parser lives in cli/parser.py)."""
+    sources = [
+        MAIN_PY.read_text(encoding="utf-8"),
+        (VIDEO_BUDDY / "master_agent" / "cli" / "parser.py").read_text(encoding="utf-8"),
+    ]
+    names: set[str] = set()
+    for src in sources:
+        names.update(re.findall(r"sub\.add_parser\(\s*[\"']([^\"']+)[\"']", src))
+        for aliases in re.findall(r"aliases\s*=\s*\[([^\]]+)\]", src):
+            names.update(re.findall(r"[\"']([^\"']+)[\"']", aliases))
     return names
 
 
