@@ -243,8 +243,7 @@ docs and `EXAMPLE` files are skipped. See
 - [Self-improvement loop](video_buddy/docs/SELF_IMPROVEMENT_LOOP.md) — live judge → revise → re-run map
 - [ClipProvenance](video_buddy/docs/CLIP_PROVENANCE.md) — sidecar + run-row prompt/seed/judge contract
 - [Music-video mode](video_buddy/docs/MUSIC_VIDEO.md) — Comfy/LTX burns → Remotion MTV stitch (not Grok)
-- [Capability audit](video_buddy/AUDIT.md) — what Buddy drives vs the live tower
-- [Merge notes (historical)](MERGE-LTX25.md) — PR #6, already merged
+- [Capability audit](video_buddy/AUDIT.md) — wired / unwired / retired matrix
 - [Movie Builder guide](video_buddy/workflows/260507_VIDEO-BUDDY_MOVIE-BUILDER_GUIDE.md) — LTX 2.3 shot-by-shot film
 - [Agent notes](video_buddy/AGENTS.md) — Rainey fleet stop-lines
 - [Hermes skill](video_buddy/skills/video-buddy/SKILL.md) — install into `~/.hermes/skills/video-buddy/`
@@ -290,7 +289,7 @@ What landed:
 - Seven LTX 2.5 graphs in the **default** catalog — usable with `--variant`, Create-tab, Comfy-tab, `GET /api/variants`. No env flags.
 - Inventory-first weight scan. `doctor` never fetches. `download-models --ltx25` lists confirmed-missing files and fetches only after `--yes`.
 - 16GB-class loader preference: **GGUF Q4 → NVFP4 (VRAM ≥ 14) → int8-convrot → bf16**.
-- WAN / K3NK paths unchanged. LTX TeaCache is inject-when-registered (PR #4); missing pack still soft-bypasses.
+- WAN paths unchanged. K3NK AIO, FaceID, ControlNet, Voronoi, Perlin, Stand-In, LanPaint, MMAudio, and WanVideoWrapper are retired and not wired. LTX TeaCache is inject-when-registered (PR #4); missing pack still soft-bypasses.
 - **Not** ported from [ltx2.5-research-agent](https://github.com/thcabq352/ltx2.5-research-agent): LangGraph research/scrape/A2A/Gradio harness, secrets, and the `ltx_research_agent` package.
 
 See the [operator changelog](video_buddy/README.md#status-2026-09-13) for the full history.

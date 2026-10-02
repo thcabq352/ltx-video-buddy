@@ -72,7 +72,7 @@ _VARIANT_KEYWORDS = [
     # vb_ai_renderer_*, vb_rtx_superres) are only routed when their JSON
     # exists — rule_based_variant skips any variant not in WORKFLOW_FILES.
     # "heal" / "fill" alone are substrings of unrelated words ("health").
-    # FaceID and Voronoi stay unwired — see capabilities notes.
+    # FaceID, ControlNet, Voronoi, and Perlin are retired, not coming soon.
     # Before ltx23_inoutpaint and the generic "ltx 2.5" / "ltx25" rules.
     # Bare "inpaint" still falls through to wan_fun_inpaint. Bare "ltx outpaint"
     # and "outpaint" still fall through to ltx23_inoutpaint.

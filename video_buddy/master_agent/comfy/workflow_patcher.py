@@ -305,8 +305,13 @@ def _apply_named_fields(
     workflow: dict[str, Any],
     field_map: dict[str, Any],
     values: dict[str, Any],
-) -> list[str]:
-    applied: list[str] = []
+) -> set[tuple[str, str]]:
+    """Write manifest fields. Return the widgets that were written.
+
+    The heuristic patch must not write those widgets again. A field map is
+    the specific target; class-wide heuristics stay for everything else.
+    """
+    written: set[tuple[str, str]] = set()
     for logical, spec in field_map.items():
         if logical not in values or values[logical] is None:
             continue
@@ -325,7 +330,7 @@ def _apply_named_fields(
                     nid = str(nid)
                     if nid in workflow:
                         _set_input(workflow[nid], key, value)
-                        applied.append(logical)
+                        written.add((nid, str(key)))
         elif "class_type" in spec:
             matches = _find_nodes_by_class(workflow, spec["class_type"])
             idx = int(spec.get("index", 0))
@@ -334,8 +339,8 @@ def _apply_named_fields(
                 key = spec.get("input") or spec.get("key")
                 if key:
                     _set_input(node, key, value)
-                    applied.append(logical)
-    return applied
+                    written.add((str(nid), str(key)))
+    return written
 
 
 def _is_node_link(value: Any) -> bool:
@@ -1176,9 +1181,33 @@ def _heuristic_patch(
     values: dict[str, Any],
     *,
     locks: set[tuple[str, str]] | None = None,
+    _real_set=_set_input,
+    _real_write=_write_widget,
 ) -> None:
-    """Best-effort patching by common ComfyUI / LTX class types."""
+    """Best-effort patching by common ComfyUI / LTX class types.
+
+    Widgets already written from a manifest field map (``locks``) are left
+    alone. Class lists still cover nodes the manifest does not name.
+    """
     locked = locks or set()
+    by_obj: dict[int, set[str]] = {}
+    for nid, node in workflow.items():
+        if not isinstance(node, dict):
+            continue
+        keys = {key for lnid, key in locked if str(lnid) == str(nid)}
+        if keys:
+            by_obj[id(node)] = keys
+
+    def _set_input(node: dict[str, Any], key: str, value: Any) -> bool:
+        if key in by_obj.get(id(node), ()):
+            return False
+        return _real_set(node, key, value)
+
+    def _write_widget(node: dict[str, Any], key: str, value: Any, *, preserve_links: bool) -> bool:
+        if key in by_obj.get(id(node), ()):
+            return False
+        return _real_write(node, key, value, preserve_links=preserve_links)
+
     preserve_links = bool(values.get("preserve_links"))
     prompt = values.get("prompt")
     negative = values.get("negative_prompt")
@@ -1539,6 +1568,7 @@ def _heuristic_patch(
         workflow,
         duration_s=values.get("duration_s"),
         audio_start_s=values.get("audio_start_s"),
+        locks=locked,
     )
     _wire_h3_reference_media(workflow, values)
 
@@ -1548,9 +1578,13 @@ def _apply_audio_clock(
     *,
     duration_s: Any,
     audio_start_s: Any,
+    locks: set[tuple[str, str]] | None = None,
 ) -> None:
     """Write the scalar duration / audio-start primitives. Linked values stay links."""
-    for _nid, node in _find_nodes_by_class(workflow, "PrimitiveFloat"):
+    locked = locks or set()
+    for nid, node in _find_nodes_by_class(workflow, "PrimitiveFloat"):
+        if (str(nid), "value") in locked:
+            continue
         inputs = node.get("inputs") or {}
         value = inputs.get("value")
         if isinstance(value, list):
@@ -1882,7 +1916,7 @@ def load_and_patch_workflow(
         values["preserve_links"] = True
 
     locks = _prompt_locks(workflow, field_map)
-    _apply_named_fields(workflow, field_map, values)
+    locks |= _apply_named_fields(workflow, field_map, values)
     _remap_stub_filenames(workflow)
     from master_agent.models.weights import bundle_for_variant, is_h3_bundle, is_ltx25_bundle
 
