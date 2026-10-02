@@ -54,7 +54,7 @@ Silence (`--silence-mode`, default `idle`):
 
 ## Provenance
 
-`outputs/<run>/shot-1.buddy.json` is still `buddy.clip.provenance/v1`. `params.lipdub` keeps the #34 keys and adds optional fields (no second schema): `silence_mode`, `anchor`, `reframe`, `join`, `scale_drift`, `hybrid_prev_weight`, `max_piece_s`, `guide_node`, `guide_available`, `pause_reset`, `pause_reset_strength`, `pause_reset_min_s`, `pause_reset_guide_lead`. Each segment may also carry `crossfade_frames`, `scale`, `dx`, `dy`, `audio_feed`, `identity_frame`, `end_keyframe`, `silence_crossfade_frames`, `guide_frame_idx`, and `guide_strength`. All of these are optional. The Rust `ClipProvenance` in `your-video-buddy` should mirror them as optional fields on the existing lipdub object. If that struct denies unknown fields, add the new `Option`s the same way it allows `voice_sample`. This repo does not fork the schema id.
+`outputs/<run>/shot-1.buddy.json` is still `buddy.clip.provenance/v1`. `params.lipdub` keeps the #34 keys and adds optional fields (no second schema): `silence_mode`, `anchor`, `reframe`, `join`, `scale_drift`, `hybrid_prev_weight`, `max_piece_s`, `guide_node`, `guide_available`, `pause_reset`, `pause_reset_strength`, `pause_reset_min_s`, `pause_reset_guide_lead`. Each segment may also carry `crossfade_frames`, `scale`, `dx`, `dy`, `audio_feed`, `identity_frame`, `end_keyframe`, `silence_crossfade_frames`, `guide_frame_idx`, and `guide_strength`. All of these are optional fields on the existing lipdub object. This repo does not fork the schema id.
 
 ## Tower: rerender the 12s ringmaster test
 

@@ -1,7 +1,6 @@
 """Brain/Hands split — CapabilityContract + Hands fit. No GPU.
 
-Wire-compatible with sibling your-video-buddy Rust
-``buddy.capability.contract/v1`` (PR #9 / docs/ARCHITECTURE.md).
+``buddy.capability.contract/v1`` (docs/ARCHITECTURE.md).
 
 Run: python -m pytest tests/test_brain_hands.py -q
 """

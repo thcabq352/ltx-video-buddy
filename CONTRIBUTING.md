@@ -21,6 +21,8 @@ Do not paste the loader order, the consent rules, or the pack table into a secon
 
 `docs/archive/` is the pre-slim manuals. Do not treat it as current. Do not delete it in a drive-by cleanup.
 
+This repository is a standalone Python product. The Hermes skill (`video-buddy`, MCP id `master-agent`), schemas (`buddy.clip.provenance/v1`, `buddy.capability.contract/v1`), curriculum, and judge live here. Do not document a required companion repository or a schema owned somewhere else.
+
 Retired capabilities stay retired. If [Audit](docs/AUDIT.md) says retired, do not describe it as coming soon.
 
 `knowledge/` is memory between machines, not the manual. Follow [`knowledge/AGENTS.md`](knowledge/AGENTS.md). No secrets, no absolute paths. Fix a link there when a doc path moves. Do not rewrite recorded lessons to match a doc edit.

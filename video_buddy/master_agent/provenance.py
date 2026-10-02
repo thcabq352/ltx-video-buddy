@@ -1,13 +1,11 @@
-"""ClipProvenance — ``buddy.clip.provenance/v1`` (Rust buddy-core aligned).
+"""ClipProvenance — ``buddy.clip.provenance/v1``.
 
 Sidecar: ``{output_dir}/shot-N.buddy.json`` next to planned ``shot-N.mp4``.
 The same object is embedded on the orchestrator / pipeline run JSON.
 
-Target schema is Rust ``ClipProvenance`` from sibling your-video-buddy
-PR #7 (``cursor/close-improve-loop-1c25``, agent bc-39743643). That repo
-was **not fetchable** from this environment (404). Field names below match
-the PR #7 contract Scott listed — do not invent a second schema. If the
-Rust struct lands extra keys, add them without dropping these.
+This repository owns the schema. Field names below are the contract.
+Do not invent a second schema id. Optional keys may be added without
+dropping these.
 """
 
 from __future__ import annotations

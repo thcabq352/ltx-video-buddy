@@ -13,8 +13,8 @@ Source of truth for this tree is this file plus
 - `CapabilityContract` / `Hands.can_fulfill` → `FitResult`
 - 8s last-frame chaining owned by Hands (`plan_last_frame_chain`)
 
-Field names match `buddy.capability.contract/v1`. If a sibling Rust
-struct lands extra keys, add them without dropping these. Never serialize
+Field names match `buddy.capability.contract/v1`, owned in this repository.
+Extra keys may be added without dropping these. Never serialize
 VRAM, slot, or weight-path fields on the contract.
 
 ## Python live orchestrator

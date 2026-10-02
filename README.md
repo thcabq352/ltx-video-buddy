@@ -2,6 +2,8 @@
 
 Local video studio. A plain-language brief becomes a judged clip on your own ComfyUI. No cloud render farm is required.
 
+This repository is the whole product: the Comfy driver, weights policy, workflows, judge, Hermes skill, curriculum, and knowledge base.
+
 Public MiniMax H3 still (8s, golden-hour BMX). Files are in-repo:
 
 <p align="center">

@@ -591,7 +591,7 @@ local models (19-27GB) and can take several minutes — allow long timeouts.
   skipped. Invoke: `python -m master_agent run "BRIEF" --self-improve-dry`
   (no Comfy). Tests: `tests/test_self_improvement_loop.py`.
   See [docs/SELF_IMPROVEMENT_LOOP.md](docs/SELF_IMPROVEMENT_LOOP.md).
-- **ClipProvenance** (`buddy.clip.provenance/v1`, Rust PR #7 shape) is written
+- **ClipProvenance** (`buddy.clip.provenance/v1`) is written
   with every clip: sidecar `{output_dir}/shot-N.buddy.json` plus the same
   object on the run JSON (`output_path` / `hash`). Prompts (brief/positive/
   negative/additives), engine (comfy + workflow/variant), params (seed/steps/

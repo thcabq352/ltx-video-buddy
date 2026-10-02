@@ -37,4 +37,4 @@ python -m pytest tests/test_brain_hands.py tests/test_vram_policy.py tests/test_
 python -m pytest tests/test_judge_split.py tests/test_self_improvement_loop.py -q
 ```
 
-Do not commit model weights, `state/runs`, Comfy portable, or sibling trees.
+Do not commit model weights, `state/runs`, or Comfy portable.

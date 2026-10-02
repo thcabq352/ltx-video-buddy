@@ -2,8 +2,7 @@
 
 # `buddy.comfy.attach/v1` contract
 
-Vendored here so public Video Buddy docs do not link a private sibling
-repo. This is the apply-recipe format Python Buddy consumes. Do not invent
+This is the apply-recipe format this studio consumes. Do not invent
 a second schema in `master_agent/comfy/attach.py`.
 
 ## Schema tokens
