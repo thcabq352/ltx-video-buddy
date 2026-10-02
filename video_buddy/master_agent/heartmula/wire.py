@@ -64,6 +64,14 @@ def materialize_track(
     dest_dir.mkdir(parents=True, exist_ok=True)
     wav = dest_dir / "heartmula.wav"
     if dry_run:
+        planned = plan_generate(
+            lyrics=lyric_text,
+            tags=tag_text,
+            out=wav,
+            duration_s=seconds,
+            seed=seed,
+            dry_run=True,
+        )
         write_silent_wav(wav, seconds=max(seconds, 8.0))
         block = provenance_block(
             lyrics=lyric_text,
@@ -71,16 +79,9 @@ def materialize_track(
             seed=seed,
             wav=str(wav),
             max_audio_length_ms=int(round(seconds * 1000)),
+            max_seq_len=planned.get("max_seq_len"),
             dry_run=True,
             placeholder="silent-wav",
-        )
-        plan_generate(
-            lyrics=lyric_text,
-            tags=tag_text,
-            out=wav,
-            duration_s=seconds,
-            seed=seed,
-            dry_run=True,
         )
         return TrackSource(audio=wav, heartmula=block, note="dry-run silent wav (not model audio)")
     result = generate_track(

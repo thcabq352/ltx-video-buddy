@@ -742,6 +742,8 @@ def _build_rows() -> dict[str, WorkflowVramRow]:
             notes=(
                 "HeartMuLa 3B bf16 + HeartCodec fp32. About 8–16GB depending on "
                 "dtype and whether lazy_load is on. heartlib has no nf4/fp4. "
+                "On 16GB the backbone KV window is sized under heartlib's 8192 "
+                "(that window OOMs during the GQA expand). "
                 "Sequential with LTX — a 16GB card cannot hold both. "
                 "Default Hub ids: HeartMuLa-oss-3B-happy-new-year into "
                 "HeartMuLa-oss-3B, HeartCodec-oss-20260123 into HeartCodec-oss. "
@@ -774,7 +776,10 @@ def _fallback_row(slug: str) -> WorkflowVramRow:
             "HeartMuLa-oss-3B-happy-new-year",
             12.0,
             "tight",
-            notes="Sequential with LTX. lazy_load bf16 + fp32 codec. No nf4/fp4 in heartlib.",
+            notes=(
+                "Sequential with LTX. lazy_load bf16 + fp32 codec. No nf4/fp4 in heartlib. "
+                "16GB uses a shorter backbone KV window than heartlib's 8192."
+            ),
         ),
         "ltx25": WorkflowVramRow(slug, family, _LTX25[0], 12.5, "safe", notes="Inherits LTX 2.5 16GB pick."),
         "h3": WorkflowVramRow(slug, family, _H3[0], 13.0, "tight", notes="Inherits H3 16GB pick."),

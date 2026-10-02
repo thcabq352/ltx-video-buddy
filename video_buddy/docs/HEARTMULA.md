@@ -30,14 +30,14 @@ python -m master_agent heartmula transcribe \
 
 `--dry-run` prints the plan and returns 0. It does not import `heartlib`, does not use a GPU, and does not write the wav or the words file.
 
-Live generate calls `HeartMuLaGenPipeline.from_pretrained` then:
+Live generate calls `HeartMuLaGenPipeline.from_pretrained`, shrinks `backbone.max_seq_len` before `setup_caches` (see the KV window below), then:
 
 ```text
 pipe({"lyrics": ..., "tags": ...}, max_audio_length_ms=..., save_path=...,
      topk=50, temperature=1.0, cfg_scale=1.5)
 ```
 
-`__call__` has no seed argument. `--seed` is `torch.manual_seed` (and CUDA when present) before that call. Reconstruction (`run_music_reconstruction.py`) is not this path.
+`__call__` has no seed argument and no seq-len argument. `--seed` is `torch.manual_seed` (and CUDA when present) before that call. The window is applied on the loaded backbone, not passed into `pipe`. Reconstruction (`run_music_reconstruction.py`) is not this path.
 
 Tags are lowercase and comma-separated **without spaces** (`piano,happy,wedding`). Lyrics may use `[Intro]` / `[Verse]` / `[Chorus]`. Default duration is **30s** (`HEARTMULA_DURATION_S`). The heartlib example uses 240s; pass `--duration 240` when you want that. Four minutes plus an LTX music video does not fit a 16GB card.
 
@@ -90,6 +90,47 @@ heartlib defaults Buddy uses:
 heartlib has **no nf4 / fp4**. Setting `HEARTMULA_DTYPE=nf4` is an error. The Comfy node's 4-bit path is tower-owner only and is not this Python pipeline.
 
 `HEARTMULA_VERSION` must stay `3B`. heartlib opens the folder `HeartMuLa-oss-3B`. 7B is not released.
+
+### KV window
+
+heartlib builds the 3B backbone with `max_seq_len=8192`. torchtune 0.4 (the version heartlib pins) allocates the KV cache at the **query** head count, after the GQA expand (24 heads, not the 8 KV heads). At the default cfg batch of 2 that cache is about 5.3GB. On a 16GB card, next to bf16 weights, `setup_caches` OOMs. A 512-token window passed a 5 second tower smoke (bf16, lazy load, wav out).
+
+Buddy does not leave every run at 8192, and it does not pin every card to 512.
+
+- Audio frames are `duration_ms // 80` (heartlib).
+- Plus a lyric/tag token estimate. The tokenizer is not loaded, so a dry-run stays offline. The estimate is one token per character, which is generous for English and close for CJK.
+- Rounded up to a multiple of 128.
+- Never above 8192. RoPE was built at 8192; Buddy will not grow it.
+
+The card caps that window. About 14GB is reserved for bf16 weights and activations, and the rest is the GQA-expanded cache. A 16GB card then holds about **3072** tokens at cfg 1.5 (batch 2). A 30 second song still fits. A 240 second song does not: the plan fails before heartlib is imported and names the cap. Once the card is about 20GB the same reserve fits the full 8192 window, so a long song on a larger GPU is unchanged. `cfg_scale=1` uses batch 1 and a higher cap.
+
+| Knob | Role |
+|---|---|
+| `HEARTMULA_MAX_SEQ_LEN` / `--max-seq-len` | Exact window. Skips the cap. `512` matches the 5s smoke. A value shorter than the song can still run out of cache. |
+| `HEARTMULA_LOW_VRAM=1` / `--low-vram` | Plan as if the card is 16GB, even when detection says more. |
+
+5 second proof when the weights are already under `models/heartmula` (this does not download them). `--max-seq-len 512` is the window that passed on the tower. Drop it and Buddy sizes a 5 second clip smaller than that. Codec dtype stays **fp32** unless you set it; the tower smoke used bf16, which is optional and lowers quality.
+
+```bash
+HEARTMULA_DEVICE=cuda HEARTMULA_CODEC_DEVICE=cuda \
+HEARTMULA_LAZY_LOAD=1 \
+HEARTMULA_DTYPE=bf16 HEARTMULA_CODEC_DTYPE=bf16 \
+python -m master_agent heartmula generate \
+  --lyrics "[Verse]\nsmoke line" \
+  --tags piano,happy \
+  --duration 5 \
+  --max-seq-len 512 \
+  --low-vram \
+  --out heartmula_smoke_test.wav
+```
+
+`--dry-run` prints `max_seq_len` and does not import heartlib.
+
+### Saving the wav
+
+heartlib calls `torchaudio.save`. TorchAudio 2.9+ saves through torchcodec. Comfy's embedded Python often has a missing or broken torchcodec DLL, and that save raises after the song is already decoded.
+
+Buddy wraps `torchaudio.save` for the generate call. If it raises, the same channels-first waveform is written with `soundfile` (time-major, the sample rate heartlib passed, 48 kHz). The original `torchaudio.save` is restored afterward. Nothing in the Comfy environment is installed or changed. `soundfile` is a heartlib dependency. If it is also missing, the error names both failures.
 
 ## Weights (consent, attested names only)
 
@@ -168,7 +209,7 @@ See [COMFY_ATTACH.md](COMFY_ATTACH.md).
 
 ## Provenance
 
-Same schema id: `buddy.clip.provenance/v1`. Optional `params.heartmula` when lyrics, tags, a wav, a transcribe source, or a words path is present. Empty blocks are omitted so older sidecars stay clean. Fields: lyrics, tags, model repo ids, version, dtypes, lazy load, seed, wav path, transcribe source, words path, `max_audio_length_ms`, dry-run. See [CLIP_PROVENANCE.md](CLIP_PROVENANCE.md).
+Same schema id: `buddy.clip.provenance/v1`. Optional `params.heartmula` when lyrics, tags, a wav, a transcribe source, or a words path is present. Empty blocks are omitted so older sidecars stay clean. Fields: lyrics, tags, model repo ids, version, dtypes, lazy load, seed, wav path, transcribe source, words path, `max_audio_length_ms`, `max_seq_len`, dry-run. See [CLIP_PROVENANCE.md](CLIP_PROVENANCE.md).
 
 ## Env
 
@@ -186,3 +227,5 @@ Same schema id: `buddy.clip.provenance/v1`. Optional `params.heartmula` when lyr
 | `HEARTMULA_DTYPE` / `HEARTMULA_CODEC_DTYPE` | bf16 / fp16 / fp32 |
 | `HEARTMULA_DEVICE` / `HEARTMULA_CODEC_DEVICE` | torch device strings |
 | `HEARTMULA_LAZY_LOAD` | `1` / `0` |
+| `HEARTMULA_MAX_SEQ_LEN` | Exact backbone KV window (1–8192). Unset: sized to the clip and the card |
+| `HEARTMULA_LOW_VRAM` | `1` plans that window as if the card is 16GB |

@@ -16,10 +16,22 @@ from master_agent.__main__ import cmd_download_models, cmd_heartmula
 from master_agent.comfy.attach import AttachError, load_attach_recipe
 from master_agent.comfy.capabilities import CAPABILITY_CATALOG
 from master_agent.comfy.graph_ops import OPTIONAL_NODE_CLASS_TYPES, is_optional_node
+from master_agent.heartmula.audio_save import (
+    HeartMuLaAudioSaveError,
+    save_waveform,
+    to_soundfile_array,
+    waveform_save_fallback,
+)
 from master_agent.heartmula.config import (
+    HEARTLIB_BACKBONE_MAX_SEQ_LEN,
     HeartMuLaConfigError,
+    align_seq_len,
     all_slots,
     mula_dtype_name,
+    prompt_token_budget,
+    select_max_seq_len,
+    seq_len_cap,
+    tokens_for_run,
 )
 from master_agent.heartmula.doctor import (
     cmd_download_heartmula,
@@ -29,6 +41,7 @@ from master_agent.heartmula.doctor import (
 )
 from master_agent.heartmula.generate import (
     HeartMuLaUnavailable,
+    apply_backbone_max_seq_len,
     generate_track,
     load_heartlib,
     plan_generate,
@@ -58,6 +71,8 @@ def _clear_repo_env(monkeypatch: pytest.MonkeyPatch, root: Path) -> None:
         "HEARTMULA_CODEC_DTYPE",
         "HEARTMULA_LYRICS",
         "HEARTMULA_TAGS",
+        "HEARTMULA_MAX_SEQ_LEN",
+        "HEARTMULA_LOW_VRAM",
     ):
         monkeypatch.delenv(name, raising=False)
 
@@ -392,6 +407,275 @@ def test_vram_and_capability_and_attach():
                 "patches": [{"class_type": "HeartMuLa_Extra"}],
             }
         )
+
+
+def test_seq_len_cap_fits_16gb_and_keeps_8192_when_vram_allows():
+    assert seq_len_cap(16, batch=2) == 3072
+    assert seq_len_cap(12, batch=2) == 512
+    assert seq_len_cap(24, batch=2) == HEARTLIB_BACKBONE_MAX_SEQ_LEN
+    assert seq_len_cap(16, batch=1) > seq_len_cap(16, batch=2)
+
+
+def test_duration_window_on_16gb_and_long_run_on_24gb():
+    lyrics = "[Verse]\nlocal night"
+    tags = "piano,happy"
+    short = select_max_seq_len(
+        duration_s=30,
+        lyrics=lyrics,
+        tags=tags,
+        cfg_scale=1.5,
+        vram_gb=16,
+    )
+    expected = align_seq_len(tokens_for_run(30, lyrics, tags))
+    assert short.max_seq_len == expected
+    assert short.max_seq_len < HEARTLIB_BACKBONE_MAX_SEQ_LEN
+    assert short.max_seq_len <= short.cap == 3072
+    assert short.source == "duration"
+    assert short.max_seq_len >= 30_000 // 80
+
+    smoke = select_max_seq_len(
+        duration_s=5,
+        lyrics=lyrics,
+        tags=tags,
+        cfg_scale=1.5,
+        vram_gb=16,
+        low_vram=True,
+    )
+    assert smoke.max_seq_len == align_seq_len(tokens_for_run(5, lyrics, tags))
+    assert smoke.source == "low-vram"
+    assert smoke.max_seq_len <= 512
+
+    long_lyrics = "[Verse]\n" + ("la " * 40)
+    ample = select_max_seq_len(
+        duration_s=240,
+        lyrics=long_lyrics,
+        tags=tags,
+        cfg_scale=1.5,
+        vram_gb=24,
+    )
+    assert ample.cap == HEARTLIB_BACKBONE_MAX_SEQ_LEN
+    assert ample.max_seq_len <= HEARTLIB_BACKBONE_MAX_SEQ_LEN
+    assert ample.max_seq_len >= 240_000 // 80
+
+    with pytest.raises(HeartMuLaConfigError, match="8192"):
+        select_max_seq_len(
+            duration_s=240,
+            lyrics=long_lyrics,
+            tags=tags,
+            cfg_scale=1.5,
+            vram_gb=16,
+        )
+    with pytest.raises(HeartMuLaConfigError, match="8192"):
+        select_max_seq_len(
+            duration_s=240,
+            lyrics=long_lyrics,
+            tags=tags,
+            cfg_scale=1.5,
+            vram_gb=48,
+            low_vram=True,
+        )
+
+
+def test_max_seq_len_override_and_smoke_flag():
+    choice = select_max_seq_len(
+        duration_s=5,
+        lyrics="[Verse]\nsmoke",
+        tags="piano,happy",
+        cfg_scale=1.5,
+        vram_gb=16,
+        override=512,
+    )
+    assert choice.max_seq_len == 512
+    assert choice.source == "override"
+    assert choice.note is None
+    tight = select_max_seq_len(
+        duration_s=240,
+        lyrics="[Verse]\n" + ("word " * 80),
+        tags="piano,happy",
+        cfg_scale=1.5,
+        vram_gb=24,
+        override=512,
+    )
+    assert tight.max_seq_len == 512
+    assert tight.note and "shorter" in tight.note
+    with pytest.raises(HeartMuLaConfigError, match="8192"):
+        select_max_seq_len(
+            duration_s=5,
+            lyrics="x",
+            tags="piano",
+            vram_gb=80,
+            override=9000,
+        )
+    assert prompt_token_budget("hi", "piano") >= 256
+
+
+def test_apply_backbone_seq_len_shrinks_and_does_not_grow():
+    class _Backbone:
+        max_seq_len = 8192
+
+    class _Mula:
+        def __init__(self):
+            self.backbone = _Backbone()
+
+    mula = _Mula()
+    assert apply_backbone_max_seq_len(mula, 512) == 512
+    assert mula.backbone.max_seq_len == 512
+    assert apply_backbone_max_seq_len(mula, 4096) == 512
+
+
+def test_generate_shrinks_window_before_forward(tmp_path, monkeypatch):
+    root = tmp_path / "models"
+    _clear_repo_env(monkeypatch, root)
+    seen: dict = {}
+
+    class _Backbone:
+        max_seq_len = 8192
+
+    class _Pipe:
+        def __init__(self):
+            self.mula = type("M", (), {"backbone": _Backbone()})()
+
+        def _forward(self, *_a, **_k):
+            seen["during"] = self.mula.backbone.max_seq_len
+
+        def __call__(self, payload, **kwargs):
+            self._forward()
+            Path(kwargs["save_path"]).write_bytes(b"RIFF")
+
+    pipe = _Pipe()
+
+    class _Gen:
+        @staticmethod
+        def from_pretrained(*_a, **_kw):
+            return pipe
+
+    generate_track(
+        lyrics="[Verse]\nhello",
+        tags="piano,happy",
+        out=tmp_path / "track.wav",
+        duration_s=5,
+        seed=None,
+        pipeline_cls=_Gen,
+        require_weights=False,
+        max_seq_len=512,
+    )
+    assert seen["during"] == 512
+    assert pipe.mula.backbone.max_seq_len == 512
+    assert "heartlib" not in sys.modules
+
+
+def test_dry_run_prints_smoke_seq_len(tmp_path, capsys):
+    sys.modules.pop("heartlib", None)
+    out = tmp_path / "track.wav"
+    code = cmd_heartmula(
+        Namespace(
+            heartmula_command="generate",
+            lyrics="[Verse]\nsmoke line",
+            tags="piano,happy",
+            duration=5,
+            seed=None,
+            out=str(out),
+            topk=50,
+            temperature=1.0,
+            cfg_scale=1.5,
+            max_seq_len=512,
+            low_vram=True,
+            dry_run=True,
+        )
+    )
+    text = capsys.readouterr().out
+    assert code == 0
+    assert "max_seq_len: 512" in text
+    assert "source: override" in text
+    assert not out.exists()
+    assert "heartlib" not in sys.modules
+    plan = plan_generate(
+        lyrics="[Verse]\nsmoke line",
+        tags="piano,happy",
+        out=out,
+        duration_s=5,
+        max_seq_len=512,
+        low_vram=True,
+        dry_run=True,
+    )
+    assert plan["max_seq_len"] == 512
+
+
+def test_soundfile_fallback_when_torchaudio_raises(tmp_path, monkeypatch):
+    import numpy as np
+
+    wav = np.arange(8, dtype=np.float32).reshape(2, 4)
+    written: dict = {}
+
+    def boom(*_a, **_k):
+        raise RuntimeError("Could not load libtorchcodec.so")
+
+    def sf_write(path, data, rate):
+        written["path"] = str(path)
+        written["data"] = data
+        written["rate"] = rate
+
+    monkeypatch.setattr(
+        "master_agent.heartmula.audio_save.soundfile_write", sf_write
+    )
+    dest = tmp_path / "out.wav"
+    which = save_waveform(dest, wav, 48000, torchaudio_save=boom)
+    assert which == "soundfile"
+    assert written["rate"] == 48000
+    assert written["path"] == str(dest)
+    assert written["data"].shape == (4, 2)
+    assert to_soundfile_array(wav).shape == (4, 2)
+
+    called = {"n": 0}
+
+    def ok(path, src, rate):
+        called["n"] += 1
+
+    assert save_waveform(dest, wav, 48000, torchaudio_save=ok) == "torchaudio"
+    assert called["n"] == 1
+
+    def sf_boom(*_a, **_k):
+        raise ImportError("no soundfile")
+
+    monkeypatch.setattr(
+        "master_agent.heartmula.audio_save.soundfile_write", sf_boom
+    )
+    with pytest.raises(HeartMuLaAudioSaveError, match="torchcodec"):
+        save_waveform(dest, wav, 48000, torchaudio_save=boom)
+
+
+def test_save_fallback_patches_torchaudio_for_one_call(tmp_path, monkeypatch):
+    import types
+
+    import numpy as np
+
+    fake = types.ModuleType("torchaudio")
+    calls = {"n": 0}
+
+    def boom(*_a, **_k):
+        calls["n"] += 1
+        raise OSError("libtorchcodec.dll: not found")
+
+    fake.save = boom
+    monkeypatch.setitem(sys.modules, "torchaudio", fake)
+    written: dict = {}
+
+    def sf_write(path, data, rate):
+        written["shape"] = data.shape
+        written["rate"] = rate
+
+    monkeypatch.setattr(
+        "master_agent.heartmula.audio_save.soundfile_write", sf_write
+    )
+    wav = np.zeros((2, 6), dtype=np.float32)
+    with waveform_save_fallback():
+        import torchaudio
+
+        torchaudio.save(tmp_path / "a.wav", wav, 48000)
+    assert calls["n"] == 1
+    assert written["shape"] == (6, 2)
+    assert written["rate"] == 48000
+    assert torchaudio.save is boom
 
 
 def test_slot_report_names_codec_preference(tmp_path, monkeypatch):

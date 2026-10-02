@@ -180,6 +180,205 @@ def lazy_load() -> bool:
     return float(VRAM_GB) <= 16.0
 
 
+# heartlib ``llama3_2_3B()`` builds the backbone at this length. RoPE is
+# allocated then. Buddy can shrink the KV window before ``setup_caches``;
+# it cannot grow past this without rebuilding the backbone.
+HEARTLIB_BACKBONE_MAX_SEQ_LEN = 8192
+# ``HeartMuLaGenPipeline._forward``: ``max_audio_frames = max_audio_length_ms // 80``.
+AUDIO_FRAME_MS = 80
+# Passed a 5s bf16 + lazy_load smoke on 16GB. The floor of the VRAM cap,
+# not the window Buddy picks for every short clip.
+SMOKE_MAX_SEQ_LEN = 512
+# torchtune 0.4 (heartlib's pin) allocates ``KVCache`` at ``num_heads``
+# because the GQA expand has already copied K and V out to query heads.
+# 3B backbone: 28 layers, 24 heads, head_dim 128, bf16. Per token, per batch.
+KV_BYTES_PER_TOKEN = 28 * 2 * 24 * 128 * 2
+# Leave this much of the card for bf16 weights and activations. The 8192
+# window is about 5.3GB at cfg batch 2 and OOM'd on 16GB during that expand.
+# 16GB then keeps about 2GB for the cache (~3072 tokens). Around 20GB the
+# same reserve still fits the full 8192 window, so longer songs stay intact.
+KV_WEIGHT_RESERVE_GB = 14.0
+LOW_VRAM_GB = 16.0
+_SEQ_ALIGN = 128
+
+
+@dataclass(frozen=True)
+class SeqLenChoice:
+    """Backbone KV window for one generate call."""
+
+    max_seq_len: int
+    needed: int
+    cap: int
+    source: str
+    vram_gb: float
+    batch: int
+    note: str | None = None
+
+
+def current_vram_gb() -> float:
+    from master_agent.config import VRAM_GB
+
+    return float(VRAM_GB)
+
+
+def cfg_batch(cfg_scale: float) -> int:
+    """heartlib uses a batch of 2 unless ``cfg_scale`` is exactly 1."""
+    return 1 if float(cfg_scale) == 1.0 else 2
+
+
+def _source_chars(text: str) -> int:
+    """Character count, or the file body when heartlib would read a path."""
+    raw = text or ""
+    if not raw or "\n" in raw or len(raw) > 1024:
+        return len(raw)
+    try:
+        path = Path(raw)
+        if path.is_file():
+            body = path.read_text(encoding="utf-8", errors="replace")
+            return min(len(body), 200_000)
+    except (OSError, ValueError):
+        return len(raw)
+    return len(raw)
+
+
+def prompt_token_budget(lyrics: str, tags: str) -> int:
+    """Tokens to reserve before audio frames. No tokenizer import.
+
+    Dry-run must not load heartlib. One token per character over-estimates
+    English BPE and matches CJK closely enough that a long lyric does not
+    silently walk off the end of the cache.
+    """
+    chars = _source_chars(lyrics) + _source_chars(tags)
+    return max(256, chars + 32)
+
+
+def tokens_for_run(duration_s: float, lyrics: str, tags: str) -> int:
+    """Prompt budget plus one cache slot per 80ms audio frame."""
+    ms = int(round(float(duration_s) * 1000))
+    frames = max(ms, 0) // AUDIO_FRAME_MS
+    return frames + prompt_token_budget(lyrics, tags)
+
+
+def align_seq_len(tokens: int, step: int = _SEQ_ALIGN) -> int:
+    tokens = max(int(tokens), 1)
+    step = max(int(step), 1)
+    aligned = ((tokens + step - 1) // step) * step
+    return min(HEARTLIB_BACKBONE_MAX_SEQ_LEN, aligned)
+
+
+def seq_len_cap(vram_gb: float, batch: int = 2) -> int:
+    """Longest GQA-expanded KV window that stays inside ``vram_gb``."""
+    batch = max(int(batch), 1)
+    per = KV_BYTES_PER_TOKEN * batch
+    budget = int(float(vram_gb) * (1024**3) - KV_WEIGHT_RESERVE_GB * (1024**3))
+    floor = SMOKE_MAX_SEQ_LEN * per
+    raw = max(budget, floor) // per
+    aligned = (int(raw) // _SEQ_ALIGN) * _SEQ_ALIGN
+    return min(HEARTLIB_BACKBONE_MAX_SEQ_LEN, max(SMOKE_MAX_SEQ_LEN, aligned))
+
+
+def _env_max_seq_len() -> int | None:
+    raw = (os.getenv("HEARTMULA_MAX_SEQ_LEN") or "").strip()
+    if not raw:
+        return None
+    try:
+        return int(raw)
+    except ValueError as exc:
+        raise HeartMuLaConfigError(
+            f"HEARTMULA_MAX_SEQ_LEN={raw} is not an integer"
+        ) from exc
+
+
+def _env_low_vram(explicit: bool | None) -> bool:
+    if explicit:
+        return True
+    return _flag("HEARTMULA_LOW_VRAM", False)
+
+
+def select_max_seq_len(
+    *,
+    duration_s: float,
+    lyrics: str,
+    tags: str,
+    cfg_scale: float = 1.5,
+    vram_gb: float | None = None,
+    low_vram: bool | None = None,
+    override: int | None = None,
+) -> SeqLenChoice:
+    """Pick a backbone window that covers this clip and fits the card.
+
+    Above the 16GB reserve the cap is heartlib's 8192, so a long song is
+    unchanged. At 16GB the cap is about 3072 tokens (cfg batch 2): a 30s
+    track still fits, a 240s track does not, and the plan says so before
+    heartlib is imported. ``override`` (CLI or ``HEARTMULA_MAX_SEQ_LEN``)
+    skips the cap. ``low_vram`` plans as if the card is 16GB.
+    """
+    gb = current_vram_gb() if vram_gb is None else float(vram_gb)
+    tight = _env_low_vram(low_vram)
+    if tight:
+        gb = min(gb, LOW_VRAM_GB)
+    batch = cfg_batch(cfg_scale)
+    needed = tokens_for_run(duration_s, lyrics, tags)
+    cap = seq_len_cap(gb, batch)
+    chosen = override if override is not None else _env_max_seq_len()
+    if chosen is not None:
+        value = int(chosen)
+        if value < 1 or value > HEARTLIB_BACKBONE_MAX_SEQ_LEN:
+            raise HeartMuLaConfigError(
+                f"max_seq_len={value} is outside 1..{HEARTLIB_BACKBONE_MAX_SEQ_LEN}. "
+                "heartlib builds the 3B backbone RoPE at 8192; Buddy will not grow it."
+            )
+        note = None
+        if value < needed:
+            note = (
+                f"max_seq_len {value} is shorter than the ~{needed} tokens this "
+                "duration and lyric length need. The KV window can fill before "
+                "the song ends. Raise it or shorten --duration."
+            )
+        return SeqLenChoice(
+            max_seq_len=value,
+            needed=needed,
+            cap=cap,
+            source="override",
+            vram_gb=gb,
+            batch=batch,
+            note=note,
+        )
+    window = align_seq_len(needed)
+    if window > cap:
+        raise HeartMuLaConfigError(
+            f"this run needs about {window} backbone tokens "
+            f"({float(duration_s):g}s plus lyrics) but a {gb:g}GB card can hold "
+            f"about {cap} under the GQA-expanded KV budget. heartlib's "
+            f"{HEARTLIB_BACKBONE_MAX_SEQ_LEN} window OOMs on 16GB during that "
+            "expand. Shorten --duration, or set HEARTMULA_MAX_SEQ_LEN if you "
+            "know a longer window fits. Keep HEARTMULA_DTYPE=bf16 and "
+            "HEARTMULA_LAZY_LOAD=1 on a 16GB card."
+        )
+    notes: list[str] = []
+    if cap < HEARTLIB_BACKBONE_MAX_SEQ_LEN:
+        notes.append(
+            f"KV budget on {gb:g}GB caps the backbone window at {cap} "
+            f"(heartlib default {HEARTLIB_BACKBONE_MAX_SEQ_LEN} OOMs during "
+            f"the GQA expand). This run uses {window}."
+        )
+    if needed > window:
+        notes.append(
+            f"This clip asks for about {needed} tokens and the backbone window "
+            f"is {window}. Generation can stop when the cache fills."
+        )
+    note = " ".join(notes) if notes else None
+    return SeqLenChoice(
+        max_seq_len=window,
+        needed=needed,
+        cap=cap,
+        source="low-vram" if tight else "duration",
+        vram_gb=gb,
+        batch=batch,
+        note=note,
+    )
+
+
 def default_duration_s() -> float:
     raw = (os.getenv("HEARTMULA_DURATION_S") or "30").strip()
     try:
@@ -261,6 +460,7 @@ def provenance_block(
     transcribe_source: str | None = None,
     words_path: str | None = None,
     max_audio_length_ms: int | None = None,
+    max_seq_len: int | None = None,
     dry_run: bool = False,
     placeholder: str | None = None,
 ) -> dict:
@@ -283,6 +483,7 @@ def provenance_block(
         "transcribe_source": transcribe_source,
         "words_path": words_path,
         "max_audio_length_ms": max_audio_length_ms,
+        "max_seq_len": max_seq_len,
         "dry_run": bool(dry_run),
         "placeholder": placeholder,
     }

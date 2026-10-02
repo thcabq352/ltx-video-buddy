@@ -455,6 +455,21 @@ def main(argv: list[str] | None = None) -> int:
     gen_p.add_argument("--topk", type=int, default=50)
     gen_p.add_argument("--temperature", type=float, default=1.0)
     gen_p.add_argument("--cfg-scale", dest="cfg_scale", type=float, default=1.5)
+    gen_p.add_argument(
+        "--max-seq-len",
+        dest="max_seq_len",
+        type=int,
+        default=None,
+        help=(
+            "backbone KV window. Default sizes to the clip and the card. "
+            "heartlib's 8192 OOMs on 16GB during the GQA expand; 512 is the 5s smoke"
+        ),
+    )
+    gen_p.add_argument(
+        "--low-vram",
+        action="store_true",
+        help="size the KV window as if the card is 16GB",
+    )
     gen_p.add_argument("--dry-run", action="store_true", help="print the plan; do not import heartlib")
     gen_p.set_defaults(func=cmd_heartmula)
     tr_p = hm.add_parser("transcribe", help="audio → words.json for lipdub --words")
