@@ -54,6 +54,10 @@ video_buddy/           master_agent, workflows, tests
 
 Hermes: `cd video_buddy && python install_hermes_skill.py`. MCP is not the skill. Profile `ltx`. Buddy does not bind 8642. Details: [CLI](docs/CLI_REFERENCE.md#hermes).
 
+## Acknowledgments
+
+Thanks to Jason Rainey (Rainey1, @jasonr.tv). He has been a collaborator since childhood, helped shape the style of LTX Video Buddy, and has contributed a great deal to the project.
+
 ## License
 
 Video Buddy is an orchestration layer. LTX, Flux, Wan, Qwen, MiniMax, and the other models it drives are third-party works under their own licenses. Several restrict commercial use. LTX 2.5 Hub packs are gated. Selected workflow designs credit [Mickmumpitz](https://mickmumpitz.ai). Review each model's license before commercial use. This repository contains no model weights.
