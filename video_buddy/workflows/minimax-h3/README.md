@@ -10,13 +10,12 @@ nodes (`MiniMaxH3ImageToVideo` / `MiniMaxH3ReferenceToVideo`) plus
 `UnetLoaderGGUF` (ComfyUI-GGUF). Video Buddy lists **all of these in the
 default catalog** — no experimental flag.
 
-16GB-class default (`VRAM_GB=16`): **GGUF Q4_K DiT** + Comfy Qwen3-VL TE
-(NVFP4 AWQ on Blackwell, else int8 / int4 convrot) + official video/audio
-VAEs. CFG stays **1.0** (distilled). Sweet spot **0.6–0.8 MP**, **≤12 s**,
-**4 steps** (LightX2V turbo LoRA when present).
+CFG stays **1.0** (distilled). Sweet spot **0.6–0.8 MP**, **≤12 s**,
+**4 steps** (LightX2V turbo LoRA when present). Loader order:
+[`docs/WEIGHTS.md`](../../../docs/WEIGHTS.md#loader-policy).
 
-See [`../../REQUIRED-FILES.md`](../../REQUIRED-FILES.md) and
-[`../../docs/QUICKSTART.md`](../../docs/QUICKSTART.md).
+See [`docs/FEATURES.md`](../../../docs/FEATURES.md#default-catalog) and
+[`docs/GETTING_STARTED.md`](../../../docs/GETTING_STARTED.md).
 
 | Buddy id | Alias | File | Mode |
 |---|---|---|---|

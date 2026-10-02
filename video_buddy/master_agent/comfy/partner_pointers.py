@@ -21,7 +21,7 @@ from urllib.parse import urlparse
 PROMOTE_NODE = "ByteDance2DraftToFinalVideoNode"
 MODEL_OPTION = "Seedance 2.5 Draft"
 API_MODEL_ID = "dreamina-seedance-2-5-260628"
-DOC_REL = "docs/SEEDANCE_2_5_DRAFT.md"
+DOC_REL = "docs/SEEDANCE_2_5_DRAFT.md"  # stub; canonical text is repo docs/FEATURES.md
 
 FORBIDDEN_CLASS_TYPES = frozenset(
     {

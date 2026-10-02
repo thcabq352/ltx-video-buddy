@@ -12,4 +12,4 @@ This folder is a pointer so we do not keep a second 6 MB copy in git.
 
 Play / reproduce from the demo README. New Buddy clips write
 `shot-N.buddy.json` — see
-[`video_buddy/docs/CLIP_PROVENANCE.md`](../../../video_buddy/docs/CLIP_PROVENANCE.md).
+[`docs/PROVENANCE.md`](../../PROVENANCE.md).

@@ -68,8 +68,9 @@ def test_local_only_policy_is_closed():
     assert XAI_BASE_URL != PACK_C_COMFY_URL
     assert cloud_video_host(XAI_BASE_URL) is None
 
-    agents = (VIDEO_BUDDY / "AGENTS.md").read_text(encoding="utf-8")
-    doc = (VIDEO_BUDDY / "docs" / "SEEDANCE_2_5_DRAFT.md").read_text(encoding="utf-8")
+    repo = VIDEO_BUDDY.parent
+    agents = (repo / "docs" / "AGENTS.md").read_text(encoding="utf-8")
+    doc = (repo / "docs" / "FEATURES.md").read_text(encoding="utf-8")
     skill = (VIDEO_BUDDY / "skills" / "video-buddy" / "SKILL.md").read_text(encoding="utf-8")
     local_only = (
         VIDEO_BUDDY / "skills" / "video-buddy" / "references" / "local-only.md"

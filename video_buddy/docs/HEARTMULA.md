@@ -1,6 +1,6 @@
-# HeartMuLa (local lyrics → track, and word timestamps)
+# Moved
 
-HeartMuLa is the open music model from [HeartMuLa/heartlib](https://github.com/HeartMuLa/heartlib) (Apache-2.0). Buddy drives it through that Python package. The Comfy custom node is a tower-side install; this repo does not clone it and does not download weights.
+HeartMuLa behavior now lives in [`docs/FEATURES.md`](../../docs/FEATURES.md#heartmula). Weight names live in [`docs/WEIGHTS.md`](../../docs/WEIGHTS.md#heartmula-files).
 
 Two jobs:
 

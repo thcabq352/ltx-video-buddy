@@ -1,6 +1,6 @@
-# Video Buddy — agent notes
+# Moved
 
-Local ComfyUI video studio. Code lives in this directory. Git root is `thcabq352/ltx-video-buddy`.
+Agent stop-lines now live in [`docs/AGENTS.md`](../docs/AGENTS.md).
 
 Install, Hermes seating, the L0→L5 curriculum, and the run cookbook live in [README.md](README.md). This file is stop-lines and field lessons only.
 
