@@ -305,6 +305,7 @@ def build_clip_provenance(
             "transcribe_source": heart.get("transcribe_source"),
             "words_path": heart.get("words_path"),
             "max_audio_length_ms": heart.get("max_audio_length_ms"),
+            "max_seq_len": heart.get("max_seq_len"),
             "dry_run": heart.get("dry_run"),
         }
     return payload

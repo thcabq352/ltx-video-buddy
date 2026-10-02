@@ -61,7 +61,7 @@ is hours. Prefer ~900s MCP timeout.
 | `music "BRIEF" --audio FILE` | Beat-synced MV (ffmpeg mux). `--visual fractal` is CPU-only. `--audio` wins over `--heartmula-lyrics` / `--heartmula-tags`. |
 | `mv plan --audio FILE` | Write `buddy.mv.beat_plan/v1` (30 fps windows). |
 | `mv render --audio FILE --out out/MV-FIXED.mp4` | Comfy/LTX unique burns → Remotion stitch. `--dry-run` = no GPU. `--image` = I2V. Optional HeartMuLa track when `--audio` is omitted. |
-| `heartmula generate --lyrics TEXT --tags TAGS --out track.wav` | heartlib plan. `--dry-run` writes nothing and does not import heartlib. |
+| `heartmula generate --lyrics TEXT --tags TAGS --out track.wav` | heartlib plan. `--dry-run` writes nothing and does not import heartlib. `--max-seq-len` / `--low-vram` size the backbone KV window (16GB cannot use heartlib's 8192). Wav save falls back to soundfile when torchaudio/torchcodec fails. |
 | `heartmula transcribe --audio FILE --out words.json` | `{w,s,e}` for lipdub. Skipped when `run --words` is set. |
 | `character create\|list` | CCC stage. `--train` chains LoRA. |
 | `lora setup\|train\|validate` | ai-toolkit Flux LoRA. |

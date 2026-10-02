@@ -981,6 +981,7 @@ def cmd_mv(args: argparse.Namespace) -> int:
 
     out = args.out or str(Path("out") / "MV-FIXED.mp4")
     if not audio or getattr(args, "heartmula_lyrics", None) or getattr(args, "heartmula_tags", None):
+        from master_agent.heartmula.audio_save import HeartMuLaAudioSaveError
         from master_agent.heartmula.config import HeartMuLaConfigError
         from master_agent.heartmula.generate import (
             HeartMuLaUnavailable,
@@ -999,7 +1000,12 @@ def cmd_mv(args: argparse.Namespace) -> int:
                 duration_s=getattr(args, "heartmula_duration", None),
                 seed=getattr(args, "heartmula_seed", None),
             )
-        except (HeartMuLaConfigError, HeartMuLaUnavailable, MissingHeartMuLaWeights) as exc:
+        except (
+            HeartMuLaConfigError,
+            HeartMuLaUnavailable,
+            MissingHeartMuLaWeights,
+            HeartMuLaAudioSaveError,
+        ) as exc:
             if not audio:
                 print(f"FAIL  {exc}")
                 return 2
@@ -1064,6 +1070,7 @@ def cmd_music(args: argparse.Namespace) -> int:
     audio = args.audio
     heartmula_block = None
     if not audio or getattr(args, "heartmula_lyrics", None) or getattr(args, "heartmula_tags", None):
+        from master_agent.heartmula.audio_save import HeartMuLaAudioSaveError
         from master_agent.heartmula.config import HeartMuLaConfigError
         from master_agent.heartmula.generate import (
             HeartMuLaUnavailable,
@@ -1081,7 +1088,12 @@ def cmd_music(args: argparse.Namespace) -> int:
                 duration_s=getattr(args, "heartmula_duration", None),
                 seed=getattr(args, "seed", None),
             )
-        except (HeartMuLaConfigError, HeartMuLaUnavailable, MissingHeartMuLaWeights) as exc:
+        except (
+            HeartMuLaConfigError,
+            HeartMuLaUnavailable,
+            MissingHeartMuLaWeights,
+            HeartMuLaAudioSaveError,
+        ) as exc:
             print(f"FAIL  {exc}")
             return 2 if not audio else 1
         if source.note:
@@ -1224,6 +1236,7 @@ def cmd_download_flux(args: argparse.Namespace) -> int:
 def cmd_heartmula(args: argparse.Namespace) -> int:
     """``heartmula generate|transcribe``. Dry-run never imports heartlib."""
     from master_agent.heartmula.config import HeartMuLaConfigError
+    from master_agent.heartmula.audio_save import HeartMuLaAudioSaveError
     from master_agent.heartmula.generate import (
         HeartMuLaUnavailable,
         MissingHeartMuLaWeights,
@@ -1251,6 +1264,8 @@ def cmd_heartmula(args: argparse.Namespace) -> int:
                 temperature=args.temperature,
                 cfg_scale=args.cfg_scale,
                 dry_run=dry,
+                max_seq_len=getattr(args, "max_seq_len", None),
+                low_vram=getattr(args, "low_vram", None),
             )
             print(format_plan(plan))
             if dry:
@@ -1264,6 +1279,8 @@ def cmd_heartmula(args: argparse.Namespace) -> int:
                 topk=args.topk,
                 temperature=args.temperature,
                 cfg_scale=args.cfg_scale,
+                max_seq_len=getattr(args, "max_seq_len", None),
+                low_vram=getattr(args, "low_vram", None),
             )
             print(f"OK    {args.out}")
             return 0
@@ -1275,7 +1292,12 @@ def cmd_heartmula(args: argparse.Namespace) -> int:
             result = transcribe_audio(audio=args.audio, out=args.out)
             print(f"OK    {result.path} ({len(result.words)} word(s))")
             return 0
-    except (HeartMuLaConfigError, HeartMuLaUnavailable, MissingHeartMuLaWeights) as exc:
+    except (
+        HeartMuLaConfigError,
+        HeartMuLaUnavailable,
+        MissingHeartMuLaWeights,
+        HeartMuLaAudioSaveError,
+    ) as exc:
         print(f"FAIL  {exc}")
         return 1
     print("FAIL  heartmula needs generate or transcribe")
@@ -2422,6 +2444,21 @@ def main(argv: list[str] | None = None) -> int:
     gen_p.add_argument("--topk", type=int, default=50)
     gen_p.add_argument("--temperature", type=float, default=1.0)
     gen_p.add_argument("--cfg-scale", dest="cfg_scale", type=float, default=1.5)
+    gen_p.add_argument(
+        "--max-seq-len",
+        dest="max_seq_len",
+        type=int,
+        default=None,
+        help=(
+            "backbone KV window. Default sizes to the clip and the card. "
+            "heartlib's 8192 OOMs on 16GB during the GQA expand; 512 is the 5s smoke"
+        ),
+    )
+    gen_p.add_argument(
+        "--low-vram",
+        action="store_true",
+        help="size the KV window as if the card is 16GB",
+    )
     gen_p.add_argument("--dry-run", action="store_true", help="print the plan; do not import heartlib")
     gen_p.set_defaults(func=cmd_heartmula)
     tr_p = hm.add_parser("transcribe", help="audio → words.json for lipdub --words")
