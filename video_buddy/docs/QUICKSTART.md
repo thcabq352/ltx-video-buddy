@@ -280,6 +280,6 @@ https://github.com/thcabq352/ltx2.5-research-agent :
 - The `ltx_research_agent` package name
 - Imagine client / OAuth
 
-WAN / K3NK paths are **unchanged**. LTX TeaCache is inject-when-registered
-(PR #4); missing pack still soft-bypasses. Historical copy table:
-[`../../MERGE-LTX25.md`](../../MERGE-LTX25.md).
+WAN paths are **unchanged**. K3NK AIO is **retired** and not wired. LTX TeaCache is inject-when-registered
+(PR #4); missing pack still soft-bypasses. The PR #6 copy table now lives in the
+[operator changelog](../README.md#status-2026-09-13).

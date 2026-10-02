@@ -2,7 +2,7 @@
 
 Authoritative lists. Do not invent names. MCP tools come from
 `master_agent/mcp_server.py`. CLI commands come from
-`python -m master_agent` (`master_agent/__main__.py`).
+`python -m master_agent` (dispatcher `master_agent/__main__.py`, commands in `master_agent/cli/`).
 
 Cwd for CLI: the `video_buddy/` directory. Use the project venv.
 

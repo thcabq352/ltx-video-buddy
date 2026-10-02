@@ -24,6 +24,19 @@ from master_agent.config import OBJECT_INFO_CACHE, WORKFLOW_FILES, WORKFLOWS_DIR
 # none      = not wired
 Surface = str
 
+# Unwired packs that are closed scope. The probe still lists them so the
+# matrix stays honest, but the gap column is "retired", not an open task.
+RETIRED_CAPABILITIES = frozenset({
+    "k3nk_wan_aio",
+    "wan_wrapper",
+    "stand_in",
+    "lanpaint",
+    "ipadapter_faceid",
+    "controlnet_sd15",
+    "fractal_comfy",
+    "mmaudio",
+})
+
 
 @dataclass(frozen=True)
 class Capability:
@@ -129,8 +142,9 @@ CAPABILITY_CATALOG: tuple[Capability, ...] = (
         name_contains=("k3nk",),
         surfaces=(),
         notes=(
-            "HYPOTHESIS: tower weights. Hub search found only K3NK LoRAs, not an AIO "
-            "I2V pack — do not invent filenames. Not a 16GB default. Use wan22 T2V."
+            "Retired. Not a 16GB default and not a planned variant. "
+            "Hub search found only K3NK LoRAs, not an AIO I2V pack — do not invent filenames. "
+            "Use wan22 T2V."
         ),
     ),
     Capability(
@@ -138,7 +152,10 @@ CAPABILITY_CATALOG: tuple[Capability, ...] = (
         "WanVideoWrapper (Sampler / Encode / TeaCache CACHEARGS)",
         class_types=("WanVideoSampler", "WanVideoModelLoader", "WanVideoTeaCache"),
         surfaces=(),
-        notes="119 wrapper nodes in cached object_info; no Buddy graph uses WanVideoSampler.",
+        notes=(
+            "Retired. 119 wrapper nodes may appear in object_info; no Buddy graph "
+            "uses WanVideoSampler. Native wan22 stays UNETLoader + KSampler."
+        ),
     ),
     Capability(
         "wan_fun_inpaint",
@@ -244,7 +261,7 @@ CAPABILITY_CATALOG: tuple[Capability, ...] = (
         "Wan Stand-In identity",
         class_types=("WanVideoAddStandInLatent",),
         surfaces=(),
-        notes="Wrapper-only node. No Buddy template.",
+        notes="Retired. Wrapper-only node. No Buddy template. Not deferred work.",
     ),
     Capability(
         "lanpaint",
@@ -252,9 +269,10 @@ CAPABILITY_CATALOG: tuple[Capability, ...] = (
         class_types=("LanPaint_KSampler",),
         surfaces=("bypass", "patcher"),
         notes=(
-            "Live tower YES: LanPaint_KSampler (not a bare LanPaint class). "
-            "No graph. Patcher writes seed/steps/cfg if a template uses it; "
-            "validator bypasses if the pack is missing."
+            "Retired. Not an open gap. Live tower may have LanPaint_KSampler "
+            "(not a bare LanPaint class). No shipped graph. If a template names "
+            "the node, the patcher still writes seed/steps/cfg and the validator "
+            "still soft-bypasses a missing pack."
         ),
     ),
     Capability(
@@ -297,10 +315,8 @@ CAPABILITY_CATALOG: tuple[Capability, ...] = (
         surfaces=("template",),
         templates=(),
         notes=(
-            "Live tower YES: IPAdapterFaceID. SDXL ADV UI graphs also have "
-            "IPAdapterUnifiedLoader (not API, not routed). No director/patcher path. "
-            "Deferred: a queueable FaceID API graph needs its own conversion of "
-            "those UI files; it is not a small add-on to Fun Inpaint."
+            "Retired. Live tower may have IPAdapterFaceID. SDXL ADV UI graphs "
+            "are not API and are not routed. No director path. Not deferred work."
         ),
     ),
     Capability(
@@ -309,8 +325,9 @@ CAPABILITY_CATALOG: tuple[Capability, ...] = (
         class_types=("ControlNetLoader", "ControlNetApplyAdvanced", "CannyEdgePreprocessor"),
         surfaces=("template",),
         notes=(
-            "Live tower YES: ControlNetLoader. In ltx23_lipsync_v08 API + SDXL ADV UI. "
-            "Director will not pick a ControlNet path."
+            "Retired. ControlNetLoader may be on the tower and inside "
+            "ltx23_lipsync_v08 / SDXL UI files. Director will not pick a "
+            "ControlNet path. Not deferred work."
         ),
     ),
     Capability(
@@ -327,10 +344,8 @@ CAPABILITY_CATALOG: tuple[Capability, ...] = (
         class_types=("CreateVoronoiMask", "Image Perlin Power Fractal", "Image Perlin Noise"),
         surfaces=(),
         notes=(
-            "Live tower YES: CreateVoronoiMask, Image Perlin Power Fractal. "
-            "Buddy fractal path is CPU numpy, not these nodes. "
-            "Deferred: a Comfy Voronoi/Perlin plate is a separate graph from "
-            "the CPU fractal path and from the Fun Inpaint template."
+            "Retired. CreateVoronoiMask and Image Perlin Power Fractal are not "
+            "a Buddy path. Fractal video stays the CPU numpy command. Not deferred work."
         ),
     ),
     Capability(
@@ -400,9 +415,9 @@ CAPABILITY_CATALOG: tuple[Capability, ...] = (
         class_types=("MMAudioModelLoader", "MMAudioSampler", "MMAudioVoCoder"),
         surfaces=("bypass",),
         notes=(
-            "Live tower: NO exact class named MMAudio. Related: MMAudioModelLoader / "
-            "Sampler / VoCoder. Music pipeline is beat-detect + mux. Soft-bypass if a "
-            "graph names MMAudio* and the pack is missing."
+            "Retired as a generator. Music stays beat-detect + mux. "
+            "Related classes (MMAudioModelLoader / Sampler / VoCoder) are not a "
+            "queued path. Soft-bypass remains if a graph names MMAudio* and the pack is missing."
         ),
     ),
     Capability(
@@ -485,6 +500,7 @@ class CapabilityRow:
             "director": self.director,
             "gap": self.gap,
             "notes": self.capability.notes,
+            "retired": self.capability.id in RETIRED_CAPABILITIES,
         }
 
 
@@ -563,6 +579,8 @@ def _template_hits(cap: Capability, index: dict[str, set[str]]) -> list[str]:
 
 
 def _verdict(cap: Capability, row: CapabilityRow) -> tuple[str, str]:
+    if cap.id in RETIRED_CAPABILITIES:
+        return "retired", "Retired scope, not deferred work."
     surfaces = set(cap.surfaces)
     if "director" in surfaces:
         return "yes", ""
@@ -622,6 +640,9 @@ def format_matrix(rows: list[CapabilityRow], *, source: str = "unknown") -> str:
     lines.append(
         "object_info is validation + this probe — not automatic graph synthesis."
     )
+    lines.append(
+        "Retired rows are closed scope, not open gaps and not coming soon."
+    )
     return "\n".join(lines) + "\n"
 
 
@@ -647,6 +668,7 @@ def run_probe(*, prefer_live: bool = True) -> tuple[list[CapabilityRow], str]:
 
 __all__ = [
     "CAPABILITY_CATALOG",
+    "RETIRED_CAPABILITIES",
     "TOWER_LIVE_RELATED",
     "TOWER_LIVE_YES",
     "Capability",

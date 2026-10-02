@@ -202,6 +202,24 @@ class TestLanPaintKSamplerPatch(unittest.TestCase):
         self.assertEqual(inputs["steps"], 8)
         self.assertEqual(inputs["cfg"], 1.5)
 
+    def test_field_map_lock_wins_over_class_heuristic(self):
+        wf = {
+            "10": {"class_type": "CLIPTextEncode", "inputs": {"text": "from-map"}},
+            "20": {
+                "class_type": "EmptyLTXVLatentVideo",
+                "inputs": {"width": 64, "height": 64, "length": 9},
+            },
+        }
+        _heuristic_patch(
+            wf,
+            {"prompt": "from-heuristic", "width": 768, "height": 512, "frames": 17},
+            locks={("10", "text"), ("20", "width")},
+        )
+        self.assertEqual(wf["10"]["inputs"]["text"], "from-map")
+        self.assertEqual(wf["20"]["inputs"]["width"], 64)
+        self.assertEqual(wf["20"]["inputs"]["height"], 512)
+        self.assertEqual(wf["20"]["inputs"]["length"], 17)
+
 
 class TestAudioToVideoClock(unittest.TestCase):
     def test_a2v_duration_audio_and_enhancer_retarget(self):

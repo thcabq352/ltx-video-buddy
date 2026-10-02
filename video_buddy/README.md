@@ -170,8 +170,8 @@ fetches. `--use-existing` keeps disk files. `download-models --ltx25`
 prints the ask for confirmed-missing slots; `--yes` / `doctor --fix-models`
 only after consent. `setup --fix` skips Ollama models already in
 `ollama list`. See [docs/QUICKSTART.md](docs/QUICKSTART.md),
-[REQUIRED-FILES.md](REQUIRED-FILES.md), and historical
-[MERGE-LTX25.md](../MERGE-LTX25.md).
+[REQUIRED-FILES.md](REQUIRED-FILES.md), and the
+[2026-09-13 changelog](#status-2026-09-13).
 
 ## Doctor and download-models
 
@@ -202,7 +202,7 @@ WAN 2.2 (`wan22`) defaults to GGUF Q4_K_S when present, else Comfy-Org fp8
 + Lightx2v. LTX TeaCache is inject-when-registered (soft-bypass if the
 pack is missing). Movie Builder and CCC ADV are **16GB-heavy** — safer
 alternates are `ltx25_t2v_i2v` / `flux`.
-K3NK AIO I2V is **not** wired (no attested pack). See
+K3NK AIO I2V is **retired** (not wired; no attested pack). See
 `python -m master_agent workflows --vram`. The research-agent LangGraph /
 Gradio / A2A harness was **not** copied.
 
@@ -217,7 +217,7 @@ python -m master_agent capabilities --json
 # object_info is validation + this probe — not graph synthesis.
 ```
 
-Fun Inpaint is the `wan_fun_inpaint` template (start image + mask). FaceID and Voronoi stay **unwired** (deferred; see capabilities notes). LTX TeaCache is
+Fun Inpaint is the `wan_fun_inpaint` template (start image + mask). FaceID, ControlNet, Voronoi, Perlin, Stand-In, LanPaint, MMAudio, WanVideoWrapper, and K3NK AIO are **retired** (not wired, not coming soon). LTX TeaCache is
 inject-when-registered (`ensure_teacache`); leftover / Wan aliases still
 soft-bypass. Full matrix: [AUDIT.md](AUDIT.md).
 
@@ -614,14 +614,20 @@ local models (19-27GB) and can take several minutes — allow long timeouts.
   `--yes` / `doctor --fix-models` only after consent. Official bf16 Gemma
   is not required when heretic / int8 TE is present.
 - **Not copied** from `ltx2.5-research-agent`: LangGraph research / scrape /
-  A2A / Gradio, secrets, `ltx_research_agent`. WAN / K3NK paths
-  unchanged. LTX TeaCache is inject-when-registered (PR #4); missing
-  pack still soft-bypasses.
+  A2A / Gradio, secrets, `ltx_research_agent`. Research aliases
+  `t2v_i2v` / `flf2v` / `msr` / `a2v` / `t2a` / `v2v_ic_lora` still resolve
+  to `ltx25_*`. `snap_ltx_frames` is 8n+1, minimum 9, fps 24; audio
+  `frames_number` stays paired with video `length`. Upstream reference
+  (read-only): https://github.com/thcabq352/ltx2.5-research-agent.
+  WAN paths unchanged. K3NK AIO is retired, not wired. LTX TeaCache is
+  inject-when-registered (PR #4); missing pack still soft-bypasses.
+  Historical merge notes that lived in `MERGE-LTX25.md` are this entry.
 - **Capability audit (PR #5, merged).** `python -m master_agent capabilities
   [--offline] [--json]`. `WORKFLOW_FILES` is derived from
-  `workflows/manifests.yaml` (every slug is director-routable). Fun Inpaint
-  is `wan_fun_inpaint` (mask via `LoadImageMask`). Fun Control / FaceID stay
-  fail-closed. See [AUDIT.md](AUDIT.md).
+  `workflows/manifests.yaml` (every on-disk slug is director-routable).
+  Fun Inpaint is `wan_fun_inpaint` (mask via `LoadImageMask`). FaceID,
+  ControlNet, Voronoi, Perlin, Stand-In, LanPaint, MMAudio, WanVideoWrapper,
+  and K3NK AIO are **retired**, not coming soon. See [AUDIT.md](AUDIT.md).
 - Operator sheet: [docs/QUICKSTART.md](docs/QUICKSTART.md).
 
 ## Status (2026-08-04, third pass)
