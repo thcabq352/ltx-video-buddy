@@ -130,6 +130,8 @@ LLM_PROVIDER = (os.getenv("LLM_PROVIDER", "auto") or "auto").strip().lower()
 # default/local = local VL heretic; grok = solo; grok+local / grok+claude = panels
 LLM_PANEL = (os.getenv("LLM_PANEL", "default") or "default").strip()
 PANEL_JUDGE = (os.getenv("PANEL_JUDGE", "ollama") or "ollama").strip()
+# Empty keeps prompts/judge.md. "rainey1" selects the caliber rubric.
+PANEL_JUDGE_RUBRIC = (os.getenv("PANEL_JUDGE_RUBRIC", "") or "").strip().lower()
 PANEL_MEMBER_TIMEOUT_S = int(os.getenv("PANEL_MEMBER_TIMEOUT_S", "300"))
 
 # Claude — optional panel member (account currently has no credits)

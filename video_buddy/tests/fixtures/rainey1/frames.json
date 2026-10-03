@@ -1,0 +1,22 @@
+[
+  {
+    "id": "morph_junk",
+    "description": "Frame 1 is an operator at a desk. Frame 2 the face morphs into a twin, melted face, identity drift. Glow soup and rainbow noise. The file is 40KB and only 1 frame.",
+    "expect_pass": false,
+    "expect_hard_fails": ["identity_morph", "filesize_junk", "too_few_frames"]
+  },
+  {
+    "id": "music_ready_pass",
+    "description": "Same locked silhouette and wardrobe across sampled frames, beard and glasses stable, identity stable, no morph. World densifies with flora, cables, cast, and craft. Multiple cooperating lights: UFO beam, RGB tower, and cyan mushrooms key the face; deep blacks intact. No watermark, no plastic skin. Stable music-video hold with readable motion. Nine frames.",
+    "expect_pass": true,
+    "expect_decision": "accept",
+    "expect_hard_fails": []
+  },
+  {
+    "id": "brief_miss_human",
+    "description": "Same locked silhouette, identity stable, no morph. Flora, cables, cast, and craft densify the world. UFO beam, RGB tower, and cyan mushrooms key the face with deep blacks. No watermark. Stable music-video hold, readable motion, nine frames. Off brief: the clip does not match the brief.",
+    "expect_pass": false,
+    "expect_decision": "human_veto",
+    "expect_album_lock": false
+  }
+]

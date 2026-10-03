@@ -158,6 +158,22 @@ def _vision_chat(
     return (resp.json().get("message") or {}).get("content") or ""
 
 
+def vision_system_prompt(
+    *,
+    user_request: str = "",
+    ltx_prompt: str = "",
+    rubric: str | None = None,
+) -> str:
+    """Vision system prompt. ``rubric=None`` resolves env / brief keyword."""
+    from master_agent.judge.rubric import KNOWN_RUBRICS, load_rubric_text, resolve_judge_rubric
+
+    if rubric is None:
+        selected = resolve_judge_rubric(user_request=user_request, ltx_prompt=ltx_prompt)
+    else:
+        selected = rubric if rubric in KNOWN_RUBRICS else None
+    return load_rubric_text(selected, kind="vision")
+
+
 def vision_review(
     video_path: str | Path | None,
     *,
@@ -165,6 +181,7 @@ def vision_review(
     ltx_prompt: str = "",
     full_video: bool = False,
     reference_paths: list | None = None,
+    rubric: str | None = None,
 ) -> Optional[dict[str, Any]]:
     """VL verdict for a clip: {score, pass, issues, temporal, artifacts, reason}.
 
@@ -194,9 +211,10 @@ def vision_review(
     if not frames:
         return None
 
-    prompt_path = Path(__file__).resolve().parent / "prompts" / "vision.md"
-    system = prompt_path.read_text(encoding="utf-8") if prompt_path.is_file() else (
-        "Review video frames. Return JSON score/pass/issues/reason."
+    system = vision_system_prompt(
+        user_request=user_request,
+        ltx_prompt=ltx_prompt,
+        rubric=rubric,
     )
     brief = {
         "user_request": user_request,
@@ -259,6 +277,22 @@ def vision_review(
         }
         if ref_images:
             result["identity_score"] = _score_01(data.get("identity_score"), score)
+        from master_agent.judge.rubric import LOOK_DIMS, clamp01
+
+        for key in LOOK_DIMS:
+            if key in data and data.get(key) is not None:
+                value = clamp01(data.get(key))
+                if value is not None:
+                    result[key] = value
+        for key in ("brief_adherence", "look_score"):
+            if key in data and data.get(key) is not None:
+                value = clamp01(data.get(key))
+                if value is not None:
+                    result[key] = value
+        if "identity_morph" in data:
+            result["identity_morph"] = data.get("identity_morph")
+        if isinstance(data.get("hard_fails"), list):
+            result["hard_fails"] = [str(item) for item in data["hard_fails"]]
         return result
     except Exception as exc:
         log.warning("vision judge skipped via %s: %s", backend, exc)
