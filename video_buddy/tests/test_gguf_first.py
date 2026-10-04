@@ -169,7 +169,8 @@ def test_ltx23_graph_uses_gguf_for_model_and_keeps_eros_for_vae(variant: str, gg
     assert workflow["3"]["class_type"] == "VAELoader"
     assert workflow["3"]["inputs"]["vae_name"] == AUDIO_VAE
     assert workflow["5"]["inputs"]["vae_name"] == VIDEO_VAE
-    assert workflow["70"]["inputs"]["vae"] == ["5", 0]
+    assert workflow["70"]["class_type"] == "VAEDecode"
+    assert workflow["70"]["inputs"] == {"samples": ["60", 0], "vae": ["5", 0]}
     assert workflow["71"]["inputs"]["audio_vae"] == ["3", 0]
     assert OLD_BAKE not in str(workflow)
     assert meta["gguf_unet"] == EROS
