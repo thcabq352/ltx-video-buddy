@@ -36,8 +36,8 @@ _SOURCE_SHA256 = {
     "sulphur/ltx23_t2v_base.json": "da499a27938b30d8c5814ac66d30f91d66fbe75687533fb0d625ae0f34c8856e",
     "sulphur/ltx23_t2v_distilled.json": "c17a69296352ca626223f75388b981184cef2a3a9ef67d70c71a716709aa7152",
 }
-# eros_t2v_i2v.json after the 10Eros v1.5 UnetLoaderGGUF rewire.
-_EROS_SHA256 = "16698e9bfc4592cf38ce43d145b551c2cf1506459da00c1212c491b6169be4d8"
+# eros_t2v_i2v.json: UnetLoaderGGUF 10Eros v1.5, node 70 VAEDecode.
+_EROS_SHA256 = "1e2bd83d772f0e06ddfc1f6270c23900a8e2dc9b7a379639ab1d97d383fe654a"
 _EROS_GGUF = "10Eros_v1.5-Q4_K_M.gguf"
 
 
@@ -92,6 +92,9 @@ def test_eros_workflow_loads_v15_gguf():
     data = json.loads(path.read_text(encoding="utf-8"))
     assert data["1"]["class_type"] == "UnetLoaderGGUF"
     assert data["1"]["inputs"] == {"unet_name": _EROS_GGUF}
+    assert data["5"]["inputs"]["vae_name"] == "taeltx2_3.safetensors"
+    assert data["70"]["class_type"] == "VAEDecode"
+    assert data["70"]["inputs"] == {"samples": ["60", 0], "vae": ["5", 0]}
     assert _sha256(path) == _EROS_SHA256
 
 
