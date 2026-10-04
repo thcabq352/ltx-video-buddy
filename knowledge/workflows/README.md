@@ -27,6 +27,15 @@ this graph won a cold-brew test.
   Do not borrow LTX `8n+1` lengths for this graph.
 ```
 
+Recorded playbook:
+[`2026-09-29-blaze-vertical-remake-ltx25-msr.md`](2026-09-29-blaze-vertical-remake-ltx25-msr.md)
+(concert + Clearwater pier remakes on `ltx25_msr`). No tower render is claimed there.
+
 Catalog ids and invoke lines:
 [`video_buddy/workflows/minimax-h3/README.md`](../../video_buddy/workflows/minimax-h3/README.md),
 [`video_buddy/workflows/ltx-2.5/README.md`](../../video_buddy/workflows/ltx-2.5/README.md).
+
+Seedance 2.5 Draft → Final (Pack C) is hard local-only. Generate on
+`http://127.0.0.1:8188`. Partner template names in
+[`docs/FEATURES.md`](../../docs/FEATURES.md#pack-c-seedance)
+are a field-shape record, not a graph in this tree.

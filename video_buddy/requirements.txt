@@ -16,3 +16,7 @@ uvicorn>=0.30
 python-multipart>=0.0.9
 huggingface_hub>=1.0
 pytest>=8.0
+# Managed Comfy lifecycle (comfy start/stop/status/restart). Pin only.
+# Do not treat this as consent to `comfy install` or `comfy update`.
+# `comfy update` is a separate opt-in and reinstalls this exact pin for --cli.
+comfy-cli==1.20.0

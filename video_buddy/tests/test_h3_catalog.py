@@ -393,11 +393,11 @@ def test_h3_r2v_voice_reference_label_is_on_picker_surfaces():
     for rel in (
         root / "README.md",
         root / "workflows" / "minimax-h3" / "README.md",
-        root / "docs" / "QUICKSTART.md",
+        repo / "docs" / "FEATURES.md",
         root / "skills" / "video-buddy" / "TOOLS.md",
         root / "master_agent" / "orchestrator" / "prompts" / "director.md",
         root / "master_agent" / "web" / "static" / "index.html",
-        root / "AGENTS.md",
+        repo / "docs" / "AGENTS.md",
         repo / "README.md",
     ):
         text = rel.read_text(encoding="utf-8")

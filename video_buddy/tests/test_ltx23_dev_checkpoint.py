@@ -106,6 +106,7 @@ def test_patched_node_4826_uses_dev_fp8(variant: str):
             "master_agent.comfy.workflow_patcher.load_workflow_template",
             side_effect=_load,
         ),
+        patch("master_agent.models.weights.model_search_roots", lambda: []),
     ):
         workflow, meta = load_and_patch_workflow(
             variant,
@@ -171,6 +172,7 @@ def _patched_render(variant: str, **kwargs):
             "master_agent.comfy.workflow_patcher.load_workflow_template",
             side_effect=_load,
         ),
+        patch("master_agent.models.weights.model_search_roots", lambda: []),
     ):
         return load_and_patch_workflow(variant, **kwargs)
 
@@ -219,9 +221,12 @@ def test_render_variant_sampler_changes_only_when_config_asks():
 
 def test_prepare_run_generate_does_not_insert_teacache_on_lipsync_v08():
     info = _teacache_object_info()
-    with patch(
-        "master_agent.comfy.workflow_patcher.resolve_model_path",
-        side_effect=_resolve_on_tower,
+    with (
+        patch(
+            "master_agent.comfy.workflow_patcher.resolve_model_path",
+            side_effect=_resolve_on_tower,
+        ),
+        patch("master_agent.models.weights.model_search_roots", lambda: []),
     ):
         wf = prepare_run(
             "generate",

@@ -6,7 +6,8 @@ Sources (merged, first id wins for a given file):
 1. Explicit ``WORKFLOW_FILES`` (manifest slugs + legacy seeds whose JSON
    files exist on disk — gitignored example graphs are not advertised)
 2. ``workflows/manifests.yaml`` entries that point at a file that exists
-3. Auto-scan ``workflows/ltx-2.5/*.json`` and ``workflows/minimax-h3/*.json``
+3. Auto-scan ``workflows/ltx-2.5/*.json``, ``workflows/minimax-h3/*.json``,
+   and ``workflows/sulphur/*.json``
 4. Auto-scan any other ``*_api.json`` under ``workflows/``
 
 Missing tower nodes/weights never hide an id from the menu. Missing
@@ -23,6 +24,8 @@ from pathlib import Path
 from typing import Any
 
 import yaml
+
+from master_agent.comfy.sulphur import SULPHUR_FILES, SULPHUR_META
 
 # Research-agent ids → Buddy default ids (both resolve).
 RESEARCH_ALIASES: dict[str, str] = {
@@ -75,7 +78,10 @@ LTX25_META: dict[str, dict[str, Any]] = {
         "weight_bundle": "ltx25_core",
     },
     "ltx25_msr": {
-        "description": "LTX 2.5 multi-reference (pic1–pic4 + background)",
+        "description": (
+            "LTX 2.5 Ingredients IC-LoRA guide image "
+            "(LTXAddVideoICLoRAGuide + ingredients LoRA)"
+        ),
         "modes": ["msr", "i2v"],
         "weight_bundle": "ltx25_msr",
     },
@@ -320,6 +326,25 @@ def load_catalog() -> tuple[CatalogEntry, ...]:
             ),
         )
 
+    # 1c) Sulphur LTX 2.3 studio pack. API graphs only; UI sources stay files.
+    for vid, rel in SULPHUR_FILES.items():
+        extra = SULPHUR_META.get(vid) or {}
+        _add(
+            by_id,
+            seen_files,
+            CatalogEntry(
+                id=vid,
+                path=rel,
+                name=f"{vid} — {Path(rel).name}",
+                description=str(extra.get("description") or "Sulphur LTX 2.3 workflow"),
+                family="ltx23",
+                default=True,
+                modes=tuple(extra.get("modes") or ()),
+                weight_bundle="",
+                source="sulphur",
+            ),
+        )
+
     # 2) Seed WORKFLOW_FILES (on-disk director allowlist + legacy ids)
     manifests = _load_manifests()
     for vid, filename in _seed_workflow_files().items():
@@ -378,6 +403,9 @@ def load_catalog() -> tuple[CatalogEntry, ...]:
         h3_dir = root / "minimax-h3"
         if h3_dir.is_dir():
             candidates.extend(sorted(h3_dir.glob("*.json")))
+        sulphur_dir = root / "sulphur"
+        if sulphur_dir.is_dir():
+            candidates.extend(sorted(sulphur_dir.glob("*.json")))
         candidates.extend(sorted(root.rglob("*_api.json")))
         for extra in extra_ltx25_workflow_dirs():
             candidates.extend(sorted(extra.glob("*.json")))

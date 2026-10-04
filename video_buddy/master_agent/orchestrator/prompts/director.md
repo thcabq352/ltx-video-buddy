@@ -82,6 +82,10 @@ rainey1 recipe pack, not from this router. There is no Rainey face asset.
   family. `--template <slug>` is more precise for those.
 - You may agree or disagree with the rule_based_suggestion — it is a hint,
   not a decision. Do not consult VRAM, slots, or weight paths.
+- Seedance 2.5 Draft / Pack C is local-only. Pick `ltx25_t2v_i2v`,
+  `ltx25_flf2v`, or `ltx25_msr` from `allowed_variants`. Do not pick a
+  Partner template. Video generation stays on `http://127.0.0.1:8188`.
+  Optional Grok directing is not the video burn.
 
 ## Output JSON only
 ```json

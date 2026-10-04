@@ -923,7 +923,7 @@ vb_movie_builder:
 
 # --- LTX 2.5 API pack (ported from thcabq352/ltx2.5-research-agent) ---
 # Default catalog entries. Stub ckpt names in the JSON are remapped at patch
-# time to the official Lightricks/LTX-2.5 Comfy split pack. See REQUIRED-FILES.md.
+# time to the official Lightricks/LTX-2.5 Comfy split pack. See repo docs/WEIGHTS.md.
 
 ltx25_t2v_i2v:
   file: ltx-2.5/LTX-2.5_T2V_I2V_Single_Stage_Distilled_api.json
@@ -1020,7 +1020,7 @@ ltx25_t2a:
 
 # --- MiniMax H3 API pack (native Comfy ≥0.30 + ComfyUI-GGUF) ---
 # Default catalog. GGUF Q4_K DiT preferred; Comfy TE + official VAEs.
-# CFG must stay 1.0. See REQUIRED-FILES.md.
+# CFG must stay 1.0. See repo docs/WEIGHTS.md.
 
 h3_t2v:
   file: minimax-h3/MiniMax-H3_T2V_FL2VA_api.json
@@ -1074,3 +1074,72 @@ h3_r2v:
     prompt: { class_type: MiniMaxH3ReferenceToVideo, index: 0, input: prompt }
     seed: { class_type: KSampler, index: 0, input: seed }
     frames: { class_type: MiniMaxH3ReferenceToVideo, index: 0, input: length }
+
+# --- Sulphur LTX 2.3 studio pack ---
+# Runtime files are API graphs. UI sources live in workflows/sulphur/ and are
+# not manifest slugs (the linter rejects UI format). LoRA weights stay on
+# the tower. No lora field: do not spray a bundle name over graph tokens.
+# Prompt / size widgets are linked; master_agent.comfy.sulphur writes scalars.
+
+ltx23_i2v_base:
+  file: sulphur/ltx23_i2v_base_api.json
+  format: api
+  description: >
+    LTX 2.3 Sulphur image-to-video, base two-stage. Local LoRA weights stay
+    on the tower. Not a download pack.
+  vram_class: heavy
+  vram_peak_gb: 14.8
+  safer_alternate: base
+  fields:
+    filename_prefix: { class_type: SaveVideo, index: 0, input: filename_prefix }
+    seed: { class_type: RandomNoise, index: 0, input: noise_seed }
+
+ltx23_i2v_distilled:
+  file: sulphur/ltx23_i2v_distilled.json
+  format: api
+  description: >
+    LTX 2.3 Sulphur image-to-video, distilled API graph from the tower.
+    Local LoRA weights stay on the tower. Not a download pack.
+  vram_class: heavy
+  vram_peak_gb: 14.8
+  safer_alternate: base
+  fields:
+    filename_prefix: { class_type: SaveVideo, index: 0, input: filename_prefix }
+    seed: { class_type: RandomNoise, index: 0, input: noise_seed }
+
+ltx23_t2v_base:
+  file: sulphur/ltx23_t2v_base_api.json
+  format: api
+  description: >
+    LTX 2.3 Sulphur text-to-video, base two-stage. Local LoRA weights stay
+    on the tower. Not a download pack.
+  vram_class: heavy
+  vram_peak_gb: 14.8
+  safer_alternate: base
+  fields:
+    filename_prefix: { class_type: SaveVideo, index: 0, input: filename_prefix }
+    seed: { class_type: RandomNoise, index: 0, input: noise_seed }
+
+ltx23_t2v_distilled:
+  file: sulphur/ltx23_t2v_distilled_api.json
+  format: api
+  description: >
+    LTX 2.3 Sulphur text-to-video, distilled two-stage. Local LoRA weights
+    stay on the tower. Not a download pack.
+  vram_class: heavy
+  vram_peak_gb: 14.8
+  safer_alternate: base
+  fields:
+    filename_prefix: { class_type: SaveVideo, index: 0, input: filename_prefix }
+    seed: { class_type: RandomNoise, index: 0, input: noise_seed }
+
+# --- Seedance 2.5 Draft (Pack C field-shape record, not executable) ---
+# Local-only is a hard requirement. No ``file:`` key on purpose. A path
+# here would enter WORKFLOW_FILES once the JSON existed. Generate on
+# http://127.0.0.1:8188 with ltx25_t2v_i2v / ltx25_flf2v / ltx25_msr.
+# Stub ids in master_agent/comfy/partner_pointers.py are not queued:
+#   seedance25_draft_t2v → api_seedance2_5_draft_t2v (record only)
+#   seedance25_draft_i2v → api_seedance2_5_draft_i2v (record only)
+#   seedance25_draft_r2v → api_seedance2_5_draft_r2v (record only)
+# partnerGraphsExecutable is false. Do not add a ByteDance / comfy.org /
+# BytePlus / ModelArk / KIE client. See repo docs/FEATURES.md (Pack C).

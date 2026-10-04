@@ -3,6 +3,9 @@
 Flow: SELECT_VARIANT → PATCH → VALIDATE → SUBMIT → POLL → RESOLVE → JUDGE
       → DONE | ERROR   (with PLAN_OOM_RETRY and judge rewrite/retune loops)
 
+The class coordinates. The judge revise cycle lives in ``judge_loop`` and the
+OOM downscale ladder lives in ``oom``.
+
 Design rules:
 - The orchestrator executes; the judge (master_agent.judge) only evaluates.
 - Nothing is queued before the validator passes.
@@ -14,7 +17,6 @@ from __future__ import annotations
 
 import json
 import logging
-import re
 import shutil
 import uuid
 from datetime import datetime, timezone
@@ -22,26 +24,17 @@ from pathlib import Path
 from typing import Any, Optional
 
 from master_agent.comfy.client import ComfyClient, ComfyClientError
+from master_agent.judge.probe import analyze
 from master_agent.comfy.linter import LintBlocked, hard_gate, lint_workflow
 from master_agent.comfy.workflow_patcher import load_and_patch_workflow, media_wiring_error
 from master_agent.config import (
-    DOWNSCALE_LADDER,
     JUDGE_ENABLED,
     MAX_JUDGE_ROUNDS,
-    MAX_RETRIES,
     POWER_MODE,
     POWER_MODE_MAX_OPS,
     POWER_MODE_REPAIR,
     RUNS_DIR,
     SEGMENT_MAX_S,
-)
-from master_agent.judge.judge import judge_segment
-from master_agent.judge.probe import analyze
-from master_agent.judge.quality_bar import (
-    RevisePlan,
-    apply_revise_plan,
-    build_revise_plan,
-    context_from_state,
 )
 from master_agent.orchestrator.state import (
     LOOP_ERROR,
@@ -51,84 +44,29 @@ from master_agent.orchestrator.state import (
     LOOP_STARTED,
     RunState,
 )
-from master_agent.orchestrator.talking import (
-    clip_duration_cap,
-    enforce_audio_duration,
-    scrub_overlong_duration,
-)
+from master_agent.orchestrator.talking import enforce_audio_duration
 from master_agent.provenance import (
-    apply_sidecar_to_state,
-    attempt_id_of,
     latest_revise_notes,
     persist_clip_provenance,
     plan_clip_paths,
     planned_clip_path,
-    read_sidecar_for_state,
-    shot_id_of,
 )
 
 log = logging.getLogger(__name__)
-
-# Param hints the judge may tune (whitelist; anything else is ignored)
-RETUNE_ALLOWED = {"steps", "cfg", "stg_scale", "stg_blocks", "sampler_name", "seed"}
-RETUNE_RANGES = {
-    "steps": (1, 80),
-    "cfg": (1.0, 10.0),
-    "stg_scale": (0.0, 2.0),
-}
-
-_OOM_PATTERN = re.compile(
-    r"out of memory|cuda oom|CUDAOOM|allocation on device|OOM", re.IGNORECASE
-)
-
-
-def _looks_oom(exc: Exception) -> bool:
-    return bool(_OOM_PATTERN.search(str(exc) or ""))
 
 
 class Orchestrator:
     def __init__(self, client: Optional[ComfyClient] = None):
         self.client = client or ComfyClient()
 
-    # ── states ────────────────────────────────────────────
-
-    def _apply_director_preset(self, st: RunState, force_variant: Optional[str]) -> None:
-        """Fill rainey1 frames, size, negative, and additives when the caller did not."""
-        from master_agent.orchestrator.director_presets import fill_rainey1
-
-        filled = fill_rainey1(
-            st.request or "",
-            variant=force_variant,
-            width=st.width,
-            height=st.height,
-            frames=st.frames,
-            negative=st.negative_prompt,
-        )
-        if filled is None:
-            return
-        if filled.apply_geometry:
-            st.width = filled.width
-            st.height = filled.height
-            st.frames = filled.frames
-            st.log(
-                f"preset {filled.recipe_id} {filled.width}x{filled.height} "
-                f"frames={filled.frames}"
-            )
-        if not (st.negative_prompt or "").strip():
-            st.negative_prompt = filled.negative
-        from master_agent.orchestrator.director_presets import (
-            compose_positive,
-            load_rainey1_pack,
-            recipe_by_id,
-        )
-
-        recipe = recipe_by_id(filled.recipe_id)
-        pack = load_rainey1_pack()
-        st.prompt = compose_positive(st.prompt or st.request or "", recipe, pack.additives)
-
     def _select_variant(self, st: RunState, force_variant: Optional[str]) -> str:
+        from master_agent.comfy.partner_pointers import PartnerPointerError, route_pack_c
         from master_agent.hands import LiveHands
         from master_agent.orchestrator.director import choose_variant
+
+        force_variant, refusal = route_pack_c(st.request or "", force_variant)
+        if refusal:
+            raise PartnerPointerError(refusal)
 
         variant, source = choose_variant(
             st.request or "",
@@ -275,7 +213,6 @@ class Orchestrator:
         if uploaded_io:
             st.log(f"ltx in/outpaint mask uploaded: {uploaded_io}")
 
-    @staticmethod
     def _resolve_h3_line(st: RunState) -> None:
         """Fill a missing H3 line from the brief or a local transcriber, else warn."""
         from master_agent.orchestrator.h3_voice import (
@@ -293,7 +230,6 @@ class Orchestrator:
         if not (st.spoken_line or "").strip():
             st.log(f"warn: {H3_MISSING_LINE_WARNING}")
 
-    @staticmethod
     def _inject_spoken_line(st: RunState) -> None:
         """Keep the H3 spoken line in the prompt across revise re-patches."""
         if not (st.spoken_line or "").strip():
@@ -387,25 +323,10 @@ class Orchestrator:
         return True
 
     def _handle_job_error(self, st: RunState, exc: Exception, *, phase: str) -> bool:
-        if _looks_oom(exc):
-            st.retries += 1
-            try:
-                from master_agent.models.vram_policy import downscale_ladder_for
+        """OOM downscale ladder. See orchestrator.oom."""
+        from master_agent.orchestrator.oom import handle_job_error
 
-                ladder = downscale_ladder_for(st.variant or "")
-            except Exception:
-                ladder = DOWNSCALE_LADDER
-            if st.retries > MAX_RETRIES or st.downscale_level + 1 >= len(ladder):
-                st.fail(f"{phase} OOM after {st.retries} retries: {exc}")
-                return False
-            st.transition("PLAN_OOM_RETRY")
-            st.downscale_level += 1
-            w, h, frames = ladder[st.downscale_level]
-            st.width, st.height = w, h
-            st.log(f"OOM at {phase}: downscaling to {w}x{h} ({frames}f), retry {st.retries}")
-            return self._patch(st) and self._validate(st) and self._submit_and_poll(st)
-        st.fail(f"{phase} failed: {exc}")
-        return False
+        return handle_job_error(self, st, exc, phase=phase)
 
     def _order_final_output(self, st: RunState, files: list[dict]) -> list[dict]:
         """Prefer the manifest's final node, else the clip with audio at this length."""
@@ -452,201 +373,27 @@ class Orchestrator:
         return False
 
     def _judge(self, st: RunState) -> None:
-        """JUDGE state. Fail → revise plan → re-run (or dry re-judge) → stop."""
-        from pathlib import Path
+        """JUDGE state. See orchestrator.judge_loop."""
+        from master_agent.orchestrator.judge_loop import judge_loop
 
-        while True:
-            prior = read_sidecar_for_state(st)
-            if prior:
-                lin = prior.get("lineage") or {}
-                st.log(
-                    f"provenance read attempt_id={lin.get('attempt_id')} "
-                    f"hash={(prior.get('hash') or '')[:12]}"
-                )
-            if st.dry_run and not (st.video_path and Path(st.video_path).is_file()):
-                heuristic, issues = 1.0, []
-            else:
-                expected = st.duration_s
-                cap = clip_duration_cap(st)
-                if cap is not None:
-                    expected = min(float(expected or cap), float(cap))
-                heuristic, issues = analyze(
-                    st.video_path, expected_duration_s=expected
-                )
-                try:
-                    from master_agent.judge.probe import probe_video
-
-                    st.has_audio = bool(probe_video(st.video_path).get("has_audio"))
-                except Exception:
-                    pass
-            ctx = context_from_state(st)
-            result = judge_segment(
-                user_request=st.request,
-                ltx_prompt=st.prompt,
-                shot=st.shot,
-                video_path=st.video_path,
-                heuristic_score=heuristic,
-                heuristic_issues=issues,
-                judge_retries=st.attempt - 1,
-                max_rounds=st.max_judge_rounds,
-                judge_enabled=st.judge_enabled,
-                context=ctx,
-            )
-            st.judge_score = result.combined_score
-            st.judge_decision = result.decision
-            st.judge_issues = result.issues
-            st.judge_reason = result.reason
-            st.quality_bar = result.quality_bar or {}
-            st.judge_round = st.attempt - 1
-            st.judge_history.append(result.to_dict())
-            st.log(
-                f"judge attempt {st.attempt}/{st.max_judge_rounds}: "
-                f"combined={result.combined_score:.2f} decision={result.decision} "
-                f"reason={result.reason}"
-            )
-            persist_clip_provenance(st, revise_notes=latest_revise_notes(st))
-
-            if result.decision == "human_veto":
-                st.loop_status = LOOP_HUMAN_VETO
-                st.transition("DONE")
-                return
-            if result.decision == "accept" and result.pass_:
-                st.loop_status = LOOP_PASSED
-                st.transition("DONE")
-                return
-            if result.decision == "exhausted" or st.attempt >= st.max_judge_rounds:
-                st.loop_status = LOOP_EXHAUSTED
-                st.judge_decision = "exhausted"
-                st.log(
-                    f"loop stop: exhausted after {st.attempt}/{st.max_judge_rounds} attempts"
-                )
-                st.transition("DONE")
-                return
-
-            judged_attempt = int(st.attempt or 1)
-            judged_shot = st.shot_id or shot_id_of(st)
-            prior = read_sidecar_for_state(st)
-            if prior:
-                apply_sidecar_to_state(st, prior)
-                st.log(
-                    f"provenance source-of-truth "
-                    f"{(prior.get('lineage') or {}).get('attempt_id')}"
-                )
-            # Parent link is the attempt just judged, not whatever the sidecar
-            # already says (that record can be the child shell).
-            st.parent_shot_id = judged_shot
-            st.parent_attempt_id = attempt_id_of(judged_shot, judged_attempt)
-            plan = self._revise_plan(st, result)
-            if not plan.actionable:
-                st.loop_status = LOOP_EXHAUSTED
-                st.judge_decision = "exhausted"
-                st.log("loop stop: no actionable revise plan")
-                st.transition("DONE")
-                return
-
-            self._apply_full_revise(st, plan, result)
-            st.revise_history.append(
-                {"attempt": judged_attempt, **plan.to_dict()}
-            )
-            # The child has not been judged and does not own the parent file yet.
-            st.judge_score = 0.0
-            st.judge_issues = []
-            st.judge_reason = ""
-            st.judge_decision = ""
-            st.quality_bar = {}
-            st.attempt = judged_attempt + 1
-            st.judge_round = st.attempt - 1
-            persist_clip_provenance(
-                st, revise_notes=latest_revise_notes(st), omit_hash=True
-            )
-
-            if st.dry_run:
-                st.transition("JUDGE")
-                continue
-
-            st.transition("PATCH")
-            if not (self._patch(st) and self._validate(st)):
-                st.loop_status = LOOP_ERROR
-                return
-            if not self._submit_and_poll(st):
-                st.loop_status = LOOP_ERROR
-                return
-            st.transition("RESOLVE")
-            if not self._resolve(st):
-                st.loop_status = LOOP_ERROR
-                return
-            st.transition("JUDGE")
+        judge_loop(self, st)
 
     @staticmethod
-    def _revise_plan(st: RunState, result) -> RevisePlan:
-        fails = list((result.quality_bar or {}).get("fails") or [])
-        plan = build_revise_plan(
-            fails,
-            context_from_state(st),
-            base_prompt=st.prompt,
-            steps=st.steps,
-        )
-        if result.prompt_rewrite and result.prompt_rewrite.strip():
-            rewrite = result.prompt_rewrite.strip()
-            if rewrite not in plan.prompt_deltas and rewrite != (st.prompt or "").strip():
-                plan.prompt_deltas.insert(0, rewrite)
-                # Full rewrite wins over additive deltas when the judge supplied one.
-                if rewrite:
-                    plan.prompt_deltas = [rewrite]
-        if result.param_hints:
-            for key, value in result.param_hints.items():
-                plan.param_deltas.setdefault(key, value)
-        if result.revise_plan and not plan.actionable:
-            raw = result.revise_plan
-            plan = RevisePlan(
-                fail_ids=list(raw.get("fail_ids") or []),
-                prompt_deltas=list(raw.get("prompt_deltas") or []),
-                param_deltas=dict(raw.get("param_deltas") or {}),
-                shot_patch=dict(raw.get("shot_patch") or {}),
-                control_pack_used=dict(raw.get("control_pack_used") or {}),
-                music_bed_attached=bool(raw.get("music_bed_attached")),
-                reason=str(raw.get("reason") or ""),
-            )
-        return plan
+    def _revise_plan(st: RunState, result):
+        from master_agent.orchestrator.judge_loop import revise_plan
 
-    def _apply_full_revise(self, st: RunState, plan: RevisePlan, result) -> None:
-        applied = apply_revise_plan(st, plan)
-        if result.decision == "rewrite" and result.prompt_rewrite.strip():
-            st.prompt = result.prompt_rewrite.strip()
-            if "prompt" not in applied:
-                applied.append("prompt")
-            st.log("judge requested prompt rewrite")
-        if plan.param_deltas or result.param_hints:
-            hints = dict(result.param_hints or {})
-            hints.update(plan.param_deltas)
-            self._apply_retune(st, hints)
-            st.log(f"revise params: {hints}")
-        cap = enforce_audio_duration(st)
-        if cap and st.prompt:
-            st.prompt = scrub_overlong_duration(st.prompt, cap)
-        if applied:
-            st.log(f"revise applied: {applied} ({plan.reason})")
+        return revise_plan(st, result)
+
+    def _apply_full_revise(self, st: RunState, plan, result) -> None:
+        from master_agent.orchestrator.judge_loop import apply_full_revise
+
+        apply_full_revise(self, st, plan, result)
 
     @staticmethod
     def _apply_retune(st: RunState, hints: dict[str, Any]) -> None:
-        for key, value in hints.items():
-            if key not in RETUNE_ALLOWED:
-                continue
-            if key in RETUNE_RANGES:
-                lo, hi = RETUNE_RANGES[key]
-                try:
-                    value = max(lo, min(hi, float(value)))
-                except (TypeError, ValueError):
-                    continue
-                value = int(value) if key == "steps" else value
-            if key == "seed":
-                try:
-                    value = int(value)
-                except (TypeError, ValueError):
-                    continue
-            setattr(st, key, value)
+        from master_agent.orchestrator.judge_loop import apply_retune
 
-    # ── entry point ───────────────────────────────────────
+        apply_retune(st, hints)
 
     def run(
         self,
@@ -668,6 +415,7 @@ class Orchestrator:
         revise_enabled: Optional[bool] = None,
         spoken_line: Optional[str] = None,
         voice_sample: Optional[dict[str, Any]] = None,
+        heartmula: Optional[dict[str, Any]] = None,
         max_judge_rounds: int = MAX_JUDGE_ROUNDS,
         power_mode: Optional[bool] = None,
         attach_recipe: Optional[dict[str, Any]] = None,
@@ -714,6 +462,7 @@ class Orchestrator:
             revise_enabled=True if revise_enabled is None else bool(revise_enabled),
             spoken_line=(spoken_line or "").strip(),
             voice_sample=dict(voice_sample or {}),
+            heartmula=dict(heartmula or {}),
             max_judge_rounds=max_judge_rounds,
             power_mode=POWER_MODE if power_mode is None else bool(power_mode),
             attach_recipe=attach_recipe,
@@ -739,9 +488,14 @@ class Orchestrator:
             ),
             max_piece_s=float(max_piece_s) if max_piece_s is not None else None,
         )
-        self._apply_director_preset(st, force_variant=variant)
+        from master_agent.comfy.partner_pointers import PartnerPointerError
+
         try:
             st.variant = self._select_variant(st, variant)
+        except PartnerPointerError as exc:
+            st.fail(str(exc))
+            return st
+        try:
             from master_agent.orchestrator.talking import h3_r2v_audio_warning, media_route_error
 
             route_err = media_route_error(
@@ -831,3 +585,4 @@ class Orchestrator:
         except Exception:
             log.debug("kb ingest failed for run %s", st.run_id, exc_info=True)
         return st
+

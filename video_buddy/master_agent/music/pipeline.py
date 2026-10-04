@@ -69,6 +69,7 @@ def run_music_video(
     panel_judge: Optional[str] = None,
     upscale: Optional[str] = None,
     client: Optional[ComfyClient] = None,
+    heartmula: dict | None = None,
     log=print,
 ) -> dict:
     audio_path = Path(audio_path)
@@ -95,6 +96,7 @@ def run_music_video(
         "visual": visual,
         "beat_map": bmap.to_dict(),
         "seed": base_seed,
+        "heartmula": heartmula,
     }
 
     if visual == "fractal":
@@ -249,6 +251,7 @@ def _shots_visual(
             kind="music_video",
             music_bed_attached=True,
             audio_path=str(audio_path),
+            heartmula=record.get("heartmula"),
             shot_index=i + 1,
         )
         if st.state != "DONE" or not st.video_path:

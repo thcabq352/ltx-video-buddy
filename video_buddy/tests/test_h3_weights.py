@@ -143,7 +143,9 @@ def test_transformer_prefers_q4k_gguf_on_vram_16(tmp_path: Path, monkeypatch):
     assert any("nvfp4" in n for n in order[1:3])
 
 
-def test_transformer_prefers_nvfp4_over_int8_when_no_gguf(tmp_path: Path):
+def test_transformer_prefers_nvfp4_over_int8_when_no_gguf(tmp_path: Path, monkeypatch):
+    monkeypatch.setattr("master_agent.config.VRAM_GB", 16.0)
+    monkeypatch.setattr("master_agent.config.FORCE_LOADER", "")
     root = tmp_path / "models"
     nvfp4 = root / "diffusion_models" / "minimax_h3_fl2va_pruned_nvfp4.safetensors"
     int8 = root / "diffusion_models" / "minimax_h3_fl2va_pruned_int8_convrot.safetensors"

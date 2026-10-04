@@ -57,7 +57,7 @@ def _quiet(fn, *args, **kwargs):
 
 @mcp.tool()
 def health() -> dict:
-    """ComfyUI reachability + GPU VRAM, local LLM (Ollama / llama.cpp), KB counts."""
+    """ComfyUI reachability + GPU VRAM, local LLM (llama.cpp, Ollama, Grok), KB counts."""
     from master_agent.comfy.client import ComfyClient
     from master_agent.kb.store import (
         COLLECTION_KNOWLEDGE,
@@ -476,4 +476,10 @@ if __name__ == "__main__":
         schedule_knowledge_ingest(stderr=True)
     except Exception as e:
         print(f"[mcp_server] knowledge ingest not scheduled: {e}", file=sys.stderr)
+    try:
+        from master_agent.llm import prepare_local_llm
+
+        prepare_local_llm()
+    except Exception as e:
+        print(f"[mcp_server] llama.cpp not started: {e}", file=sys.stderr)
     mcp.run()  # stdio transport

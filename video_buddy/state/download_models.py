@@ -187,8 +187,18 @@ def _find_local_weight(fname, dest):
     return None
 
 
+def _assert_pack_dest(dest):
+    """Pack pulls stay under Buddy MODELS_DIR, never an attached Comfy tree."""
+    if ROOT not in sys.path:
+        sys.path.insert(0, ROOT)
+    from master_agent.models.download import assert_pack_download_destination
+
+    assert_pack_download_destination(dest)
+
+
 def fetch(repo, fname, dest_rel):
     dest = os.path.join(ROOT, dest_rel.replace("/", os.sep))
+    _assert_pack_dest(dest)
     os.makedirs(os.path.dirname(dest), exist_ok=True)
     try:
         existing = _find_local_weight(fname, dest)

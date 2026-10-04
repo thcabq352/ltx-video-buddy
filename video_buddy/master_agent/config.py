@@ -3,6 +3,8 @@
 from __future__ import annotations
 
 import os
+import shutil
+import subprocess
 from pathlib import Path
 from typing import Any
 
@@ -57,11 +59,38 @@ OBJECT_INFO_CACHE = STATE_DIR / "object_info.json"
 # Model inventory output
 MODEL_INVENTORY_JSON = STATE_DIR / "model_inventory.json"
 
+# COMFY_MODE=managed|external and EXTERNAL_COMFY_ROOT: docs/COMFY.md (repo root).
+# external refuses comfy start/stop/restart. Pack downloads stay in MODELS_DIR.
 COMFYUI_URL = os.getenv("COMFYUI_URL", "http://127.0.0.1:8188").rstrip("/")
 COMFYUI_PORT = int(os.getenv("COMFYUI_PORT", "8188"))
 COMFYUI_OUTPUT_DIR = Path(
     os.getenv("COMFYUI_OUTPUT_DIR", str(COMFYUI_ROOT / "output"))
 ).resolve()
+
+# Pack C / Seedance Draft→Final. Hard local-only. Video burns for this route
+# always target loopback Comfy. Existing LTX / Wan / H3 graphs keep using
+# COMFYUI_URL. Optional Grok (XAI_BASE_URL below) may direct; it is not a
+# video inference client for this route.
+PACK_C_COMFY_URL = "http://127.0.0.1:8188"
+PACK_C_LOCAL_ONLY = {
+    "hardRequirement": True,
+    "cloudApis": False,
+    "cloudServices": False,
+    "hostedInference": False,
+    "execution": "local-comfy",
+    "comfy": PACK_C_COMFY_URL,
+    "localPacks": {
+        "t2v": "ltx25_t2v_i2v",
+        "i2v": "ltx25_t2v_i2v",
+        "flf": "ltx25_flf2v",
+        "r2v": "ltx25_msr",
+    },
+    "keptLocalFamilies": ("ltx", "wan", "h3"),
+    "partnerGraphs": "field-shape-record",
+    "partnerGraphsExecutable": False,
+    "videoInference": "local-comfy",
+    "directingLlmSeparateFromVideo": True,
+}
 
 # SpaceXAI
 XAI_API_KEY = os.getenv("XAI_API_KEY", "")
@@ -75,20 +104,23 @@ def ltxv_api_key() -> str:
     """
     return (os.getenv("LTXV_API_KEY") or "").strip()
 SPACEXAI_MODEL = os.getenv("SPACEXAI_MODEL", "grok-4.5")
+# Directing only. Pack C video generation does not call this host.
 XAI_BASE_URL = "https://api.x.ai/v1"
 
-# Local Ollama — MAIN LLM (user pivot: local-only first).
-# Local text + vision: Qwen3-VL Heretic (9B-class, already on this machine)
+# Local text + vision: Qwen3-VL Heretic (9B-class). llama.cpp is preferred;
+# Ollama is the second local backend.
 OLLAMA_URL = os.getenv("OLLAMA_URL", "http://127.0.0.1:11434").rstrip("/")
 OLLAMA_MODEL = os.getenv("OLLAMA_MODEL", "qwen3-vl-heretic")
 
-# llama.cpp OpenAI-compat server (llama-server --api). Default :8080 — do not
-# collide with Hermes 8642 or the studio facade 8189.
+# llama.cpp OpenAI-compat server (llama-server). Default :8080 — do not
+# collide with Hermes 8642 or the studio facade 8189. Buddy starts this
+# process against MODELS_DIR when LLM_PROVIDER is auto or llamacpp.
 LLAMACPP_URL = os.getenv("LLAMACPP_URL", "http://127.0.0.1:8080").rstrip("/")
 LLAMACPP_MODEL = (os.getenv("LLAMACPP_MODEL") or OLLAMA_MODEL).strip()
+LLAMACPP_BIN = (os.getenv("LLAMACPP_BIN") or "").strip()
 
 # LLM provider selection:
-#   auto (ollama -> llamacpp -> grok)
+#   auto (default; llamacpp -> ollama -> grok)
 #   ollama[:model] | llamacpp[:model] (aliases: llama.cpp, llama-cpp)
 #   grok
 LLM_PROVIDER = (os.getenv("LLM_PROVIDER", "auto") or "auto").strip().lower()
@@ -98,6 +130,8 @@ LLM_PROVIDER = (os.getenv("LLM_PROVIDER", "auto") or "auto").strip().lower()
 # default/local = local VL heretic; grok = solo; grok+local / grok+claude = panels
 LLM_PANEL = (os.getenv("LLM_PANEL", "default") or "default").strip()
 PANEL_JUDGE = (os.getenv("PANEL_JUDGE", "ollama") or "ollama").strip()
+# Empty keeps prompts/judge.md. "rainey1" selects the caliber rubric.
+PANEL_JUDGE_RUBRIC = (os.getenv("PANEL_JUDGE_RUBRIC", "") or "").strip().lower()
 PANEL_MEMBER_TIMEOUT_S = int(os.getenv("PANEL_MEMBER_TIMEOUT_S", "300"))
 
 # Claude — optional panel member (account currently has no credits)
@@ -152,8 +186,58 @@ STORYBOARD_MODE = (os.getenv("STORYBOARD_MODE", "smart") or "smart").strip().low
 # Per-run JSON records (orchestrator output; seed of the knowledge-base log)
 RUNS_DIR = STATE_DIR / "runs"
 
-# VRAM profile — RTX 5060 Ti 16GB defaults
-VRAM_GB = float(os.getenv("VRAM_GB", "16"))
+# VRAM profile. Explicit VRAM_GB wins. Otherwise nvidia-smi total memory.
+# 16 stays the fallback only when neither is available (RTX 5060 Ti class).
+# Cards under 14GB (RTX 4000 Ada 12GB / rainey1) must not be offered NVFP4/bf16.
+def detect_nvidia_vram_gb() -> float | None:
+    """Total GPU memory in GB from ``nvidia-smi``, or None."""
+    if not shutil.which("nvidia-smi"):
+        return None
+    try:
+        proc = subprocess.run(
+            ["nvidia-smi", "--query-gpu=memory.total", "--format=csv,noheader,nounits"],
+            capture_output=True,
+            text=True,
+            timeout=3,
+            check=False,
+        )
+    except (OSError, subprocess.TimeoutExpired):
+        return None
+    if proc.returncode != 0:
+        return None
+    line = (proc.stdout or "").strip().splitlines()
+    if not line:
+        return None
+    token = line[0].split(",")[0].strip()
+    try:
+        mib = float(token)
+    except ValueError:
+        return None
+    if mib <= 0:
+        return None
+    return round(mib / 1024.0, 1)
+
+
+def _resolve_vram_gb() -> tuple[float, str]:
+    raw = (os.getenv("VRAM_GB") or "").strip()
+    if raw:
+        try:
+            return float(raw), "env"
+        except ValueError:
+            pass
+    detected = detect_nvidia_vram_gb()
+    if detected is not None:
+        return detected, "nvidia-smi"
+    return 16.0, "default"
+
+
+VRAM_GB, VRAM_SOURCE = _resolve_vram_gb()
+# gguf | nvfp4 | int8 | bf16 | "" (auto).
+# Empty is GGUF-first at any VRAM: a compatible GGUF on disk wins.
+# fp8 / bf16 / EROS load only when that slot has no GGUF.
+# "gguf" hides NVFP4 and bf16 from suggestions (12GB cards). A lone bf16
+# file on disk is still used so a 16GB+ machine without GGUF keeps working.
+FORCE_LOADER = (os.getenv("FORCE_LOADER") or "").strip().lower()
 MAX_WIDTH = int(os.getenv("MAX_WIDTH", "768"))
 MAX_HEIGHT = int(os.getenv("MAX_HEIGHT", "512"))
 # Total requested length (multi-segment stitches clips up to this)
@@ -216,6 +300,10 @@ VARIANT_GEN: dict[str, dict[str, int]] = {
     "ltx25_t2a": {"fps": 24, "frame_snap": 8},
     "ltx23_inoutpaint": {"fps": 24, "frame_snap": 8},
     "ltx25_inoutpaint": {"fps": 24, "frame_snap": 8},
+    "ltx23_i2v_base": {"fps": 24, "frame_snap": 8},
+    "ltx23_i2v_distilled": {"fps": 24, "frame_snap": 8},
+    "ltx23_t2v_base": {"fps": 24, "frame_snap": 8},
+    "ltx23_t2v_distilled": {"fps": 24, "frame_snap": 8},
     "h3_t2v": {"fps": 24, "frame_snap": 17},
     "h3_i2v": {"fps": 24, "frame_snap": 17},
     "h3_flf": {"fps": 24, "frame_snap": 17},
@@ -299,10 +387,11 @@ POLL_INTERVAL_S = float(os.getenv("POLL_INTERVAL_S", "2"))
 JOB_TIMEOUT_S = float(os.getenv("JOB_TIMEOUT_S", "1800"))
 COMFYUI_VRAM_FLAG = os.getenv("COMFYUI_VRAM_FLAG", "--normalvram")
 
-# Expected model filenames (16GB tier) — used for preflight checks
-# CheckpointLoaderSimple needs an all-in-one .safetensors. On this 16GB install we
-# use the community EROS baked all-in-one until official Lightricks
-# ltx-2.3-22b-dev.safetensors is placed in models/checkpoints/.
+# Expected model filenames (16GB tier) — used for preflight checks.
+# CheckpointLoaderSimple still needs an all-in-one .safetensors for VAE and
+# text projection on base / eros / directors. The MODEL slot prefers a
+# compatible GGUF when one is on disk (QuantStack Q4_K_S, then Sulphur Q3_K_S).
+# EROS is that checkpoint fallback, not the diffusion pick.
 DEFAULT_ALL_IN_ONE_CKPT = (
     "LTX2.3_DISTILLED-1.1_BAKED_LTX_10Eros_v14_r768.safetensors"
 )
@@ -312,19 +401,20 @@ OFFICIAL_DEV_CKPT = "ltx-2.3-22b-dev.safetensors"
 MODEL_FILES: dict[str, dict[str, str]] = {
     "base": {
         "checkpoint": DEFAULT_ALL_IN_ONE_CKPT,
-        "diffusion": "ltx-2.3-22b-distilled-1.1_transformer_only_fp8_scaled.safetensors",
+        "diffusion": "LTX-2.3-22B-distilled-1.1-Q4_K_S.gguf",
         "lora": "ltx-2.3-22b-distilled-1.1_lora-dynamic_fro09_avg_rank_111_bf16.safetensors",
         "vae": "taeltx2_3.safetensors",
         "text_encoder": "gemma_3_12B_it_fp4_mixed.safetensors",
     },
     "eros": {
         "checkpoint": DEFAULT_ALL_IN_ONE_CKPT,
+        "diffusion": "LTX-2.3-22B-distilled-1.1-Q4_K_S.gguf",
         "vae": "taeltx2_3.safetensors",
         "text_encoder": "gemma_3_12B_it_fp4_mixed.safetensors",
     },
     "directors": {
         "checkpoint": DEFAULT_ALL_IN_ONE_CKPT,
-        "diffusion": "ltx-2.3-22b-dev_transformer_only_fp8_scaled.safetensors",
+        "diffusion": "LTX-2.3-dev-Q4_K_S.gguf",
         "lora": "ltx-2.3-22b-distilled-1.1_lora-dynamic_fro09_avg_rank_111_bf16.safetensors",
         "vae": "taeltx2_3.safetensors",
         "text_encoder": "gemma_3_12B_it_fp4_mixed.safetensors",
@@ -537,6 +627,10 @@ _WORKFLOW_FILE_SEEDS: dict[str, str] = {
     "h3_i2v": "minimax-h3/MiniMax-H3_I2V_FL2VA_api.json",
     "h3_flf": "minimax-h3/MiniMax-H3_FLF_FL2VA_api.json",
     "h3_r2v": "minimax-h3/MiniMax-H3_R2V_REF2VA_api.json",
+    "ltx23_i2v_base": "sulphur/ltx23_i2v_base_api.json",
+    "ltx23_i2v_distilled": "sulphur/ltx23_i2v_distilled.json",
+    "ltx23_t2v_base": "sulphur/ltx23_t2v_base_api.json",
+    "ltx23_t2v_distilled": "sulphur/ltx23_t2v_distilled_api.json",
 }
 
 

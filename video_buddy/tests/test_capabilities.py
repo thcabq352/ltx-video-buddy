@@ -59,8 +59,9 @@ def test_probe_marks_fun_inpaint_wired():
 
 def test_probe_does_not_claim_missing_lanpaint():
     rows = {r.capability.id: r for r in probe_capabilities({})}
-    assert rows["lanpaint"].verdict == "no"
+    assert rows["lanpaint"].verdict == "retired"
     assert rows["lanpaint"].in_object_info == []
+    assert rows["lanpaint"].gap.startswith("Retired")
 
 
 def test_k3nk_does_not_match_aio_preprocessor():
@@ -94,7 +95,8 @@ def test_probe_hits_lanpaint_ksampler_and_warp():
     rows = {r.capability.id: r for r in probe_capabilities(info)}
     assert rows["lanpaint"].in_object_info == ["LanPaint_KSampler"]
     assert rows["video_noise_warp"].in_object_info == ["GetWarpedNoiseFromVideo"]
-    assert rows["lanpaint"].verdict == "partial"
+    assert rows["lanpaint"].verdict == "retired"
+    assert rows["video_noise_warp"].verdict == "partial"
 
 
 def test_format_matrix_has_header():
@@ -107,3 +109,16 @@ def test_format_matrix_has_header():
     by_id = {r.capability.id: r for r in rows}
     assert by_id["ltx25_t2v"].verdict == "yes"
     assert "director" in by_id["ltx25_t2v"].capability.surfaces
+    assert "Retired rows are closed scope" in text
+    for retired_id in (
+        "k3nk_wan_aio",
+        "wan_wrapper",
+        "stand_in",
+        "lanpaint",
+        "ipadapter_faceid",
+        "controlnet_sd15",
+        "fractal_comfy",
+        "mmaudio",
+    ):
+        assert by_id[retired_id].verdict == "retired"
+        assert by_id[retired_id].to_dict()["retired"] is True
