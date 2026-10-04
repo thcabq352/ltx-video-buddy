@@ -627,9 +627,9 @@ MUSIC_DEFAULTS: dict[str, Any] = {
 # Live director allowlist is derived from workflows/manifests.yaml so every
 # shipped slug stays choosable (rules + LLM). Do not hand-duplicate slugs here.
 _WORKFLOW_FILE_SEEDS: dict[str, str] = {
-    "base": "base_t2v_i2v.json",
-    "eros": "eros_t2v_i2v.json",
-    "directors": "directors.json",
+    "base": "ltx23_av.json",
+    "eros": "ltx23_av.json",
+    "directors": "ltx23_av.json",
     "lipsync": "lipsync_ia2v.json",
     "wan22": "260713_VIDEO-BUDDY_WAN-2-2-VID_1-0_api.json",
     "flux": "flux_t2i.json",

@@ -1,0 +1,15 @@
+# Per-variant inputs for ltx23_av.json.
+# The graph is one chain. Only the diffusion name, the positive prompt,
+# and the save prefix come from here.
+base:
+  unet_name: 10Eros_v1.5-Q4_K_M.gguf
+  prompt: cinematic commercial shot, soft light, smooth motion
+  filename_prefix: ltx_base
+eros:
+  unet_name: 10Eros_v1.5-Q4_K_M.gguf
+  prompt: cinematic commercial shot, soft light, smooth motion
+  filename_prefix: ltx_eros
+directors:
+  unet_name: 10Eros_v1.5-Q4_K_M.gguf
+  prompt: cinematic commercial shot, soft light, smooth motion
+  filename_prefix: ltx_directors
