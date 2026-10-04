@@ -6,8 +6,9 @@
 # available but are not 16GB defaults — see safer_alternate.
 
 base:
-  file: base_t2v_i2v.json
-  description: Simplified LTX-2.3 single-pass T2V (AV joint, 10Eros v1.5 GGUF)
+  file: ltx23_av.json
+  preset: ltx23_av_presets.yaml
+  description: Shared LTX-2.3 AV graph (ltx23_av.json); unet, prompt, and prefix from ltx23_av_presets.yaml
   vram_class: safe
   vram_peak_gb: 9.5
   fields:
@@ -43,8 +44,9 @@ base:
       input: filename_prefix
 
 eros:
-  file: eros_t2v_i2v.json
-  description: Same simplified graph; diffusion is 10Eros_v1.5-Q4_K_M.gguf via UnetLoaderGGUF
+  file: ltx23_av.json
+  preset: ltx23_av_presets.yaml
+  description: Same ltx23_av.json chain; eros preset supplies unet, prompt, and filename prefix
   vram_class: safe
   vram_peak_gb: 11.0
   fields:
@@ -77,8 +79,9 @@ eros:
       input: filename_prefix
 
 directors:
-  file: directors.json
-  description: Director multi-segment graph; diffusion is 10Eros_v1.5-Q4_K_M.gguf via UnetLoaderGGUF
+  file: ltx23_av.json
+  preset: ltx23_av_presets.yaml
+  description: Same ltx23_av.json chain; directors preset supplies unet, prompt, and filename prefix
   vram_class: tight
   vram_peak_gb: 13.5
   fields:

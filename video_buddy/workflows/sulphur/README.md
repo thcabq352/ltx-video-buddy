@@ -51,7 +51,7 @@ are filled from the tower API export of the same node types
 | `ltx23_t2v_distilled` | `ltx23_t2v_distilled_api.json` |
 
 These are heavy two-stage graphs, not the 16GB default. `base` is the
-safer alternate. `eros_t2v_i2v.json` is a different pack and is unchanged.
+safer alternate. `base`, `eros`, and `directors` share `ltx23_av.json`.
 
 ```bash
 python -m master_agent workflows

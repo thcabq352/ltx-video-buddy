@@ -10,7 +10,7 @@ Checks a workflow before it ever hits the queue:
      inventory (typos / missing downloads caught before queueing).
 
 Usage:
-    python -m master_agent validate workflows/base_t2v_i2v.json
+    python -m master_agent validate workflows/ltx23_av.json
     python -m master_agent validate --all
 """
 
