@@ -208,6 +208,36 @@
     .wf-split { grid-template-columns: 1fr; }
   }
 
+  fieldset.sel-radio {
+    border: 1px solid var(--line); border-radius: 8px; margin: 12px 0 0; padding: 8px 12px 10px;
+  }
+  fieldset.sel-radio legend { color: var(--dim); font-size: 12px; padding: 0 6px; }
+  fieldset.sel-radio label, .checkline {
+    display: inline-flex; align-items: center; gap: 6px; margin: 4px 16px 4px 0;
+    color: var(--text); font-size: 14px; cursor: pointer;
+  }
+  .checkline { display: flex; margin: 10px 0 0; }
+  .checkline input, fieldset.sel-radio input { accent-color: var(--accent); }
+  .sel-row {
+    display: grid; grid-template-columns: 22px minmax(0, 1fr) auto;
+    gap: 10px; align-items: start; padding: 8px 0; border-bottom: 1px solid var(--line);
+  }
+  .sel-size { font-variant-numeric: tabular-nums; white-space: nowrap; text-align: right; }
+  .sel-summary {
+    margin-top: 12px; padding: 12px; border-radius: 8px; background: var(--panel2);
+    border: 1px solid var(--line);
+  }
+  .sel-summary.ok { border-color: var(--ok); }
+  .sel-summary.short { border-color: var(--err); }
+  .sel-summary .total { font-size: 16px; font-weight: 700; }
+  .sel-have { color: var(--ok); }
+  .sel-miss { color: var(--warn); }
+  .sel-switch { margin-top: 12px; padding: 12px; }
+  @media (max-width: 640px) {
+    .sel-row { grid-template-columns: 22px minmax(0, 1fr); }
+    .sel-size { grid-column: 2; text-align: left; }
+  }
+
   .about-hero h2 { font-size: 22px; letter-spacing: .5px; }
   .about-hero h2 span { color: var(--accent); }
   .about-facts { width: 100%; }
@@ -310,7 +340,7 @@
           <div class="meter" id="c-budget-meter"><i id="c-budget-fill"></i></div>
         </div>
         <div style="display:flex;align-items:flex-end">
-          <button type="button" class="btn ghost sm" id="c-budget-reset">Reset used</button>
+          <button type="button" class="btn ghost sm" id="c-budget-reset" title="Clear used VRAM-min and continue a budget-paused generate">Reset used</button>
         </div>
       </div>
       <div class="muted" id="c-budget-pending">No scenes held for review.</div>
@@ -619,6 +649,38 @@
   </section>
 
   <section id="tab-models" class="tab">
+    <div class="card" id="selector-card">
+      <h2>Model selector</h2>
+      <div class="sub">Same catalog as <code>python -m master_agent models select</code>. Generate still uses Comfy on :8188. This page installs and selects weights. It does not update Comfy.</div>
+      <fieldset class="sel-radio">
+        <legend>LTX version</legend>
+        <label><input type="radio" name="sel-version" value="2.3"> 2.3</label>
+        <label><input type="radio" name="sel-version" value="2.5" checked> 2.5</label>
+      </fieldset>
+      <label class="checkline"><input type="checkbox" id="sel-soundtrack"> <span id="sel-soundtrack-label">Enable Soundtrack Studio</span></label>
+      <div class="row">
+        <div><label for="sel-mbps">Link speed for ETA (Mbit/s)</label>
+          <input type="number" id="sel-mbps" value="50" min="1" step="1"></div>
+      </div>
+      <div id="selector-groups"></div>
+      <div id="selector-local"></div>
+      <div id="selector-summary" class="sel-summary"><span class="muted">loading…</span></div>
+      <div id="selector-switch" class="sel-switch" style="display:none">
+        <div id="selector-switch-copy"></div>
+        <label class="checkline"><input type="radio" name="sel-switch" value="keep"> Keep the previous pack on disk</label>
+        <label class="checkline"><input type="radio" name="sel-switch" value="wipe"> Wipe the previous pack from MODELS_DIR</label>
+      </div>
+      <label class="checkline"><input type="checkbox" id="sel-agree"> I agree to fetch missing selected files into MODELS_DIR. Files already on disk are skipped. This does not update Comfy.</label>
+      <div class="actions">
+        <button class="btn ghost" type="button" id="sel-scan">Scan only</button>
+        <button class="btn" type="button" id="sel-apply">Download selected</button>
+      </div>
+      <div class="muted" id="selector-state"></div>
+      <details class="adv">
+        <summary>Checklist text</summary>
+        <pre class="log" id="selector-log"></pre>
+      </details>
+    </div>
     <div class="card" id="models-body"><span class="muted">loading…</span></div>
   </section>
 
@@ -1691,16 +1753,291 @@ $("wf-run")?.addEventListener("click", async () => {
 })();
 
 // models
+function formatMissing(missing) {
+  if (Array.isArray(missing)) return missing.filter(Boolean).join(", ");
+  if (missing && typeof missing === "object") {
+    return Object.entries(missing)
+      .map(([slot, name]) => slot + ": " + name)
+      .join(", ");
+  }
+  return "";
+}
 async function loadModels() {
-  const m = await api("/api/models").catch(() => null);
-  if (!m) { $("models-body").innerHTML = '<span class="muted">failed to load</span>'; return; }
-  const bundles = Object.entries(m.bundles || {}).map(([k, v]) =>
-    `<tr><td>${esc(k)}</td><td>${v.runnable ? '<span class="score hi">runnable</span>' : '<span class="score lo">incomplete</span>'}</td>
-     <td class="muted">${esc((v.missing || []).join(", "))}</td></tr>`).join("");
-  const files = (m.files || []).map(f => `<tr><td>${esc(f.name)}</td>
-    <td>${f.size_gb} GB</td><td class="muted">${esc(f.dir)}</td></tr>`).join("");
-  $("models-body").innerHTML = `<b>Bundles</b><table>${bundles || '<tr><td class="muted">none</td></tr>'}</table>
-    <br><b>Files</b><table>${files || '<tr><td class="muted">none</td></tr>'}</table>`;
+  try {
+    const m = await api("/api/models").catch(() => null);
+    if (!m) { $("models-body").innerHTML = '<span class="muted">failed to load</span>'; return; }
+    const bundles = Object.entries(m.bundles || {}).map(([k, v]) =>
+      `<tr><td>${esc(k)}</td><td>${v.runnable ? '<span class="score hi">runnable</span>' : '<span class="score lo">incomplete</span>'}</td>
+       <td class="muted">${esc(formatMissing(v.missing))}</td></tr>`).join("");
+    const files = (m.files || []).map(f => `<tr><td>${esc(f.name)}</td>
+      <td>${f.size_gb} GB</td><td class="muted">${esc(f.dir)}</td></tr>`).join("");
+    $("models-body").innerHTML = `<b>Bundles</b><table>${bundles || '<tr><td class="muted">none</td></tr>'}</table>
+      <br><b>Files</b><table>${files || '<tr><td class="muted">none</td></tr>'}</table>`;
+  } catch (e) {
+    if ($("models-body")) {
+      $("models-body").innerHTML = '<span class="muted">failed to load</span>';
+    }
+  }
+  loadSelector();
+}
+
+const selector = {
+  booted: false,
+  version: "2.5",
+  soundtrack: false,
+  mbps: 50,
+  optional: new Set(),
+  byVersion: {"2.3": new Set(), "2.5": new Set()},
+  switchKey: "",
+};
+let selectorBound = false;
+let selectorSeq = 0;
+let selectorMbpsTimer = 0;
+
+function selectorBody(extra) {
+  return Object.assign({
+    version: selector.version,
+    optional_ids: Array.from(selector.optional),
+    soundtrack: !!selector.soundtrack,
+    mbps: selector.mbps > 0 ? selector.mbps : 50,
+  }, extra || {});
+}
+
+async function postSelector(path, body) {
+  const res = await fetch(path, {
+    method: "POST",
+    headers: {"Content-Type": "application/json"},
+    body: JSON.stringify(body),
+  });
+  let data = {};
+  try { data = await res.json(); } catch (_) {}
+  if (!res.ok) {
+    let detail = data.detail || res.statusText;
+    if (Array.isArray(detail)) detail = detail.map(x => x.msg || JSON.stringify(x)).join("; ");
+    throw new Error(typeof detail === "string" ? detail : JSON.stringify(detail));
+  }
+  return data;
+}
+
+function seedSelector(data) {
+  const plan = data.plan || {};
+  selector.version = plan.version || "2.5";
+  selector.soundtrack = !!plan.soundtrack_studio;
+  selector.optional = new Set(
+    (plan.rows || [])
+      .filter(row => row.capability === "video_generation" && !row.required && row.selected)
+      .map(row => row.id)
+  );
+  selector.byVersion[selector.version] = new Set(selector.optional);
+  const radio = document.querySelector('input[name="sel-version"][value="' + selector.version + '"]');
+  if (radio) radio.checked = true;
+  if ($("sel-soundtrack")) $("sel-soundtrack").checked = selector.soundtrack;
+}
+
+function paintSelector(data) {
+  const plan = data.plan || {};
+  const caps = (data.catalog && data.catalog.capabilities) || [];
+  const soundtrackCap = caps.find(cap => cap.id === "soundtrack");
+  if (soundtrackCap && soundtrackCap.toggle && $("sel-soundtrack-label")) {
+    $("sel-soundtrack-label").textContent = soundtrackCap.toggle.label;
+  }
+  const rows = plan.rows || [];
+  if ($("selector-groups")) {
+    $("selector-groups").innerHTML = caps.map(cap => {
+      if (cap.id === "local_studio") return "";
+      const group = rows.filter(row => row.capability === cap.id);
+      if (!group.length) return "";
+      return `<div class="section-label">${esc(cap.label)}</div>` + group.map(renderSelectorRow).join("");
+    }).join("");
+  }
+  const localCap = caps.find(cap => cap.id === "local_studio");
+  const flags = plan.local_flags || [];
+  if ($("selector-local")) {
+    const title = localCap ? localCap.label : "Local studio";
+    const note = localCap && localCap.note ? `<div class="muted">${esc(localCap.note)}</div>` : "";
+    const body = flags.map(flag => {
+      const state = flag.present ? "on disk" : "not on disk";
+      const cls = flag.present ? "sel-have" : "sel-miss";
+      return `<div class="sel-row"><span></span><div><b>${esc(flag.label)}</b>
+        <div class="muted">local flag · ${esc(flag.detail || "")}</div></div>
+        <div class="${cls}">${esc(state)}</div></div>`;
+    }).join("");
+    $("selector-local").innerHTML = flags.length
+      ? `<div class="section-label">${esc(title)}</div>${note}${body}`
+      : "";
+  }
+  const gate = plan.disk_ok ? "OK" : "SHORT";
+  const scanOnly = rows.filter(row => row.capability === "video_generation" && row.downloadable === false);
+  const unknown = plan.unknown_size_ids || [];
+  if ($("selector-summary")) {
+    $("selector-summary").className = "sel-summary " + (plan.disk_ok ? "ok" : "short");
+    $("selector-summary").innerHTML =
+      `<div class="total">Download ${esc(plan.download_label)}</div>` +
+      `<div>ETA ${esc(plan.eta_label)} at ${esc(plan.mbps)} Mbit/s · selected ${esc(plan.selected_label)}</div>` +
+      `<div>Disk free ${esc(plan.disk_free_label)} on ${esc(plan.disk_path)} · ${gate}</div>` +
+      `<div class="muted">Files already on disk are skipped.</div>` +
+      (scanOnly.length ? `<div class="muted">${scanOnly.length} video row(s) are scan-only and are not fetched.</div>` : "") +
+      (unknown.length ? `<div class="muted">Size is not attested for ${esc(unknown.join(", "))}. Those rows are not fetched.</div>` : "");
+  }
+  const active = data.state && data.state.active_version;
+  const switching = !!(active && active !== plan.version);
+  const switchKey = switching ? (active + "->" + plan.version) : "";
+  if ($("selector-switch")) {
+    $("selector-switch").style.display = switching ? "block" : "none";
+    if ($("selector-switch-copy")) {
+      $("selector-switch-copy").textContent = switching
+        ? ("Keep the LTX " + active + " files already on disk, or wipe them from MODELS_DIR?")
+        : "";
+    }
+    if (selector.switchKey !== switchKey) {
+      document.querySelectorAll('input[name="sel-switch"]').forEach(el => { el.checked = false; });
+      selector.switchKey = switchKey;
+    }
+  }
+  if ($("selector-state")) {
+    if (data.state && data.state.active_version) {
+      const kept = (data.state.kept_versions || []).join(", ");
+      $("selector-state").textContent = "Saved radio LTX " + data.state.active_version +
+        (data.state.per_job_version ? " · per-job version on (" + kept + ")" : "") +
+        (data.state.soundtrack_studio ? " · Soundtrack Studio on" : "");
+    } else {
+      $("selector-state").textContent = "No selector state saved yet. Scan does not write it.";
+    }
+  }
+  if ($("selector-log") && data.text) $("selector-log").textContent = data.text;
+  if ($("sel-apply")) {
+    const blocked = plan.disk_ok === false && Number(plan.download_bytes) > 0;
+    $("sel-apply").disabled = blocked;
+    $("sel-apply").title = blocked ? "Not enough free space on MODELS_DIR" : "";
+  }
+}
+
+function renderSelectorRow(row) {
+  const soundtrackRow = row.capability === "soundtrack";
+  const locked = !!row.required || !!row.locked;
+  const checked = locked || (soundtrackRow ? !!row.selected : selector.optional.has(row.id));
+  const disabled = locked || soundtrackRow;
+  const role = row.required_label || "optional";
+  const have = row.present ? "on disk" : "missing";
+  const haveCls = row.present ? "sel-have" : "sel-miss";
+  let run = "off";
+  if (row.skipped) run = "skipped";
+  else if (row.will_fetch) run = "will download";
+  else if (row.downloadable === false) run = "scan only";
+  else if (row.selected) run = "selected";
+  const box = `<input type="checkbox" class="${disabled ? "" : "sel-opt"}" value="${esc(row.id)}" ${checked ? "checked" : ""} ${disabled ? "disabled" : ""}>`;
+  return `<div class="sel-row">${box}<div><b>${esc(row.label)}</b>
+    <div class="muted">${esc(role)} · <span class="${haveCls}">${have}</span> · ${esc(run)}</div>
+    ${row.detail ? `<div class="muted">${esc(row.detail)}</div>` : ""}
+    ${row.note && row.downloadable === false ? `<div class="muted">${esc(row.note)}</div>` : ""}
+    </div><div class="sel-size">${esc(row.size_label)}</div></div>`;
+}
+
+async function refreshSelector() {
+  const seq = ++selectorSeq;
+  const data = await postSelector("/api/models/selector/plan", selectorBody());
+  if (seq !== selectorSeq) return data;
+  paintSelector(data);
+  return data;
+}
+
+async function loadSelector() {
+  if (!$("selector-card")) return;
+  bindSelector();
+  try {
+    if (!selector.booted) {
+      const res = await fetch("/api/models/selector");
+      let data = {};
+      try { data = await res.json(); } catch (_) {}
+      if (!res.ok) {
+        const detail = data.detail || res.statusText;
+        throw new Error(typeof detail === "string" ? detail : "selector failed");
+      }
+      seedSelector(data);
+      selector.booted = true;
+      paintSelector(data);
+      return;
+    }
+    await refreshSelector();
+  } catch (e) {
+    if ($("selector-summary")) {
+      $("selector-summary").className = "sel-summary short";
+      $("selector-summary").textContent = e.message || "failed to load selector";
+    }
+  }
+}
+
+function bindSelector() {
+  if (selectorBound || !$("selector-card")) return;
+  selectorBound = true;
+  const onSelectorChange = (e) => {
+    const t = e.target;
+    if (!t) return;
+    if (t.name === "sel-version") {
+      selector.byVersion[selector.version] = new Set(selector.optional);
+      selector.version = t.value;
+      selector.optional = new Set(selector.byVersion[selector.version] || []);
+      refreshSelector().catch(err => toast(err.message));
+      return;
+    }
+    if (t.id === "sel-soundtrack") {
+      selector.soundtrack = !!t.checked;
+      refreshSelector().catch(err => toast(err.message));
+      return;
+    }
+    if (t.id === "sel-mbps") {
+      clearTimeout(selectorMbpsTimer);
+      selectorMbpsTimer = setTimeout(() => {
+        const n = Number(t.value);
+        selector.mbps = n > 0 ? n : 50;
+        refreshSelector().catch(err => toast(err.message));
+      }, 200);
+      return;
+    }
+    if (t.classList && t.classList.contains("sel-opt")) {
+      if (t.checked) selector.optional.add(t.value);
+      else selector.optional.delete(t.value);
+      selector.byVersion[selector.version] = new Set(selector.optional);
+      refreshSelector().catch(err => toast(err.message));
+    }
+  };
+  $("selector-card").addEventListener("change", onSelectorChange);
+  $("selector-card").addEventListener("input", (e) => {
+    if (e.target && e.target.id === "sel-mbps") onSelectorChange(e);
+  });
+  $("sel-scan")?.addEventListener("click", () => applySelector(true));
+  $("sel-apply")?.addEventListener("click", () => applySelector(false));
+}
+
+async function applySelector(scanOnly) {
+  const choice = document.querySelector('input[name="sel-switch"]:checked');
+  const switching = $("selector-switch") && $("selector-switch").style.display !== "none";
+  if (!scanOnly && switching && (!choice || (choice.value !== "keep" && choice.value !== "wipe"))) {
+    toast("Choose keep or wipe for the previous LTX pack.");
+    return;
+  }
+  if (!scanOnly && !$("sel-agree")?.checked) {
+    toast("Check the download agreement. Scan only does not fetch weights.");
+    return;
+  }
+  const buttons = [$("sel-scan"), $("sel-apply")];
+  buttons.forEach(btn => { if (btn) btn.disabled = true; });
+  try {
+    const data = await postSelector("/api/models/selector/apply", selectorBody({
+      scan_only: !!scanOnly,
+      yes: !scanOnly,
+      keep: !scanOnly && !!(choice && choice.value === "keep"),
+      wipe: !scanOnly && !!(choice && choice.value === "wipe"),
+    }));
+    paintSelector(data);
+    const lines = String(data.text || "").split("\n").map(line => line.trim()).filter(Boolean);
+    toast(lines[lines.length - 1] || (scanOnly ? "Scan only. Nothing downloaded." : "Selector updated."));
+  } catch (e) {
+    toast(e.message);
+  } finally {
+    if ($("sel-scan")) $("sel-scan").disabled = false;
+    if ($("sel-apply") && !$("sel-apply").title) $("sel-apply").disabled = false;
+  }
 }
 
 function bindDial(id, labelId) {
@@ -1749,9 +2086,10 @@ function paintControl(c) {
   if ($("c-budget-meter")) $("c-budget-meter").classList.toggle("hot", pct >= 90 || !!c.budget?.paused);
   const pending = c.budget?.pending || [];
   if ($("c-budget-pending")) {
-    $("c-budget-pending").textContent = pending.length
+    const held = pending.length
       ? ("Held for review: " + pending.map(p => p.id + " (" + Number(p.vram_min).toFixed(2) + " VRAM-min)").join(", "))
       : "No scenes held for review.";
+    $("c-budget-pending").textContent = c.resume_note ? (c.resume_note + " " + held) : held;
   }
   const fillSelect = (id, items, active) => {
     const el = $(id);

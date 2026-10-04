@@ -72,7 +72,7 @@ _VARIANT_KEYWORDS = [
     # vb_ai_renderer_*, vb_rtx_superres) are only routed when their JSON
     # exists — rule_based_variant skips any variant not in WORKFLOW_FILES.
     # "heal" / "fill" alone are substrings of unrelated words ("health").
-    # FaceID and Voronoi stay unwired — see capabilities notes.
+    # FaceID, ControlNet, Voronoi, and Perlin are retired, not coming soon.
     # Before ltx23_inoutpaint and the generic "ltx 2.5" / "ltx25" rules.
     # Bare "inpaint" still falls through to wan_fun_inpaint. Bare "ltx outpaint"
     # and "outpaint" still fall through to ltx23_inoutpaint.
@@ -100,6 +100,22 @@ _VARIANT_KEYWORDS = [
     ("ltx25_v2v_ic_lora", ("ic-lora", "iclora", "ic lora", "video-to-video", "v2v")),
     ("ltx25_a2v", ("audio-to-video", "audio to video", "a2v")),
     ("ltx25_t2a", ("text-to-audio", "text to audio", "t2a", "audio only")),
+    # Sulphur studio graphs. Specific phrases before the bare "sulphur" default.
+    # Before the generic "two-stage" / "latent upscale" rule so a sulphur brief
+    # is not sent to the LTX 2.5 two-stage template.
+    ("ltx23_i2v_distilled", (
+        "sulphur i2v distilled", "ltx23_i2v_distilled", "sulphur distilled i2v",
+    )),
+    ("ltx23_t2v_distilled", (
+        "sulphur t2v distilled", "ltx23_t2v_distilled", "sulphur distilled t2v",
+    )),
+    ("ltx23_i2v_base", (
+        "sulphur i2v base", "sulphur i2v", "ltx23_i2v_base",
+    )),
+    ("ltx23_t2v_base", (
+        "sulphur t2v base", "sulphur t2v", "ltx23_t2v_base",
+    )),
+    ("ltx23_i2v_distilled", ("sulphur",)),
     ("ltx25_t2v_i2v_two_stage", ("two-stage", "two stage", "latent upscale", "ltx 2.5 two")),
     ("ltx25_t2v_i2v", ("ltx 2.5", "ltx2.5", "ltx25", "ltx-2.5")),
     ("directors", ("director", "storyboard", "scene", "shots", "multi-shot")),
@@ -117,6 +133,12 @@ def _allowed_variants() -> set[str]:
 
 
 def rule_based_variant(request: str) -> str:
+    from master_agent.comfy.partner_pointers import local_catalog_for_pack_c_brief
+
+    # Pack C fails closed onto a local catalog id. Partner templates are not variants.
+    local_pack_c = local_catalog_for_pack_c_brief(request)
+    if local_pack_c and local_pack_c in set(WORKFLOW_FILES):
+        return local_pack_c
     text = (request or "").lower()
     allowed = set(WORKFLOW_FILES)
     for variant, keywords in _VARIANT_KEYWORDS:

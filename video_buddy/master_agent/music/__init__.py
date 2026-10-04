@@ -2,7 +2,7 @@
 
 Classic ``music`` CLI still muxes with ffmpeg. MTV / Remotion mode lives in
 ``plan`` / ``burn`` / ``unique`` / ``remotion`` / ``mv`` — see
-``docs/MUSIC_VIDEO.md``.
+repo ``docs/FEATURES.md``.
 """
 
 from master_agent.music.plan import BEAT_PLAN_SCHEMA, BeatPlan, build_beat_plan

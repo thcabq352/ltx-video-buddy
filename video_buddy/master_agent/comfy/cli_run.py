@@ -86,6 +86,11 @@ def resolve_template(rel: str | Path) -> Path:
     key = str(rel or "").strip().replace("\\", "/")
     if not key:
         raise ValueError("template path required")
+    from master_agent.comfy.partner_pointers import PartnerPointerError, partner_refusal
+
+    refusal = partner_refusal("", key, match_request=False)
+    if refusal:
+        raise PartnerPointerError(refusal)
     if is_known_variant(key):
         return resolve_workflow_path(key)
     if key in WORKFLOW_FILES:
@@ -148,9 +153,28 @@ def prepare_run(
         looks_like_ltx_graph,
     )
 
+    from master_agent.comfy.partner_pointers import (
+        PartnerPointerError,
+        partner_refusal,
+        reject_partner_or_cloud_queue,
+        route_pack_c,
+    )
+
+    if mode == "generate":
+        variant, refusal = route_pack_c(prompt, variant)
+        if refusal:
+            raise PartnerPointerError(refusal)
+    elif mode == "template":
+        refusal = partner_refusal("", str(template_path or ""), match_request=False)
+        if refusal:
+            raise PartnerPointerError(refusal)
+
     if mode == "raw":
         if not isinstance(workflow, dict):
             raise ValueError("raw mode requires a workflow dict")
+        blocked = reject_partner_or_cloud_queue(workflow, "http://127.0.0.1:8188")
+        if blocked:
+            raise PartnerPointerError(blocked)
         wf = apply_overrides(workflow, overrides)
     elif mode == "template":
         raw_path = Path(template_path or "")
@@ -260,7 +284,11 @@ def execute_prepared(
         require_weights(str(variant))
     client = ComfyClient()
     from master_agent.comfy.fun_inpaint import ensure_fun_inpaint_mask
-    from master_agent.comfy.inoutpaint import prepare_queue_inputs, record_comfy_provenance
+    from master_agent.comfy.inoutpaint import (
+        SourceVideoTrimError,
+        prepare_queue_inputs,
+        record_comfy_provenance,
+    )
 
     try:
         uploaded = ensure_fun_inpaint_mask(wf, client.upload_image)
@@ -271,6 +299,8 @@ def execute_prepared(
             print(f"uploaded mask: {uploaded}")
     try:
         uploaded_io = prepare_queue_inputs(wf, client.upload_image)
+    except SourceVideoTrimError:
+        raise
     except Exception as exc:
         print(f"WARN  ltx in/outpaint mask: {exc}")
     else:

@@ -9,6 +9,10 @@ Do not invent weight files. Every filename is attested in
 (QuantStack Wan2.2 / LTX-2.3 GGUF, city96 FLUX.1-dev-gguf, Comfy-Org/Krea-2).
 K3NK AIO I2V packs were searched and are **not** attested — they stay
 off the default table.
+
+``hardware_route`` is the doctor sentence for NVIDIA / AMD / ROCm and the
+12GB / 8GB bands. It recommends a pack. It does not block install. Loader
+preference in this module stays GGUF-first when a GGUF file is on disk.
 """
 
 from __future__ import annotations
@@ -20,6 +24,11 @@ TARGET_GPU = "NVIDIA RTX 5060 Ti"
 TARGET_VRAM_GB = 16.0
 NVFP4_MIN_VRAM_GB = 14.0
 PEAK_HEADROOM_GB = (12.0, 14.0)
+# Doctor routing bands. 12GB and above can take full checkpoints.
+# Above 8GB and below 12GB routes to GGUF. 8GB and below is the ≤8 band.
+FULL_CHECKPOINT_MIN_GB = 12.0
+LOW_VRAM_MAX_GB = 8.0
+_SULPHUR_LESS = " Sulphur GGUF can run on less."
 
 # Quantization rank: lower is the 16GB pick.
 _KIND_RANK = {
@@ -40,7 +49,8 @@ def pack_kind(filename: str) -> str:
     name = (filename or "").lower().replace("\\", "/")
     base = name.rsplit("/", 1)[-1]
     if base.endswith(".gguf"):
-        if "q4" in base:
+        # Q3 (Sulphur / 12GB) ranks with Q4: both are the low-VRAM GGUF pick.
+        if "q3" in base or "q4" in base:
             return "gguf_q4"
         if "q5" in base:
             return "gguf_q5"
@@ -60,26 +70,55 @@ def pack_kind(filename: str) -> str:
     return "other"
 
 
+_HEAVY_KINDS = frozenset({"nvfp4", "bf16", "fp16"})
+
+
 def preference_order(
     names: Iterable[str],
     *,
     vram_gb: float | None = None,
+    force_loader: str | None = None,
 ) -> tuple[str, ...]:
-    """GGUF Q4/Q5 → NVFP4 (if VRAM_GB ≥ 14) → int8/int4 → fp8 → fp16/bf16."""
-    from master_agent.config import VRAM_GB
+    """Standing rule: GGUF Q3/Q4/Q5, then NVFP4, int8, fp8, bf16.
+
+    Callers load the first name in this tuple that exists on disk. A
+    compatible GGUF therefore wins at any VRAM, including 16GB+, without
+    ``FORCE_LOADER``. fp8, bf16, and other packs are fallbacks for a slot
+    that has no matching GGUF.
+
+    Below 14GB, or when ``FORCE_LOADER=gguf``, NVFP4 and bf16/fp16 drop out
+    of this suggestion list. A heavy file that is the only copy on disk
+    still counts later so Buddy does not download a second pack.
+    """
+    from master_agent.config import FORCE_LOADER, VRAM_GB
 
     gb = float(VRAM_GB if vram_gb is None else vram_gb)
+    force = (FORCE_LOADER if force_loader is None else force_loader).strip().lower()
     seen: list[str] = []
     for name in names:
         if name and name not in seen:
             seen.append(name)
+    ranked = sorted(seen, key=lambda n: (_KIND_RANK.get(pack_kind(n), 9), n.lower()))
+    if force == "gguf":
+        gguf = [n for n in ranked if pack_kind(n).startswith("gguf")]
+        if gguf:
+            return tuple(gguf)
+        return tuple(n for n in ranked if pack_kind(n) not in _HEAVY_KINDS)
     if gb < NVFP4_MIN_VRAM_GB:
-        seen = [n for n in seen if pack_kind(n) != "nvfp4"] + [
-            n for n in seen if pack_kind(n) == "nvfp4"
-        ]
-        ranked = [n for n in seen if pack_kind(n) != "nvfp4"]
-        return tuple(sorted(ranked, key=lambda n: (_KIND_RANK.get(pack_kind(n), 9), n)))
-    return tuple(sorted(seen, key=lambda n: (_KIND_RANK.get(pack_kind(n), 9), n)))
+        return tuple(n for n in ranked if pack_kind(n) not in _HEAVY_KINDS)
+    return tuple(ranked)
+
+
+def heavy_not_suggested(filename: str, *, vram_gb: float | None = None, force_loader: str | None = None) -> bool:
+    """True when this file is NVFP4/bf16 and the card should stay on GGUF."""
+    from master_agent.config import FORCE_LOADER, VRAM_GB
+
+    kind = pack_kind(filename)
+    if kind not in _HEAVY_KINDS:
+        return False
+    gb = float(VRAM_GB if vram_gb is None else vram_gb)
+    force = (FORCE_LOADER if force_loader is None else force_loader).strip().lower()
+    return force == "gguf" or gb < NVFP4_MIN_VRAM_GB
 
 
 def describe_pack(filename: str | None) -> str:
@@ -124,8 +163,12 @@ _LTX23 = (
     "ltx-2.3-22b-distilled-1.1_transformer_only_fp8_scaled.safetensors",
     "ltx-2.3-22b-dev-fp8.safetensors",
     "ltx-2.3-22b-dev_transformer_only_fp8_scaled.safetensors",
-    "LTX-2.3-dev-Q4_K_S.gguf",
     "LTX-2.3-22B-distilled-1.1-Q4_K_S.gguf",
+    "LTX-2.3-dev-Q4_K_S.gguf",
+    # Acceptance aliases only. Not download targets.
+    "sulphur_dev-Q3_K_S.gguf",
+    "ltx-2.3-22b-distilled-Q3_K_S.gguf",
+    "LTX-2.3-distilled-Q3_K_S.gguf",
     "gemma_3_12B_it_fp4_mixed.safetensors",
     "gemma_3_12B_it_fp8_scaled.safetensors",
 )
@@ -196,12 +239,32 @@ QWEN_EDIT_PREFERENCE: tuple[str, ...] = (
     "Qwen-Image-Edit-2509-Q5_0.gguf",
     "qwen-image-edit-2511-Q5_0.gguf",
 )
+# QuantStack Q4_K_S, then Sulphur Q3_K_S, then the other aliases #52 already
+# accepts. fp8 and the EROS all-in-one are fallbacks when none of these exist.
+LTX23_DISTILLED_GGUF: tuple[str, ...] = (
+    "LTX-2.3-22B-distilled-1.1-Q4_K_S.gguf",
+    "ltx-2.3-22b-distilled-Q3_K_S.gguf",
+    "LTX-2.3-distilled-Q3_K_S.gguf",
+    "sulphur_dev-Q3_K_S.gguf",
+    "LTX-2.3-dev-Q4_K_S.gguf",
+)
+LTX23_DEV_GGUF: tuple[str, ...] = (
+    "LTX-2.3-dev-Q4_K_S.gguf",
+    "sulphur_dev-Q3_K_S.gguf",
+    "LTX-2.3-22B-distilled-1.1-Q4_K_S.gguf",
+    "ltx-2.3-22b-distilled-Q3_K_S.gguf",
+    "LTX-2.3-distilled-Q3_K_S.gguf",
+)
 LTX23_PREFERENCE: tuple[str, ...] = (
-    "LTX2.3_DISTILLED-1.1_BAKED_LTX_10Eros_v14_r768.safetensors",
     "LTX-2.3-22B-distilled-1.1-Q4_K_S.gguf",
     "LTX-2.3-dev-Q4_K_S.gguf",
+    "sulphur_dev-Q3_K_S.gguf",
+    "ltx-2.3-22b-distilled-Q3_K_S.gguf",
+    "LTX-2.3-distilled-Q3_K_S.gguf",
     "ltx-2.3-22b-distilled-1.1_transformer_only_fp8_scaled.safetensors",
+    "ltx-2.3-22b-dev_transformer_only_fp8_scaled.safetensors",
     "ltx-2.3-22b-dev-fp8.safetensors",
+    "LTX2.3_DISTILLED-1.1_BAKED_LTX_10Eros_v14_r768.safetensors",
 )
 
 
@@ -230,10 +293,15 @@ HEAVY_SLUGS: frozenset[str] = frozenset(
         "vb_aivfx_preprocess",
         "ltx23_lipsync_v08",
         "ltx25_inoutpaint",
+        "ltx23_i2v_base",
+        "ltx23_i2v_distilled",
+        "ltx23_t2v_base",
+        "ltx23_t2v_distilled",
     }
 )
 
 _FAMILY_BY_PREFIX: tuple[tuple[tuple[str, ...], str], ...] = (
+    (("heartmula", "heartcodec", "hearttranscriptor"), "heartmula"),
     (("ltx25", "ltx-2.5", "t2v_i2v", "flf2v", "msr", "v2v_ic", "a2v", "t2a"), "ltx25"),
     (("h3", "fl2va", "ref2va", "minimax"), "h3"),
     (("wan22", "vb_wan22", "wan"), "wan22"),
@@ -255,6 +323,8 @@ _FAMILY_BY_PREFIX: tuple[tuple[tuple[str, ...], str], ...] = (
 
 def family_for_slug(slug: str) -> str:
     key = (slug or "").strip().lower().replace("\\", "/")
+    if "heartmula" in key or key in {"heartcodec", "hearttranscriptor"}:
+        return "heartmula"
     if key in {
         "base",
         "eros",
@@ -399,23 +469,49 @@ def _build_rows() -> dict[str, WorkflowVramRow]:
         )
 
     ltx23_notes = (
-        "EROS baked all-in-one is the proven 16GB default. "
-        "QuantStack LTX-2.3 GGUF Q4_K_S (~16.7 GB) is optional / tight. "
-        "Official bf16/dev is not a default. DOWNSCALE_LADDER + distilled LoRA."
+        "Standing rule: if a compatible GGUF is on disk, load it "
+        "(QuantStack Q4_K_S, then Sulphur Q3_K_S, then other LTX 2.3 GGUF aliases). "
+        "fp8 and the EROS all-in-one are the MODEL fallback only when no GGUF matches. "
+        "The all-in-one checkpoint still feeds VAE and text projection. "
+        "Not a new download pack. 16GB+ machines that only have EROS or bf16 keep those files."
     )
-    for slug, vram, klass in (
-        ("base", 9.5, "safe"),
-        ("eros", 11.0, "safe"),
-        ("directors", 13.5, "tight"),
+    for slug, pack, vram, klass in (
+        ("base", LTX23_DISTILLED_GGUF[0], 9.5, "safe"),
+        ("eros", LTX23_DISTILLED_GGUF[0], 11.0, "safe"),
+        ("directors", LTX23_DEV_GGUF[0], 13.5, "tight"),
     ):
         add(
             WorkflowVramRow(
                 slug=slug,
                 family="ltx23",
-                default_pack=_LTX23[0],
+                default_pack=pack,
                 expected_vram_gb=vram,
                 vram_class=klass,
                 notes=ltx23_notes,
+            )
+        )
+
+    sulphur_notes = (
+        "Sulphur LTX 2.3 two-stage studio graph. LoRA weights stay on the tower "
+        "under models/loras/ or models/loras/sulphur/. Not a download pack. "
+        "Linked image size is left alone on i2v."
+    )
+    for slug in (
+        "ltx23_i2v_base",
+        "ltx23_i2v_distilled",
+        "ltx23_t2v_base",
+        "ltx23_t2v_distilled",
+    ):
+        add(
+            WorkflowVramRow(
+                slug=slug,
+                family="ltx23",
+                default_pack=LTX23_DEV_GGUF[0],
+                expected_vram_gb=14.8,
+                vram_class="heavy",
+                safer_alternate="base",
+                prepare_warning=_warn_heavy("Sulphur LTX 2.3 two-stage", "base"),
+                notes=sulphur_notes,
             )
         )
 
@@ -634,6 +730,29 @@ def _build_rows() -> dict[str, WorkflowVramRow]:
     )
     add(
         WorkflowVramRow(
+            slug="heartmula",
+            family="heartmula",
+            default_pack="HeartMuLa-oss-3B-happy-new-year",
+            expected_vram_gb=12.0,
+            vram_class="tight",
+            prepare_warning=(
+                "Sequential with LTX on 16GB. heartlib lazy_load unloads HeartMuLa "
+                "before HeartCodec. Do not keep HeartMuLa and LTX resident together."
+            ),
+            notes=(
+                "HeartMuLa 3B bf16 + HeartCodec fp32. About 8–16GB depending on "
+                "dtype and whether lazy_load is on. heartlib has no nf4/fp4. "
+                "On 16GB the backbone KV window is sized under heartlib's 8192 "
+                "(that window OOMs during the GQA expand). "
+                "Sequential with LTX — a 16GB card cannot hold both. "
+                "Default Hub ids: HeartMuLa-oss-3B-happy-new-year into "
+                "HeartMuLa-oss-3B, HeartCodec-oss-20260123 into HeartCodec-oss. "
+                "HeartCodec-oss returned 401 (tower + Hub lookup)."
+            ),
+        )
+    )
+    add(
+        WorkflowVramRow(
             slug="vb_tag_review",
             family="dataset",
             default_pack="qwen3vl",
@@ -651,15 +770,40 @@ _ROWS = _build_rows()
 def _fallback_row(slug: str) -> WorkflowVramRow:
     family = family_for_slug(slug)
     templates = {
+        "heartmula": WorkflowVramRow(
+            slug,
+            family,
+            "HeartMuLa-oss-3B-happy-new-year",
+            12.0,
+            "tight",
+            notes=(
+                "Sequential with LTX. lazy_load bf16 + fp32 codec. No nf4/fp4 in heartlib. "
+                "16GB uses a shorter backbone KV window than heartlib's 8192."
+            ),
+        ),
         "ltx25": WorkflowVramRow(slug, family, _LTX25[0], 12.5, "safe", notes="Inherits LTX 2.5 16GB pick."),
         "h3": WorkflowVramRow(slug, family, _H3[0], 13.0, "tight", notes="Inherits H3 16GB pick."),
-        "ltx23": WorkflowVramRow(slug, family, _LTX23[0], 10.0, "safe", notes="Inherits LTX 2.3 EROS baked."),
+        "ltx23": WorkflowVramRow(
+            slug,
+            family,
+            LTX23_DISTILLED_GGUF[0],
+            10.0,
+            "safe",
+            notes="Inherits LTX 2.3 GGUF-first; EROS/fp8 when no GGUF is on disk.",
+        ),
         "wan22": WorkflowVramRow(slug, family, WAN22_HIGH_PREFERENCE[0], 13.2, "tight", notes="Inherits Wan 2.2 Lightx2v path."),
         "vace": WorkflowVramRow(slug, family, _VACE[0], 13.6, "tight", notes="Inherits VACE GGUF Q4_K_M."),
         "krea2": WorkflowVramRow(slug, family, _KREA[0], 10.5, "safe", notes="Inherits Krea-2 NVFP4."),
         "flux": WorkflowVramRow(slug, family, _FLUX[0], 11.0, "safe", notes="Inherits Flux GGUF/fp8."),
         "qwen_edit": WorkflowVramRow(slug, family, _QWEN[0], 12.0, "safe", notes="Inherits Qwen Edit GGUF Q5."),
-        "other": WorkflowVramRow(slug, family, _LTX23[0], 10.0, "tight", notes="Unclassified — inherit LTX 2.3 16GB baked."),
+        "other": WorkflowVramRow(
+            slug,
+            family,
+            LTX23_DISTILLED_GGUF[0],
+            10.0,
+            "tight",
+            notes="Unclassified — inherit LTX 2.3 GGUF-first.",
+        ),
     }
     return templates.get(family, templates["other"])
 
@@ -711,9 +855,22 @@ def is_16gb_default(slug: str) -> bool:
 def format_vram_table() -> str:
     """Family → default pack → expected VRAM → notes (PR / doctor)."""
     families: list[tuple[str, str, str, float, str]] = [
-        ("LTX 2.3", "base / eros / directors", _LTX23[0], 9.5, "EROS baked; GGUF Q4_K_S optional; bf16 not default"),
+        (
+            "LTX 2.3",
+            "base / eros / directors",
+            LTX23_DISTILLED_GGUF[0],
+            9.5,
+            "GGUF Q4_K_S when on disk; Sulphur Q3; EROS/fp8 fallback",
+        ),
         ("LTX 2.5", "ltx25_t2v_i2v (default 2.5)", _LTX25[0], 12.5, "GGUF Q4 → NVFP4 → int8 → bf16; two-stage is quality"),
         ("MiniMax H3", "h3_t2v / i2v / flf / r2v", _H3[0], 13.0, "Q4_K + NVFP4 TE; ≤12s / 0.8MP / 4 steps / CFG 1.0"),
+        (
+            "HeartMuLa",
+            "heartmula (not an LTX slug)",
+            "HeartMuLa-oss-3B-happy-new-year",
+            12.0,
+            "bf16 + lazy_load; sequential with LTX; codec fp32; no nf4/fp4",
+        ),
         ("Wan 2.2", "wan22", WAN22_HIGH_PREFERENCE[0], 13.2, "GGUF Q4_K_S or fp8 + Lightx2v; sequential high/low; no dual bf16"),
         ("AI-VFX / VACE", "vb_aivfx_adv_13", _VACE[0], 13.6, "Q4_K_M GGUF default; v1.0 e4m3fn is heavy"),
         ("Movie Builder", "vb_movie_builder", "flux-2-klein-9b-fp8.safetensors", 15.8, "HEAVY — safer: ltx25_t2v_i2v"),
@@ -741,12 +898,145 @@ def format_vram_table() -> str:
     return "\n".join(lines) + "\n"
 
 
+@dataclass(frozen=True)
+class HardwareRoute:
+    """One routing sentence. ``blocks_install`` stays false."""
+
+    vendor: str
+    band: str
+    sentence: str
+    blocks_install: bool = False
+
+
+def vram_band(vram_gb: float | None) -> str:
+    """``full`` (≥12), ``gguf`` (above 8 and below 12), ``low`` (≤8), or ``unknown``."""
+    if vram_gb is None:
+        return "unknown"
+    gb = float(vram_gb)
+    if gb >= FULL_CHECKPOINT_MIN_GB:
+        return "full"
+    if gb > LOW_VRAM_MAX_GB:
+        return "gguf"
+    return "low"
+
+
+def _fmt_gb(vram_gb: float) -> str:
+    gb = float(vram_gb)
+    rounded = round(gb)
+    if abs(gb - rounded) < 0.05:
+        return f"{int(rounded)}GB"
+    text = f"{gb:.1f}".rstrip("0").rstrip(".")
+    return f"{text}GB"
+
+
+def _card_label(vendor: str, gpu_name: str, vram_gb: float | None) -> str:
+    name = " ".join((gpu_name or "").split())
+    if vendor == "nvidia":
+        if not name:
+            name = "NVIDIA GPU"
+        elif not name.lower().startswith("nvidia"):
+            name = f"NVIDIA {name}"
+    elif vendor == "amd":
+        plain = name[4:] if name.lower().startswith("amd ") else name
+        if not plain or plain.lower() == "amd":
+            plain = "GPU"
+        name = f"AMD {plain}"
+    else:
+        name = ""
+    gb = _fmt_gb(vram_gb) if vram_gb is not None else ""
+    return " ".join(part for part in (name, gb) if part)
+
+
+def _pack_clause(band: str) -> str:
+    if band == "full":
+        return "full checkpoints are in range."
+    if band == "gguf":
+        return "use GGUF." + _SULPHUR_LESS
+    if band == "low":
+        return "use GGUF or CPU, or upgrade." + _SULPHUR_LESS
+    return ""
+
+
+def hardware_route(
+    *,
+    vendor: str,
+    vram_gb: float | None,
+    rocm: bool = False,
+    gpu_name: str = "",
+) -> HardwareRoute:
+    """Route a detected card to one sentence. Never a hard install failure."""
+    vendor_key = (vendor or "unknown").strip().lower()
+    if vendor_key in {"none", "cpu", ""}:
+        vendor_key = "unknown"
+    band = vram_band(vram_gb)
+    card = _card_label(vendor_key, gpu_name, vram_gb)
+    pack = _pack_clause(band)
+    if vendor_key == "nvidia":
+        if band == "unknown":
+            sentence = (
+                f"{card}: VRAM was not detected. Use GGUF until VRAM_GB is set. "
+                "This scan does not block install."
+            )
+        else:
+            sentence = f"{card}: {pack}"
+    elif vendor_key == "amd":
+        if rocm:
+            if band == "unknown":
+                sentence = (
+                    f"{card} with ROCm: slower, and it works. "
+                    "VRAM was not detected; use GGUF until VRAM_GB is set."
+                )
+            else:
+                sentence = f"{card} with ROCm: slower, and it works; {pack}"
+        else:
+            sulphur = _SULPHUR_LESS if band in {"gguf", "low", "unknown"} else ""
+            sentence = f"{card} without ROCm: install ROCm first, or use GGUF.{sulphur}"
+    elif band == "unknown":
+        sentence = (
+            "No GPU detected: use GGUF or CPU, or upgrade."
+            + _SULPHUR_LESS
+            + " This scan does not block install."
+        )
+    else:
+        shown = _fmt_gb(vram_gb) if vram_gb is not None else ""
+        sentence = (
+            f"{shown} reported with no identified GPU: {pack} "
+            "This scan does not block install."
+        )
+    return HardwareRoute(
+        vendor=vendor_key,
+        band=band,
+        sentence=" ".join(sentence.split()),
+        blocks_install=False,
+    )
+
+
 def format_doctor_line() -> str:
+    """Doctor row: detected VRAM, loader pick, and the 16GB policy card."""
+    from master_agent.config import FORCE_LOADER, VRAM_GB, VRAM_SOURCE
+
+    gb = float(VRAM_GB)
+    force = (FORCE_LOADER or "").strip().lower()
+    avoid_heavy = force == "gguf" or gb < NVFP4_MIN_VRAM_GB
+    if avoid_heavy:
+        ladder = "GGUF when a compatible file is on disk (NVFP4 and bf16 are not suggested"
+        if force == "gguf":
+            ladder += f"; FORCE_LOADER={force}"
+        ladder += f" below {NVFP4_MIN_VRAM_GB:.0f}GB)"
+    else:
+        ladder = (
+            "GGUF when a compatible file is on disk, else NVFP4 "
+            f"(≥{NVFP4_MIN_VRAM_GB:.0f}GB), else int8/fp8/bf16"
+        )
+    source = VRAM_SOURCE or "default"
+    hint = ""
+    if source == "default":
+        hint = " Set VRAM_GB=12 and FORCE_LOADER=gguf on a 12GB card (RTX 4000 Ada)."
     return (
-        f"{TARGET_GPU} {TARGET_VRAM_GB:.0f}GB — GGUF Q4/Q5 then NVFP4 "
-        f"(≥{NVFP4_MIN_VRAM_GB:.0f}GB) then int8/fp8. Peak headroom "
-        f"~{PEAK_HEADROOM_GB[0]:.0f}–{PEAK_HEADROOM_GB[1]:.0f}GB. "
-        "See `python -m master_agent workflows --vram`."
+        f"VRAM {gb:.1f}GB via {source}. {ladder}. "
+        f"Policy card {TARGET_GPU} {TARGET_VRAM_GB:.0f}GB. "
+        f"Peak headroom ~{PEAK_HEADROOM_GB[0]:.0f}–{PEAK_HEADROOM_GB[1]:.0f}GB."
+        f"{hint} See `python -m master_agent workflows --vram`."
     )
 
 
@@ -777,6 +1067,8 @@ __all__ = [
     "FLUX_PREFERENCE",
     "HEAVY_SLUGS",
     "KREA_PREFERENCE",
+    "LTX23_DEV_GGUF",
+    "LTX23_DISTILLED_GGUF",
     "LTX23_PREFERENCE",
     "NVFP4_MIN_VRAM_GB",
     "PEAK_HEADROOM_GB",
@@ -791,13 +1083,19 @@ __all__ = [
     "downscale_ladder_for",
     "expected_vram_gb",
     "family_for_slug",
+    "FULL_CHECKPOINT_MIN_GB",
+    "HardwareRoute",
+    "LOW_VRAM_MAX_GB",
     "format_doctor_line",
     "format_vram_table",
+    "hardware_route",
     "is_16gb_default",
+    "heavy_not_suggested",
     "pack_kind",
     "preference_order",
     "prepare_warning",
     "safer_alternate",
+    "vram_band",
     "vram_class",
     "workflow_row",
     "workflow_vram_rows",

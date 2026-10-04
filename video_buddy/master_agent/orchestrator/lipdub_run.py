@@ -69,6 +69,7 @@ def run_segmented_lipdub(
     max_judge_rounds: int,
     dry_run: bool,
     tripod: bool,
+    heartmula: Optional[dict] = None,
 ) -> Any:
     """Render each Comfy piece, idle the pauses, mux the original wav."""
     from master_agent.orchestrator.pipeline import _budget_admit, _write_record
@@ -182,6 +183,7 @@ def run_segmented_lipdub(
             end_guide_frame_idx=piece.guide_frame_idx,
             end_guide_strength=piece.guide_strength,
             judge_enabled=judge_enabled,
+            heartmula=heartmula,
             revise_enabled=False if not judge_enabled else revise_enabled,
             duration_cap_s=float(piece.audio_duration_s),
             # max-piece bounds a revise only when this piece already fits it.

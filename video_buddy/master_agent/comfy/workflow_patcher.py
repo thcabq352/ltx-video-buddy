@@ -287,12 +287,31 @@ def _set_input(node: dict[str, Any], key: str, value: Any) -> bool:
     return True
 
 
+def _write_widget(node: dict[str, Any], key: str, value: Any, *, preserve_links: bool) -> bool:
+    """Set a widget. When ``preserve_links`` is set, leave graph links in place.
+
+    Missing keys are also left missing so a linked two-stage graph does not
+    grow a scalar that bypasses the primitive chain. Other variants pass
+    ``preserve_links=False`` and keep the old always-write behavior.
+    """
+    if preserve_links:
+        inputs = node.get("inputs") or {}
+        if key not in inputs or _is_node_link(inputs.get(key)):
+            return False
+    return _set_input(node, key, value)
+
+
 def _apply_named_fields(
     workflow: dict[str, Any],
     field_map: dict[str, Any],
     values: dict[str, Any],
-) -> list[str]:
-    applied: list[str] = []
+) -> set[tuple[str, str]]:
+    """Write manifest fields. Return the widgets that were written.
+
+    The heuristic patch must not write those widgets again. A field map is
+    the specific target; class-wide heuristics stay for everything else.
+    """
+    written: set[tuple[str, str]] = set()
     for logical, spec in field_map.items():
         if logical not in values or values[logical] is None:
             continue
@@ -311,7 +330,7 @@ def _apply_named_fields(
                     nid = str(nid)
                     if nid in workflow:
                         _set_input(workflow[nid], key, value)
-                        applied.append(logical)
+                        written.add((nid, str(key)))
         elif "class_type" in spec:
             matches = _find_nodes_by_class(workflow, spec["class_type"])
             idx = int(spec.get("index", 0))
@@ -320,8 +339,8 @@ def _apply_named_fields(
                 key = spec.get("input") or spec.get("key")
                 if key:
                     _set_input(node, key, value)
-                    applied.append(logical)
-    return applied
+                    written.add((str(nid), str(key)))
+    return written
 
 
 def _is_node_link(value: Any) -> bool:
@@ -772,6 +791,78 @@ def _resolved_family_name(weight_key: str) -> str | None:
     return name_from_local_path(found) or found.name
 
 
+_LTX23_GGUF_VARIANTS = frozenset({"base", "eros", "directors"})
+
+
+def _fresh_node_id(workflow: dict[str, Any]) -> str:
+    nums = []
+    for key in workflow:
+        try:
+            nums.append(int(key))
+        except (TypeError, ValueError):
+            continue
+    return str((max(nums) if nums else 0) + 1)
+
+
+def _apply_ltx23_gguf_model(workflow: dict[str, Any], variant: str) -> str | None:
+    """Point the MODEL edge at a local LTX 2.3 GGUF when one matches the slot.
+
+    CheckpointLoaderSimple stays in the graph for VAE (output 2) and the
+    text-projection checkpoint. fp8 / EROS remain the MODEL source only when
+    no compatible GGUF is on disk. Lipsync and in/outpaint are not rewritten.
+    """
+    if variant not in _LTX23_GGUF_VARIANTS:
+        return None
+    from master_agent.comfy.loader_names import name_from_local_path
+    from master_agent.models.weights import resolve_ltx23_gguf
+
+    found = resolve_ltx23_gguf(variant)
+    if found is None:
+        return None
+    unet_name = name_from_local_path(found) or found.name
+    wired = False
+    for src, node in list(workflow.items()):
+        if not isinstance(node, dict) or node.get("class_type") != "CheckpointLoaderSimple":
+            continue
+        consumers: list[tuple[str, str]] = []
+        for nid, other in workflow.items():
+            if not isinstance(other, dict):
+                continue
+            inputs = other.get("inputs") or {}
+            for key, value in inputs.items():
+                if not (isinstance(value, list) and len(value) == 2 and str(value[0]) == str(src)):
+                    continue
+                try:
+                    slot = int(value[1])
+                except (TypeError, ValueError):
+                    continue
+                if slot == 0:
+                    consumers.append((str(nid), key))
+        if not consumers:
+            continue
+        new_id = _fresh_node_id(workflow)
+        workflow[new_id] = {
+            "class_type": "UnetLoaderGGUF",
+            "inputs": {"unet_name": unet_name},
+            "_meta": {"title": "LTX 2.3 GGUF (preferred)"},
+        }
+        for nid, key in consumers:
+            workflow[nid]["inputs"][key] = [new_id, 0]
+        wired = True
+    for class_type in ("UNETLoader", "UnetLoaderGGUF", "DiffusionModelLoader"):
+        for _nid, node in _find_nodes_by_class(workflow, class_type):
+            inputs = node.get("inputs") or {}
+            current = str(inputs.get("unet_name") or inputs.get("ckpt_name") or "")
+            lowered = current.lower()
+            if not current or lowered.endswith(".gguf"):
+                continue
+            if "ltx-2.3" not in lowered and "ltx2.3" not in lowered and "sulphur" not in lowered:
+                continue
+            _set_family_unet_loader(node, unet_name, "LTX 2.3 GGUF (preferred)")
+            wired = True
+    return unet_name if wired else None
+
+
 def _apply_local_family_weights(workflow: dict[str, Any], variant: str) -> None:
     """16GB-class remaps for Wan / VACE / Krea / Flux / Qwen (GGUF vs UNET)."""
     from master_agent.models.vram_policy import family_for_slug
@@ -1027,7 +1118,7 @@ def _weight_family(name: str) -> str:
     base = str(name or "").lower().replace("\\", "/").rsplit("/", 1)[-1]
     if not base:
         return ""
-    if any(tok in base for tok in ("ltx", "10eros", "taeltx", "gemma", "eros")):
+    if any(tok in base for tok in ("ltx", "10eros", "taeltx", "gemma", "eros", "sulphur")):
         return "ltx"
     if any(tok in base for tok in ("wan", "umt5", "lightx2v", "fusionx")):
         return "wan"
@@ -1090,9 +1181,34 @@ def _heuristic_patch(
     values: dict[str, Any],
     *,
     locks: set[tuple[str, str]] | None = None,
+    _real_set=_set_input,
+    _real_write=_write_widget,
 ) -> None:
-    """Best-effort patching by common ComfyUI / LTX class types."""
+    """Best-effort patching by common ComfyUI / LTX class types.
+
+    Widgets already written from a manifest field map (``locks``) are left
+    alone. Class lists still cover nodes the manifest does not name.
+    """
     locked = locks or set()
+    by_obj: dict[int, set[str]] = {}
+    for nid, node in workflow.items():
+        if not isinstance(node, dict):
+            continue
+        keys = {key for lnid, key in locked if str(lnid) == str(nid)}
+        if keys:
+            by_obj[id(node)] = keys
+
+    def _set_input(node: dict[str, Any], key: str, value: Any) -> bool:
+        if key in by_obj.get(id(node), ()):
+            return False
+        return _real_set(node, key, value)
+
+    def _write_widget(node: dict[str, Any], key: str, value: Any, *, preserve_links: bool) -> bool:
+        if key in by_obj.get(id(node), ()):
+            return False
+        return _real_write(node, key, value, preserve_links=preserve_links)
+
+    preserve_links = bool(values.get("preserve_links"))
     prompt = values.get("prompt")
     negative = values.get("negative_prompt")
     seed = values.get("seed")
@@ -1169,24 +1285,29 @@ def _heuristic_patch(
     ):
         for _nid, node in _find_nodes_by_class(workflow, class_type):
             if width is not None:
-                _set_input(node, "width", width)
+                _write_widget(node, "width", width, preserve_links=preserve_links)
             if height is not None:
-                _set_input(node, "height", height)
+                _write_widget(node, "height", height, preserve_links=preserve_links)
             # EmptyLatentImage (Flux t2i) has no length/frames input
             if frames is not None and class_type != "EmptyLatentImage":
                 write = ltx_frames if class_type in LTX_LENGTH_CLASSES else frames
                 for k in ("length", "frames", "num_frames", "frame_count"):
                     if k in (node.get("inputs") or {}) or k == "length":
-                        _set_input(node, k, write)
+                        _write_widget(node, k, write, preserve_links=preserve_links)
                         break
 
     if frames is not None:
         paired = ltx_frames if ltx_frames is not None else int(frames)
         for class_type in LTX_AUDIO_CLASSES:
             for _nid, node in _find_nodes_by_class(workflow, class_type):
-                _set_input(node, "frames_number", int(paired))
+                _write_widget(node, "frames_number", int(paired), preserve_links=preserve_links)
                 if values.get("fps"):
-                    _set_input(node, "frame_rate", int(values.get("fps") or 24))
+                    _write_widget(
+                        node,
+                        "frame_rate",
+                        int(values.get("fps") or 24),
+                        preserve_links=preserve_links,
+                    )
         for class_type in ("MiniMaxH3ImageToVideo", "MiniMaxH3ReferenceToVideo"):
             for _nid, node in _find_nodes_by_class(workflow, class_type):
                 if prompt is not None:
@@ -1205,14 +1326,19 @@ def _heuristic_patch(
         ):
             for _nid, node in _find_nodes_by_class(workflow, class_type):
                 if values.get("fps") and class_type == "LTXVConditioning":
-                    _set_input(node, "frame_rate", int(values.get("fps") or 24))
+                    _write_widget(
+                        node,
+                        "frame_rate",
+                        int(values.get("fps") or 24),
+                        preserve_links=preserve_links,
+                    )
                 if class_type == "LTXVImgToVideo":
                     if width is not None:
-                        _set_input(node, "width", width)
+                        _write_widget(node, "width", width, preserve_links=preserve_links)
                     if height is not None:
-                        _set_input(node, "height", height)
+                        _write_widget(node, "height", height, preserve_links=preserve_links)
                     write = ltx_frames if ltx_frames is not None else int(frames)
-                    _set_input(node, "length", write)
+                    _write_widget(node, "length", write, preserve_links=preserve_links)
                     if values.get("image_name") or values.get("first_image"):
                         _set_input(node, "image", values.get("first_image") or values.get("image_name"))
                     if values.get("last_image"):
@@ -1233,7 +1359,12 @@ def _heuristic_patch(
                     _set_input(node, "strength", float(i2v_strength))
         for _nid, node in _find_nodes_by_class(workflow, "CreateVideo"):
             if values.get("fps"):
-                _set_input(node, "fps", float(values.get("fps") or 24))
+                _write_widget(
+                    node,
+                    "fps",
+                    float(values.get("fps") or 24),
+                    preserve_links=preserve_links,
+                )
         # Sampler selection only when the caller or the variant config asks.
         # Authored names such as euler_ancestral_cfg_pp stay put.
         sampler_name = values.get("sampler_name")
@@ -1437,6 +1568,7 @@ def _heuristic_patch(
         workflow,
         duration_s=values.get("duration_s"),
         audio_start_s=values.get("audio_start_s"),
+        locks=locked,
     )
     _wire_h3_reference_media(workflow, values)
 
@@ -1446,9 +1578,13 @@ def _apply_audio_clock(
     *,
     duration_s: Any,
     audio_start_s: Any,
+    locks: set[tuple[str, str]] | None = None,
 ) -> None:
     """Write the scalar duration / audio-start primitives. Linked values stay links."""
-    for _nid, node in _find_nodes_by_class(workflow, "PrimitiveFloat"):
+    locked = locks or set()
+    for nid, node in _find_nodes_by_class(workflow, "PrimitiveFloat"):
+        if (str(nid), "value") in locked:
+            continue
         inputs = node.get("inputs") or {}
         value = inputs.get("value")
         if isinstance(value, list):
@@ -1526,6 +1662,51 @@ def _wire_h3_reference_media(workflow: dict[str, Any], values: dict[str, Any]) -
             from master_agent.orchestrator.h3_voice import inject_spoken_line
 
             inputs["prompt"] = inject_spoken_line(str(inputs.get("prompt") or ""), str(line))
+
+
+def _loader_name(path: Path) -> str:
+    from master_agent.comfy.loader_names import name_from_local_path
+
+    return name_from_local_path(path) or path.name
+
+
+def _prefer_on_disk_checkpoint(name: Optional[str], variant: str) -> Optional[str]:
+    """Point the checkpoint slot at a local LTX 2.3 GGUF when the literal is absent.
+
+    base / eros / directors only. An on-disk all-in-one (EROS, dev fp8) stays
+    put so VAE and text projection keep a real checkpoint. Lipsync and the
+    dev-fp8 render variants are not rewritten.
+    """
+    if not name or variant not in _LTX23_GGUF_VARIANTS:
+        return name
+    if resolve_model_path(name) is not None:
+        return name
+    from master_agent.models.weights import model_search_roots, resolve_ltx23_gguf
+
+    found = resolve_ltx23_gguf(variant, model_search_roots())
+    if found is None:
+        return name
+    return _loader_name(found)
+
+
+def _prefer_on_disk_text_encoder(name: Optional[str]) -> Optional[str]:
+    """Use a local ``*heretic*`` Gemma when the configured encoder file is absent."""
+    if not name or resolve_model_path(name) is not None:
+        return name
+    if "gemma" not in name.lower():
+        return name
+    from master_agent.models.weights import (
+        WEIGHT_FILES,
+        find_compatible_for_weight,
+        model_search_roots,
+    )
+
+    found = find_compatible_for_weight(
+        WEIGHT_FILES["text_encoder"], model_search_roots()
+    )
+    if found is None:
+        return name
+    return _loader_name(found)
 
 
 def load_and_patch_workflow(
@@ -1660,8 +1841,9 @@ def load_and_patch_workflow(
         checkpoint = None
     else:
         checkpoint = resolve_checkpoint_name(preferred) if preferred else None
+        checkpoint = _prefer_on_disk_checkpoint(checkpoint, resolved_id or variant)
     lora = models.get("lora")
-    text_encoder = models.get("text_encoder")
+    text_encoder = _prefer_on_disk_text_encoder(models.get("text_encoder"))
     clip_l = models.get("clip_l")
     t5xxl = models.get("t5xxl")
     vae_name = models.get("vae")
@@ -1734,8 +1916,13 @@ def load_and_patch_workflow(
         for i, seg in enumerate(segment_prompts):
             values[f"segment_{i}"] = seg
 
+    from master_agent.comfy.sulphur import is_sulphur_variant, patch_sulphur_graph
+
+    if is_sulphur_variant(resolved_id) or is_sulphur_variant(variant):
+        values["preserve_links"] = True
+
     locks = _prompt_locks(workflow, field_map)
-    _apply_named_fields(workflow, field_map, values)
+    locks |= _apply_named_fields(workflow, field_map, values)
     _remap_stub_filenames(workflow)
     from master_agent.models.weights import bundle_for_variant, is_h3_bundle, is_ltx25_bundle
 
@@ -1743,11 +1930,21 @@ def load_and_patch_workflow(
     if is_ltx25_bundle(bundle):
         _rewrite_ltx25_checkpoint_loader(workflow)
     _heuristic_patch(workflow, values, locks=locks)
+    if values.get("preserve_links"):
+        patch_sulphur_graph(
+            workflow,
+            prompt=run_prompt,
+            negative_prompt=negative_prompt,
+            width=width,
+            height=height,
+            frames=frames,
+        )
     if is_ltx25_bundle(bundle):
         _apply_local_ltx25_weights(workflow)
     if is_h3_bundle(bundle):
         _apply_local_h3_weights(workflow, bundle or "h3_fl2va")
     _apply_local_family_weights(workflow, resolved_id or variant)
+    gguf_unet = _apply_ltx23_gguf_model(workflow, resolved_id or variant)
     if loras:
         _apply_typed_loras(workflow, loras)
     if multi_ref:
@@ -1813,6 +2010,7 @@ def load_and_patch_workflow(
         "checkpoint": checkpoint,
         "checkpoint_preferred": preferred,
         "checkpoint_fallback": preferred != checkpoint,
+        "gguf_unet": gguf_unet,
         "lora": lora,
         "filename_prefix": filename_prefix,
         "inoutpaint_default_length": defaulted_length,

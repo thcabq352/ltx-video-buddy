@@ -1,0 +1,11 @@
+{
+  "comfyui": null,
+  "nodes": [
+    {
+      "name": "HeartMuLa_ComfyUI",
+      "commit": "fdb53c4",
+      "optional": true,
+      "note": "Optional Comfy classes attested for the tower. A missing folder is not stale. This commit is not a Hub download."
+    }
+  ]
+}

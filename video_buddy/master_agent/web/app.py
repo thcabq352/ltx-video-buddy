@@ -28,7 +28,21 @@ async def _lifespan(_app: FastAPI):
 
     print(announce_config(), flush=True)
     schedule_knowledge_ingest()
-    yield
+    try:
+        from master_agent.llm import prepare_local_llm
+
+        prepare_local_llm()
+    except Exception:
+        pass
+    try:
+        yield
+    finally:
+        try:
+            from master_agent.llamacpp_server import stop
+
+            stop()
+        except Exception:
+            pass
 
 
 app = FastAPI(title="VIDEO BUDDY", docs_url=None, redoc_url=None, lifespan=_lifespan)
@@ -119,6 +133,28 @@ class ComfyPrepareRequest(BaseModel):
 class ComfyWorkflowBody(BaseModel):
     workflow: dict[str, Any]
     request: str = "comfy run"
+
+
+class SelectorPlanBody(BaseModel):
+    """Live checklist. Never downloads and never writes selector state."""
+
+    version: str = "2.5"
+    optional_ids: list[str] = []
+    soundtrack: bool = False
+    mbps: float = 50.0
+
+
+class SelectorApplyBody(BaseModel):
+    """Same consent flags as ``models select``. ``scan_only`` wins over ``yes``."""
+
+    version: str = "2.5"
+    optional_ids: list[str] = []
+    soundtrack: bool = False
+    mbps: float = 50.0
+    scan_only: bool = True
+    yes: bool = False
+    keep: bool = False
+    wipe: bool = False
 
 
 # ── pages & media ───────────────────────────────────────
@@ -232,6 +268,14 @@ def api_submit_job(req: JobRequest):
         raise HTTPException(400, "request must not be empty")
     if req.quality not in ("draft", "balanced", "quality"):
         raise HTTPException(400, "quality must be draft|balanced|quality")
+    from master_agent.comfy.partner_pointers import route_pack_c
+
+    forced_variant = None if req.variant in (None, "", "auto") else req.variant
+    routed, refusal = route_pack_c(req.request, forced_variant)
+    if refusal:
+        raise HTTPException(400, refusal)
+    if routed:
+        req.variant = routed
     if req.variant not in (None, "", "auto"):
         from master_agent.comfy.catalog import is_known_variant
 
@@ -471,7 +515,12 @@ def api_power_tune(req: PowerTuneRequest):
     if not req.request.strip():
         raise HTTPException(400, "request must not be empty")
     from master_agent.comfy.catalog import is_known_variant
+    from master_agent.comfy.partner_pointers import route_pack_c
 
+    routed, refusal = route_pack_c(req.request, req.variant)
+    if refusal:
+        raise HTTPException(400, refusal)
+    req.variant = routed or req.variant
     if not is_known_variant(req.variant):
         raise HTTPException(400, f"unknown variant: {req.variant}")
     if req.quality not in ("draft", "balanced", "quality"):
@@ -713,6 +762,137 @@ def api_models():
     return data
 
 
+def _selector_saved_matches(state: dict[str, Any] | None, version: str) -> bool:
+    return bool(state) and str(state.get("active_version") or "") == version
+
+
+def _resolve_selector(
+    *,
+    version: str | None,
+    optional_ids: list[str] | None,
+    soundtrack: bool | None,
+    mbps: float,
+) -> tuple[str, list[str], bool, float]:
+    """Resolve a checklist request through the CLI selector. No second catalog."""
+    from master_agent.models.selector import load_state, normalize_optional
+
+    state = load_state()
+    if not version:
+        version = str((state or {}).get("active_version") or "2.5")
+    if version not in {"2.3", "2.5"}:
+        raise HTTPException(400, "LTX version must be 2.3 or 2.5")
+    if mbps <= 0:
+        raise HTTPException(400, "mbps must be greater than 0")
+    use_saved = optional_ids is None and _selector_saved_matches(state, version)
+    saved = state or {}
+    raw = (
+        [str(item) for item in (saved.get("optional_ids") or [])]
+        if use_saved
+        else list(optional_ids or [])
+    )
+    try:
+        optional = normalize_optional(version, raw, all_optional=False)
+    except ValueError as exc:
+        if use_saved:
+            optional = []
+        else:
+            raise HTTPException(400, str(exc)) from exc
+    if soundtrack is None:
+        soundtrack = bool(saved.get("soundtrack_studio")) if _selector_saved_matches(state, version) else False
+    return version, optional, bool(soundtrack), float(mbps)
+
+
+def _selector_payload(
+    plan: Any,
+    *,
+    text: str | None = None,
+    exit_code: int | None = None,
+) -> dict[str, Any]:
+    from master_agent.models.selector import SCHEMA, catalog_document, load_state, render_plan
+
+    return {
+        "schema": SCHEMA,
+        "catalog": catalog_document(),
+        "state": load_state(),
+        "plan": plan.to_dict(),
+        "text": render_plan(plan) if text is None else text,
+        "exit_code": exit_code,
+        "comfy_update": False,
+    }
+
+
+@app.get("/api/models/selector")
+def api_models_selector(
+    version: Optional[str] = None,
+    soundtrack: Optional[bool] = None,
+    mbps: float = 50.0,
+    optional: Optional[str] = None,
+):
+    """Saved radio plus a disk scan. Does not download or write selector state."""
+    from master_agent.models.selector import assess
+
+    optional_ids = None if optional is None else [part for part in optional.split(",")]
+    chosen, ids, sound, rate = _resolve_selector(
+        version=version,
+        optional_ids=optional_ids,
+        soundtrack=soundtrack,
+        mbps=mbps,
+    )
+    plan = assess(chosen, ids, soundtrack=sound, mbps=rate)
+    return _selector_payload(plan)
+
+
+@app.post("/api/models/selector/plan")
+def api_models_selector_plan(body: SelectorPlanBody):
+    """Recompute totals, ETA, and skip-if-present. No download and no state write."""
+    from master_agent.models.selector import assess
+
+    chosen, ids, sound, rate = _resolve_selector(
+        version=body.version,
+        optional_ids=list(body.optional_ids),
+        soundtrack=body.soundtrack,
+        mbps=body.mbps,
+    )
+    plan = assess(chosen, ids, soundtrack=sound, mbps=rate)
+    return _selector_payload(plan)
+
+
+@app.post("/api/models/selector/apply")
+def api_models_selector_apply(body: SelectorApplyBody):
+    """Install/select only. ``yes`` is the ``--yes`` consent. Scan does not fetch.
+
+    Generate stays on the Comfy HTTP client. This route does not start Comfy
+    and does not run ``comfy update``.
+    """
+    from master_agent.models.selector import apply_selection
+
+    if body.keep and body.wipe:
+        raise HTTPException(400, "pass only one of keep and wipe")
+    chosen, ids, sound, rate = _resolve_selector(
+        version=body.version,
+        optional_ids=list(body.optional_ids),
+        soundtrack=body.soundtrack,
+        mbps=body.mbps,
+    )
+    lines: list[str] = []
+
+    def progress(msg: str = "") -> None:
+        lines.append(str(msg))
+
+    code, plan = apply_selection(
+        chosen,
+        ids,
+        soundtrack=sound,
+        yes=bool(body.yes),
+        wipe=bool(body.wipe),
+        keep=bool(body.keep),
+        scan_only=bool(body.scan_only),
+        mbps=rate,
+        progress=progress,
+    )
+    return _selector_payload(plan, text="\n".join(lines), exit_code=code)
+
+
 @app.post("/api/judge")
 def api_judge(req: JudgeRequest):
     from master_agent.judge.judge import judge_full_video, judge_segment
@@ -869,7 +1049,16 @@ def api_control_post(req: ControlUpdate):
     store = get_versioned_config()
     if updates:
         store.set_values(updates, session=session, sync_budget=True)
+    resume_note = ""
     if req.reset_budget:
         get_project_budget().reset_used()
         store.sync_used(0.0)
-    return _control_payload()
+        from master_agent.orchestrator.pipeline import resume_after_budget_clear
+
+        continued = resume_after_budget_clear()
+        if continued:
+            resume_note = "Continuing paused generate: " + ", ".join(continued)
+    payload = _control_payload()
+    if resume_note:
+        payload["resume_note"] = resume_note
+    return payload

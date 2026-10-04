@@ -19,8 +19,8 @@ The patcher still rewrites `CheckpointLoaderSimple` → `UNETLoader` /
 official loaders. Official bf16 Gemma is not required when a heretic /
 int8 TE is present. TeaCache stays inject-when-registered.
 
-See [`../../REQUIRED-FILES.md`](../../REQUIRED-FILES.md) and
-[`../../docs/QUICKSTART.md`](../../docs/QUICKSTART.md).
+Loader order: [`docs/WEIGHTS.md`](../../../docs/WEIGHTS.md#loader-policy).
+First generate: [`docs/GETTING_STARTED.md`](../../../docs/GETTING_STARTED.md).
 
 | Buddy id | Research id | File | Notes |
 |---|---|---|---|

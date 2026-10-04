@@ -13,6 +13,7 @@ import json
 import logging
 import random
 import re
+import threading
 import uuid
 from datetime import datetime, timezone
 from pathlib import Path
@@ -144,6 +145,8 @@ class PipelineResult:
         self.provenance: dict[str, Any] = {}
         self.provenance_history: list[dict[str, Any]] = []
         self.provenance_sidecar: str = ""
+        self.heartmula: dict[str, Any] = {}
+        self.resume: Optional[dict[str, Any]] = None
 
     def log(self, msg: str) -> None:
         self.messages.append(msg)
@@ -180,7 +183,8 @@ class PipelineResult:
             "provenance": self.provenance,
             "provenance_history": self.provenance_history,
             "provenance_sidecar": self.provenance_sidecar,
-        }
+            "resume": self.resume,
+        } | ({"heartmula": self.heartmula} if getattr(self, "heartmula", None) else {})
 
 
 def _write_record(result: PipelineResult) -> None:
@@ -392,6 +396,7 @@ def run_pipeline(
     revise_enabled: Optional[bool] = None,
     spoken_line: Optional[str] = None,
     voice_sample: Optional[dict[str, Any]] = None,
+    heartmula: Optional[dict[str, Any]] = None,
     max_judge_rounds: int = MAX_JUDGE_ROUNDS,
     max_full_judge_rounds: int = MAX_FULL_JUDGE_ROUNDS,
     judge_threshold: float = JUDGE_SCORE_THRESHOLD,
@@ -415,10 +420,31 @@ def run_pipeline(
     pause_reset_strength: Optional[float] = None,
     pause_reset_min_s: Optional[float] = None,
     inoutpaint: Optional[dict[str, Any]] = None,
+    resume: Optional[dict[str, Any]] = None,
 ) -> PipelineResult:
-    run_id = uuid.uuid4().hex[:12]
+    stored_id = ""
+    if isinstance(resume, dict):
+        stored_id = str(resume.get("run_id") or "")
+    run_id = stored_id or uuid.uuid4().hex[:12]
     result = PipelineResult(run_id, request=request)
+    result.heartmula = dict(heartmula or {})
+    from master_agent.comfy.partner_pointers import route_pack_c
+
+    variant, refusal = route_pack_c(request, variant)
+    if refusal:
+        result.status = "error"
+        result.error = refusal
+        result.log(refusal)
+        _write_record(result)
+        return result
+    if isinstance(resume, dict) and seed is None and resume.get("seed") is not None:
+        try:
+            seed = int(resume["seed"])
+        except (TypeError, ValueError):
+            pass
     j_enabled = JUDGE_ENABLED if judge_enabled is None else judge_enabled
+    if isinstance(resume, dict) and "judge_enabled" in resume and judge_enabled is None:
+        j_enabled = bool(resume["judge_enabled"])
     sb_mode = (storyboard_mode or STORYBOARD_MODE).strip().lower()
     base_seed = seed if seed is not None else random.randint(0, 2**32 - 1)
     orch = Orchestrator(client=client)
@@ -495,6 +521,7 @@ def run_pipeline(
             max_judge_rounds=max_judge_rounds,
             dry_run=dry_run,
             tripod=bool(tripod),
+            heartmula=result.heartmula or None,
         )
 
     talking = None
@@ -531,20 +558,87 @@ def run_pipeline(
         segs = plan_story_segments(duration_s, kind=kind, quality=quality)
         audio_starts = [0.0] * len(segs)
     result.segment_durations = segs
+    start_index = 0
+    if isinstance(resume, dict) and resume:
+        stored_segs = resume.get("segment_durations")
+        if isinstance(stored_segs, list) and stored_segs:
+            segs = [float(x) for x in stored_segs]
+            stored_starts = resume.get("audio_starts")
+            if isinstance(stored_starts, list) and len(stored_starts) == len(segs):
+                audio_starts = [float(x) for x in stored_starts]
+            result.segment_durations = list(segs)
+        stored_paths = resume.get("segment_paths")
+        if isinstance(stored_paths, list):
+            result.segment_paths = [str(p) for p in stored_paths if p]
+        stored_scores = resume.get("segment_scores")
+        if isinstance(stored_scores, list):
+            result.segment_scores = [
+                float(s) for s in stored_scores[: len(result.segment_paths)]
+            ]
+        raw_index = resume.get("start_index")
+        if raw_index is None:
+            start_index = len(result.segment_paths)
+        else:
+            try:
+                start_index = int(raw_index)
+            except (TypeError, ValueError):
+                start_index = len(result.segment_paths)
+        start_index = max(0, min(start_index, len(segs)))
     result.log(f"plan: {duration_s}s -> {len(segs)} segment(s) {segs} (judge={j_enabled})")
+    if start_index or result.segment_paths:
+        result.log(
+            f"resume: continuing {run_id} from segment {start_index + 1}/{len(segs)}"
+        )
+
+    def _pause_for_budget(message: str, index: int) -> PipelineResult:
+        result.status = "paused"
+        result.error = message
+        result.resume = {
+            "run_id": run_id,
+            "request": request,
+            "variant": variant,
+            "duration_s": float(duration_s),
+            "quality": quality,
+            "seed": base_seed,
+            "width": width,
+            "height": height,
+            "video_name": video_name,
+            "image_name": image_name,
+            "image_path": image_path,
+            "mask_name": mask_name,
+            "audio_name": audio_name,
+            "audio_path": audio_path,
+            "spoken_line": spoken_line,
+            "voice_sample": voice_sample,
+            "heartmula": result.heartmula or None,
+            "storyboard_mode": storyboard_mode,
+            "judge_enabled": bool(j_enabled),
+            "revise_enabled": revise_enabled,
+            "llm_panel": llm_panel,
+            "power_mode": power_mode,
+            "dry_run": bool(dry_run),
+            "kind": kind,
+            "start_index": int(index),
+            "segment_paths": list(result.segment_paths),
+            "segment_scores": list(result.segment_scores),
+            "segment_durations": list(segs),
+            "audio_starts": list(audio_starts),
+            "storyboard": list(result.storyboard),
+        }
+        result.log(message)
+        _write_record(result)
+        return result
 
     # Single segment → plain orchestrator run (no storyboard/stitch overhead)
-    if len(segs) == 1:
+    if len(segs) == 1 and start_index < 1:
         gate = _budget_admit(result, f"{run_id}:seg0", variant, segs[0])
         if gate["decision"] == "hold":
-            result.status = "paused"
             result.budget_held.append({"id": f"{run_id}:seg0", **gate})
-            result.error = (
+            return _pause_for_budget(
                 f"render budget paused {run_id}:seg0 "
-                f"(used {gate['used_after']}/{gate['cap']} VRAM-min)"
+                f"(used {gate['used_after']}/{gate['cap']} VRAM-min)",
+                0,
             )
-            _write_record(result)
-            return result
         short_prompt = None
         short_negative = None
         short_i2v = None
@@ -574,6 +668,7 @@ def run_pipeline(
             revise_enabled=revise_enabled,
             spoken_line=spoken_line,
             voice_sample=voice_sample,
+            heartmula=result.heartmula or None,
             max_judge_rounds=max_judge_rounds,
             power_mode=power_mode,
             attach_recipe=attach_recipe,
@@ -615,11 +710,16 @@ def run_pipeline(
         _write_record(result)
         return result
 
-    # Storyboard once for the whole piece
+    # Storyboard once for the whole piece. A budget resume keeps the cards
+    # from the held run so a second LLM pass cannot rewrite the remaining shots.
     use_board = should_storyboard(
         sb_mode, segment_count=len(segs), user_request=request, variant=variant
     )
-    if use_board:
+    restored_cards = _cards_from_resume(resume if isinstance(resume, dict) else None)
+    if restored_cards:
+        cards = restored_cards
+        result.log(f"resume: restored storyboard ({len(cards)} shots)")
+    elif use_board:
         cards, global_style, panel_meta = _plan_storyboard(
             request,
             segs,
@@ -687,6 +787,7 @@ def run_pipeline(
             revise_enabled=revise_enabled,
             spoken_line=spoken_line,
             voice_sample=voice_sample,
+            heartmula=result.heartmula or None,
             max_judge_rounds=max_judge_rounds,
             power_mode=power_mode,
             attach_recipe=attach_recipe,
@@ -698,7 +799,7 @@ def run_pipeline(
         )
 
     # Per-segment generation (budget can pause the remaining queue)
-    for i in range(len(segs)):
+    for i in range(start_index, len(segs)):
         scene_id = f"{run_id}:seg{i}"
         gate = _budget_admit(result, scene_id, variant, segs[i])
         if gate["decision"] == "hold":
@@ -725,13 +826,11 @@ def run_pipeline(
             log.debug("free_memory failed after segment", exc_info=True)
 
     if result.budget_held and not result.segment_paths:
-        result.status = "paused"
-        result.error = (
+        return _pause_for_budget(
             f"render budget paused; {len(result.budget_held)} scene(s) held for review "
-            f"(used {result.budget.get('used')}/{result.budget.get('cap')} VRAM-min)"
+            f"(used {result.budget.get('used')}/{result.budget.get('cap')} VRAM-min)",
+            0,
         )
-        _write_record(result)
-        return result
 
     # Stitch
     final = _stitch(result, result.segment_paths, suffix="")
@@ -741,13 +840,11 @@ def run_pipeline(
 
     if result.budget_held:
         result.video_path = str(Path(final).resolve())
-        result.status = "paused"
-        result.error = (
+        return _pause_for_budget(
             f"render budget paused after {len(result.segment_paths)} scene(s); "
-            f"{len(result.budget_held)} held for review"
+            f"{len(result.budget_held)} held for review",
+            len(result.segment_paths),
         )
-        _write_record(result)
-        return result
 
     # Outer full-video judge + selective weak-shot re-gen
     if j_enabled:
@@ -816,6 +913,142 @@ def run_pipeline(
     )
     _write_record(result)
     return result
+
+
+_RESUME_KEYS = (
+    "variant",
+    "duration_s",
+    "quality",
+    "seed",
+    "width",
+    "height",
+    "video_name",
+    "image_name",
+    "image_path",
+    "mask_name",
+    "audio_name",
+    "audio_path",
+    "spoken_line",
+    "voice_sample",
+    "heartmula",
+    "storyboard_mode",
+    "judge_enabled",
+    "revise_enabled",
+    "llm_panel",
+    "power_mode",
+    "dry_run",
+    "kind",
+)
+
+
+def _cards_from_resume(resume: Optional[dict[str, Any]]) -> Optional[list[ShotCard]]:
+    if not isinstance(resume, dict):
+        return None
+    raw = resume.get("storyboard")
+    if not isinstance(raw, list) or not raw:
+        return None
+    cards: list[ShotCard] = []
+    for i, item in enumerate(raw):
+        if not isinstance(item, dict):
+            return None
+        cards.append(ShotCard.from_dict(item, index=i))
+    return cards
+
+
+def _latest_pipeline_records() -> dict[str, dict[str, Any]]:
+    """Newest ``*_pipeline.json`` per run_id. Older pause records are ignored."""
+    if not RUNS_DIR.is_dir():
+        return {}
+    newest: dict[str, tuple[float, dict[str, Any]]] = {}
+    for path in RUNS_DIR.glob("*_pipeline.json"):
+        try:
+            data = json.loads(path.read_text(encoding="utf-8"))
+            mtime = path.stat().st_mtime
+        except (OSError, json.JSONDecodeError, TypeError, ValueError):
+            continue
+        if not isinstance(data, dict):
+            continue
+        run_id = str(data.get("run_id") or "")
+        if not run_id:
+            continue
+        prev = newest.get(run_id)
+        if prev is None or mtime >= prev[0]:
+            newest[run_id] = (mtime, data)
+    return {run_id: row for run_id, (_mtime, row) in newest.items()}
+
+
+def continue_budget_paused(
+    record: dict[str, Any],
+    client: Optional[ComfyClient] = None,
+) -> PipelineResult:
+    """Re-enter ``run_pipeline`` from the segment a budget hold stopped on."""
+    resume = record.get("resume") if isinstance(record, dict) else None
+    if not isinstance(resume, dict):
+        raise ValueError("pipeline record has no budget-resume payload")
+    kwargs = {key: resume[key] for key in _RESUME_KEYS if key in resume}
+    return run_pipeline(
+        str(resume.get("request") or record.get("request") or ""),
+        client=client,
+        resume=resume,
+        **kwargs,
+    )
+
+
+def resume_paused_pipeline_records(
+    *,
+    skip_run_ids: Optional[set[str]] = None,
+    client: Optional[ComfyClient] = None,
+) -> list[str]:
+    """Continue disk records whose newest status is still paused."""
+    skip = set(skip_run_ids or ())
+    continued: list[str] = []
+    for run_id, record in _latest_pipeline_records().items():
+        if run_id in skip or record.get("status") != "paused":
+            continue
+        if not isinstance(record.get("resume"), dict):
+            continue
+        continue_budget_paused(record, client=client)
+        continued.append(run_id)
+    return continued
+
+
+def resume_after_budget_clear(
+    *,
+    client: Optional[ComfyClient] = None,
+    background: Optional[bool] = None,
+) -> list[str]:
+    """Continue generates that paused on the render budget.
+
+    The studio control uses a background thread so the HTTP handler does not
+    wait on a GPU render. The CLI resumes in-process: a daemon thread would
+    die when ``budget reset-shift`` exits. In-memory jobs are resumed first;
+    disk records with those run ids are skipped so one process does not queue
+    the same generate twice. The studio button and the CLI are different
+    processes and can both start the run if both are used.
+    """
+    if background is None:
+        background = True
+    from master_agent.web.jobs import MANAGER
+
+    live = MANAGER.resume_paused()
+    skip = {str(run_id) for run_id in live}
+    pending_disk = [
+        run_id
+        for run_id, record in _latest_pipeline_records().items()
+        if run_id not in skip
+        and record.get("status") == "paused"
+        and isinstance(record.get("resume"), dict)
+    ]
+    if background:
+        if pending_disk:
+            threading.Thread(
+                target=resume_paused_pipeline_records,
+                kwargs={"skip_run_ids": skip, "client": client},
+                daemon=True,
+            ).start()
+        return list(live) + pending_disk
+    disk = resume_paused_pipeline_records(skip_run_ids=skip, client=client)
+    return list(live) + disk
 
 
 def _stitch(result: PipelineResult, segment_paths: list[str], *, suffix: str) -> Optional[Path]:
@@ -892,8 +1125,19 @@ def dry_run_pipeline(
     pause_reset_strength: Optional[float] = None,
     pause_reset_min_s: Optional[float] = None,
     inoutpaint: Optional[dict[str, Any]] = None,
+    heartmula: Optional[dict[str, Any]] = None,
 ) -> int:
     """Storyboard + patch + validate every segment without queueing. CLI exit code."""
+    if heartmula:
+        source = heartmula.get("transcribe_source") or "heartmula"
+        print(f"heartmula: {source} (dry-run plan; no GPU)")
+    from master_agent.comfy.partner_pointers import route_pack_c
+
+    variant, refusal = route_pack_c(request, variant)
+    if refusal:
+        print(f"FAIL  {refusal}")
+        return 2
+
     from master_agent.comfy.validator import format_report, validate_workflow
     from master_agent.comfy.workflow_patcher import (
         load_and_patch_workflow,

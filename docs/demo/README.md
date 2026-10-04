@@ -4,8 +4,7 @@ Photoreal clip produced with **MiniMax H3** through **Video Buddy** (ComfyUI
 `h3_t2v` / fl2va). Public GitHub viewers get these files from the repo — no
 Tailscale, no extra host.
 
-This is the path **your-video-buddy PR #11** already links:
-`https://github.com/thcabq352/ltx-video-buddy/tree/main/docs/demo`
+Public path: `docs/demo/` in this repository.
 
 [`docs/showcase/h3-bmx/`](../showcase/h3-bmx/) is a pointer README to this
 folder (same files; do not keep a second copy).
@@ -51,7 +50,7 @@ They are the originating machine’s notes, not a published benchmark.
 
 This sidecar is the original `.provenance.json` from the showcase run. New
 Buddy clips write `shot-N.buddy.json` instead — see
-[`video_buddy/docs/CLIP_PROVENANCE.md`](../../video_buddy/docs/CLIP_PROVENANCE.md).
+[`docs/PROVENANCE.md`](../PROVENANCE.md).
 
 ## Reproduce (local Comfy + H3 weights)
 

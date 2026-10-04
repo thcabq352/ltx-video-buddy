@@ -1,13 +1,11 @@
-"""ClipProvenance — ``buddy.clip.provenance/v1`` (Rust buddy-core aligned).
+"""ClipProvenance — ``buddy.clip.provenance/v1``.
 
 Sidecar: ``{output_dir}/shot-N.buddy.json`` next to planned ``shot-N.mp4``.
 The same object is embedded on the orchestrator / pipeline run JSON.
 
-Target schema is Rust ``ClipProvenance`` from sibling your-video-buddy
-PR #7 (``cursor/close-improve-loop-1c25``, agent bc-39743643). That repo
-was **not fetchable** from this environment (404). Field names below match
-the PR #7 contract Scott listed — do not invent a second schema. If the
-Rust struct lands extra keys, add them without dropping these.
+This repository owns the schema. Field names below are the contract.
+Do not invent a second schema id. Optional keys may be added without
+dropping these.
 """
 
 from __future__ import annotations
@@ -286,6 +284,33 @@ def build_clip_provenance(
             "end_s": sample.get("end_s"),
             "method": sample.get("method"),
             "trimmed": bool(sample.get("trimmed")),
+        }
+    heart = getattr(st, "heartmula", None) or {}
+    if isinstance(heart, dict) and (
+        heart.get("lyrics")
+        or heart.get("tags")
+        or heart.get("wav")
+        or heart.get("transcribe_source")
+        or heart.get("words_path")
+    ):
+        payload["params"]["heartmula"] = {
+            "lyrics": heart.get("lyrics"),
+            "tags": heart.get("tags"),
+            "mula_repo": heart.get("mula_repo"),
+            "codec_repo": heart.get("codec_repo"),
+            "transcriptor_repo": heart.get("transcriptor_repo"),
+            "gen_repo": heart.get("gen_repo"),
+            "version": heart.get("version"),
+            "mula_dtype": heart.get("mula_dtype"),
+            "codec_dtype": heart.get("codec_dtype"),
+            "lazy_load": heart.get("lazy_load"),
+            "seed": heart.get("seed"),
+            "wav": heart.get("wav"),
+            "transcribe_source": heart.get("transcribe_source"),
+            "words_path": heart.get("words_path"),
+            "max_audio_length_ms": heart.get("max_audio_length_ms"),
+            "max_seq_len": heart.get("max_seq_len"),
+            "dry_run": heart.get("dry_run"),
         }
     return payload
 

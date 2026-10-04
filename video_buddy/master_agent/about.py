@@ -92,7 +92,7 @@ def format_about(card: dict[str, Any] | None = None) -> str:
         f"Comfy    {comfy.get('url')}",
         f"Studio   {studio.get('url')}  (optional dashboard)",
         f"Persona  {persona.get('slug')} ({persona.get('name')})   soul {soul.get('slug')} ({soul.get('name')})",
-        f"Local    ollama={models.get('ollama')}  llamacpp={models.get('llamacpp')}   provider {models.get('llm_provider')}",
+        f"Local    llamacpp={models.get('llamacpp')}  ollama={models.get('ollama')}   provider {models.get('llm_provider')}",
         f"Package  {data.get('package')}   MCP {data.get('mcp_id')}",
         f"Hermes   profile ltx (primary)   A2A fallback {hermes.get('a2a_fallback')}",
         "",

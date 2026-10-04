@@ -13,8 +13,9 @@ Local ComfyUI video studio in this repo (`video_buddy/`). Package is `master_age
 
 - Local brief → storyboard → validate → render → judge → stitch on **this** machine
 - LTX 2.5 (`ltx25_*` / aliases `t2v_i2v`, `flf2v`, …), MiniMax H3 (`h3_*` / `fl2va` / `ref2va`), LTX 2.3 (`base` / `eros` / `directors` / `lipsync`), Wan 2.2, music video, fractal, Movie Builder
+- Seedance 2.5 Draft → Final (Pack C). **Local-only is a hard requirement.** Generate on `http://127.0.0.1:8188` with `ltx25_t2v_i2v`, `ltx25_flf2v`, or `ltx25_msr`. Partner ids are a field-shape record and are not queued. See `references/local-only.md` and repo `docs/FEATURES.md`
 - Drive or lint a Comfy API graph (`comfy run`)
-- Inventory-first weights: `doctor` (no fetch) then `download-models --ltx25` or `--h3` if a slot is confirmed missing
+- Inventory-first weights: `inventory`, then `doctor` (no fetch), then `download-models --ltx25` or `--h3` if a slot is confirmed missing. `--heartmula` lists HeartMuLa slots and does not fetch until `--yes` (check free space first; prefer `HeartCodec-oss-20260123`). `--scan-only` never fetches. GGUF is the loader whenever a compatible file is on disk; fp8/bf16/EROS are fallbacks. 12GB: `VRAM_GB=12` and `FORCE_LOADER=gguf` (hides NVFP4/bf16 suggestions; does not block a lone bf16). Fully local LLM: `LLM_PROVIDER=ollama`. HeartMuLa is sequential with LTX on 16GB. On 16GB the backbone KV window is sized under heartlib's 8192 (that window OOMs during the GQA expand); `--max-seq-len 512` is the 5s smoke. Wav save falls back to soundfile when torchaudio/torchcodec fails.
 - Character → Flux sheet → LoRA (CCC)
 
 ## When NOT to use
@@ -24,7 +25,7 @@ Local ComfyUI video studio in this repo (`video_buddy/`). Package is `master_age
 | Grok / Imagine cloud clip, no local Comfy | default cloud video skills — not Buddy |
 | Pixie Forge brand / scotty.fyi / HyperFrames | `hermes -p forge` |
 | Generic node poke on a **different** Comfy install | that install's MCP, not `master-agent` |
-| Sibling trees (`ltx_director/`, `SOS/`, `lot/`) | those packages — L0 is this tree only |
+| A checkout other than this `video_buddy/` tree | that checkout's own docs — L0 is this package only |
 
 ## Hermes profile (primary)
 
@@ -54,7 +55,7 @@ Do L0→L5 in order. Print the card: `python -m master_agent curriculum`. Part 2
 
 | Lesson | Do |
 |---|---|
-| L0 tree | This tree: `video_buddy` / `master_agent`. Not sibling studios. |
+| L0 tree | This tree: `video_buddy` / `master_agent`. |
 | L1 about | `python -m master_agent about` — studio card before any GPU claim. |
 | L2 health | `python -m master_agent health` — Comfy **:8188** up. Studio `:8189` is not proof. |
 | L3 dry-run | `python -m master_agent run "BRIEF" --dry-run` — plan/lint only. No queue, no shift-budget spend. |
@@ -74,25 +75,25 @@ Hard rules:
 |---|---|---|
 | **:8188** | ComfyUI API | `health` / MCP `health` shows Comfy up |
 | **:8189** | Optional studio dashboard (`python -m master_agent ui`) | Human UI only. A live tab is **not** Comfy. |
-| **:8080** | llama.cpp `llama-server` (optional local LLM) | MCP `health.llamacpp` / `local_llm.llamacpp` |
-| **:11434** | Ollama (optional local LLM) | MCP `health.ollama` — not implied by llama.cpp |
+| **:8080** | llama.cpp `llama-server` (preferred local LLM) | MCP `health.llamacpp` / `local_llm.llamacpp` |
+| **:11434** | Ollama (second local LLM) | MCP `health.ollama` — not implied by llama.cpp |
 
 Do not bind **8642** (Hermes API) or treat llama.cpp as Ollama.
 
-## Ollama vs llama.cpp
+## llama.cpp vs Ollama
 
-Buddy does not force Ollama. Jason / Scott can run Hermes + llama.cpp only.
+llama.cpp is the preferred local backend. Buddy starts `llama-server` (`LLAMACPP_BIN` or `PATH`) against `MODELS_DIR` and stops it on shutdown. If that binary is missing, auto warns and uses Ollama. Pin `llamacpp` or `ollama` to force one backend.
 
-| | Ollama | llama.cpp |
+| | llama.cpp | Ollama |
 |---|---|---|
-| Env | `OLLAMA_URL`, `OLLAMA_MODEL` | `LLAMACPP_URL`, `LLAMACPP_MODEL` |
-| Provider | `LLM_PROVIDER=ollama` or `auto` | `LLM_PROVIDER=llamacpp` (aliases `llama.cpp`, `llama-cpp`) |
+| Env | `LLAMACPP_URL`, `LLAMACPP_MODEL`, `LLAMACPP_BIN` | `OLLAMA_URL`, `OLLAMA_MODEL` |
+| Provider | `LLM_PROVIDER=llamacpp` (aliases `llama.cpp`, `llama-cpp`) or `auto` | `LLM_PROVIDER=ollama` |
 | Chat / storyboard | `{url}/v1/chat/completions` | `{url}/v1/chat/completions` |
-| Embeddings | `/api/embed` | `/v1/embeddings` (KB no-ops if missing) |
-| Vision judge | `/api/chat` + images | multimodal `/v1/chat/completions`; heuristic-only if the GGUF is text-only |
+| Embeddings | `/v1/embeddings` (KB no-ops if missing) | `/api/embed` |
+| Vision judge | multimodal `/v1/chat/completions`; heuristic-only if the GGUF is text-only | `/api/chat` + images |
 
-`auto` order: ollama → llamacpp → grok. Panels accept `llamacpp[:model]`.
-`health` reports each backend separately.
+`auto` order: llamacpp → ollama → grok. Panels accept `llamacpp[:model]`.
+`health` reports llama.cpp, Ollama, and Grok separately.
 
 ## MCP tools ↔ CLI
 
@@ -112,7 +113,7 @@ Full signatures: [TOOLS.md](TOOLS.md). Invoke MCP as `master-agent.<tool>`. CLI 
 | `create_character(description, name="", shots=0, train=False)` | `python -m master_agent character create "DESC" [--name N --shots N --train]` |
 | `train_lora(character_name, steps=0, lr=0, rank=0, validate=True)` | `python -m master_agent lora train NAME [--steps N --lr X --rank N --validate]` |
 
-CLI-only (no MCP tool): `about`, `curriculum`, `doctor`/`setup`, `workflows`, `capabilities`, `download-models`, `download-flux`, `comfy run`, `diagnose`, `budget`, `hermes`, `ui`, `fetch-object-info`, `power-tune`, `persona`, `soul`, `brief`, `fractal`, `music`, `mv plan`/`mv render`, `lora setup`/`validate`, `character list`.
+CLI-only (no MCP tool): `about`, `curriculum`, `inventory`, `doctor`/`setup`, `workflows`, `capabilities`, `download-models`, `download-flux`, `comfy run`, `diagnose`, `budget`, `hermes`, `ui`, `fetch-object-info`, `power-tune`, `persona`, `soul`, `brief`, `fractal`, `music`, `mv plan`/`mv render`, `heartmula generate`/`heartmula transcribe`, `lora setup`/`validate`, `character list`.
 
 Drive graphs with CLI first: `comfy run`. Director pipeline: `run`. Unattended: `--no-interview`.
 

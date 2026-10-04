@@ -1,9 +1,8 @@
-"""Cheap Quality Bar fail rules (buddy-core ids as plain strings).
+"""Cheap Quality Bar fail rules (plain string ids).
 
-Mirrors sibling your-video-buddy ``buddy-core`` quality_bar rule ids. This is
-**not** an iteration-controller API — the orchestrator already owns
-judge → revise → re-run. These helpers only name fail reasons and build a
-structured revise plan (prompt deltas + param deltas).
+The orchestrator owns judge → revise → re-run. These helpers only name
+fail reasons and build a structured revise plan (prompt deltas + param
+deltas).
 
 Rule ids
 --------
@@ -20,7 +19,7 @@ from __future__ import annotations
 from dataclasses import asdict, dataclass, field
 from typing import Any, Optional
 
-# buddy-core quality_bar fail rule ids (simple strings)
+# quality_bar fail rule ids (simple strings)
 RULE_A = "a"
 RULE_B = "b"
 RULE_C = "c"

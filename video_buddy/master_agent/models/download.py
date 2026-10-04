@@ -14,6 +14,9 @@ Local-first: files already at the destination, in Comfy ``models/``,
 cache are reused. A clear SKIP log is printed. Nothing is re-downloaded
 when a usable local copy exists.
 
+New bytes are written only under Buddy ``MODELS_DIR``. A destination inside
+an attached or external Comfy tree is refused.
+
 If configured model dirs are missing, this module refuses to start a Hub
 fetch and names every path it checked.
 
@@ -44,6 +47,10 @@ FLUX_FILES: list[tuple[str, str, str]] = [
 ]
 
 
+class DownloadDestinationError(RuntimeError):
+    """Pack download destination is outside Buddy ``MODELS_DIR`` or inside an attached tree."""
+
+
 class LocalModelNotFound(RuntimeError):
     """Configured model dirs are missing or unusable; do not start a Hub fetch."""
 
@@ -71,6 +78,46 @@ def _skip_local(path: Path, dest: Path, progress: Callable[[str], None]) -> Path
         f"SKIP download of {dest.name} — local file found at {path} (not re-downloading)"
     )
     return path
+
+
+def _is_under(path: Path, parent: Path) -> bool:
+    try:
+        path.resolve().relative_to(parent.resolve())
+    except (ValueError, OSError):
+        return False
+    return True
+
+
+def assert_pack_download_destination(dest: Path) -> Path:
+    """Require ``dest`` under Buddy ``MODELS_DIR`` and outside attached Comfy trees.
+
+    Search order is unchanged (``MODELS_DIR``, then Comfy ``models/``, then
+    YAML / HF). This guard only blocks the write.
+    """
+    from master_agent.comfy.model_paths import path_is_comfy_like, read_only_weight_roots
+    from master_agent.config import MODELS_DIR as models_dir
+
+    models = Path(models_dir).expanduser().resolve()
+    target = Path(dest).expanduser().resolve()
+    if not _is_under(target, models):
+        raise DownloadDestinationError(
+            f"Refusing to write {target} outside Buddy MODELS_DIR ({models}). "
+            "download-models and pack pulls never write into an attached or "
+            "external Comfy tree."
+        )
+    for tree in read_only_weight_roots():
+        try:
+            root = Path(tree).expanduser().resolve()
+        except OSError:
+            continue
+        if root == models or _is_under(target, root):
+            if _is_under(models, root) and root != models and not path_is_comfy_like(root):
+                continue
+            raise DownloadDestinationError(
+                f"Refusing to write {target} into read-only model tree {root}. "
+                f"Pack downloads go only to Buddy MODELS_DIR ({models})."
+            )
+    return target
 
 
 def _configured_model_roots() -> list[Path]:
@@ -148,6 +195,7 @@ def download_hub_file(
             filename=dest.name,
         )
 
+    dest = assert_pack_download_destination(dest)
     dest.parent.mkdir(parents=True, exist_ok=True)
     from huggingface_hub import hf_hub_download
     from huggingface_hub.utils import GatedRepoError

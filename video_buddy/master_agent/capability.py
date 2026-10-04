@@ -1,13 +1,11 @@
-"""CapabilityContract — ``buddy.capability.contract/v1`` (Rust buddy-core aligned).
+"""CapabilityContract — ``buddy.capability.contract/v1``.
 
 Brain-side guarantee for one run: model / family / variant, resolution,
 duration, audio, control layers. **No** VRAM, slot, or weight-path fields.
 
-Target schema is Rust ``CapabilityContract`` from sibling your-video-buddy
-PR #9 (``docs/BRAIN_HANDS.md``). That repo was **not fetchable** from this
-environment (404). Field names below match the PR #9 contract Scott listed.
-If the Rust struct lands extra keys, add them without dropping these.
-Capacity keys are never serialized.
+This repository owns the contract. It is documented in
+``docs/ARCHITECTURE.md``. Field names below are the schema. Extra keys
+may be added without dropping these. Capacity keys are never serialized.
 """
 
 from __future__ import annotations

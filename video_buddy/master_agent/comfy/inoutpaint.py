@@ -1,11 +1,13 @@
-"""LTX 2.3 inpaint / outpaint layout, mask PNG, and queue-time upload.
+"""LTX 2.3 and 2.5 inpaint / outpaint layout, mask PNG, and queue-time upload.
 
 The shipped graphs are ``workflows/ltx23_inoutpaint_api.json`` and
 ``workflows/ltx-2.5/LTX-2.5_ICLoRA_Inpaint_Outpaint_Two_Stage_Distilled_api.json``.
 White mask pixels are the region the IC-LoRA regenerates. Black pixels are
 held. Outpaint grows the canvas with ``ImagePadForOutpaint`` (pads are
-multiples of 8, the node's step) and builds a matching mask: white on the new
-border, black on the source. The 2.5 graph swaps its image-condition nodes to
+multiples of 8, the node's step). On 2.3 the sampler mask is that node's own
+mask, repeated with ``VHS_DuplicateMasks`` because the pad mask is one frame,
+and ``trim_to_shortest`` is false. Inpaint keeps the still-repeat and
+``trim_to_shortest`` true. The 2.5 graph swaps its image-condition nodes to
 ``LTXVImgToVideoConditionOnly`` when the mode is outpaint.
 """
 
@@ -486,6 +488,75 @@ def _set(node: dict[str, Any] | None, key: str, value: Any) -> None:
     node.setdefault("inputs", {})[key] = value
 
 
+def _fresh_node_id(workflow: dict[str, Any]) -> str:
+    used = [int(key) for key in workflow if str(key).isdigit()]
+    nxt = (max(used) if used else 0) + 1
+    while str(nxt) in workflow:
+        nxt += 1
+    return str(nxt)
+
+
+def _ensure_mask_duplicate(
+    workflow: dict[str, Any],
+    title: str,
+    source: list[Any],
+    frames: int,
+) -> str:
+    """One ``VHS_DuplicateMasks`` per stage. Re-running finalize updates it."""
+    nid = _nid_by_title(workflow, "VHS_DuplicateMasks", title)
+    if nid is None:
+        nid = _fresh_node_id(workflow)
+        workflow[nid] = {
+            "class_type": "VHS_DuplicateMasks",
+            "inputs": {},
+            "_meta": {"title": title},
+        }
+    inputs = workflow[nid].setdefault("inputs", {})
+    inputs["mask"] = source
+    inputs["multiply_by"] = int(frames)
+    return nid
+
+
+def _nid_by_title(workflow: dict[str, Any], class_type: str, title: str) -> str | None:
+    want = title.lower()
+    for nid, node in _nodes(workflow, class_type):
+        got = str((node.get("_meta") or {}).get("title") or "").lower()
+        if got == want:
+            return nid
+    return None
+
+
+def _widget_int(node: dict[str, Any] | None, key: str) -> int | None:
+    if node is None:
+        return None
+    raw = (node.get("inputs") or {}).get(key)
+    if isinstance(raw, bool) or not isinstance(raw, int):
+        return None
+    return int(raw)
+
+
+class SourceVideoTrimError(RuntimeError):
+    """The source clip could not be cut to the latent frame count."""
+
+
+def _write_scale_dimensions(node: dict[str, Any] | None, width: int, height: int) -> None:
+    """Exact stage size. ``crop=disabled`` stretches onto the latent grid.
+
+    ComfyUI 0.35 names these ``resize_type.width`` / ``height`` / ``crop``.
+    Plain ``width`` / ``height`` fail prompt validation.
+    """
+    if node is None:
+        return
+    inputs = node.setdefault("inputs", {})
+    inputs.pop("width", None)
+    inputs.pop("height", None)
+    inputs["resize_type"] = "scale dimensions"
+    inputs["resize_type.width"] = int(width)
+    inputs["resize_type.height"] = int(height)
+    inputs["resize_type.crop"] = "disabled"
+    inputs["scale_method"] = "lanczos"
+
+
 def _write_stage_resize(
     workflow: dict[str, Any],
     title: str,
@@ -494,13 +565,13 @@ def _write_stage_resize(
     *,
     ltx25: bool,
 ) -> None:
-    """Stage size for a titled ResizeImageMaskNode.
+    """Stage size for a titled ResizeImageMaskNode on the 2.5 graph.
 
     Comfy 0.35.1 ``scale dimensions`` requires ``resize_type.width``,
     ``resize_type.height``, and ``resize_type.crop``. Plain ``width`` /
     ``height`` are not those inputs. Crop stays ``disabled`` so the mask and
     the frames stretch to the same pixels instead of center-cropping apart.
-    The 2.3 graph still uses the plain widgets until its own fix lands.
+    The 2.3 graph uses ``_write_scale_dimensions`` / ``_write_match_size``.
     """
     node = _by_title(workflow, "ResizeImageMaskNode", title)
     if node is None:
@@ -516,6 +587,21 @@ def _write_stage_resize(
     inputs["resize_type.width"] = int(width)
     inputs["resize_type.height"] = int(height)
     inputs["resize_type.crop"] = "disabled"
+
+
+def _write_match_size(node: dict[str, Any] | None, match: list[Any]) -> None:
+    """Fit the mask to the already-resized frames (official IC-LoRA graph)."""
+    if node is None:
+        return
+    inputs = node.setdefault("inputs", {})
+    inputs.pop("width", None)
+    inputs.pop("height", None)
+    inputs.pop("resize_type.width", None)
+    inputs.pop("resize_type.height", None)
+    inputs["resize_type"] = "match size"
+    inputs["resize_type.match"] = match
+    inputs["resize_type.crop"] = "center"
+    inputs["scale_method"] = "area"
 
 
 def _latent_frame_count(workflow: dict[str, Any]) -> int | None:
@@ -554,6 +640,9 @@ def finalize_inoutpaint_graph(
     """Write stage sizes, dilate/blend, and outpaint pads after the generic patcher.
 
     ``width`` / ``height`` are the stage-2 output. The empty latent is stage 1
+    (half) so ``LTXVLatentUpsampler`` lands on stage 2. Masks are match-sized
+    to those frames so a still mask cannot drift off the plate. Spatial dilate
+    stays the official 15 / 30 (outpaint 0) and the blend stays 6 / 2.
     (half) so the x2 step (latent upscaler on 2.3, lanczos pixel resize on
     2.5) lands on stage 2. ``ltx25`` keeps official blend dilations and, for
     outpaint, swaps ``LTXVImgToVideoInplace`` to ``LTXVImgToVideoConditionOnly``.
@@ -561,10 +650,34 @@ def finalize_inoutpaint_graph(
     stage_w, stage_h = fit_working_size(int(width), int(height))
     stage1_w, stage1_h = stage_w // 2, stage_h // 2
     outpaint = (mode or "inpaint").lower() == "outpaint"
-    _write_stage_resize(workflow, "Resize Frames Stage 1", stage1_w, stage1_h, ltx25=ltx25)
-    _write_stage_resize(workflow, "Resize Frames Stage 2", stage_w, stage_h, ltx25=ltx25)
-    _write_stage_resize(workflow, "Resize Mask Stage 1", stage1_w, stage1_h, ltx25=ltx25)
-    _write_stage_resize(workflow, "Resize Mask Stage 2", stage_w, stage_h, ltx25=ltx25)
+    if ltx25:
+        _write_stage_resize(workflow, "Resize Frames Stage 1", stage1_w, stage1_h, ltx25=True)
+        _write_stage_resize(workflow, "Resize Frames Stage 2", stage_w, stage_h, ltx25=True)
+        _write_stage_resize(workflow, "Resize Mask Stage 1", stage1_w, stage1_h, ltx25=True)
+        _write_stage_resize(workflow, "Resize Mask Stage 2", stage_w, stage_h, ltx25=True)
+    else:
+        _write_scale_dimensions(
+            _by_title(workflow, "ResizeImageMaskNode", "Resize Frames Stage 1"),
+            stage1_w,
+            stage1_h,
+        )
+        _write_scale_dimensions(
+            _by_title(workflow, "ResizeImageMaskNode", "Resize Frames Stage 2"),
+            stage_w,
+            stage_h,
+        )
+        frames1 = _nid_by_title(workflow, "ResizeImageMaskNode", "Resize Frames Stage 1")
+        frames2 = _nid_by_title(workflow, "ResizeImageMaskNode", "Resize Frames Stage 2")
+        if frames1:
+            _write_match_size(
+                _by_title(workflow, "ResizeImageMaskNode", "Resize Mask Stage 1"),
+                [frames1, 0],
+            )
+        if frames2:
+            _write_match_size(
+                _by_title(workflow, "ResizeImageMaskNode", "Resize Mask Stage 2"),
+                [frames2, 0],
+            )
     for _nid, node in _nodes(workflow, "EmptyLTXVLatentVideo"):
         inputs = node.setdefault("inputs", {})
         inputs["width"] = stage1_w
@@ -602,13 +715,72 @@ def finalize_inoutpaint_graph(
         for _nid, node in _nodes(workflow, "LTXVImgToVideoInplace"):
             node["class_type"] = "LTXVImgToVideoConditionOnly"
     pads = pad or {}
-    pad_node = _by_title(workflow, "ImagePadForOutpaint", "Outpaint Pad")
-    if pad_node is None:
+    pad_id = _nid_by_title(workflow, "ImagePadForOutpaint", "Outpaint Pad")
+    pad_node = workflow.get(pad_id) if pad_id else None
+    if not isinstance(pad_node, dict):
         found = _nodes(workflow, "ImagePadForOutpaint")
-        pad_node = found[0][1] if found else None
+        if found:
+            pad_id, pad_node = found[0]
+        else:
+            pad_id, pad_node = None, None
     for key in ("left", "top", "right", "bottom"):
         _set(pad_node, key, int(pads.get(key, 0) or 0))
     _set(pad_node, "feathering", 0)
+    if not ltx25:
+        # Official 2.3 guide leaves attention_mask disconnected and encodes the
+        # green plate in one pass. Tiled encode was tinting the kept strip.
+        # 2.5 keeps its own attention_mask link and decode overlap.
+        for _nid, node in _nodes(workflow, "LTXAddVideoICLoRAGuideAdvanced"):
+            inputs = node.setdefault("inputs", {})
+            inputs.pop("attention_mask", None)
+            inputs["use_tiled_encode"] = False
+        for _nid, node in _nodes(workflow, "LTXVTiledVAEDecode"):
+            _set(node, "overlap", 6)
+        length = DEFAULT_FRAMES
+        latents = _nodes(workflow, "EmptyLTXVLatentVideo")
+        if latents:
+            raw_len = _widget_int(latents[0][1], "length")
+            if raw_len:
+                length = raw_len
+        _set(_by_title(workflow, "RepeatImageBatch", "Repeat Inpaint Mask"), "amount", length)
+        if outpaint and pad_id:
+            # The pad node mask is 1 on the new border and 0 on the source. It is
+            # one frame, so the blend's trim_to_shortest would collapse the clip.
+            # Match-size that mask, then repeat it to the latent length before dilate.
+            for title in ("Resize Mask Stage 1", "Resize Mask Stage 2"):
+                _set(
+                    _by_title(workflow, "ResizeImageMaskNode", title),
+                    "input",
+                    [pad_id, 1],
+                )
+            stage1 = _nid_by_title(workflow, "ResizeImageMaskNode", "Resize Mask Stage 1")
+            stage2 = _nid_by_title(workflow, "ResizeImageMaskNode", "Resize Mask Stage 2")
+            if stage1:
+                dup1 = _ensure_mask_duplicate(
+                    workflow,
+                    "Repeat Outpaint Mask Stage 1",
+                    [stage1, 0],
+                    length,
+                )
+                _set(
+                    _by_title(workflow, "LTXVDilateVideoMask", "Dilate Mask Stage 1"),
+                    "mask",
+                    [dup1, 0],
+                )
+            if stage2:
+                dup2 = _ensure_mask_duplicate(
+                    workflow,
+                    "Repeat Outpaint Mask Stage 2",
+                    [stage2, 0],
+                    length,
+                )
+                _set(
+                    _by_title(workflow, "LTXVDilateVideoMask", "Dilate Mask Stage 2"),
+                    "mask",
+                    [dup2, 0],
+                )
+            for _nid, node in _nodes(workflow, "LTXVLaplacianPyramidBlend"):
+                node.setdefault("inputs", {})["trim_to_shortest"] = False
     if mask_png:
         for _nid, node in _nodes(workflow, "LoadImageMask"):
             meta = node.setdefault("_meta", {})
@@ -696,6 +868,147 @@ def ensure_inoutpaint_mask(
     return name
 
 
+def _ffprobe_video_stream(path: Path, *, count_frames: bool) -> dict[str, Any]:
+    cmd = ["ffprobe", "-v", "error", "-select_streams", "v:0"]
+    if count_frames:
+        cmd.append("-count_frames")
+    cmd += [
+        "-show_entries",
+        "stream=nb_frames,nb_read_frames,avg_frame_rate,duration",
+        "-of",
+        "json",
+        str(path),
+    ]
+    try:
+        proc = subprocess.run(cmd, capture_output=True, text=True, check=False)
+    except FileNotFoundError as exc:
+        raise SourceVideoTrimError("ffprobe is not on PATH; cannot read the source frame count") from exc
+    if proc.returncode != 0:
+        detail = (proc.stderr or proc.stdout or "").strip()
+        raise SourceVideoTrimError(f"ffprobe failed for {path.name}: {detail}")
+    try:
+        data = json.loads(proc.stdout or "{}")
+    except json.JSONDecodeError as exc:
+        raise SourceVideoTrimError(f"ffprobe returned no JSON for {path.name}") from exc
+    streams = data.get("streams") or []
+    return streams[0] if streams and isinstance(streams[0], dict) else {}
+
+
+def _stream_int(stream: dict[str, Any], key: str) -> int:
+    raw = stream.get(key)
+    if isinstance(raw, int) and not isinstance(raw, bool) and raw > 0:
+        return raw
+    if isinstance(raw, str) and raw.isdigit() and int(raw) > 0:
+        return int(raw)
+    return 0
+
+
+def _frame_rate(text: Any) -> float:
+    raw = str(text or "")
+    if "/" in raw:
+        num, den = raw.split("/", 1)
+        try:
+            denom = float(den)
+        except ValueError:
+            return 0.0
+        if denom == 0:
+            return 0.0
+        try:
+            return float(num) / denom
+        except ValueError:
+            return 0.0
+    try:
+        return float(raw)
+    except ValueError:
+        return 0.0
+
+
+def probe_video_frame_count(path: Path) -> int:
+    """Decoded frame count of the first video stream."""
+    stream = _ffprobe_video_stream(path, count_frames=False)
+    frames = _stream_int(stream, "nb_frames")
+    if frames:
+        return frames
+    stream = _ffprobe_video_stream(path, count_frames=True)
+    frames = _stream_int(stream, "nb_read_frames") or _stream_int(stream, "nb_frames")
+    if frames:
+        return frames
+    try:
+        duration = float(stream.get("duration") or 0)
+    except (TypeError, ValueError):
+        duration = 0.0
+    rate = _frame_rate(stream.get("avg_frame_rate"))
+    if duration > 0 and rate > 0:
+        return max(int(round(duration * rate)), 1)
+    return 0
+
+
+def trim_video_command(src: Path, frames: int, dest: Path) -> list[str]:
+    """First ``frames`` pictures, with audio when the source has any."""
+    return [
+        "ffmpeg",
+        "-y",
+        "-i",
+        str(src),
+        "-map",
+        "0:v:0",
+        "-map",
+        "0:a?",
+        "-frames:v",
+        str(int(frames)),
+        "-c:v",
+        "libx264",
+        "-pix_fmt",
+        "yuv420p",
+        "-c:a",
+        "aac",
+        str(dest),
+    ]
+
+
+def trim_video_to_frames(src: Path, frames: int, dest: Path) -> None:
+    cmd = trim_video_command(src, frames, dest)
+    try:
+        proc = subprocess.run(cmd, capture_output=True, text=True, check=False)
+    except FileNotFoundError as exc:
+        raise SourceVideoTrimError("ffmpeg is not on PATH; cannot trim the source video") from exc
+    if proc.returncode != 0 or not dest.is_file():
+        detail = (proc.stderr or proc.stdout or "").strip().splitlines()
+        tail = detail[-1] if detail else "no output"
+        raise SourceVideoTrimError(f"ffmpeg failed to trim {src.name} to {frames} frames: {tail}")
+
+
+def fit_source_video(path: Path, frames: int) -> Path:
+    """Cut a longer source down to the requested 8n+1 latent length.
+
+    ``LTXAddVideoICLoRAGuideAdvanced`` asserts when the encoded guide is
+    longer than ``EmptyLTXVLatentVideo``. LoadVideo in this Comfy build has
+    no frame cap, so the file itself has to be the right length.
+    """
+    target = int(frames)
+    if target < 1:
+        raise SourceVideoTrimError(f"latent length {frames} is not a frame count")
+    count = probe_video_frame_count(path)
+    if count <= 0:
+        raise SourceVideoTrimError(f"could not read a frame count for {path.name}")
+    if count <= target:
+        return path
+    dest_dir = Path(tempfile.mkdtemp(prefix="ltx23-trim-"))
+    suffix = path.suffix if path.suffix else ".mp4"
+    dest = dest_dir / f"{path.stem}_{target}f{suffix}"
+    trim_video_to_frames(path, target, dest)
+    got = probe_video_frame_count(dest)
+    if got != target:
+        raise SourceVideoTrimError(
+            f"trimmed {path.name} has {got} frames; the latent length is {target}"
+        )
+    return dest
+
+
+def _is_inoutpaint_graph(workflow: dict[str, Any]) -> bool:
+    return bool(_nodes(workflow, "LTXVInpaintPreprocess"))
+
+
 def _is_ltx25_workflow(workflow: dict[str, Any]) -> bool:
     return mask_upload_name(workflow) == LTX25_MASK_UPLOAD_NAME
 
@@ -712,13 +1025,33 @@ def prepare_queue_inputs(
             length = _latent_frame_count(workflow)
             if length:
                 upload_path = trim_video_to_frame_count(local, length)
-        try:
+        else:
+            target = _latent_frame_count(workflow) if _is_inoutpaint_graph(workflow) else None
+            if target:
+                _set(
+                    _by_title(workflow, "RepeatImageBatch", "Repeat Inpaint Mask"),
+                    "amount",
+                    target,
+                )
+                for _nid, node in _nodes(workflow, "VHS_DuplicateMasks"):
+                    node.setdefault("inputs", {})["multiply_by"] = int(target)
+                upload_path = fit_source_video(local, target)
+        if _is_ltx25_workflow(workflow):
+            try:
+                name = upload(upload_path) or upload_path.name
+            finally:
+                if upload_path != local:
+                    shutil.rmtree(upload_path.parent, ignore_errors=True)
+        else:
             name = upload(upload_path) or upload_path.name
-        finally:
-            if upload_path != local:
-                shutil.rmtree(upload_path.parent, ignore_errors=True)
         for _nid, node in _nodes(workflow, "LoadVideo"):
             node.setdefault("inputs", {})["file"] = str(name)
+    elif not _is_ltx25_workflow(workflow):
+        target = _latent_frame_count(workflow) if _is_inoutpaint_graph(workflow) else None
+        if target:
+            _set(_by_title(workflow, "RepeatImageBatch", "Repeat Inpaint Mask"), "amount", target)
+            for _nid, node in _nodes(workflow, "VHS_DuplicateMasks"):
+                node.setdefault("inputs", {})["multiply_by"] = int(target)
     local_mask = _pop_local_mask(workflow)
     if local_mask is not None:
         _pop_mask_png(workflow)
@@ -792,12 +1125,38 @@ def record_comfy_provenance(
     height = _stage_side(stage_in, "height", DEFAULT_HEIGHT)
     frames = _latent_frame_count(workflow) or DEFAULT_FRAMES
     fps = DEFAULT_FPS
+    duration_s = frames / float(fps)
+    output_frames: int | None = None
     measured_frames: int | None = None
     measured_duration: float | None = None
     if (variant or "") == LTX25_VARIANT:
         measured_frames, measured_duration = probe_output_media(video_path)
         if measured_frames:
             frames = measured_frames
+        if measured_duration:
+            duration_s = measured_duration
+    else:
+        try:
+            from master_agent.judge.probe import probe_video
+
+            probed = probe_video(video_path)
+        except Exception:
+            probed = None
+        if isinstance(probed, dict):
+            probed_frames = probed.get("frames")
+            probed_duration = probed.get("duration_s")
+            if (
+                isinstance(probed_frames, int)
+                and not isinstance(probed_frames, bool)
+                and probed_frames > 0
+            ):
+                output_frames = probed_frames
+                frames = probed_frames
+            if isinstance(probed_duration, (int, float)) and not isinstance(probed_duration, bool):
+                if float(probed_duration) > 0:
+                    duration_s = float(probed_duration)
+            elif output_frames:
+                duration_s = output_frames / float(fps)
     videos = _nodes(workflow, "LoadVideo")
     video_name = ""
     if videos:
@@ -817,7 +1176,7 @@ def record_comfy_provenance(
         width=width,
         height=height,
         fps=fps,
-        duration_s=measured_duration if measured_duration else frames / float(fps),
+        duration_s=duration_s,
         video_name=video_name or None,
         mask_name=mask_name or None,
         attempt=1,
@@ -828,6 +1187,11 @@ def record_comfy_provenance(
         shot=None,
     )
     payload = build_clip_provenance(state, path=video_path)
+    if output_frames is not None:
+        params = payload.get("params")
+        if isinstance(params, dict):
+            params["frames"] = output_frames
+            params["duration"] = duration_s
     if (variant or "") == LTX25_VARIANT:
         payload["params"]["frames"] = frames
         payload["params"]["output_frames_source"] = (

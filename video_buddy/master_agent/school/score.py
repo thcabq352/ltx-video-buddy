@@ -1,4 +1,4 @@
-"""Deterministic school scoring. Ported from lot/crates/lot-core/src/school.rs."""
+"""Deterministic school scoring. Never blocks export."""
 
 from __future__ import annotations
 

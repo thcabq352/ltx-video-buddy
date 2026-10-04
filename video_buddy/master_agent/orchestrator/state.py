@@ -59,6 +59,8 @@ class RunState:
     audio_start_s: float = 0.0
     # H3 voice sample trim (optional ClipProvenance params.voice_sample)
     voice_sample: dict[str, Any] = field(default_factory=dict)
+    # HeartMuLa generate / transcribe (optional ClipProvenance params.heartmula)
+    heartmula: dict[str, Any] = field(default_factory=dict)
     spoken_line: str = ""
     kind: str = ""
     music_bed_attached: bool = False

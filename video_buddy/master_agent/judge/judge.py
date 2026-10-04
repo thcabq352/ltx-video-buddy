@@ -23,6 +23,15 @@ from master_agent.judge.quality_bar import (
     build_revise_plan,
     evaluate_quality_bar,
 )
+from master_agent.judge.rubric import (
+    RAINEY1,
+    aggregate_look,
+    apply_rainey1_gates,
+    collect_hard_fails,
+    extract_rubric_scores,
+    load_rubric_text,
+    resolve_judge_rubric,
+)
 
 HUMAN_VETO = "human_veto"
 BRIEF_ADHERENCE_LOW = 0.45
@@ -77,10 +86,13 @@ def judge_system_prompt(
     context: dict[str, Any] | None = None,
 ) -> str:
     """System prompt for one judge call, with brand rules gated on the brief."""
-    path = Path(__file__).resolve().parent / "prompts" / "judge.md"
-    system = path.read_text(encoding="utf-8") if path.is_file() else (
-        "Judge video quality. Return JSON pass/score/issues/prompt_rewrite/param_hints/reason."
+    selected = resolve_judge_rubric(
+        user_request=user_request,
+        ltx_prompt=ltx_prompt,
+        shot=shot,
+        context=context,
     )
+    system = load_rubric_text(selected, kind="judge")
     if brand_required(*_brand_texts(user_request, ltx_prompt, shot)):
         system += _BRAND_RUBRIC
     else:
@@ -157,16 +169,25 @@ def _vision_review_safe(
     user_request: str,
     ltx_prompt: str = "",
     full_video: bool = False,
+    shot: dict[str, Any] | None = None,
+    context: dict[str, Any] | None = None,
 ) -> Optional[dict[str, Any]]:
     """Vision evaluator leg; None when disabled/unavailable/failed."""
     try:
         from master_agent.judge.vision import vision_notes, vision_review
 
+        rubric = resolve_judge_rubric(
+            user_request=user_request,
+            ltx_prompt=ltx_prompt,
+            shot=shot,
+            context=context,
+        )
         return vision_review(
             video_path,
             user_request=user_request,
             ltx_prompt=ltx_prompt,
             full_video=full_video,
+            rubric=rubric,
         )
     except Exception:
         return None
@@ -194,6 +215,9 @@ class JudgeResult:
     brief_adherence: float | None = None
     human_veto: bool = False
     album_lock: bool = False  # judge never aesthetic-locks; Admiral/human eyes do
+    rubric: str = ""
+    rubric_scores: dict[str, float] = field(default_factory=dict)
+    hard_fails: list[str] = field(default_factory=list)
     issues: list[str] = field(default_factory=list)
     prompt_rewrite: str = ""
     param_hints: dict[str, Any] = field(default_factory=dict)
@@ -209,6 +233,11 @@ class JudgeResult:
         d = asdict(self)
         d["pass"] = d.pop("pass_")
         d["HUMAN_VETO"] = d["decision"] == HUMAN_VETO
+        # Unset rubric keeps the historical payload keys.
+        if not d.get("rubric"):
+            d.pop("rubric", None)
+            d.pop("rubric_scores", None)
+            d.pop("hard_fails", None)
         return d
 
 
@@ -314,6 +343,108 @@ def decide_action(
     return "accept" if look >= thr * 0.9 else "rewrite"
 
 
+def _apply_selected_rubric(
+    *,
+    user_request: str,
+    ltx_prompt: str,
+    shot: dict[str, Any] | None,
+    context: dict[str, Any] | None,
+    decision: str,
+    look: float,
+    brief_adherence: float | None,
+    prompt_rewrite: str,
+    issues: list[str],
+    reason: str,
+    heuristic_issues: list[dict[str, Any]] | None,
+    llm: dict[str, Any] | None,
+    review: dict[str, Any] | None,
+    judge_retries: int,
+    max_rounds: int,
+) -> tuple[str, float, float | None, str, list[str], str, str, dict[str, float], list[str]]:
+    """Rainey1 gates. No-op (empty rubric fields) when the rubric is unset."""
+    selected = resolve_judge_rubric(
+        user_request=user_request,
+        ltx_prompt=ltx_prompt,
+        shot=shot,
+        context=context,
+    )
+    if selected != RAINEY1:
+        return (
+            decision,
+            look,
+            brief_adherence,
+            prompt_rewrite,
+            issues,
+            reason,
+            "",
+            {},
+            [],
+        )
+    scores = extract_rubric_scores(llm, review)
+    aggregated = aggregate_look(scores)
+    if aggregated is not None:
+        look = aggregated
+    texts: list[object] = []
+    structured: dict[str, Any] = {}
+    if isinstance(llm, dict):
+        texts.extend(llm.get("issues") or [])
+        texts.append(llm.get("reason") or "")
+        structured = dict(llm)
+    if isinstance(review, dict):
+        texts.extend(review.get("issues") or [])
+        for key in ("subject_lock", "temporal", "artifacts", "reason"):
+            if review.get(key):
+                texts.append(review.get(key))
+        if not structured:
+            structured = dict(review)
+        else:
+            if review.get("identity_morph") and not structured.get("identity_morph"):
+                structured["identity_morph"] = review.get("identity_morph")
+            extra_fails = review.get("hard_fails")
+            if extra_fails:
+                merged = list(structured.get("hard_fails") or [])
+                if isinstance(extra_fails, list):
+                    merged.extend(extra_fails)
+                else:
+                    merged.append(extra_fails)
+                structured["hard_fails"] = merged
+        if brief_adherence is None and review.get("brief_adherence") is not None:
+            try:
+                brief_adherence = float(review["brief_adherence"])
+            except (TypeError, ValueError):
+                brief_adherence = None
+    hard = collect_hard_fails(heuristic_issues, texts=texts, structured=structured)
+    decision, prompt_rewrite = apply_rainey1_gates(
+        decision=decision,
+        look=look,
+        brief_adherence=brief_adherence,
+        hard_fails=hard,
+        judge_retries=judge_retries,
+        max_rounds=max_rounds,
+        prompt_rewrite=prompt_rewrite,
+        ltx_prompt=ltx_prompt,
+    )
+    for code in hard:
+        label = f"hard_fail.{code}"
+        if label not in issues:
+            issues.append(label)
+    if hard:
+        extra = "hard_fail: " + ",".join(hard)
+        if extra not in (reason or ""):
+            reason = f"{reason} | {extra}" if reason else extra
+    return (
+        decision,
+        look,
+        brief_adherence,
+        prompt_rewrite,
+        issues,
+        reason,
+        selected,
+        scores,
+        hard,
+    )
+
+
 def _merge_quality_bar(
     *,
     decision: str,
@@ -392,6 +523,34 @@ def judge_segment(
         hints: dict[str, Any] = {}
         rewrite = ""
         reason = "Judge disabled; heuristic only"
+        brief_adherence = None
+        (
+            decision,
+            look,
+            brief_adherence,
+            rewrite,
+            issues,
+            reason,
+            rubric_name,
+            rubric_scores,
+            hard_fails,
+        ) = _apply_selected_rubric(
+            user_request=user_request,
+            ltx_prompt=ltx_prompt,
+            shot=shot,
+            context=context,
+            decision=decision,
+            look=look,
+            brief_adherence=brief_adherence,
+            prompt_rewrite=rewrite,
+            issues=issues,
+            reason=reason,
+            heuristic_issues=heuristic_issues,
+            llm=None,
+            review=None,
+            judge_retries=judge_retries,
+            max_rounds=max_r,
+        )
         decision, rewrite, hints, issues, reason, plan = _merge_quality_bar(
             decision=decision,
             rewrite=rewrite,
@@ -404,13 +563,17 @@ def judge_segment(
         )
         veto = decision == HUMAN_VETO
         return JudgeResult(
-            pass_=decision == "accept" and not critical and not qb_fails,
+            pass_=decision == "accept" and not critical and not qb_fails and not hard_fails,
             score=combined,
             combined_score=combined,
             look_score=look,
             health_score=health,
+            brief_adherence=brief_adherence,
             human_veto=veto,
             album_lock=False,
+            rubric=rubric_name,
+            rubric_scores=rubric_scores,
+            hard_fails=hard_fails,
             issues=issues,
             prompt_rewrite=rewrite,
             param_hints=hints,
@@ -424,7 +587,11 @@ def judge_segment(
 
     notes = frame_notes(video_path)
     review = _vision_review_safe(
-        video_path, user_request=user_request, ltx_prompt=ltx_prompt
+        video_path,
+        user_request=user_request,
+        ltx_prompt=ltx_prompt,
+        shot=shot,
+        context=context,
     )
     vision_score = review["score"] if review else None
     if review:
@@ -504,6 +671,33 @@ def judge_segment(
             brief_adherence=brief_adherence,
         )
 
+    (
+        decision,
+        look,
+        brief_adherence,
+        rewrite,
+        issues,
+        reason,
+        rubric_name,
+        rubric_scores,
+        hard_fails,
+    ) = _apply_selected_rubric(
+        user_request=user_request,
+        ltx_prompt=ltx_prompt,
+        shot=shot,
+        context=context,
+        decision=decision,
+        look=look,
+        brief_adherence=brief_adherence,
+        prompt_rewrite=rewrite,
+        issues=issues,
+        reason=reason,
+        heuristic_issues=heuristic_issues,
+        llm=llm,
+        review=review,
+        judge_retries=judge_retries,
+        max_rounds=max_r,
+    )
     decision, rewrite, hints, issues, reason, plan = _merge_quality_bar(
         decision=decision,
         rewrite=rewrite,
@@ -514,7 +708,7 @@ def judge_segment(
         context=context,
         ltx_prompt=ltx_prompt,
     )
-    passed = decision == "accept" and not qb_fails
+    passed = decision == "accept" and not qb_fails and not hard_fails
     veto = decision == HUMAN_VETO
     return JudgeResult(
         pass_=passed,
@@ -525,6 +719,9 @@ def judge_segment(
         brief_adherence=brief_adherence,
         human_veto=veto,
         album_lock=False,
+        rubric=rubric_name,
+        rubric_scores=rubric_scores,
+        hard_fails=hard_fails,
         issues=issues,
         prompt_rewrite=rewrite,
         param_hints=hints,
@@ -578,6 +775,7 @@ def judge_full_video(
         user_request=user_request,
         ltx_prompt=f"FULL VIDEO storyboard=[{board_summary}]",
         full_video=True,
+        context=context,
     )
     vision_score = review["score"] if review else None
     if review:
@@ -633,6 +831,45 @@ def judge_full_video(
         decision = HUMAN_VETO
         passed = False
     hints = dict(llm.get("param_hints") or {}) if llm else {}
+    file_issues: list[dict[str, Any]] = []
+    if resolve_judge_rubric(user_request=user_request, context=context) == RAINEY1:
+        from master_agent.judge.probe import MIN_FRAMES, TINY_FILE_BYTES, probe_video
+
+        info = probe_video(video_path) if video_path else {"exists": False, "size_bytes": 0}
+        if info.get("exists") and int(info.get("size_bytes") or 0) < TINY_FILE_BYTES:
+            file_issues.append({"code": "tiny_file", "severity": 1.0, "detail": "junk filesize"})
+        frames = info.get("frames") if isinstance(info, dict) else None
+        if isinstance(frames, int) and frames < MIN_FRAMES:
+            file_issues.append(
+                {"code": "too_few_frames", "severity": 1.0, "detail": f"{frames} frames"}
+            )
+    (
+        decision,
+        look,
+        brief_adherence,
+        rewrite,
+        issues,
+        reason,
+        rubric_name,
+        rubric_scores,
+        hard_fails,
+    ) = _apply_selected_rubric(
+        user_request=user_request,
+        ltx_prompt=f"FULL VIDEO storyboard=[{board_summary}]",
+        shot={"title": "full_video"},
+        context=context,
+        decision=decision,
+        look=look,
+        brief_adherence=brief_adherence,
+        prompt_rewrite=rewrite,
+        issues=issues,
+        reason=reason,
+        heuristic_issues=file_issues,
+        llm=llm,
+        review=review,
+        judge_retries=0,
+        max_rounds=1,
+    )
     qb = evaluate_quality_bar(context)
     decision, rewrite, hints, issues, reason, plan = _merge_quality_bar(
         decision=decision,
@@ -644,8 +881,10 @@ def judge_full_video(
         context=context,
         ltx_prompt=f"FULL VIDEO {user_request}",
     )
-    if qb.get("fails"):
+    if qb.get("fails") or hard_fails or decision != "accept":
         passed = False
+    else:
+        passed = True
     veto = decision == HUMAN_VETO
     return JudgeResult(
         pass_=passed,
@@ -656,6 +895,9 @@ def judge_full_video(
         brief_adherence=brief_adherence,
         human_veto=veto,
         album_lock=False,
+        rubric=rubric_name,
+        rubric_scores=rubric_scores,
+        hard_fails=hard_fails,
         issues=issues,
         prompt_rewrite=rewrite,
         param_hints=hints,
@@ -722,6 +964,13 @@ def _llm_judge(
         "heuristic_issues": heuristic_issues[:10],
         "frame_notes": frame_notes,
         "brand_required": brand_required(*_brand_texts(user_request, ltx_prompt, shot)),
+        "judge_rubric": resolve_judge_rubric(
+            user_request=user_request,
+            ltx_prompt=ltx_prompt,
+            shot=shot,
+            context=context,
+        )
+        or "",
     }
     if isinstance(context, dict) and context.get("duration_cap_s"):
         payload["duration_cap_s"] = context.get("duration_cap_s")

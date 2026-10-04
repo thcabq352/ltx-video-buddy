@@ -16,6 +16,9 @@ from typing import Any, Optional
 # Live Comfy often only registers WanVideoTeaCache / WanVideoTeaCacheKJ — a generic
 # LTX TeaCache class_type must still bypass cleanly.
 #
+# Tower Comfy Desk 2026-09-30 registered HeartMuLa_Generate and
+# HeartMuLa_Transcribe (benjiyaya/HeartMuLa_ComfyUI @ fdb53c4). Those are
+# payload nodes, not optional accelerators — do not add them here.
 # Tower dump 2026-09-13 (Comfy Desk, 4114 classes) confirmed exact YES:
 #   TeaCache, WanVideoTeaCache, LanPaint_KSampler, GetWarpedNoiseFromVideo (family;
 #   there is NO exact VideoNoiseWarp), MMAudioModelLoader / Sampler / VoCoder.

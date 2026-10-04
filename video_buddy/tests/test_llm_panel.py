@@ -56,22 +56,33 @@ class TestResolvePanel(unittest.TestCase):
 
     def test_local_first_presets(self):
         with patch("master_agent.llm_panel.provider_available", return_value=True), patch(
-            "master_agent.llm_panel.OLLAMA_MODEL", "qwen3-vl-heretic"
+            "master_agent.llm_panel.LLAMACPP_MODEL", "qwen3-vl-heretic"
         ):
             local = resolve_panel("default")
-            self.assertEqual(local.members, ["ollama:qwen3-vl-heretic"])
+            self.assertEqual(local.members, ["llamacpp:qwen3-vl-heretic"])
             self.assertEqual(resolve_panel("local").members, local.members)
 
             self.assertEqual(resolve_panel("grok").members, ["grok"])
 
             both = resolve_panel("both")
-            self.assertEqual(both.members, ["grok", "ollama:qwen3-vl-heretic"])
+            self.assertEqual(both.members, ["grok", "llamacpp:qwen3-vl-heretic"])
             self.assertEqual(resolve_panel("panel").members, both.members)
             self.assertEqual(resolve_panel("grok+local").members, both.members)
 
             self.assertEqual(
                 resolve_panel("grok+claude").members, ["grok", "claude"]
             )
+
+    def test_ollama_when_llamacpp_down(self):
+        def avail(spec: str) -> bool:
+            name = spec.split(":", 1)[0].strip().lower()
+            return name == "ollama"
+
+        with patch("master_agent.llm_panel.provider_available", side_effect=avail), patch(
+            "master_agent.llm_panel.OLLAMA_MODEL", "qwen3-vl-heretic"
+        ):
+            res = resolve_panel("default")
+        self.assertEqual(res.members, ["ollama:qwen3-vl-heretic"])
 
     def test_llamacpp_when_ollama_down(self):
         def avail(spec: str) -> bool:

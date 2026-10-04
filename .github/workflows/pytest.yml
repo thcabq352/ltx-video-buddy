@@ -32,10 +32,18 @@ jobs:
             video_buddy/tests/test_music_video.py \
             video_buddy/tests/test_clip_provenance.py \
             video_buddy/tests/test_judge_revise_fixes.py \
+            video_buddy/tests/test_rainey1_rubric.py \
             video_buddy/tests/test_h3_voice_sample.py \
             video_buddy/tests/test_h3_catalog.py \
             video_buddy/tests/test_cli_routing.py \
             video_buddy/tests/test_lipdub_segments.py \
             video_buddy/tests/test_lipdub_likeness.py \
             video_buddy/tests/test_a2a.py \
-            video_buddy/tests/test_knowledge_ingest.py
+            video_buddy/tests/test_knowledge_ingest.py \
+            video_buddy/tests/test_seedance_partner_pointers.py \
+            video_buddy/tests/test_heartmula.py \
+            video_buddy/tests/test_sulphur_workflows.py \
+            video_buddy/tests/test_managed_comfy_tower.py \
+            video_buddy/tests/test_model_paths.py \
+            video_buddy/tests/test_model_selector.py \
+            video_buddy/tests/test_model_selector_web.py

@@ -40,7 +40,7 @@ not `notes`).
 ## Path and secret hygiene
 
 Same rule as provenance sidecars
-([`video_buddy/docs/CLIP_PROVENANCE.md`](../video_buddy/docs/CLIP_PROVENANCE.md),
+([`docs/PROVENANCE.md`](../docs/PROVENANCE.md),
 [`docs/demo/H3-SHOWCASE-BMX-8s.provenance.json`](../docs/demo/H3-SHOWCASE-BMX-8s.provenance.json)):
 
 - Repo-relative paths and bare filenames only.

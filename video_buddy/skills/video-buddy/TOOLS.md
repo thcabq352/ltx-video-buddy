@@ -2,7 +2,7 @@
 
 Authoritative lists. Do not invent names. MCP tools come from
 `master_agent/mcp_server.py`. CLI commands come from
-`python -m master_agent` (`master_agent/__main__.py`).
+`python -m master_agent` (dispatcher `master_agent/__main__.py`, commands in `master_agent/cli/`).
 
 Cwd for CLI: the `video_buddy/` directory. Use the project venv.
 
@@ -36,7 +36,8 @@ is hours. Prefer ~900s MCP timeout.
 |---|---|
 | `about` | Studio identity card (`--json` ok). |
 | `curriculum` | Print L0→L5 + Part 2 overnight gate (`--json` ok). |
-| `setup` / `doctor` | Deps + LTX 2.5 / H3 scan. **Does not fetch weights.** `--fix` installs deps. `--fix-models` only after you agree. |
+| `inventory` | List discovered weights (path + role) before doctor. `--json` optional. Consent rules: repo `docs/WEIGHTS.md`. |
+| `setup` / `doctor` | Deps + LTX 2.5 / H3 / LTX 2.3 scan. Flags and the loader order: repo `docs/WEIGHTS.md`. `--fix` installs deps; Ollama pull skips models already in `ollama list` unless you pass `--yes`. |
 | `health` | Comfy `:8188` + GPU stats. |
 | `workflows` | Default catalog (includes `ltx25_*` and `h3_*`). `--vram` prints 16GB pack table. |
 | `capabilities` | Comfy pack vs Buddy wiring. `--offline` uses cache. |
@@ -44,7 +45,7 @@ is hours. Prefer ~900s MCP timeout.
 | `comfy run` | Prepare, lint, queue, copy into `outputs/`. `--prepare` stops before GPU. Modes: `generate` / `template` / `raw`. |
 | `comfy attach` | Apply previs `buddy.comfy.attach/v1` / WorkflowPatchPlan JSON. Default dry-run (patch + `/object_info`). `--submit` POSTs `/prompt`. |
 | `run "BRIEF"` | Director pipeline. `--dry-run` plan+lint only. `--self-improve-dry` closes judge→revise→rejudge (quality_bar a/c/d, no Comfy). `--attach RECIPE.json` patches a previs pack. `--no-interview` for unattended. `--variant` forces a catalog slug. Every clip writes `shot-N.buddy.json` + run-row ClipProvenance. |
-| `download-models` | List confirmed-missing slots. `--ltx25` / `--h3` / `--wan` / … Add `--yes` only after the ask. |
+| `download-models` | List confirmed-missing slots. `--ltx25` / `--h3` / `--heartmula` / `--wan` / … HeartMuLa codec id and consent flags: repo `docs/WEIGHTS.md`. |
 | `download-flux` | One-time Flux fp8 weights (~17GB). |
 | `validate` | One file or `--all`. `--offline` / `--strict` (illegal LTX frames = ERROR). |
 | `scan-models` | Scan `models/` → inventory. |
@@ -57,9 +58,11 @@ is hours. Prefer ~900s MCP timeout.
 | `soul list\|show\|set` | Standing values (`studio`, `play`). |
 | `brief "idea"` | Interview only. `--go` chains into generation. |
 | `fractal` | CPU Mandelbrot/Julia. No Comfy. |
-| `music "BRIEF" --audio FILE` | Beat-synced MV (ffmpeg mux). `--visual fractal` is CPU-only. |
+| `music "BRIEF" --audio FILE` | Beat-synced MV (ffmpeg mux). `--visual fractal` is CPU-only. `--audio` wins over `--heartmula-lyrics` / `--heartmula-tags`. |
 | `mv plan --audio FILE` | Write `buddy.mv.beat_plan/v1` (30 fps windows). |
-| `mv render --audio FILE --out out/MV-FIXED.mp4` | Comfy/LTX unique burns → Remotion stitch. `--dry-run` = no GPU. `--image` = I2V. |
+| `mv render --audio FILE --out out/MV-FIXED.mp4` | Comfy/LTX unique burns → Remotion stitch. `--dry-run` = no GPU. `--image` = I2V. Optional HeartMuLa track when `--audio` is omitted. |
+| `heartmula generate --lyrics TEXT --tags TAGS --out track.wav` | heartlib plan. `--dry-run` writes nothing and does not import heartlib. `--max-seq-len` / `--low-vram` size the backbone KV window (16GB cannot use heartlib's 8192). Wav save falls back to soundfile when torchaudio/torchcodec fails. |
+| `heartmula transcribe --audio FILE --out words.json` | `{w,s,e}` for lipdub. Skipped when `run --words` is set. |
 | `character create\|list` | CCC stage. `--train` chains LoRA. |
 | `lora setup\|train\|validate` | ai-toolkit Flux LoRA. |
 | `power-tune` | Dry-run power mode: patch + LLM graph ops + validate, no GPU. |
@@ -110,3 +113,13 @@ H3 speaks your line in the voice of your 2-12 s sample and animates the mouth to
 
 Still-working: `base`, `eros`, `directors`, `lipsync`, `wan22`, `flux`,
 `vb_movie_builder`, CCC / renderer / AI-VFX slugs. List: `python -m master_agent workflows`.
+
+## Pack C (hard local-only)
+
+Local-only is a hard requirement. Generate on `http://127.0.0.1:8188`.
+
+`seedance25_draft_t2v` / `seedance25_draft_i2v` / `seedance25_draft_r2v` are
+field-shape records of `api_seedance2_5_draft_{t2v,i2v,r2v}`. They are not
+executable. A Seedance brief fail-closes onto `ltx25_t2v_i2v`, `ltx25_flf2v`,
+or `ltx25_msr`. No comfy.org, BytePlus, ModelArk, or KIE call.
+Doc: repo `docs/FEATURES.md` (Pack C).

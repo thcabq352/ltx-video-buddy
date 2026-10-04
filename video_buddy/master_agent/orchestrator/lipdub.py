@@ -1453,7 +1453,6 @@ def lipdub_param_block(
     """Optional ``params.lipdub`` on ``buddy.clip.provenance/v1``.
 
     Same pattern as ``params.voice_sample``: extra key, same schema id.
-    Rust ``ClipProvenance`` does not have this field yet — see the PR note.
     """
     records = segments if segments is not None else [p.to_record() for p in plan.pieces]
     return {

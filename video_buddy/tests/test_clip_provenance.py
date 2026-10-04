@@ -1,6 +1,6 @@
 """ClipProvenance sidecar + run-row contract. No GPU, no live Comfy.
 
-Aligned to buddy.clip.provenance/v1 (Rust PR #7 shape).
+Aligned to buddy.clip.provenance/v1.
 Run: python -m pytest tests/test_clip_provenance.py -q
 """
 
