@@ -124,6 +124,54 @@ def _expected_template_path(variant: str) -> Path:
     return WORKFLOWS_DIR / f"{variant}.json"
 
 
+def ltx23_av_preset(variant: str) -> dict[str, str] | None:
+    """Unet name, positive prompt, and save prefix for the shared AV graph.
+
+    Only variants whose manifest names ``ltx23_av_presets.yaml`` have a row.
+    """
+    meta = variant_manifest(variant)
+    preset_name = meta.get("preset")
+    if not isinstance(preset_name, str) or not preset_name.strip():
+        return None
+    path = WORKFLOWS_DIR / preset_name.replace("\\", "/")
+    if not path.is_file():
+        return None
+    with path.open(encoding="utf-8") as f:
+        data = yaml.safe_load(f) or {}
+    row = data.get(variant) if isinstance(data, dict) else None
+    if not isinstance(row, dict):
+        return None
+    out: dict[str, str] = {}
+    for key in ("unet_name", "prompt", "filename_prefix"):
+        value = row.get(key)
+        if isinstance(value, str) and value:
+            out[key] = value
+    return out or None
+
+
+def _apply_ltx23_av_preset(workflow: dict[str, Any], variant: str) -> None:
+    """Write the three preset fields onto the shared chain. Other nodes stay."""
+    row = ltx23_av_preset(variant)
+    if not row:
+        return
+    unet = row.get("unet_name")
+    node1 = workflow.get("1")
+    if unet and isinstance(node1, dict) and node1.get("class_type") == "UnetLoaderGGUF":
+        node1.setdefault("inputs", {})["unet_name"] = unet
+    prompt = row.get("prompt")
+    node10 = workflow.get("10")
+    if prompt and isinstance(node10, dict):
+        inputs = node10.get("inputs") or {}
+        if isinstance(inputs.get("text"), str):
+            inputs["text"] = prompt
+    prefix = row.get("filename_prefix")
+    node90 = workflow.get("90")
+    if prefix and isinstance(node90, dict):
+        inputs = node90.get("inputs") or {}
+        if "filename_prefix" in inputs and isinstance(inputs.get("filename_prefix"), str):
+            inputs["filename_prefix"] = prefix
+
+
 def load_workflow_template(variant: str) -> dict[str, Any]:
     path: Path | None = None
     try:
@@ -145,7 +193,9 @@ def load_workflow_template(variant: str) -> dict[str, Any]:
     with path.open(encoding="utf-8") as f:
         data = json.load(f)
     if isinstance(data, dict) and "prompt" in data and isinstance(data["prompt"], dict):
-        return data["prompt"]
+        data = data["prompt"]
+    if isinstance(data, dict):
+        _apply_ltx23_av_preset(data, variant)
     return data
 
 
