@@ -9,6 +9,9 @@ failure note instead of restating them.
 Supersede by appending a new file that points at the old one. Leave
 the old file so the other machine can see what changed.
 
+Recorded:
+[`2026-09-29-blaze-vertical-ingredients-remake.md`](2026-09-29-blaze-vertical-ingredients-remake.md).
+
 ## EXAMPLE entry — not a recorded decision
 
 ```markdown

@@ -27,6 +27,10 @@ this graph won a cold-brew test.
   Do not borrow LTX `8n+1` lengths for this graph.
 ```
 
+Recorded playbook:
+[`2026-09-29-blaze-vertical-remake-ltx25-msr.md`](2026-09-29-blaze-vertical-remake-ltx25-msr.md)
+(concert + Clearwater pier remakes on `ltx25_msr`). No tower render is claimed there.
+
 Catalog ids and invoke lines:
 [`video_buddy/workflows/minimax-h3/README.md`](../../video_buddy/workflows/minimax-h3/README.md),
 [`video_buddy/workflows/ltx-2.5/README.md`](../../video_buddy/workflows/ltx-2.5/README.md).
