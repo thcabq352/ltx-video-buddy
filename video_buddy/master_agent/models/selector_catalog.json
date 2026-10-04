@@ -22,8 +22,8 @@
             "LTX-2.3-distilled-Q3_K_S.gguf",
             "sulphur_dev-Q3_K_S.gguf",
             "LTX-2.3-dev-Q4_K_S.gguf",
-            "ltx-2.3-22b-dev-fp8.safetensors",
-            "LTX2.3_DISTILLED-1.1_BAKED_LTX_10Eros_v14_r768.safetensors"
+            "10Eros_v1.5-Q4_K_M.gguf",
+            "ltx-2.3-22b-dev-fp8.safetensors"
           ],
           "size_bytes": null,
           "required": true,
@@ -33,7 +33,7 @@
           "downloadable": false,
           "weight_key": null,
           "local_only": false,
-          "note": "LTX 2.3 diffusion. A local GGUF alias, the dev fp8 checkpoint, or the EROS all-in-one counts as already on disk. Byte size is not attested here, so this row is not fetched.",
+          "note": "LTX 2.3 diffusion. A local GGUF alias, the dev fp8 checkpoint, or 10Eros_v1.5-Q4_K_M.gguf counts as already on disk. Byte size is not attested here, so this row is not fetched.",
           "size_label": "size not attested",
           "required_label": "required for generation",
           "locked": true
@@ -466,12 +466,12 @@
         },
         {
           "id": "local.eros",
-          "label": "EROS checkpoint",
-          "filename": "LTX2.3_DISTILLED-1.1_BAKED_LTX_10Eros_v14_r768.safetensors",
+          "label": "10Eros v1.5 GGUF",
+          "filename": "10Eros_v1.5-Q4_K_M.gguf",
           "accepts": [
-            "LTX2.3_DISTILLED-1.1_BAKED_LTX_10Eros_v14_r768.safetensors"
+            "10Eros_v1.5-Q4_K_M.gguf"
           ],
-          "size_bytes": null,
+          "size_bytes": 14296161888,
           "required": false,
           "package": "local_eros",
           "version": null,
@@ -479,8 +479,8 @@
           "downloadable": false,
           "weight_key": null,
           "local_only": true,
-          "note": "Local all-in-one checkpoint. Buddy does not download it.",
-          "size_label": "size not attested",
+          "note": "Local diffusion GGUF 10Eros_v1.5-Q4_K_M.gguf (14,296,161,888 bytes). Buddy does not download it.",
+          "size_label": "14.3 GB",
           "required_label": "",
           "locked": false
         }

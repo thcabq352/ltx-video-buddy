@@ -29,14 +29,16 @@ from master_agent.config import WORKFLOW_FILES, WORKFLOWS_DIR
 from master_agent.models.vram_policy import workflow_row
 from master_agent.orchestrator.director import rule_based_variant
 
-# Tower bytes. A change here means the committed graph is no longer the source.
+# Sulphur tower bytes. A change here means the committed Sulphur graph moved.
 _SOURCE_SHA256 = {
     "sulphur/ltx23_i2v_base.json": "571c572d7d377a4c4c102331731ac93862e60cb4b53fd121d554e75adeeafb08",
     "sulphur/ltx23_i2v_distilled.json": "0af6043519b25037edc46978bbf429dffaf23d46ac3496731fc795ab97c5e0ef",
     "sulphur/ltx23_t2v_base.json": "da499a27938b30d8c5814ac66d30f91d66fbe75687533fb0d625ae0f34c8856e",
     "sulphur/ltx23_t2v_distilled.json": "c17a69296352ca626223f75388b981184cef2a3a9ef67d70c71a716709aa7152",
 }
-_EROS_SHA256 = "868c3d110462b6d3be24f28030d410b7ff4ed7ef57b4f77fffdfd2b91442c545"
+# eros_t2v_i2v.json after the 10Eros v1.5 UnetLoaderGGUF rewire.
+_EROS_SHA256 = "16698e9bfc4592cf38ce43d145b551c2cf1506459da00c1212c491b6169be4d8"
+_EROS_GGUF = "10Eros_v1.5-Q4_K_M.gguf"
 
 
 @pytest.fixture(autouse=True)
@@ -84,9 +86,12 @@ def test_tower_source_graphs_are_unchanged_and_nonempty():
         assert _sha256(path) == digest
 
 
-def test_eros_workflow_is_unchanged():
+def test_eros_workflow_loads_v15_gguf():
     path = WORKFLOWS_DIR / "eros_t2v_i2v.json"
     assert WORKFLOW_FILES["eros"] == "eros_t2v_i2v.json"
+    data = json.loads(path.read_text(encoding="utf-8"))
+    assert data["1"]["class_type"] == "UnetLoaderGGUF"
+    assert data["1"]["inputs"] == {"unet_name": _EROS_GGUF}
     assert _sha256(path) == _EROS_SHA256
 
 
