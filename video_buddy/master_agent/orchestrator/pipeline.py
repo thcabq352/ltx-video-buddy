@@ -376,6 +376,45 @@ def _short_talking_schedule(duration_s: float):
     return TalkingSchedule(durations=[used], audio_starts=[0.0])
 
 
+def _apply_rainey1_plan(
+    request: str,
+    *,
+    variant: Optional[str],
+    width: int,
+    height: int,
+    latent_frames: Optional[int],
+    negative_prompt: Optional[str],
+    announce: bool = False,
+) -> tuple[str, int, int, Optional[int], Optional[str], Optional[str]]:
+    """Apply rainey1 recipe gaps. Returns the possibly updated run fields."""
+    from master_agent.orchestrator.director_presets import fill_rainey1, format_preset_line
+
+    filled = fill_rainey1(
+        request,
+        variant=variant,
+        width=width,
+        height=height,
+        frames=latent_frames,
+        negative=negative_prompt,
+    )
+    if filled is None:
+        return request, width, height, latent_frames, negative_prompt, variant
+    request = filled.prompt
+    if not variant:
+        variant = filled.variant
+    if filled.apply_geometry:
+        width = filled.width
+        height = filled.height
+        latent_frames = filled.frames
+    if not (negative_prompt or "").strip():
+        negative_prompt = filled.negative
+    if announce and filled.apply_geometry:
+        print(format_preset_line(filled))
+        if filled.delivery:
+            print(f"preset-delivery: {filled.delivery}")
+    return request, width, height, latent_frames, negative_prompt, variant
+
+
 def run_pipeline(
     request: str,
     *,
@@ -640,7 +679,7 @@ def run_pipeline(
                 0,
             )
         short_prompt = None
-        short_negative = None
+        short_negative = negative_prompt
         short_i2v = None
         if tripod and lip_plan is not None and not lip_plan.segmented:
             from master_agent.orchestrator.lipdub import tripod_conditioning
@@ -650,6 +689,7 @@ def run_pipeline(
             request,
             prompt=short_prompt,
             negative_prompt=short_negative,
+            frames=latent_frames,
             i2v_strength=short_i2v,
             variant=variant,
             duration_s=segs[0],
@@ -769,6 +809,8 @@ def run_pipeline(
         return orch.run(
             request,
             prompt=card.ltx_prompt or request,
+            negative_prompt=negative_prompt,
+            frames=latent_frames,
             shot=card.to_dict(),
             variant=variant,
             duration_s=segs[i],
@@ -1320,7 +1362,7 @@ def dry_run_pipeline(
         if chain is not None and i < len(chain.clips) and chain.clips[i].use_last_frame:
             clip_image = f"chain_last_{i}.png"
         clip_prompt = card.ltx_prompt or request
-        clip_negative = ""
+        clip_negative = negative_prompt or ""
         clip_i2v = None
         if tripod and lip_plan is not None and not lip_plan.segmented:
             from master_agent.orchestrator.lipdub import tripod_conditioning
@@ -1342,15 +1384,16 @@ def dry_run_pipeline(
                 audio_start_s=audio_starts[i] if i < len(audio_starts) else 0.0,
                 spoken_line=spoken_line,
                 i2v_strength=clip_i2v,
+                frames=latent_frames,
                 inoutpaint=inoutpaint,
             )
         except Exception as e:
             print(f"FAIL  segment {i + 1} patch: {e}")
             failures += 1
             continue
-        frames = meta.get("frames")
+        patched_frames = meta.get("frames")
         print(
-            f"segment {i + 1}/{len(cards)} duration={segs[i]}s frames={frames} "
+            f"segment {i + 1}/{len(cards)} duration={segs[i]}s frames={patched_frames} "
             f"image_name={clip_image!r} use_last_frame="
             f"{bool(chain and i < len(chain.clips) and chain.clips[i].use_last_frame)}"
         )

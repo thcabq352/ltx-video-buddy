@@ -65,6 +65,12 @@ answers whether the tower can fulfill the contract right now. Do not
 prefer a “cheaper” or “safer VRAM” graph. If the user names Movie Builder,
 CCC ADV, or AI-VFX 1.0, pick that slug.
 
+## Director preset — rainey1
+If the brief contains the cue `rainey1`, pick `base` (the 16GB distilled
+10Eros pin). Do not pick `wan22` just because the brief also says
+photoreal. Shot length, size, and the anti-slop negative come from the
+rainey1 recipe pack, not from this router. There is no Rainey face asset.
+
 ## Rules
 - Pick exactly one of the allowed variants (the payload lists them).
 - When unsure, prefer `base`. Only choose `directors` for genuinely
