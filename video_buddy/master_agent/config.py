@@ -392,14 +392,18 @@ POLL_INTERVAL_S = float(os.getenv("POLL_INTERVAL_S", "2"))
 JOB_TIMEOUT_S = float(os.getenv("JOB_TIMEOUT_S", "1800"))
 COMFYUI_VRAM_FLAG = os.getenv("COMFYUI_VRAM_FLAG", "--normalvram")
 
-# Expected model filenames (16GB tier) — used for preflight checks.
-# CheckpointLoaderSimple still needs an all-in-one .safetensors for VAE and
-# text projection on base / eros / directors. The MODEL slot prefers a
-# compatible GGUF when one is on disk (QuantStack Q4_K_S, then Sulphur Q3_K_S).
-# EROS is that checkpoint fallback, not the diffusion pick.
-DEFAULT_ALL_IN_ONE_CKPT = (
-    "LTX2.3_DISTILLED-1.1_BAKED_LTX_10Eros_v14_r768.safetensors"
-)
+# 10Eros v1.5 diffusion GGUF. On the tower it lives at
+# video_buddy/models/diffusion_models/10Eros_v1.5-Q4_K_M.gguf
+# (extra_model_paths.yaml base is video_buddy/models; diffusion_models and
+# unet both map to that folder). 14,296,161,888 bytes. There is no v1.6.
+# Not a download pack — Buddy does not fetch this file.
+EROS_GGUF = "10Eros_v1.5-Q4_K_M.gguf"
+EROS_GGUF_BYTES = 14_296_161_888
+# Historical name. The value is the diffusion GGUF above, loaded by
+# UnetLoaderGGUF. It is not a safetensors all-in-one. Gemma, the text
+# projection checkpoint, the video VAE, and the audio VAE stay on their
+# own split files.
+DEFAULT_ALL_IN_ONE_CKPT = EROS_GGUF
 # Optional upgrade target (full quality base, ~40GB+)
 OFFICIAL_DEV_CKPT = "ltx-2.3-22b-dev.safetensors"
 

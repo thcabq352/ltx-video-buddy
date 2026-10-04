@@ -7,7 +7,7 @@
 
 base:
   file: base_t2v_i2v.json
-  description: Simplified LTX-2.3 single-pass T2V (AV joint)
+  description: Simplified LTX-2.3 single-pass T2V (AV joint, 10Eros v1.5 GGUF)
   vram_class: safe
   vram_peak_gb: 9.5
   fields:
@@ -34,7 +34,7 @@ base:
       input: steps
     checkpoint:
       node_id: "1"
-      input: ckpt_name
+      input: unet_name
     lora:
       node_id: "4"
       input: lora_name
@@ -44,7 +44,7 @@ base:
 
 eros:
   file: eros_t2v_i2v.json
-  description: Same simplified graph with EROS baked checkpoint
+  description: Same simplified graph; diffusion is 10Eros_v1.5-Q4_K_M.gguf via UnetLoaderGGUF
   vram_class: safe
   vram_peak_gb: 11.0
   fields:
@@ -71,14 +71,14 @@ eros:
       input: steps
     checkpoint:
       node_id: "1"
-      input: ckpt_name
+      input: unet_name
     filename_prefix:
       node_id: "90"
       input: filename_prefix
 
 directors:
   file: directors.json
-  description: Simplified graph used for multi-segment director style
+  description: Director multi-segment graph; diffusion is 10Eros_v1.5-Q4_K_M.gguf via UnetLoaderGGUF
   vram_class: tight
   vram_peak_gb: 13.5
   fields:
@@ -105,7 +105,7 @@ directors:
       input: steps
     checkpoint:
       node_id: "1"
-      input: ckpt_name
+      input: unet_name
     lora:
       node_id: "4"
       input: lora_name

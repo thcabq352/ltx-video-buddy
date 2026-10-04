@@ -71,9 +71,9 @@ When several transformers for one slot are already on disk, any VRAM:
 
 1. **GGUF Q4** when a compatible file is on disk (`UnetLoaderGGUF`). Order inside that bucket: QuantStack Q4_K_S, then Sulphur `sulphur_dev-Q3_K_S.gguf`, then the other recognized GGUF aliases (including Q5). A machine that already has GGUF Q4 and NVFP4 loads GGUF Q4. `FORCE_LOADER` is not required for that win.
 2. Else **NVFP4**, only if `VRAM_GB` ≥ 14.
-3. Else **int8 / fp8**, then official bf16 or the EROS all-in-one.
+3. Else **int8 / fp8**, then official bf16.
 
-`VRAM_GB` comes from the environment, else `nvidia-smi`, else 16. Below 14GB, doctor does not suggest NVFP4 or bf16. A heavy file that is already on disk still counts as present, so Buddy does not download a second copy. Leave `FORCE_LOADER` empty when the only local transformer is bf16 or EROS. Those files still load.
+`VRAM_GB` comes from the environment, else `nvidia-smi`, else 16. Below 14GB, doctor does not suggest NVFP4 or bf16. A heavy file that is already on disk still counts as present, so Buddy does not download a second copy. Leave `FORCE_LOADER` empty when the only local transformer is bf16. That file still loads. LTX 2.3 `base` / `eros` / `directors` keep `10Eros_v1.5-Q4_K_M.gguf` on `UnetLoaderGGUF` when that file is on disk (quantized ops). Gemma, the text projection, the video VAE, and the audio VAE stay on their split files. There is no fp8 cast on the audio VAE. When that GGUF is absent, QuantStack Q4_K_S then Sulphur Q3 fill the MODEL slot. Buddy does not download the 10Eros file.
 
 Research JSON may still say `ckpt_name: ltx-2.5-22b-distilled.safetensors` on `CheckpointLoaderSimple`. Buddy remaps that stub to `UNETLoader` / `UnetLoaderGGUF` and `LTXAVTextEncoderLoader`.
 
@@ -110,7 +110,7 @@ Any one transformer name fills the slot. Official bf16 Gemma is not required whe
 | Duration head | `ltx-2.5-duration-head-bf16.safetensors` (optional) |
 | Spatial upscaler | `ltx-2.5-latent-spatial-upscaler-x2-bf16-1.0.safetensors` |
 | IC-LoRA / MSR | Ingredients LoRA, pixel-spatial IC-LoRA, stubs `ltx-2.5-ic-lora.safetensors` / `ltx-2.5-msr.safetensors` |
-| LTX 2.3 diffusion | QuantStack `LTX-2.3-*-Q4_K_S.gguf`, Sulphur Q3, other recognized Q3/Q4/Q5 names. fp8 and the EROS checkpoint are the fallback and are not a new download pack. EROS stays for VAE and text projection |
+| LTX 2.3 diffusion | `10Eros_v1.5-Q4_K_M.gguf` on `UnetLoaderGGUF` when that file is in `diffusion_models/` (14,296,161,888 bytes; not downloaded). Otherwise QuantStack `LTX-2.3-*-Q4_K_S.gguf`, then Sulphur Q3. Gemma, text projection (`ltx-2.3-22b-dev-fp8.safetensors`), video VAE `taeltx2_3.safetensors`, and audio VAE `LTX23_audio_vae_bf16.safetensors` stay wired. No fp8 cast on the audio VAE |
 | H3 DiT | `minimax_h3_fl2va_pruned-Q4_K.gguf`, `minimax_h3_ref2va_pruned-Q4_K.gguf`, then NVFP4, then int8 |
 | H3 text encoder | Comfy Qwen3-VL first: `qwen3vl_32b_minimax_h3_nvfp4_awq.safetensors`, else int8 / int4. `qwen3vl_32b_minimax_h3-Q4_K_M.gguf` is last resort (~17GB) and is not the default |
 | H3 VAEs | `minimax_h3_video_vae_fp16.safetensors`, `minimax_h3_audio_vae_fp32.safetensors` |
@@ -127,7 +127,7 @@ Legacy Mickmumpitz / LTX 2.3 filenames still used by older graphs are installed 
 
 | Family | Default slug | When that pack is the one on disk | Notes |
 |---|---|---|---|
-| LTX 2.3 | `base` / `eros` / `directors` | Quantized GGUF, else EROS/fp8 | ~9.5–13.5GB |
+| LTX 2.3 | `base` / `eros` / `directors` | `10Eros_v1.5-Q4_K_M.gguf` when on disk, else QuantStack then Sulphur | ~9.5–13.5GB |
 | LTX 2.5 | `ltx25_t2v_i2v` | Q4_K_M file | ~12.5GB. Two-stage is the quality path |
 | MiniMax H3 | `h3_t2v` | Q4_K DiT | ~13GB. ≤12s / 0.8MP / 4 steps / CFG 1.0 |
 | Wan 2.2 | `wan22` | Q4_K_S or fp8 + Lightx2v | ~13.2GB. Sequential high/low. No dual bf16 |
@@ -161,6 +161,6 @@ Lightx2v / turbo LoRAs apply when the file is present. LTX TeaCache is inject-wh
 
 `models manifest` / `models select` is the LTX 2.3 vs 2.5 checklist. It does not run `comfy install` or `comfy update`. `--scan-only` prints the running total, an ETA (default 50 Mbit/s, `--mbps` overrides), and free space. It does not fetch and does not write `state/model_selector.json`. A fetch still needs `--yes` after the disk check. Files already on disk are skipped.
 
-`--soundtrack` is Enable Soundtrack Studio. It calls the existing `--heartmula` consent path. Switching 2.3 and 2.5 asks whether to keep or wipe the previous pack under `MODELS_DIR` (`--keep` / `--wipe` when non-interactive). Sulphur GGUF, the Sulphur LoRA, and the EROS checkpoint are local detect flags. The selector does not download them. LTX 2.3 rows whose size is not attested in this repo are listed and are not fetched.
+`--soundtrack` is Enable Soundtrack Studio. It calls the existing `--heartmula` consent path. Switching 2.3 and 2.5 asks whether to keep or wipe the previous pack under `MODELS_DIR` (`--keep` / `--wipe` when non-interactive). Sulphur GGUF, the Sulphur LoRA, and `10Eros_v1.5-Q4_K_M.gguf` are local detect flags. The selector does not download them. LTX 2.3 rows whose size is not attested in this repo are listed and are not fetched.
 
 The studio Models tab calls the same functions in `master_agent/models/selector.py`. Download stays idle until the agreement checkbox is checked.

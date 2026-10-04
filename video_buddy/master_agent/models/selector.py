@@ -25,7 +25,7 @@ from dataclasses import asdict, dataclass, field
 from pathlib import Path
 from typing import Any, Iterable, Sequence
 
-from master_agent.config import DEFAULT_ALL_IN_ONE_CKPT
+from master_agent.config import DEFAULT_ALL_IN_ONE_CKPT, EROS_GGUF_BYTES
 from master_agent.heartmula.doctor import HUB_USED_STORAGE_BYTES
 from master_agent.models.vram_policy import LTX23_DISTILLED_GGUF
 from master_agent.models.weights import (
@@ -246,7 +246,7 @@ def video_models(version: str) -> list[CatalogModel]:
                 downloadable=False,
                 note=(
                     "LTX 2.3 diffusion. A local GGUF alias, the dev fp8 checkpoint, "
-                    "or the EROS all-in-one counts as already on disk. "
+                    "or 10Eros_v1.5-Q4_K_M.gguf counts as already on disk. "
                     "Byte size is not attested here, so this row is not fetched."
                 ),
             ),
@@ -403,17 +403,20 @@ def local_models() -> list[CatalogModel]:
         ),
         CatalogModel(
             id="local.eros",
-            label="EROS checkpoint",
+            label="10Eros v1.5 GGUF",
             filename=DEFAULT_ALL_IN_ONE_CKPT,
             accepts=(DEFAULT_ALL_IN_ONE_CKPT,),
-            size_bytes=None,
+            size_bytes=EROS_GGUF_BYTES,
             required=False,
             package="local_eros",
             version=None,
             capability="local_studio",
             downloadable=False,
             local_only=True,
-            note="Local all-in-one checkpoint. Buddy does not download it.",
+            note=(
+                "Local diffusion GGUF 10Eros_v1.5-Q4_K_M.gguf "
+                "(14,296,161,888 bytes). Buddy does not download it."
+            ),
         ),
     ]
 
@@ -602,8 +605,8 @@ def _row_present(model: CatalogModel, roots: Sequence[Path]) -> tuple[bool, str]
     if model.id == "local.eros":
         found = _find_name(model.filename, roots)
         if found is not None:
-            return True, "EROS checkpoint on disk"
-        return False, "EROS checkpoint not on disk"
+            return True, "10Eros GGUF on disk"
+        return False, "10Eros GGUF not on disk"
     if model.capability == "soundtrack":
         return _soundtrack_present(model)
     if model.weight_key:

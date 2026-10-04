@@ -27,7 +27,8 @@ from master_agent.config import DEFAULT_ALL_IN_ONE_CKPT, MODEL_FILES
 
 DEV_FP8 = "ltx-2.3-22b-dev-fp8.safetensors"
 TRUNCATED_DISTILLED = "ltx-2.3-22b-distilled-fp8.safetensors"
-BAKE_10EROS = "LTX2.3_DISTILLED-1.1_BAKED_LTX_10Eros_v14_r768.safetensors"
+BAKE_10EROS = "10Eros_v1.5-Q4_K_M.gguf"
+OLD_BAKE = "LTX2.3_DISTILLED-1.1_BAKED_LTX_10Eros_v14_r768.safetensors"
 DISTILLED_LORA = "ltx-2.3-22b-distilled-lora-384-1.1.safetensors"
 RENDER_VARIANTS = (
     "ltx23_lipsync_v08",
@@ -69,6 +70,7 @@ def _lora_names(workflow: dict) -> list[str]:
 def test_render_variants_have_their_own_checkpoint_entry():
     assert MODEL_FILES["base"]["checkpoint"] == DEFAULT_ALL_IN_ONE_CKPT
     assert DEFAULT_ALL_IN_ONE_CKPT == BAKE_10EROS
+    assert DEFAULT_ALL_IN_ONE_CKPT != OLD_BAKE
     for variant in RENDER_VARIANTS:
         files = MODEL_FILES[variant]
         assert files.get("checkpoint") == DEV_FP8
@@ -126,8 +128,10 @@ def test_patched_node_4826_uses_dev_fp8(variant: str):
     assert set(ckpts) == {DEV_FP8}
     assert TRUNCATED_DISTILLED not in ckpts
     assert BAKE_10EROS not in ckpts
+    assert OLD_BAKE not in ckpts
     assert DISTILLED_LORA in _lora_names(workflow)
     assert BAKE_10EROS not in _lora_names(workflow)
+    assert OLD_BAKE not in _lora_names(workflow)
 
 
 def _teacache_object_info() -> dict:
