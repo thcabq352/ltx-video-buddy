@@ -215,3 +215,26 @@ def test_dry_run_uses_recipe_and_does_not_queue(monkeypatch, capsys):
     assert "variant: base" in out
     assert "nothing queued" in out
     assert rc == 0
+
+
+def test_preset_flag_pins_rainey1_without_the_keyword(monkeypatch, capsys):
+    def _queue(self, workflow):
+        raise AssertionError("dry-run queued a prompt")
+
+    def _object_info(self, cache_path=OBJECT_INFO_CACHE, prefer_live=True):
+        return json.loads(OBJECT_INFO_CACHE.read_text(encoding="utf-8")), "cache"
+
+    monkeypatch.setattr("master_agent.comfy.client.ComfyClient.queue_prompt", _queue)
+    monkeypatch.setattr("master_agent.comfy.client.ComfyClient.load_object_info", _object_info)
+
+    rc = cmd_run(
+        _run_ns(
+            request="photoreal locked character at a cluttered desk",
+            preset="rainey1",
+        )
+    )
+    out = capsys.readouterr().out
+    assert rc == 0
+    assert "preset: rainey1_lock_open" in out
+    assert "variant=base" in out
+    assert "nothing queued" in out

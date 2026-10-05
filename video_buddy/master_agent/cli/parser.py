@@ -119,6 +119,16 @@ def main(argv: list[str] | None = None) -> int:
         ),
     )
     p.add_argument(
+        "--preset",
+        choices=["rainey1"],
+        default=None,
+        help=(
+            "director recipe pack. rainey1 pins base and fills the prompt, "
+            "negative, frames, and size from the recipe (a brief that already "
+            "says rainey1 does the same without this flag)"
+        ),
+    )
+    p.add_argument(
         "--duration",
         type=float,
         default=5.0,
@@ -571,6 +581,14 @@ def main(argv: list[str] | None = None) -> int:
     p.add_argument("--variant", default="base")
     p.add_argument("--prompt", default="")
     p.add_argument("--negative", dest="negative_prompt", default=None)
+    p.add_argument(
+        "--scott",
+        help="Scott identity still for a blaze remake (uploaded before queue, not committed)",
+    )
+    p.add_argument(
+        "--blaze",
+        help="Blaze identity still for a blaze remake (uploaded before queue, not committed)",
+    )
     p.add_argument("--video", help="source video; uploaded before queue")
     p.add_argument("--mask", help="inpaint mask (white=regenerate); uploaded before queue")
     p.add_argument("--aspect", help="outpaint target aspect, for example 9:16")
@@ -595,7 +613,10 @@ def main(argv: list[str] | None = None) -> int:
     )
     p.add_argument(
         "--recipe",
-        help="attach: previs buddy.comfy.attach/v1 / WorkflowPatchPlan JSON",
+        help=(
+            "comfy run: blaze remake id (blaze-concert, blaze-pier). "
+            "comfy attach: previs buddy.comfy.attach/v1 / WorkflowPatchPlan JSON"
+        ),
     )
     p.add_argument(
         "--submit",
