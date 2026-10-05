@@ -31,6 +31,24 @@ def cmd_run(args: argparse.Namespace) -> int:
         args.duration = parsed_duration
         brief_applied = True
 
+    from master_agent.orchestrator.director_presets import (
+        apply_rainey1_namespace,
+        format_preset_line,
+        mentions_rainey1,
+        reapply_rainey1_prompt,
+    )
+
+    if getattr(args, "preset", None) == "rainey1" and not mentions_rainey1(
+        getattr(args, "request", "")
+    ):
+        args.request = f"rainey1 {args.request}".strip()
+
+    rainey_plan = apply_rainey1_namespace(args)
+    if rainey_plan is not None:
+        print(format_preset_line(rainey_plan))
+        if rainey_plan.delivery:
+            print(f"preset-delivery: {rainey_plan.delivery}")
+
     from master_agent.comfy.partner_pointers import route_pack_c
 
     routed, refusal = route_pack_c(getattr(args, "request", ""), getattr(args, "variant", None))
@@ -214,6 +232,7 @@ def cmd_run(args: argparse.Namespace) -> int:
         from master_agent.orchestrator.machine import Orchestrator
 
         args.request = _maybe_interview(args.request, no_interview=args.no_interview)
+        reapply_rainey1_prompt(args)
         image_name = Path(args.image).name if getattr(args, "image", None) else None
         audio_name = Path(args.audio).name if getattr(args, "audio", None) else None
         st = Orchestrator().run(
@@ -237,6 +256,8 @@ def cmd_run(args: argparse.Namespace) -> int:
             max_judge_rounds=args.max_judge_rounds or MAX_JUDGE_ROUNDS,
             attach_recipe=attach_recipe,
             dry_run=True,
+            negative_prompt=getattr(args, "negative_prompt", None),
+            frames=getattr(args, "frames", None),
             control_pack_present=bool(attach_loaded and attach_loaded.control_pack_present),
             previs_source=(attach_loaded.previs_source if attach_loaded else ""),
         )
@@ -300,6 +321,7 @@ def cmd_run(args: argparse.Namespace) -> int:
     client = comfy_client()
     if args.dry_run:
         args.request = _maybe_interview(args.request, no_interview=args.no_interview)
+        reapply_rainey1_prompt(args)
         return dry_run_pipeline(
             args.request,
             variant=args.variant,
@@ -333,6 +355,8 @@ def cmd_run(args: argparse.Namespace) -> int:
             pause_reset_strength=getattr(args, "pause_reset_strength", None),
             pause_reset_min_s=getattr(args, "pause_reset_min_s", None),
             inoutpaint=inoutpaint,
+            latent_frames=getattr(args, "frames", None),
+            negative_prompt=getattr(args, "negative_prompt", None),
         )
 
     if not client.is_up():
@@ -340,6 +364,7 @@ def cmd_run(args: argparse.Namespace) -> int:
         return 1
 
     args.request = _maybe_interview(args.request, no_interview=args.no_interview)
+    reapply_rainey1_prompt(args)
 
     # Auto-route music videos to the beat-synced pipeline (explicit --variant wins)
     if (
@@ -448,6 +473,8 @@ def cmd_run(args: argparse.Namespace) -> int:
         attach_recipe=attach_recipe,
         client=client,
         inoutpaint=inoutpaint,
+        latent_frames=getattr(args, "frames", None),
+        negative_prompt=getattr(args, "negative_prompt", None),
     )
     print()
     if result.status in ("done", "done_with_warnings"):

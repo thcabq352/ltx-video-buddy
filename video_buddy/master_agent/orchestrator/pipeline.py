@@ -460,11 +460,21 @@ def run_pipeline(
     pause_reset_min_s: Optional[float] = None,
     inoutpaint: Optional[dict[str, Any]] = None,
     resume: Optional[dict[str, Any]] = None,
+    latent_frames: Optional[int] = None,
+    negative_prompt: Optional[str] = None,
 ) -> PipelineResult:
     stored_id = ""
     if isinstance(resume, dict):
         stored_id = str(resume.get("run_id") or "")
     run_id = stored_id or uuid.uuid4().hex[:12]
+    request, width, height, latent_frames, negative_prompt, variant = _apply_rainey1_plan(
+        request,
+        variant=variant,
+        width=width,
+        height=height,
+        latent_frames=latent_frames,
+        negative_prompt=negative_prompt,
+    )
     result = PipelineResult(run_id, request=request)
     result.heartmula = dict(heartmula or {})
     from master_agent.comfy.partner_pointers import route_pack_c
@@ -1168,11 +1178,22 @@ def dry_run_pipeline(
     pause_reset_min_s: Optional[float] = None,
     inoutpaint: Optional[dict[str, Any]] = None,
     heartmula: Optional[dict[str, Any]] = None,
+    latent_frames: Optional[int] = None,
+    negative_prompt: Optional[str] = None,
 ) -> int:
     """Storyboard + patch + validate every segment without queueing. CLI exit code."""
     if heartmula:
         source = heartmula.get("transcribe_source") or "heartmula"
         print(f"heartmula: {source} (dry-run plan; no GPU)")
+    request, width, height, latent_frames, negative_prompt, variant = _apply_rainey1_plan(
+        request,
+        variant=variant,
+        width=width,
+        height=height,
+        latent_frames=latent_frames,
+        negative_prompt=negative_prompt,
+        announce=latent_frames is None,
+    )
     from master_agent.comfy.partner_pointers import route_pack_c
 
     variant, refusal = route_pack_c(request, variant)

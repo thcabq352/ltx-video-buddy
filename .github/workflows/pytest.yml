@@ -22,6 +22,8 @@ jobs:
           # accelerator bypass, music video, clip provenance.
           PYTHONPATH=video_buddy pytest -q \
             video_buddy/tests/test_ltx25_catalog.py \
+            video_buddy/tests/test_prompt_polarity.py \
+            video_buddy/tests/test_blaze_remake.py \
             video_buddy/tests/test_brain_hands.py \
             video_buddy/tests/test_loader_names.py \
             video_buddy/tests/test_ltx_frames.py \

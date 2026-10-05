@@ -122,15 +122,30 @@ def cmd_download_models(args: argparse.Namespace) -> int:
     return 0
 
 
+def _print_director_recipes(recipes: list[dict]) -> None:
+    if not recipes:
+        return
+    print(f"{len(recipes)} director recipe(s):")
+    for row in recipes:
+        delivery = " crop" if row.get("delivery") else ""
+        print(
+            f"  {row['id']:<28} variant={row['variant']:<6} "
+            f"{row['width']}x{row['height']} {row['frames']}f  "
+            f"{row.get('description', '')}{delivery}"
+        )
+
+
 def cmd_workflows(args: argparse.Namespace) -> int:
     from master_agent.comfy.catalog import list_catalog_items
     from master_agent.comfy.partner_pointers import POINTERS
+    from master_agent.orchestrator.director_presets import list_recipe_rows
 
     items = list_catalog_items()
     pointers = [p.as_list_item() for p in POINTERS]
+    recipes = list_recipe_rows()
     variants = [i for i in items if i.get("kind") == "variant"]
     if args.json:
-        print(json.dumps([*items, *pointers], indent=1))
+        print(json.dumps([*items, *pointers, *recipes], indent=1))
         return 0
     if getattr(args, "vram", False):
         from master_agent.models.vram_policy import format_vram_table, workflow_row
@@ -148,6 +163,7 @@ def cmd_workflows(args: argparse.Namespace) -> int:
             f"{len(pointers)} Partner pointer(s) omitted from the VRAM table "
             "(field-shape records, not executable)."
         )
+        _print_director_recipes(recipes)
         return 0
     print(f"{len(variants)} default catalog variant(s):")
     for item in variants:
@@ -161,6 +177,7 @@ def cmd_workflows(args: argparse.Namespace) -> int:
         print(
             f"  {item['id']:<28} {item.get('template', '')}  {item.get('description', '')}"
         )
+    _print_director_recipes(recipes)
     return 0
 
 

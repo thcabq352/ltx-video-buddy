@@ -144,13 +144,14 @@ lipsync:
   vram_class: safe
   vram_peak_gb: 10.5
   fields:
+    # Node ids, not CLIPTextEncode index. Index 0 in this graph is the
+    # negative encoder; writing it would put the negative text on the
+    # guider's positive input.
     prompt:
-      class_type: CLIPTextEncode
-      index: 0
+      node_id: "2483"
       input: text
     negative_prompt:
-      class_type: CLIPTextEncode
-      index: 1
+      node_id: "2612"
       input: text
     seed:
       class_type: RandomNoise
@@ -933,9 +934,11 @@ ltx25_t2v_i2v:
   vram_peak_gb: 12.5
   requires: [ComfyUI-LTXVideo, VideoHelperSuite]
   fields:
-    prompt: { class_type: CLIPTextEncode, index: 0, input: text }
-    negative_prompt: { class_type: CLIPTextEncode, index: 1, input: text }
-    seed: { class_type: KSampler, index: 0, input: seed }
+    # Primitives, not CLIPTextEncode. Those encoders are links; index 0 is
+    # the negative encoder. Overwriting the link swaps the prompt.
+    prompt: { node_id: "5508", input: value }
+    negative_prompt: { node_id: "5509", input: value }
+    seed: { node_id: "5516:4832", input: noise_seed }
     width: { class_type: EmptyLTXVLatentVideo, index: 0, input: width }
     height: { class_type: EmptyLTXVLatentVideo, index: 0, input: height }
     frames: { class_type: EmptyLTXVLatentVideo, index: 0, input: length }
@@ -950,7 +953,9 @@ ltx25_t2v_i2v_two_stage:
   requires: [ComfyUI-LTXVideo, VideoHelperSuite, LTXVLatentUpsampler]
   fields:
     prompt: { class_type: CLIPTextEncode, index: 0, input: text }
-    seed: { class_type: KSampler, index: 0, input: seed }
+    seed:
+      node_id: ["5516:4832", "5517:4967"]
+      input: noise_seed
     frames: { class_type: EmptyLTXVLatentVideo, index: 0, input: length }
 
 ltx25_flf2v:
@@ -962,7 +967,7 @@ ltx25_flf2v:
   requires: [ComfyUI-LTXVideo, VideoHelperSuite]
   fields:
     prompt: { class_type: CLIPTextEncode, index: 0, input: text }
-    seed: { class_type: KSampler, index: 0, input: seed }
+    seed: { node_id: "5516:4832", input: noise_seed }
     frames: { class_type: EmptyLTXVLatentVideo, index: 0, input: length }
 
 ltx25_msr:
@@ -974,7 +979,7 @@ ltx25_msr:
   requires: [ComfyUI-LTXVideo (ComfyUILTX25MSR*), VideoHelperSuite]
   fields:
     prompt: { class_type: CLIPTextEncode, index: 0, input: text }
-    seed: { class_type: KSampler, index: 0, input: seed }
+    seed: { node_id: "5516:9017", input: noise_seed }
     width: { class_type: EmptyLTXVLatentVideo, index: 0, input: width }
     height: { class_type: EmptyLTXVLatentVideo, index: 0, input: height }
     frames: { class_type: EmptyLTXVLatentVideo, index: 0, input: length }
@@ -988,7 +993,7 @@ ltx25_v2v_ic_lora:
   requires: [ComfyUI-LTXVideo (LTXVICLoRALoader), VideoHelperSuite]
   fields:
     prompt: { class_type: CLIPTextEncode, index: 0, input: text }
-    seed: { class_type: KSampler, index: 0, input: seed }
+    seed: { node_id: "5516:4832", input: noise_seed }
     width: { class_type: EmptyLTXVLatentVideo, index: 0, input: width }
     height: { class_type: EmptyLTXVLatentVideo, index: 0, input: height }
     frames: { class_type: EmptyLTXVLatentVideo, index: 0, input: length }
@@ -1002,7 +1007,9 @@ ltx25_a2v:
   requires: [ComfyUI-LTXVideo, VideoHelperSuite]
   fields:
     prompt: { class_type: CLIPTextEncode, index: 0, input: text }
-    seed: { class_type: KSampler, index: 0, input: seed }
+    seed:
+      node_id: ["5516:4832", "5517:4967"]
+      input: noise_seed
     width: { class_type: EmptyLTXVLatentVideo, index: 0, input: width }
     height: { class_type: EmptyLTXVLatentVideo, index: 0, input: height }
     frames: { class_type: EmptyLTXVLatentVideo, index: 0, input: length }
