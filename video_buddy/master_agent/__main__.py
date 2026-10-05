@@ -28,6 +28,7 @@ Commands:
                       Managed local ComfyUI via comfy-cli (not attach / not generate)
   comfy update        Report stale pins; update only with --yes, snapshot first
   diagnose            9-frame hull fire (sec/step); does not spend shift budget
+  rainey1-batch       Rainey1 seeds → junk filter → judge → top-K (.buddy.json)
   budget              status | reset-shift  (VRAM-min shift ledger)
   hermes              status | register  (profile ltx + discovery)
   capabilities        Gap matrix: tower-ish Comfy nodes vs Buddy wiring

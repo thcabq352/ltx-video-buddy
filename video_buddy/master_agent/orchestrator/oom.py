@@ -8,7 +8,7 @@ from __future__ import annotations
 
 import re
 
-from master_agent.config import DOWNSCALE_LADDER, MAX_RETRIES
+from master_agent.config import DEFAULT_FPS, DOWNSCALE_LADDER, MAX_RETRIES
 from master_agent.orchestrator.state import RunState
 
 _OOM_PATTERN = re.compile(
@@ -20,6 +20,25 @@ def looks_oom(exc: Exception) -> bool:
     return bool(_OOM_PATTERN.search(str(exc) or ""))
 
 
+def apply_oom_downscale(st: RunState, ladder: list[tuple[int, int, int]]) -> bool:
+    """Step one rung down the ladder and write width, height, and frames.
+
+    The logged frame count is the count the next patch uses. LTX rungs are
+    already ``8n+1``. Returns False when the ladder is exhausted.
+    """
+    level = int(getattr(st, "downscale_level", 0) or 0)
+    if level + 1 >= len(ladder):
+        return False
+    level += 1
+    width, height, frames = ladder[level]
+    st.downscale_level = level
+    st.width = int(width)
+    st.height = int(height)
+    st.frames = int(frames)
+    st.duration_s = float(st.frames) / float(DEFAULT_FPS)
+    return True
+
+
 def handle_job_error(orch, st: RunState, exc: Exception, *, phase: str) -> bool:
     if looks_oom(exc):
         st.retries += 1
@@ -29,14 +48,14 @@ def handle_job_error(orch, st: RunState, exc: Exception, *, phase: str) -> bool:
             ladder = downscale_ladder_for(st.variant or "")
         except Exception:
             ladder = DOWNSCALE_LADDER
-        if st.retries > MAX_RETRIES or st.downscale_level + 1 >= len(ladder):
+        if st.retries > MAX_RETRIES or not apply_oom_downscale(st, ladder):
             st.fail(f"{phase} OOM after {st.retries} retries: {exc}")
             return False
         st.transition("PLAN_OOM_RETRY")
-        st.downscale_level += 1
-        w, h, frames = ladder[st.downscale_level]
-        st.width, st.height = w, h
-        st.log(f"OOM at {phase}: downscaling to {w}x{h} ({frames}f), retry {st.retries}")
+        st.log(
+            f"OOM at {phase}: downscaling to {st.width}x{st.height} "
+            f"({st.frames}f), retry {st.retries}"
+        )
         return orch._patch(st) and orch._validate(st) and orch._submit_and_poll(st)
     st.fail(f"{phase} failed: {exc}")
     return False

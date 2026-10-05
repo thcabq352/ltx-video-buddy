@@ -405,6 +405,8 @@ class Orchestrator:
         duration_s: float = 5.0,
         quality: Optional[str] = None,
         seed: Optional[int] = None,
+        steps: Optional[int] = None,
+        cfg: Optional[float] = None,
         width: int = 768,
         height: int = 512,
         video_name: Optional[str] = None,
@@ -437,6 +439,7 @@ class Orchestrator:
         inoutpaint: Optional[dict[str, Any]] = None,
         duration_cap_s: Optional[float] = None,
         max_piece_s: Optional[float] = None,
+        downscale_level: int = 0,
     ) -> RunState:
         run_id = uuid.uuid4().hex[:12]
         st = RunState(
@@ -448,6 +451,8 @@ class Orchestrator:
             duration_s=duration_s,
             quality=quality,
             seed=seed,
+            steps=steps,
+            cfg=cfg,
             width=width,
             height=height,
             video_name=video_name,
@@ -488,6 +493,7 @@ class Orchestrator:
             ),
             max_piece_s=float(max_piece_s) if max_piece_s is not None else None,
         )
+        st.downscale_level = max(0, int(downscale_level))
         from master_agent.comfy.partner_pointers import PartnerPointerError
 
         try:
