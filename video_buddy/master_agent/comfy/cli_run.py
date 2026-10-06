@@ -146,6 +146,7 @@ def prepare_run(
     video_name: str | None = None,
     mask_name: str | None = None,
     inoutpaint: dict[str, Any] | None = None,
+    vae: str | None = None,
 ) -> dict[str, Any]:
     from master_agent.comfy.graph_ops import (
         LTX_TEACACHE_VARIANTS,
@@ -210,6 +211,8 @@ def prepare_run(
             gen_kwargs["mask_name"] = mask_name
         if inoutpaint is not None:
             gen_kwargs["inoutpaint"] = inoutpaint
+        if vae is not None:
+            gen_kwargs["vae"] = vae
         wf, meta = load_and_patch_workflow(variant or "base", **gen_kwargs)
         warn = (meta or {}).get("prepare_warning")
         if warn:
@@ -232,6 +235,18 @@ def prepare_run(
         wants_tea = False
     if wants_tea:
         ensure_teacache(wf, object_info)
+    from master_agent.comfy.vae_guard import (
+        TinyVAETiledDecodeError,
+        explicit_tiny_request,
+        explicit_tiny_vae_message,
+        graph_has_tiled_decode,
+        reject_tiny_vae_on_tiled_decode,
+    )
+
+    requested = explicit_tiny_request(vae, overrides)
+    if requested and graph_has_tiled_decode(wf):
+        raise TinyVAETiledDecodeError(explicit_tiny_vae_message(requested))
+    reject_tiny_vae_on_tiled_decode(wf)
     return wf
 
 

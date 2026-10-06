@@ -26,6 +26,7 @@ Authoritative framing: **Briefing for LTX Video Buddy (`master_agent`) — fleet
 - **TeaCache has one writer:** `graph_ops.ensure_teacache`, called from `load_and_patch_workflow` and `prepare_run`. Do not bake it into JSON templates.
 - **Judge look vs health.** Retry uses look only. Low brief adherence plus high look is `human_veto`. See [Judge](JUDGE.md).
 - **Shift reset** archives the previous used total, then sets `used=0` and `paused=False`. Diagnose and dry-run do not increment `used`.
+- **Tiny preview VAE is not valid with tiled decode.** `taeltx*` / `tae*` preview decoders (including `taeltx2_3`) may feed plain `VAEDecode` only. Tiled decode uses `LTX23_video_vae_bf16.safetensors`.
 
 ## Tests
 

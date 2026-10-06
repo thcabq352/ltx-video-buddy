@@ -33,6 +33,7 @@ from master_agent.config import (
     snap_h3_frames,
     snap_ltx_frames,
 )
+from master_agent.comfy.vae_guard import is_tiny_preview_vae, vae_name_for_tiled_graph
 
 # LTX latent widgets that must stay 8n+1 and paired with audio frames_number
 LTX_LENGTH_CLASSES = frozenset({"EmptyLTXVLatentVideo", "LTXVEmptyLatentVideo"})
@@ -1221,6 +1222,15 @@ def _heuristic_patch(
     clip_l = values.get("clip_l")
     t5xxl = values.get("t5xxl")
     vae_name = values.get("vae_name")
+    requested_vae = values.get("vae_requested", vae_name)
+    if requested_vae and is_tiny_preview_vae(str(requested_vae)):
+        guarded = vae_name_for_tiled_graph(
+            str(requested_vae),
+            workflow,
+            explicit=bool(values.get("vae_explicit")),
+        )
+        if guarded != requested_vae:
+            vae_name = guarded
     image_name = values.get("image_name")
     audio_name = values.get("audio_name")
     filename_prefix = values.get("filename_prefix")
@@ -1741,6 +1751,7 @@ def load_and_patch_workflow(
     multi_ref: Optional[dict[str, Any]] = None,
     inoutpaint: Optional[dict[str, Any]] = None,
     clamp_canvas: bool = True,
+    vae: Optional[str] = None,
 ) -> tuple[dict[str, Any], dict[str, Any]]:
     """
     Returns (workflow_api_dict, meta) where meta has resolved generation params.
@@ -1846,7 +1857,9 @@ def load_and_patch_workflow(
     text_encoder = _prefer_on_disk_text_encoder(models.get("text_encoder"))
     clip_l = models.get("clip_l")
     t5xxl = models.get("t5xxl")
-    vae_name = models.get("vae")
+    # ``vae=`` is an explicit CLI/config override. MODEL_FILES is the default.
+    configured_vae = vae if vae is not None else models.get("vae")
+    vae_explicit = vae is not None
 
     # Only inject weight names whose file exists
     if lora and resolve_model_path(lora) is None:
@@ -1855,10 +1868,22 @@ def load_and_patch_workflow(
         clip_l = None
     if t5xxl and resolve_model_path(t5xxl) is None:
         t5xxl = None
-    if vae_name and resolve_model_path(vae_name) is None:
-        vae_name = None
 
     workflow = copy.deepcopy(load_workflow_template(variant))
+    vae_name = configured_vae
+    if vae_name and is_tiny_preview_vae(vae_name):
+        # A tiled graph swaps the default (or refuses an explicit request)
+        # before the missing-file check. Plain VAEDecode still drops a
+        # preview file that is not on disk.
+        vae_name = vae_name_for_tiled_graph(vae_name, workflow, explicit=vae_explicit)
+    swapped_to_full = bool(
+        configured_vae
+        and is_tiny_preview_vae(configured_vae)
+        and vae_name
+        and vae_name != configured_vae
+    )
+    if vae_name and not swapped_to_full and resolve_model_path(vae_name) is None:
+        vae_name = None
     manifests = _load_manifests()
     manifest = manifests.get(variant) or {}
     field_map = dict(manifest.get("fields") or {})
@@ -1888,6 +1913,8 @@ def load_and_patch_workflow(
         "clip_l": clip_l,
         "t5xxl": t5xxl,
         "vae_name": vae_name,
+        "vae_requested": configured_vae,
+        "vae_explicit": vae_explicit,
         "text_encoder": text_encoder,
         "image_name": image_name or first_image,
         "image": image_name or first_image,

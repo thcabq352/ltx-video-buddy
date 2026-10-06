@@ -102,10 +102,12 @@ class ComfyClient:
     def queue_prompt(self, workflow: dict[str, Any]) -> str:
         """Submit API-format workflow (node_id → node dict). Returns prompt_id."""
         from master_agent.comfy.partner_pointers import reject_partner_or_cloud_queue
+        from master_agent.comfy.vae_guard import reject_tiny_vae_on_tiled_decode
 
         blocked = reject_partner_or_cloud_queue(workflow, self.base_url)
         if blocked:
             raise ComfyClientError(blocked)
+        reject_tiny_vae_on_tiled_decode(workflow)
         body = {"prompt": workflow, "client_id": self.client_id}
         r = self._http().post(self._url("/prompt"), json=body, timeout=self.timeout)
         if r.status_code >= 400:

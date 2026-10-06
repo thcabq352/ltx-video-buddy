@@ -52,6 +52,7 @@ If you start Comfy yourself:
 - `--where local` (no Comfy Cloud routing)
 - after `--`: `--disable-auto-launch`, `--port 8188`, `--listen 127.0.0.1`
 - `--extra-model-paths-config` pointing at the Buddy YAML, unless `--extra-model-paths` names an existing file
+- `--use-sage-attention` always last, after `--listen` and after the extra-model-paths pair when that pair is present, so managed launches always enable SageAttention
 
 Start, stop, status, and restart do not run `comfy install` or `comfy update`. `--no-watch` skips the crash-restart watchdog. `--no-wait` returns before `/system_stats` is ready. If `:8188` is already bound, do not kill a running render. Attach or wait.
 
