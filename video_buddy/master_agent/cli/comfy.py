@@ -407,6 +407,7 @@ def cmd_comfy(args: argparse.Namespace) -> int:
             variant=args.variant,
             prompt=args.prompt,
             overrides=overrides,
+            vae=getattr(args, "vae", None),
             **gen_extra,
         )
         if getattr(args, "mode", "generate") == "generate" and not getattr(args, "prepare", False):

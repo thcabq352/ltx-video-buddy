@@ -398,25 +398,33 @@ DEFAULT_ALL_IN_ONE_CKPT = (
 # Optional upgrade target (full quality base, ~40GB+)
 OFFICIAL_DEV_CKPT = "ltx-2.3-22b-dev.safetensors"
 
+# Tiny preview decoder. Real scale is 32x spatial / 8x temporal, but ComfyUI
+# 0.38 reports every taeltx* / tae* decoder as 16x/4x. Plain VAEDecode can
+# use it. Tiled decode cannot — the blend mask is built at the wrong size.
+TINY_LTX_PREVIEW_VAE = "taeltx2_3.safetensors"
+# Full LTX 2.3 video VAE. Attested as vae_name on the shipped movie-builder
+# graph (workflows/260507_VIDEO-BUDDY_MOVIE-BUILDER_1-1_ADV_api.json).
+LTX23_FULL_VIDEO_VAE = "LTX23_video_vae_bf16.safetensors"
+
 MODEL_FILES: dict[str, dict[str, str]] = {
     "base": {
         "checkpoint": DEFAULT_ALL_IN_ONE_CKPT,
         "diffusion": "LTX-2.3-22B-distilled-1.1-Q4_K_S.gguf",
         "lora": "ltx-2.3-22b-distilled-1.1_lora-dynamic_fro09_avg_rank_111_bf16.safetensors",
-        "vae": "taeltx2_3.safetensors",
+        "vae": TINY_LTX_PREVIEW_VAE,
         "text_encoder": "gemma_3_12B_it_fp4_mixed.safetensors",
     },
     "eros": {
         "checkpoint": DEFAULT_ALL_IN_ONE_CKPT,
         "diffusion": "LTX-2.3-22B-distilled-1.1-Q4_K_S.gguf",
-        "vae": "taeltx2_3.safetensors",
+        "vae": TINY_LTX_PREVIEW_VAE,
         "text_encoder": "gemma_3_12B_it_fp4_mixed.safetensors",
     },
     "directors": {
         "checkpoint": DEFAULT_ALL_IN_ONE_CKPT,
         "diffusion": "LTX-2.3-dev-Q4_K_S.gguf",
         "lora": "ltx-2.3-22b-distilled-1.1_lora-dynamic_fro09_avg_rank_111_bf16.safetensors",
-        "vae": "taeltx2_3.safetensors",
+        "vae": TINY_LTX_PREVIEW_VAE,
         "text_encoder": "gemma_3_12B_it_fp4_mixed.safetensors",
     },
     "lipsync": {
@@ -425,7 +433,7 @@ MODEL_FILES: dict[str, dict[str, str]] = {
         "checkpoint": "ltx-2.3-22b-dev-fp8.safetensors",
         "diffusion": "ltx-2.3-22b-dev_transformer_only_fp8_scaled.safetensors",
         "lora": "ltx-2.3-22b-ic-lora-lipdub-0.9.safetensors",
-        "vae": "taeltx2_3.safetensors",
+        "vae": TINY_LTX_PREVIEW_VAE,
         "audio_vae": "LTX23_audio_vae_bf16.safetensors",
         "text_encoder": "gemma_3_12B_it_fp4_mixed.safetensors",
     },

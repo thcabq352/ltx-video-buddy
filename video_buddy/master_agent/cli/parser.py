@@ -607,6 +607,14 @@ def main(argv: list[str] | None = None) -> int:
     p.set_defaults(width_set=False, height_set=False)
     p.add_argument("--set", action="append", default=[], metavar="NODE.FIELD=VALUE",
                    help="expert override, e.g. 12.steps=8 (repeatable)")
+    p.add_argument(
+        "--vae",
+        default=None,
+        help=(
+            "VAE filename override. A taeltx*/tae* preview VAE is refused "
+            "when the graph uses tiled decode."
+        ),
+    )
     p.add_argument("--out", help="write prepared workflow JSON (still queues unless --prepare)")
     p.add_argument(
         "--prepare",
