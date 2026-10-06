@@ -49,4 +49,6 @@ jobs:
             video_buddy/tests/test_managed_comfy_tower.py \
             video_buddy/tests/test_model_paths.py \
             video_buddy/tests/test_model_selector.py \
-            video_buddy/tests/test_model_selector_web.py
+            video_buddy/tests/test_model_selector_web.py \
+            video_buddy/tests/test_ingest_learn.py \
+            video_buddy/tests/test_tiny_vae_tiled_decode.py

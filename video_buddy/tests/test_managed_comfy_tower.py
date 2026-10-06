@@ -86,6 +86,7 @@ def isolated(tmp_path: Path, monkeypatch: pytest.MonkeyPatch):
         return item
 
     monkeypatch.setattr(tower, "http_ready", fake_ready)
+    monkeypatch.setattr(tower, "sageattention_available", lambda: True)
     return {
         "root": tmp_path,
         "state_dir": state_dir,
@@ -364,7 +365,8 @@ def test_extra_model_paths_after_double_dash(isolated, tmp_path: Path):
     assert isolated["popens"] == []
 
 
-def test_launch_args_always_use_sage_attention(tmp_path: Path):
+def test_launch_args_always_use_sage_attention(tmp_path: Path, monkeypatch: pytest.MonkeyPatch):
+    monkeypatch.setattr(tower, "sageattention_available", lambda: True)
     tower_obj = ManagedComfyTower()
     without = tower_obj._launch_args(None)
     assert "--use-sage-attention" in without
@@ -382,6 +384,27 @@ def test_launch_args_always_use_sage_attention(tmp_path: Path):
     assert config_at > with_yaml.index("--")
     assert with_yaml[config_at + 1] == str(yaml_path)
     assert with_yaml.index("--use-sage-attention") > config_at
+
+
+def test_launch_args_omit_sage_attention_when_missing(monkeypatch: pytest.MonkeyPatch):
+    monkeypatch.setattr(tower, "sageattention_available", lambda: False)
+    warnings: list[str] = []
+    monkeypatch.setattr(tower.log, "warning", lambda msg, *args: warnings.append(msg % args if args else msg))
+    args = ManagedComfyTower()._launch_args(None)
+    assert "--use-sage-attention" not in args
+    assert args[-1] == "127.0.0.1"
+    assert any("sageattention" in item for item in warnings)
+
+
+def test_sageattention_available_follows_find_spec(monkeypatch: pytest.MonkeyPatch):
+    monkeypatch.setattr(tower.importlib.util, "find_spec", lambda name: object() if name == "sageattention" else None)
+    assert tower.sageattention_available() is True
+    monkeypatch.setattr(tower.importlib.util, "find_spec", lambda name: None)
+    assert tower.sageattention_available() is False
+    def broken(name):
+        raise ValueError(name)
+    monkeypatch.setattr(tower.importlib.util, "find_spec", broken)
+    assert tower.sageattention_available() is False
 
 
 def test_state_accepts_comfy_mode_alias(isolated):
@@ -458,6 +481,11 @@ def test_comfy_help_lists_lifecycle_without_dropping_run(capsys):
     for token in (
         "run",
         "attach",
+        "ingest",
+        "learn",
+        "dry-run",
+        "--ingested",
+        "--slug",
         "start",
         "stop",
         "status",

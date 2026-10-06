@@ -12,6 +12,7 @@ Operator manual. One fact lives in one file. Other pages link here instead of re
 | [Judge](JUDGE.md) | Look vs health, quality bar, revise loop |
 | [Provenance](PROVENANCE.md) | `buddy.clip.provenance/v1` sidecars |
 | [Features](FEATURES.md) | Catalog, lipdub, HeartMuLa, music video, Pack C |
+| [Workflow ingest](WORKFLOW_INGEST.md) | Ingest, learn, dry-run, and run a one-off Comfy API graph |
 | [Agents](AGENTS.md) | Stop-lines and field lessons |
 | [Audit](AUDIT.md) | Wired / unwired / retired |
 

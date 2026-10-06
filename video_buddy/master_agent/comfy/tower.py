@@ -156,6 +156,19 @@ def resolve_comfy_cli() -> list[str]:
     return [sys.executable, "-m", "comfy_cli"]
 
 
+def sageattention_available() -> bool:
+    """True when this interpreter can import ``sageattention``.
+
+    Managed Comfy is launched via comfy-cli. When that CLI is
+    ``sys.executable -m comfy_cli``, this is the same interpreter Comfy uses.
+    A separate Comfy venv is not probed.
+    """
+    try:
+        return importlib.util.find_spec("sageattention") is not None
+    except (ImportError, ModuleNotFoundError, ValueError):
+        return False
+
+
 def comfy_cli_present() -> bool:
     """True when an operator binary, PATH entry, or the ``comfy_cli`` module exists."""
     if (os.getenv("COMFY_CLI") or "").strip():
@@ -421,8 +434,18 @@ class ManagedComfyTower:
                 raise TowerError(f"extra_model_paths not found: {emp}")
             # ComfyUI flag, so it stays after `--`. This function only forwards the path.
             args.extend(["--extra-model-paths-config", str(emp)])
-        # ComfyUI flag, always last, after `--` and after extra-model-paths when present.
-        args.append("--use-sage-attention")
+        # ComfyUI flag, last, after `--` and after extra-model-paths when present.
+        # The check is this interpreter. comfy-cli on the tower may use another
+        # Python; a miss here omits the flag instead of crashing that launch.
+        if sageattention_available():
+            args.append("--use-sage-attention")
+        else:
+            log.warning(
+                "sageattention is not importable in %s; omitting --use-sage-attention "
+                "so Comfy does not crash. Install sageattention in the Comfy "
+                "interpreter to enable it.",
+                sys.executable,
+            )
         return args
 
     def _launch(self, extra_model_paths: Path | None = None) -> subprocess.CompletedProcess[str]:

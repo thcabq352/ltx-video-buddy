@@ -571,16 +571,48 @@ def main(argv: list[str] | None = None) -> int:
 
     p = sub.add_parser(
         "comfy",
-        help="drive ComfyUI: run/attach graphs, managed start/stop/status/restart, or opt-in update",
+        help="drive ComfyUI: ingest/learn/dry-run/run graphs, managed start/stop/status/restart, or opt-in update",
     )
     p.add_argument(
         "comfy_command",
-        choices=["run", "attach", "start", "stop", "status", "restart", "update"],
+        choices=[
+            "run",
+            "attach",
+            "ingest",
+            "learn",
+            "dry-run",
+            "start",
+            "stop",
+            "status",
+            "restart",
+            "update",
+        ],
+    )
+    p.add_argument(
+        "target",
+        nargs="?",
+        default=None,
+        help="ingest: API workflow JSON path; learn/dry-run: slug under state/ingested/",
     )
     p.add_argument("--mode", choices=["raw", "template", "generate"], default="generate")
     p.add_argument("--json", dest="workflow_json", help="pasted/path API workflow JSON (raw)")
     p.add_argument("--template", help="template slug or path under workflows/")
     p.add_argument("--variant", default="base")
+    p.add_argument(
+        "--slug",
+        default=None,
+        help="ingest: name under state/ingested/ (default: the JSON file stem)",
+    )
+    p.add_argument(
+        "--ingested",
+        default=None,
+        help="comfy run: queue a learned graph from state/ingested/SLUG. Not a catalog variant.",
+    )
+    p.add_argument(
+        "--queue",
+        action="store_true",
+        help="ingest: queue after storing. Default is dry-run next and no queue.",
+    )
     p.add_argument("--prompt", default="")
     p.add_argument("--negative", dest="negative_prompt", default=None)
     p.add_argument(
