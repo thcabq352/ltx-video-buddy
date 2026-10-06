@@ -421,6 +421,8 @@ class ManagedComfyTower:
                 raise TowerError(f"extra_model_paths not found: {emp}")
             # ComfyUI flag, so it stays after `--`. This function only forwards the path.
             args.extend(["--extra-model-paths-config", str(emp)])
+        # ComfyUI flag, always last, after `--` and after extra-model-paths when present.
+        args.append("--use-sage-attention")
         return args
 
     def _launch(self, extra_model_paths: Path | None = None) -> subprocess.CompletedProcess[str]:

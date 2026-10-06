@@ -125,7 +125,11 @@ def test_launch_argv_is_local_loopback_and_hides_browser(isolated):
     ]
     yaml_path = (isolated["state_dir"] / "extra_model_paths.yaml").resolve()
     assert yaml_path.is_file()
-    assert tail[-2:] == ["--extra-model-paths-config", str(yaml_path)]
+    assert tail[-3:] == [
+        "--extra-model-paths-config",
+        str(yaml_path),
+        "--use-sage-attention",
+    ]
     assert not (isolated["workspace"] / "extra_model_paths.yaml").exists()
     assert "is_default: true" in yaml_path.read_text(encoding="utf-8")
     assert "0.0.0.0" not in cmd
@@ -352,8 +356,32 @@ def test_extra_model_paths_after_double_dash(isolated, tmp_path: Path):
     yaml_path.write_text("comfyui:\n", encoding="utf-8")
     ManagedComfyTower(ready_timeout_s=1).start(extra_model_paths=yaml_path, watch=False)
     tail = _launch_tail(isolated["calls"][0])
-    assert tail[-2:] == ["--extra-model-paths-config", str(yaml_path)]
+    assert tail[-3:] == [
+        "--extra-model-paths-config",
+        str(yaml_path),
+        "--use-sage-attention",
+    ]
     assert isolated["popens"] == []
+
+
+def test_launch_args_always_use_sage_attention(tmp_path: Path):
+    tower_obj = ManagedComfyTower()
+    without = tower_obj._launch_args(None)
+    assert "--use-sage-attention" in without
+    assert without.index("--use-sage-attention") > without.index("--")
+    assert without[-1] == "--use-sage-attention"
+    assert "--extra-model-paths-config" not in without
+
+    yaml_path = tmp_path / "extra.yaml"
+    yaml_path.write_text("comfyui:\n", encoding="utf-8")
+    with_yaml = tower_obj._launch_args(yaml_path)
+    assert "--use-sage-attention" in with_yaml
+    assert with_yaml.index("--use-sage-attention") > with_yaml.index("--")
+    assert with_yaml[-1] == "--use-sage-attention"
+    config_at = with_yaml.index("--extra-model-paths-config")
+    assert config_at > with_yaml.index("--")
+    assert with_yaml[config_at + 1] == str(yaml_path)
+    assert with_yaml.index("--use-sage-attention") > config_at
 
 
 def test_state_accepts_comfy_mode_alias(isolated):
