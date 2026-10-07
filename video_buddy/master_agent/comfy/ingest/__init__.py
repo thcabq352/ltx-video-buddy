@@ -1,8 +1,7 @@
 """Ingest a ComfyUI API graph, learn its widgets, dry-run, and queue it.
 
-Phase A is generic graphs only. Catalog variants, inoutpaint, sulphur, and
-lipsync stay on their existing ``--variant`` paths. Storage is
-``state/ingested/<slug>/`` and is not promoted into ``workflows/``.
+Storage is ``state/ingested/<slug>/``. ``comfy promote`` can copy a draft
+into the local ``workflows/`` checkout. That draft is not a catalog default.
 """
 
 from master_agent.comfy.ingest.normalize import IngestError

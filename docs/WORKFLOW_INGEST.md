@@ -1,10 +1,10 @@
 # Workflow ingest
 
-Buddy learns a one-off ComfyUI graph and runs it through the same patcher, `vae_guard`, and Comfy client as a catalog variant. The graph stays on this machine under `state/ingested/`. It is not copied into `workflows/` and it is not added to `manifests.yaml`.
+Buddy learns a one-off ComfyUI graph and runs it through the same patcher, `vae_guard`, and Comfy client as a catalog variant. The graph stays on this machine under `state/ingested/` until an explicit `comfy promote` copies a draft into the local `workflows/` checkout. Promote does not change the catalog default.
 
 Catalog variants stay on `comfy run --variant`. An ingested graph that matches inoutpaint, sulphur, or lipsync is routed through that family's existing helper. `--no-family-route` keeps it generic. Unmatched graphs stay generic.
 
-No web UI. No custom-node install. No weight download. No LLM. Outputs are never deleted.
+No web UI. No custom-node install. No weight download. No LLM. Outputs are never deleted. Promote does not commit, push, or open a pull request.
 
 ## Commands
 
@@ -16,6 +16,7 @@ python -m master_agent comfy ingest path/to/workflow_ui.json --slug demo
 python -m master_agent comfy ingest --from history:PROMPT_ID --slug demo
 python -m master_agent comfy learn demo
 python -m master_agent comfy dry-run demo --prompt "neon rain" --seed 42
+python -m master_agent comfy promote demo --variant-name demo-draft
 python -m master_agent comfy run --ingested demo --prompt "neon rain" --seed 42 --frames 25
 ```
 
@@ -99,6 +100,17 @@ An unmatched graph stays on the generic patcher and dry-run warns `unmatched gra
 
 `--no-family-route` on ingest or learn stores `family_route: generic`. The same flag on dry-run or run forces generic for that call. `learn` without the flag turns routing back on when the graph still matches.
 
+## Promote
+
+`comfy promote SLUG [--variant-name NAME]` writes two local files and prints a unified diff:
+
+- `workflows/<name>.json` — a copy of the stored API graph
+- an appended block in `workflows/manifests.yaml` — `file`, `description`, `vram_class`, `fields`, `inputs`, `outputs`, `requires`, plus `draft: true`
+
+The block uses the same field vocabulary as the rest of the manifest (`node_id` or `class_type` + `index`, plus `input`). A low-confidence role is a YAML comment above that field, not an extra key.
+
+Promote refuses when `readiness` lists missing nodes or models. `--force` writes the draft anyway and does not install nodes or substitute weights. It refuses a `--variant-name` that is already a catalog default (`base`, or any id `default_variant_ids()` publishes) and refuses a name that already exists in `manifests.yaml`. It does not replace `base`. It does not run git, and it does not open a pull request. `comfy run --variant` does not pick the new draft unless you pass that name yourself.
+
 ## Not in this phase
 
-URL ingest, promote-to-catalog, LLM role names, and a web drop zone.
+URL ingest, LLM role names, and a web drop zone.

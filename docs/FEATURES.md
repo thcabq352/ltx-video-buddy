@@ -130,4 +130,4 @@ Recorded promote class: `ByteDance2DraftToFinalVideoNode`. Policy object: `PACK_
 
 ## Ingested workflows
 
-One-off Comfy graphs (API JSON, UI JSON when Comfy is up, or `/history`) are learned into gitignored `state/ingested/<slug>/`. They are not catalog variants and are not promoted. Procedure: [Workflow ingest](WORKFLOW_INGEST.md).
+One-off Comfy graphs (API JSON, UI JSON when Comfy is up, or `/history`) are learned into gitignored `state/ingested/<slug>/`. They are not catalog defaults. `comfy promote` writes a local draft only. Procedure: [Workflow ingest](WORKFLOW_INGEST.md).

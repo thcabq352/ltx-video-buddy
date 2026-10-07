@@ -35,7 +35,7 @@ python -m master_agent power-tune "neon rain" --variant base --json
 
 `run` is the director pipeline. Useful flags: `--variant`, `--dry-run` (plan and lint, no GPU), `--self-improve-dry` (judge loop, no Comfy), `--no-judge`, `--no-interview`, `--storyboard`, `--llm-panel`, `--panel-judge`, `--attach`, `--upscale seedvr2|rtx`, `--image`, `--video`, `--audio`, `--mask`, `--outpaint`, `--aspect`, `--line`, and the lipdub flags in [Features](FEATURES.md#lipdub). H3 voice warning is stated once in [Features](FEATURES.md#default-catalog).
 
-`comfy` subcommands: `run`, `attach`, `ingest`, `learn`, `dry-run`, `start`, `stop`, `status`, `restart`, `update`. `run --ingested SLUG` queues a learned graph. `ingest` takes a JSON path or `--from history:PROMPT_ID`, stores under `state/ingested/`, and does not queue; the next command is dry-run. Procedure: [Workflow ingest](WORKFLOW_INGEST.md). Process ownership and the attach schema: [Comfy](COMFY.md).
+`comfy` subcommands: `run`, `attach`, `ingest`, `learn`, `dry-run`, `promote`, `start`, `stop`, `status`, `restart`, `update`. `run --ingested SLUG` queues a learned graph. `ingest` takes a JSON path or `--from history:PROMPT_ID`, stores under `state/ingested/`, and does not queue; the next command is dry-run. `promote` writes a local draft manifest entry. Procedure: [Workflow ingest](WORKFLOW_INGEST.md). Process ownership and the attach schema: [Comfy](COMFY.md).
 
 ## LLM provider
 

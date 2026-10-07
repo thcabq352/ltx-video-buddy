@@ -581,6 +581,7 @@ def main(argv: list[str] | None = None) -> int:
             "ingest",
             "learn",
             "dry-run",
+            "promote",
             "start",
             "stop",
             "status",
@@ -592,7 +593,7 @@ def main(argv: list[str] | None = None) -> int:
         "target",
         nargs="?",
         default=None,
-        help="ingest: API workflow JSON path; learn/dry-run: slug under state/ingested/",
+        help="ingest: API workflow JSON path; learn/dry-run/promote: slug under state/ingested/",
     )
     p.add_argument("--mode", choices=["raw", "template", "generate"], default="generate")
     p.add_argument("--json", dest="workflow_json", help="pasted/path API workflow JSON (raw)")
@@ -613,6 +614,16 @@ def main(argv: list[str] | None = None) -> int:
         "--no-family-route",
         action="store_true",
         help="ingest/learn/dry-run/run: keep a matched inoutpaint, sulphur, or lipsync graph on the generic path",
+    )
+    p.add_argument(
+        "--variant-name",
+        default=None,
+        help="promote: draft id in workflows/manifests.yaml (default: the ingested slug). Never a catalog default.",
+    )
+    p.add_argument(
+        "--force",
+        action="store_true",
+        help="promote: write the draft even when readiness lists missing nodes or models",
     )
     p.add_argument(
         "--ingested",
