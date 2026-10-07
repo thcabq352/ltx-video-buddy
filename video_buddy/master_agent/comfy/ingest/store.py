@@ -133,6 +133,8 @@ def ingest_graph(
     model_inventory: set[str] | None = None,
     provenance_extra: dict[str, Any] | None = None,
     no_family_route: bool = False,
+    llm_assist: bool = False,
+    proposer: Any = None,
 ) -> dict[str, Any]:
     """Learn ``workflow`` and store it. Does not queue and does not download."""
     safe = slugify(slug)
@@ -143,6 +145,8 @@ def ingest_graph(
         object_info=object_info,
         model_inventory=model_inventory,
         no_family_route=no_family_route,
+        llm_assist=llm_assist,
+        proposer=proposer,
     )
     provenance = {
         "source_path": source,
@@ -196,6 +200,8 @@ def ingest_file(
     client: Any = None,
     model_inventory: set[str] | None = None,
     no_family_route: bool = False,
+    llm_assist: bool = False,
+    proposer: Any = None,
 ) -> dict[str, Any]:
     """Ingest a local JSON file.
 
@@ -248,8 +254,10 @@ def ingest_file(
         object_info=info,
         ui_workflow=ui_workflow,
         model_inventory=_merge_inventory(model_inventory, live if used_convert else None),
-        provenance_extra=extra,
+        provenance_extra=_with_llm(extra, llm_assist),
         no_family_route=no_family_route,
+        llm_assist=llm_assist,
+        proposer=proposer,
     )
 
 
@@ -261,6 +269,8 @@ def ingest_history(
     object_info: dict[str, Any] | None = None,
     model_inventory: set[str] | None = None,
     no_family_route: bool = False,
+    llm_assist: bool = False,
+    proposer: Any = None,
 ) -> dict[str, Any]:
     """Ingest the queued graph from Comfy ``/history/<prompt_id>``.
 
@@ -306,14 +316,27 @@ def ingest_history(
         source=f"history:{token}",
         object_info=info,
         model_inventory=_merge_inventory(model_inventory, live),
-        provenance_extra={
-            "phase": "B",
-            "source_format": "history",
-            "prompt_id": token,
-            "comfy_version": version,
-        },
+        provenance_extra=_with_llm(
+            {
+                "phase": "B",
+                "source_format": "history",
+                "prompt_id": token,
+                "comfy_version": version,
+            },
+            llm_assist,
+        ),
         no_family_route=no_family_route,
+        llm_assist=llm_assist,
+        proposer=proposer,
     )
+
+
+def _with_llm(extra: dict[str, Any] | None, llm_assist: bool) -> dict[str, Any] | None:
+    if not llm_assist:
+        return extra
+    merged = dict(extra or {})
+    merged["llm_assist"] = True
+    return merged
 
 
 def refresh_learned(
@@ -321,6 +344,8 @@ def refresh_learned(
     object_info: dict[str, Any] | None = None,
     model_inventory: set[str] | None = None,
     no_family_route: bool = False,
+    llm_assist: bool = False,
+    proposer: Any = None,
 ) -> dict[str, Any]:
     """Re-run heuristics on the stored API graph and rewrite learned.yaml."""
     bundle = load_bundle(slug)
@@ -333,6 +358,8 @@ def refresh_learned(
         object_info=object_info,
         model_inventory=inventory,
         no_family_route=no_family_route,
+        llm_assist=llm_assist,
+        proposer=proposer,
     )
     _write_learned(bundle["dir"] / "learned.yaml", learned)
     bundle["learned"] = learned

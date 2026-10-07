@@ -170,6 +170,7 @@ def prepare_ingested(
             "input": spec.get("input"),
             "class_type": spec.get("class_type"),
             "confidence": spec.get("confidence") or "high",
+            "source": spec.get("source"),
             "overridden": role in values,
         }
     return {
@@ -182,6 +183,8 @@ def prepare_ingested(
         "family_warning": note,
         "family_notes": family_notes,
         "dangers": list(learned.get("dangers") or []),
+        "llm_proposals": list(learned.get("llm_proposals") or []),
+        "llm_warning": learned.get("llm_warning"),
         "vae_notes": notes,
         "readiness": readiness,
         "workflow": workflow,
@@ -209,9 +212,17 @@ def format_dry_run(report: dict[str, Any]) -> str:
         lines.append("params: none")
     for role, info in params.items():
         confidence = info.get("confidence") or "high"
+        source = f" source {info['source']}" if info.get("source") else ""
         lines.append(
             f"{role}: {info.get('value')!r} [{confidence}] "
-            f"node {info.get('node_id')} {info.get('input')}"
+            f"node {info.get('node_id')} {info.get('input')}{source}"
+        )
+    if report.get("llm_warning"):
+        lines.append(f"WARN  {report['llm_warning']}")
+    for proposal in report.get("llm_proposals") or []:
+        lines.append(
+            f"llm: {proposal.get('from')} -> {proposal.get('role')} "
+            f"[{proposal.get('confidence')}] source {proposal.get('source')}"
         )
     for warning in report.get("warnings") or []:
         lines.append(

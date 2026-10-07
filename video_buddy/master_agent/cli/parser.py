@@ -626,6 +626,14 @@ def main(argv: list[str] | None = None) -> int:
         help="promote: write the draft even when readiness lists missing nodes or models",
     )
     p.add_argument(
+        "--llm-assist",
+        action="store_true",
+        help=(
+            "ingest/learn: ask a local LLM (llama.cpp, then Ollama) to name "
+            "low-confidence widgets. Off by default. No cloud call."
+        ),
+    )
+    p.add_argument(
         "--ingested",
         default=None,
         help="comfy run: queue a learned graph from state/ingested/SLUG. Not a catalog variant.",
