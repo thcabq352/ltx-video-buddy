@@ -132,6 +132,7 @@ def ingest_graph(
     ui_workflow: dict[str, Any] | None = None,
     model_inventory: set[str] | None = None,
     provenance_extra: dict[str, Any] | None = None,
+    no_family_route: bool = False,
 ) -> dict[str, Any]:
     """Learn ``workflow`` and store it. Does not queue and does not download."""
     safe = slugify(slug)
@@ -141,6 +142,7 @@ def ingest_graph(
         source=source,
         object_info=object_info,
         model_inventory=model_inventory,
+        no_family_route=no_family_route,
     )
     provenance = {
         "source_path": source,
@@ -193,6 +195,7 @@ def ingest_file(
     converter: Any = None,
     client: Any = None,
     model_inventory: set[str] | None = None,
+    no_family_route: bool = False,
 ) -> dict[str, Any]:
     """Ingest a local JSON file.
 
@@ -246,6 +249,7 @@ def ingest_file(
         ui_workflow=ui_workflow,
         model_inventory=_merge_inventory(model_inventory, live if used_convert else None),
         provenance_extra=extra,
+        no_family_route=no_family_route,
     )
 
 
@@ -256,6 +260,7 @@ def ingest_history(
     client: Any = None,
     object_info: dict[str, Any] | None = None,
     model_inventory: set[str] | None = None,
+    no_family_route: bool = False,
 ) -> dict[str, Any]:
     """Ingest the queued graph from Comfy ``/history/<prompt_id>``.
 
@@ -307,6 +312,7 @@ def ingest_history(
             "prompt_id": token,
             "comfy_version": version,
         },
+        no_family_route=no_family_route,
     )
 
 
@@ -314,6 +320,7 @@ def refresh_learned(
     slug: str,
     object_info: dict[str, Any] | None = None,
     model_inventory: set[str] | None = None,
+    no_family_route: bool = False,
 ) -> dict[str, Any]:
     """Re-run heuristics on the stored API graph and rewrite learned.yaml."""
     bundle = load_bundle(slug)
@@ -325,6 +332,7 @@ def refresh_learned(
         source=source,
         object_info=object_info,
         model_inventory=inventory,
+        no_family_route=no_family_route,
     )
     _write_learned(bundle["dir"] / "learned.yaml", learned)
     bundle["learned"] = learned

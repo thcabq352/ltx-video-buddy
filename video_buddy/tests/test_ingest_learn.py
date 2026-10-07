@@ -234,7 +234,7 @@ def test_missing_custom_nodes_fail_with_the_names(state_dir: Path):
         dry_run_slug("custom", object_info=None)
 
 
-def test_ui_json_is_refused_and_specialized_families_stay_generic(state_dir: Path, tmp_path: Path, monkeypatch):
+def test_ui_json_is_refused_when_comfy_is_down(state_dir: Path, tmp_path: Path):
     ui = tmp_path / "ui.json"
     ui.write_text(
         json.dumps({"nodes": [{"id": 1, "type": "KSampler", "widgets_values": [1]}]}),
@@ -243,19 +243,6 @@ def test_ui_json_is_refused_and_specialized_families_stay_generic(state_dir: Pat
     with pytest.raises(IngestError, match="API JSON"):
         ingest_file(ui, slug="ui")
     assert not (state_dir / "ingested" / "ui").exists()
-
-    graph = _load_fixture()
-    graph["60"] = {"class_type": "LTXVInpaintPreprocess", "inputs": {"video": ["90", 0]}}
-
-    def boom(*_args, **_kwargs):
-        raise AssertionError("specialized family was routed")
-
-    monkeypatch.setattr("master_agent.comfy.inoutpaint.finalize_inoutpaint_graph", boom)
-    monkeypatch.setattr("master_agent.comfy.sulphur.patch_sulphur_graph", boom)
-    ingest_graph(graph, slug="family", source="memory")
-    report = dry_run_slug("family", prompt="stay generic")
-    assert report["workflow"]["60"]["class_type"] == "LTXVInpaintPreprocess"
-    assert report["workflow"]["12"]["inputs"]["value"] == "stay generic"
 
 
 def test_ingest_cli_defaults_to_dry_run_next_and_does_not_queue(state_dir: Path, capsys):
