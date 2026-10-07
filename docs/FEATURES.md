@@ -127,3 +127,7 @@ Generate only on `http://127.0.0.1:8188` with the on-disk catalog: text or one-t
 | `seedance25_draft_r2v` | `api_seedance2_5_draft_r2v` | `ByteDance2ReferenceNodeV2` |
 
 Recorded promote class: `ByteDance2DraftToFinalVideoNode`. Policy object: `PACK_C_LOCAL_ONLY` in `master_agent/config.py`.
+
+## Ingested workflows
+
+One-off Comfy API graphs are learned from the CLI into gitignored `state/ingested/<slug>/`. They are not catalog variants and are not promoted. Commands, the field map, and the dry-run default: [Workflow ingest](WORKFLOW_INGEST.md).

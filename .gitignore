@@ -26,6 +26,7 @@ video_buddy/state/*.db
 video_buddy/state/chroma/
 video_buddy/state/tools/
 video_buddy/state/uploads/
+video_buddy/state/ingested/
 video_buddy/outputs/**
 !video_buddy/outputs/.gitkeep
 

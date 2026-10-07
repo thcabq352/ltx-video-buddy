@@ -345,6 +345,12 @@ def cmd_comfy(args: argparse.Namespace) -> int:
         return cmd_update(args)
     if command == "attach":
         return cmd_comfy_attach(args)
+    if command in {"ingest", "learn", "dry-run"} or (
+        command == "run" and getattr(args, "ingested", None)
+    ):
+        from master_agent.cli.ingest import dispatch_ingest_command
+
+        return dispatch_ingest_command(args)
     recipe = getattr(args, "recipe", None)
     if recipe:
         from master_agent.comfy.blaze_remake import is_blaze_remake

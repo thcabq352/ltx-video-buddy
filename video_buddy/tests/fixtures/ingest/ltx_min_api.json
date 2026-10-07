@@ -1,0 +1,87 @@
+{
+  "1": {
+    "class_type": "CheckpointLoaderSimple",
+    "inputs": {
+      "ckpt_name": "ltx-2.3.safetensors"
+    },
+    "_meta": {
+      "title": "Load Checkpoint"
+    }
+  },
+  "10": {
+    "class_type": "CLIPTextEncode",
+    "inputs": {
+      "text": ["12", 0],
+      "clip": ["1", 1]
+    },
+    "_meta": {
+      "title": "CLIP Text Encode (Positive)"
+    }
+  },
+  "11": {
+    "class_type": "CLIPTextEncode",
+    "inputs": {
+      "text": "blurry",
+      "clip": ["1", 1]
+    },
+    "_meta": {
+      "title": "CLIP Text Encode (Negative)"
+    }
+  },
+  "12": {
+    "class_type": "PrimitiveStringMultiline",
+    "inputs": {
+      "value": "a cat on a roof"
+    },
+    "_meta": {
+      "title": "Positive prompt"
+    }
+  },
+  "20": {
+    "class_type": "EmptyLTXVLatentVideo",
+    "inputs": {
+      "width": 768,
+      "height": 512,
+      "length": 97,
+      "batch_size": 1
+    },
+    "_meta": {
+      "title": "Empty LTX Latent"
+    }
+  },
+  "42": {
+    "class_type": "RandomNoise",
+    "inputs": {
+      "noise_seed": 0
+    },
+    "_meta": {
+      "title": "RandomNoise"
+    }
+  },
+  "40": {
+    "class_type": "KSampler",
+    "inputs": {
+      "seed": 1,
+      "steps": 8,
+      "cfg": 1.0,
+      "sampler_name": "euler",
+      "model": ["1", 0],
+      "positive": ["10", 0],
+      "negative": ["11", 0],
+      "latent_image": ["20", 0]
+    },
+    "_meta": {
+      "title": "KSampler"
+    }
+  },
+  "90": {
+    "class_type": "SaveVideo",
+    "inputs": {
+      "filename_prefix": "ltx_agent",
+      "video": ["40", 0]
+    },
+    "_meta": {
+      "title": "Save Video"
+    }
+  }
+}

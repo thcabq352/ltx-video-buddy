@@ -23,6 +23,11 @@ Commands:
   setup | doctor      Scan deps + weights (fetch rules: repo docs/WEIGHTS.md)
   workflows           List default catalog variants (no env flags)
   comfy run           Drive ComfyUI from the CLI (prepare + lint + queue)
+  comfy ingest        Store an API workflow under state/ingested/<slug>/ (no queue)
+  comfy learn         Refresh and print the learned field map for a slug
+  comfy dry-run       Print the patched map; do not queue
+  comfy run --ingested SLUG
+                      Queue a learned graph (vae_guard on). Not a catalog variant.
   comfy attach        Apply previs buddy.comfy.attach/v1 (dry-run; --submit to /prompt)
   comfy start|stop|status|restart
                       Managed local ComfyUI via comfy-cli (not attach / not generate)
