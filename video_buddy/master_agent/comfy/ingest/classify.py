@@ -75,6 +75,14 @@ _PACKS = {
     "LTXVSeparateAVLatent": "ComfyUI-LTXVideo",
     "LTXVTiledVAEDecode": "ComfyUI-LTXVideo",
     "MultimodalGuider": "ComfyUI-LTXVideo",
+    "LTXAddVideoICLoRAGuide": "ComfyUI-LTXVideo",
+    "LTX2SamplingPreviewOverride": "ComfyUI-LTXVideo",
+    "VHS_VideoCombine": "VideoHelperSuite",
+    "VHS_DuplicateMasks": "VideoHelperSuite",
+    "VHS_LoadVideo": "VideoHelperSuite",
+    "PathchSageAttentionKJ": "ComfyUI-KJNodes",
+    "ResizeImageMaskNode": "ComfyUI-KJNodes",
+    "ComfyMathExpression": "ComfyMath",
 }
 
 _LATENT_HIGH = frozenset(
@@ -133,10 +141,81 @@ def missing_class_types(
     return sorted(missing)
 
 
-def requires_packs(workflow: dict[str, Any]) -> list[str]:
+def pack_from_python_module(module: str) -> str | None:
+    """Best-effort pack folder from an object_info ``python_module`` string.
+
+    ``custom_nodes.ComfyUI-LTXVideo.nodes`` → ``ComfyUI-LTXVideo``.
+    Core ``nodes`` / ``comfy`` modules are not packs.
+    """
+    text = str(module or "").strip()
+    if not text:
+        return None
+    parts = [part for part in text.split(".") if part]
+    if "custom_nodes" in parts:
+        index = parts.index("custom_nodes")
+        if index + 1 < len(parts):
+            return parts[index + 1]
+        return None
+    if parts[0] in {"nodes", "comfy", "comfy_extras", "execution", "folder_paths"}:
+        return None
+    return None
+
+
+def pack_from_known_map(class_type: str) -> str | None:
+    """Known class → pack. ``VHS_*`` is Video Helper Suite."""
+    name = str(class_type or "")
+    if name in _PACKS:
+        return _PACKS[name]
+    if name.startswith("VHS_"):
+        return "VideoHelperSuite"
+    return None
+
+
+def pack_for_class(
+    class_type: str,
+    object_info: dict[str, Any] | None = None,
+) -> tuple[str | None, str]:
+    """Return ``(pack, source)`` where source is python_module, known_map, or unknown.
+
+    object_info wins when that class entry has ``python_module``. Otherwise
+    the known map. A missing class is usually absent from object_info, so the
+    known map is what names it.
+    """
+    info = (object_info or {}).get(class_type)
+    if isinstance(info, dict):
+        module = info.get("python_module")
+        if isinstance(module, str) and module.strip():
+            pack = pack_from_python_module(module)
+            if pack:
+                return pack, "python_module"
+    known = pack_from_known_map(class_type)
+    if known:
+        return known, "known_map"
+    return None, "unknown"
+
+
+def missing_node_packs(
+    workflow: dict[str, Any],
+    object_info: dict[str, Any] | None = None,
+) -> list[dict[str, str]]:
+    """One row per missing class, with a best-effort pack name."""
+    rows: list[dict[str, str]] = []
+    for name in missing_class_types(workflow, object_info):
+        pack, source = pack_for_class(name, object_info)
+        row = {"class_type": name, "source": source}
+        if pack:
+            row["pack"] = pack
+        rows.append(row)
+    return rows
+
+
+def requires_packs(
+    workflow: dict[str, Any],
+    object_info: dict[str, Any] | None = None,
+) -> list[str]:
     packs: list[str] = []
     for name in class_types(workflow):
-        pack = _PACKS.get(name)
+        pack, _source = pack_for_class(name, object_info)
         if pack and pack not in packs:
             packs.append(pack)
     return packs

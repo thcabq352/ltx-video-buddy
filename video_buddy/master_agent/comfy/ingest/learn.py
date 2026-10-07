@@ -5,8 +5,17 @@ from __future__ import annotations
 import logging
 from typing import Any
 
-from master_agent.comfy.ingest.classify import infer_roles, missing_class_types, requires_packs
-from master_agent.comfy.ingest.validate import dangers_for
+from master_agent.comfy.ingest.classify import (
+    infer_roles,
+    missing_class_types,
+    missing_node_packs,
+    requires_packs,
+)
+from master_agent.comfy.ingest.validate import (
+    dangers_for,
+    missing_model_filenames,
+    pointers_for,
+)
 
 log = logging.getLogger(__name__)
 
@@ -29,6 +38,7 @@ def learn_workflow(
     slug: str,
     source: str = "",
     object_info: dict[str, Any] | None = None,
+    model_inventory: set[str] | None = None,
 ) -> dict[str, Any]:
     """Typed field map plus readiness. Low-confidence roles are kept."""
     guesses, output_id = infer_roles(workflow)
@@ -63,14 +73,19 @@ def learn_workflow(
         "fields": fields,
         "inputs": {},
         "outputs": {"final": {"node_id": output_id}} if output_id else {},
-        "requires": requires_packs(workflow),
+        "requires": requires_packs(workflow, object_info),
         "dangers": dangers_for(workflow),
         "vram_class": "unknown",
         "warnings": warnings,
-        "readiness": {
-            "missing_nodes": missing_class_types(workflow, object_info),
-            "missing_models": [],
-            "convertible": True,
-        },
+    }
+    missing_nodes = missing_class_types(workflow, object_info)
+    missing_models = missing_model_filenames(workflow, model_inventory)
+    learned["readiness"] = {
+        "missing_nodes": missing_nodes,
+        "missing_node_packs": missing_node_packs(workflow, object_info),
+        "missing_models": missing_models,
+        "models_checked": model_inventory is not None,
+        "pointers": pointers_for(missing_nodes=missing_nodes, missing_models=missing_models),
+        "convertible": True,
     }
     return learned

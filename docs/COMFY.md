@@ -91,6 +91,8 @@ Run JSON records `previs_source` (quality-bar bookkeeping for rule c), `control_
 
 `HeartMuLa_Generate` and `HeartMuLa_Transcribe` are payload nodes, not control channels. Attach does not treat them as optional accelerators. Any other class name containing `HeartMuLa` raises `AttachError`.
 
+One-off graphs (not catalog variants) are ingested, learned, and dry-run before queue. Procedure: [Workflow ingest](WORKFLOW_INGEST.md).
+
 ## Driving a graph
 
 ```bash

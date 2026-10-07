@@ -1,6 +1,6 @@
 # Workflow ingest
 
-Phase A learns a one-off ComfyUI API graph and runs it through the same patcher, `vae_guard`, and Comfy client as a catalog variant. The graph stays on this machine under `state/ingested/`. It is not copied into `workflows/` and it is not added to `manifests.yaml`.
+Buddy learns a one-off ComfyUI graph and runs it through the same patcher, `vae_guard`, and Comfy client as a catalog variant. The graph stays on this machine under `state/ingested/`. It is not copied into `workflows/` and it is not added to `manifests.yaml`.
 
 Catalog variants stay on `comfy run --variant`. Inpaint, sulphur, and lipsync are not detected or rerouted from an ingested graph. Keep using `--variant` for those.
 
@@ -12,6 +12,8 @@ From `video_buddy/`:
 
 ```bash
 python -m master_agent comfy ingest path/to/workflow_api.json --slug demo
+python -m master_agent comfy ingest path/to/workflow_ui.json --slug demo
+python -m master_agent comfy ingest --from history:PROMPT_ID --slug demo
 python -m master_agent comfy learn demo
 python -m master_agent comfy dry-run demo --prompt "neon rain" --seed 42
 python -m master_agent comfy run --ingested demo --prompt "neon rain" --seed 42 --frames 25
@@ -31,13 +33,28 @@ python -m master_agent comfy run --ingested demo --prompt "neon rain" --seed 42 
 state/ingested/<slug>/
   workflow_api.json    # API graph that runs
   learned.yaml         # field map, same vocabulary as manifests.yaml
-  provenance.json      # source path, time, sha256; comfy version stays empty offline
-  workflow_ui.json     # only after a UI→API conversion (not Phase A)
+  provenance.json      # source path, time, sha256; comfy version when history answered
+  workflow_ui.json     # original UI export when ingest converted one
 ```
 
 `state/ingested/` is gitignored.
 
-UI-format JSON is refused. Phase A does not call Comfy `/workflow/convert`. Supply API JSON (`node id` → `class_type` / `inputs`).
+## UI JSON and history
+
+API JSON (`node id` → `class_type` / `inputs`) is stored as `workflow_api.json`.
+
+UI-format JSON (a `nodes` list) is posted to Comfy `/workflow/convert` when Comfy is reachable. Both files are kept: `workflow_ui.json` is the export you dropped, `workflow_api.json` is the converted graph that runs. When Comfy is down, ingest refuses with `start Comfy or supply API JSON`. Buddy does not convert UI JSON on its own.
+
+`--from history:PROMPT_ID` reads Comfy `/history/<prompt_id>` and stores the queued prompt graph. The same refusal is used when that request fails. No weights are downloaded.
+
+## Readiness
+
+`learned.yaml` `readiness` lists:
+
+- `missing_nodes` — class types absent from live `/object_info`, or from the bundled offline catalog when Comfy was not asked. `missing_node_packs` adds a best-effort pack name from that class's object_info `python_module` (`custom_nodes.<pack>....`) or from a known class→pack map (`VHS_*` → Video Helper Suite, LTX nodes → `ComfyUI-LTXVideo`). Unknown packs stay unnamed. Buddy does not install the pack.
+- `missing_models` — loader filenames that are not in the Comfy `/models/<folder>` lists and not under a `base_path` in Buddy `state/extra_model_paths.yaml`. The check runs only when one of those inventories exists (`models_checked`). A missing name is left exactly as written. Buddy does not substitute another file. The report points at `python -m master_agent doctor` and `python -m master_agent download-models`.
+
+`run --ingested` refuses when `models_checked` is true and `missing_models` is not empty. Dry-run prints the list and does not queue.
 
 ## What learn maps
 
@@ -68,4 +85,4 @@ Every ingested run applies `vae_guard`. A baked `taeltx*` / `tae*` preview VAE t
 
 ## Not in this phase
 
-UI drag-and-drop, history ingest, URL ingest, promote-to-catalog, and fingerprint routing onto inoutpaint, sulphur, or lipsync.
+URL ingest, promote-to-catalog, fingerprint routing onto inoutpaint, sulphur, or lipsync, LLM role names, and a web drop zone.

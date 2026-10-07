@@ -130,6 +130,82 @@ class ComfyClient:
         r.raise_for_status()
         return r.json()
 
+    def convert_workflow(self, workflow: dict[str, Any]) -> dict[str, Any]:
+        """POST UI-format JSON to ``/workflow/convert``. Return the API graph.
+
+        A down or rejecting server raises ``ComfyClientError`` whose message
+        tells the caller to start Comfy or supply API JSON. This does not
+        rewrite the caller's file.
+        """
+        try:
+            response = self._http().post(
+                self._url("/workflow/convert"),
+                json=workflow,
+                timeout=min(float(self.timeout), 5.0),
+            )
+            response.raise_for_status()
+            data = response.json()
+        except Exception as exc:
+            raise ComfyClientError(
+                "start Comfy or supply API JSON. "
+                f"Comfy /workflow/convert is not reachable at {self.base_url}. ({exc})"
+            ) from exc
+        if not isinstance(data, dict):
+            raise ComfyClientError(
+                "start Comfy or supply API JSON. "
+                "Comfy /workflow/convert did not return a JSON object."
+            )
+        prompt = data.get("prompt")
+        if isinstance(prompt, dict) and any(
+            isinstance(node, dict) and "class_type" in node for node in prompt.values()
+        ):
+            return prompt
+        return data
+
+    def list_model_filenames(self, folders: tuple[str, ...] | None = None) -> list[str]:
+        """GET ``/models/<folder>`` and return filenames. Missing folders are skipped.
+
+        Names are returned as Comfy listed them. Nothing is downloaded and
+        nothing is substituted.
+        """
+        chosen = folders or (
+            "checkpoints",
+            "loras",
+            "vae",
+            "diffusion_models",
+            "text_encoders",
+            "unet",
+            "clip",
+            "upscale_models",
+        )
+        names: list[str] = []
+        for folder in chosen:
+            try:
+                response = self._http().get(
+                    self._url(f"/models/{folder}"),
+                    timeout=min(float(self.timeout), 5.0),
+                )
+            except Exception as exc:
+                raise ComfyClientError(
+                    f"Comfy /models/{folder} is not reachable at {self.base_url}. ({exc})"
+                ) from exc
+            if response.status_code == 404:
+                continue
+            response.raise_for_status()
+            payload = response.json()
+            if isinstance(payload, dict):
+                payload = payload.get("files") or payload.get("models") or []
+            if not isinstance(payload, list):
+                continue
+            for item in payload:
+                if isinstance(item, str) and item.strip():
+                    names.append(item.strip())
+                elif isinstance(item, dict):
+                    raw = item.get("name") or item.get("filename")
+                    if isinstance(raw, str) and raw.strip():
+                        names.append(raw.strip())
+        return names
+
     def get_queue(self) -> dict[str, Any]:
         r = self._http().get(self._url("/queue"), timeout=self.timeout)
         r.raise_for_status()

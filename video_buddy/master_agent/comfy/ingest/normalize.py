@@ -1,8 +1,9 @@
 """Load a Comfy workflow JSON and normalize it to API form.
 
-Phase A accepts API graphs only (``{node_id: {class_type, inputs}}``), including
-a ``{prompt: ...}`` wrapper. UI exports are refused. Conversion via
-``/workflow/convert`` is Phase B and does not run here.
+API graphs (``{node_id: {class_type, inputs}}``), including a ``{prompt: ...}``
+wrapper, load as-is. UI exports convert through Comfy ``/workflow/convert``
+when a converter is supplied. With no converter, a UI file is refused:
+start Comfy or supply API JSON.
 """
 
 from __future__ import annotations
@@ -13,7 +14,11 @@ from typing import Any
 
 
 class IngestError(ValueError):
-    """The file is not a Phase A API workflow."""
+    """The workflow could not be ingested."""
+
+
+# Exact phrase callers and tests look for when conversion cannot run.
+START_COMFY_OR_API = "start Comfy or supply API JSON"
 
 
 def _is_api_node(value: Any) -> bool:
@@ -58,20 +63,51 @@ def unwrap_api_workflow(data: Any) -> dict[str, Any]:
         return direct
     if is_ui_workflow(data):
         raise IngestError(
-            "UI workflow JSON is not converted in Phase A. "
-            "Supply API JSON (node id → class_type/inputs). "
-            "Comfy /workflow/convert is a later phase and is not called."
+            f"{START_COMFY_OR_API}. "
+            "This file is UI-format JSON and Comfy /workflow/convert was not called."
         )
     raise IngestError(
         "not a Comfy API workflow. Expected node id → {class_type, inputs}."
     )
 
 
-def load_workflow_file(path: Path) -> tuple[dict[str, Any], dict[str, Any] | None]:
+def graph_from_history_payload(payload: Any, prompt_id: str) -> dict[str, Any]:
+    """Pull the queued API graph out of a Comfy ``/history`` body.
+
+    Comfy stores ``prompt`` as ``[number, prompt_id, graph, extra, outputs]``.
+    A dict ``prompt`` is accepted when it is already an API graph.
+    """
+    if not isinstance(payload, dict):
+        raise IngestError(
+            f"{START_COMFY_OR_API}. Comfy /history/{prompt_id} was not a JSON object."
+        )
+    entry = payload.get(prompt_id)
+    if not isinstance(entry, dict):
+        entry = payload
+    prompt = entry.get("prompt") if isinstance(entry, dict) else None
+    graph: Any = None
+    if isinstance(prompt, list) and len(prompt) >= 3 and isinstance(prompt[2], dict):
+        graph = prompt[2]
+    elif isinstance(prompt, dict):
+        graph = prompt
+    if not isinstance(graph, dict):
+        raise IngestError(
+            f"Comfy /history/{prompt_id} has no queued prompt graph. "
+            f"{START_COMFY_OR_API}."
+        )
+    return unwrap_api_workflow(graph)
+
+
+def load_workflow_file(
+    path: Path,
+    *,
+    converter: Any = None,
+) -> tuple[dict[str, Any], dict[str, Any] | None]:
     """Read ``path``. Return ``(api_graph, ui_original_or_none)``.
 
-    UI files raise. ``ui_original`` stays ``None`` so callers do not write
-    ``workflow_ui.json``.
+    ``converter`` is ``callable(ui_dict) -> api_dict``. UI files without a
+    converter raise ``IngestError`` (start Comfy or supply API JSON). The UI
+    object is returned so the caller can keep ``workflow_ui.json``.
     """
     file_path = Path(path)
     if not file_path.is_file():
@@ -80,4 +116,19 @@ def load_workflow_file(path: Path) -> tuple[dict[str, Any], dict[str, Any] | Non
         data = json.loads(file_path.read_text(encoding="utf-8"))
     except json.JSONDecodeError as exc:
         raise IngestError(f"workflow is not JSON: {file_path}") from exc
+    if is_ui_workflow(data):
+        if converter is None:
+            raise IngestError(
+                f"{START_COMFY_OR_API}. "
+                "This file is UI-format JSON and Comfy /workflow/convert was not called."
+            )
+        try:
+            converted = converter(data)
+        except IngestError:
+            raise
+        except Exception as exc:
+            raise IngestError(
+                f"{START_COMFY_OR_API}. Comfy /workflow/convert failed: {exc}"
+            ) from exc
+        return unwrap_api_workflow(converted), data
     return unwrap_api_workflow(data), None

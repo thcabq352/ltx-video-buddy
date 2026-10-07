@@ -10,9 +10,15 @@ import json
 import logging
 from typing import Any
 
-from master_agent.comfy.ingest.classify import missing_class_types
+from master_agent.comfy.ingest.classify import missing_class_types, missing_node_packs
 from master_agent.comfy.ingest.store import load_bundle
-from master_agent.comfy.ingest.validate import MissingCustomNodeError, apply_vae_guard
+from master_agent.comfy.ingest.validate import (
+    DOCTOR_POINTER,
+    DOWNLOAD_POINTER,
+    MissingCustomNodeError,
+    MissingModelError,
+    apply_vae_guard,
+)
 from master_agent.config import snap_ltx_frames
 
 log = logging.getLogger(__name__)
@@ -134,6 +140,7 @@ def prepare_ingested(
     readiness = dict(learned.get("readiness") or {})
     missing_nodes = missing_class_types(workflow, object_info)
     readiness["missing_nodes"] = missing_nodes
+    readiness["missing_node_packs"] = missing_node_packs(workflow, object_info)
     if missing_nodes:
         raise MissingCustomNodeError(missing_nodes)
     params: dict[str, Any] = {}
@@ -157,6 +164,7 @@ def prepare_ingested(
         "vae_notes": notes,
         "readiness": readiness,
         "workflow": workflow,
+        "workflow_sha256": (bundle.get("provenance") or {}).get("workflow_sha256"),
         "next": f"python -m master_agent comfy run --ingested {bundle['slug']}",
     }
 
@@ -193,11 +201,38 @@ def format_dry_run(report: dict[str, Any]) -> str:
         lines.append("dangers: none")
     for note in report.get("vae_notes") or []:
         lines.append(f"vae_guard: {note}")
-    missing = (report.get("readiness") or {}).get("missing_nodes") or []
+    readiness = report.get("readiness") or {}
+    packs = {
+        str(row.get("class_type")): row
+        for row in (readiness.get("missing_node_packs") or [])
+        if isinstance(row, dict)
+    }
+    missing = readiness.get("missing_nodes") or []
     if missing:
-        lines.append("missing_nodes: " + ", ".join(str(item) for item in missing))
+        rendered: list[str] = []
+        for item in missing:
+            row = packs.get(str(item)) or {}
+            pack = row.get("pack")
+            if pack:
+                rendered.append(f"{item} ({pack})")
+            else:
+                rendered.append(str(item))
+        lines.append("missing_nodes: " + ", ".join(rendered))
     else:
         lines.append("missing_nodes: none")
+    models = readiness.get("missing_models") or []
+    if models:
+        lines.append("missing_models: " + ", ".join(str(item) for item in models))
+        lines.append(
+            "missing_models are not substituted. "
+            f"{DOCTOR_POINTER}. {DOWNLOAD_POINTER}."
+        )
+    elif readiness.get("models_checked"):
+        lines.append("missing_models: none")
+    else:
+        lines.append("missing_models: not checked")
+    for pointer in readiness.get("pointers") or []:
+        lines.append(f"pointer: {pointer}")
     lines.append(f"next: {report.get('next')}")
     return "\n".join(lines)
 
@@ -208,11 +243,84 @@ def dry_run_slug(slug: str, **kwargs: Any) -> dict[str, Any]:
     return report
 
 
+def _write_output_provenance(
+    report: dict[str, Any],
+    history_files: list[dict[str, Any]],
+    *,
+    output_dir: Any = None,
+) -> list[str]:
+    """Write ``buddy.clip.provenance/v1`` next to each output that exists.
+
+    Uses ``build_clip_provenance`` / ``write_clip_provenance``. Does not
+    delete the output. Skips names that are not on disk.
+    """
+    from types import SimpleNamespace
+
+    from master_agent.comfy.client import ComfyClient
+    from master_agent.config import COMFYUI_OUTPUT_DIR
+    from master_agent.provenance import (
+        CLIP_PROVENANCE_SCHEMA,
+        build_clip_provenance,
+        missing_required,
+        write_clip_provenance,
+    )
+
+    params = report.get("params") or {}
+
+    def _value(role: str) -> Any:
+        info = params.get(role) or {}
+        return info.get("value") if isinstance(info, dict) else None
+
+    slug = str(report.get("slug") or "ingested")
+    base = output_dir or COMFYUI_OUTPUT_DIR
+    written: list[str] = []
+    for info in history_files:
+        if not isinstance(info, dict) or not info.get("filename"):
+            continue
+        path = ComfyClient.resolve_output_path(info, base)
+        if not path.is_file():
+            continue
+        state = SimpleNamespace(
+            request=str(_value("prompt") or ""),
+            prompt=str(_value("prompt") or ""),
+            negative_prompt=str(_value("negative_prompt") or ""),
+            variant=f"ingested:{slug}",
+            seed=_value("seed"),
+            steps=_value("steps"),
+            cfg=_value("cfg"),
+            width=int(_value("width") or 0),
+            height=int(_value("height") or 0),
+            fps=24,
+            duration_s=0.0,
+            shot_id="shot-1",
+            attempt=1,
+            judge_score=0.0,
+            shot={},
+            revise_history=[],
+        )
+        payload = build_clip_provenance(state, path=path, revise_notes="ingested run")
+        payload["engine"]["workflow_id"] = slug
+        digest = report.get("workflow_sha256")
+        if digest:
+            payload["params"]["workflow_sha256"] = digest
+        if payload.get("schema") != CLIP_PROVENANCE_SCHEMA:
+            raise RuntimeError("ingested provenance used an unknown schema")
+        missing = missing_required(payload)
+        if missing:
+            raise RuntimeError("ingested provenance missing " + ", ".join(missing))
+        dest = write_clip_provenance(path, payload)
+        written.append(str(dest))
+        if not path.is_file():
+            raise RuntimeError(f"output was removed while writing provenance: {path}")
+    return written
+
+
 def run_ingested(
     slug: str,
     *,
     client: Any | None = None,
     object_info: dict[str, Any] | None = None,
+    output_dir: Any = None,
     **kwargs: Any,
 ) -> dict[str, Any]:
     """Queue a prepared ingested graph through ``client.queue_prompt``.
@@ -227,6 +335,10 @@ def run_ingested(
         if object_info is None and hasattr(client, "load_object_info"):
             object_info, _source = client.load_object_info(prefer_live=True)
     report = prepare_ingested(slug, object_info=object_info, **kwargs)
+    readiness = report.get("readiness") or {}
+    missing_models = list(readiness.get("missing_models") or [])
+    if readiness.get("models_checked") and missing_models:
+        raise MissingModelError([str(name) for name in missing_models])
     workflow = report["workflow"]
     if object_info is not None:
         from master_agent.comfy.cli_run import lint_or_raise
@@ -246,4 +358,7 @@ def run_ingested(
         report["history_files"] = files
         if not files:
             raise RuntimeError("job completed but produced no output files")
+        report["provenance_sidecars"] = _write_output_provenance(
+            report, files, output_dir=output_dir
+        )
     return report

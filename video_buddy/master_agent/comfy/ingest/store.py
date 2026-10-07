@@ -12,7 +12,13 @@ from typing import Any
 import yaml
 
 from master_agent.comfy.ingest.learn import learn_workflow
-from master_agent.comfy.ingest.normalize import IngestError, load_workflow_file
+from master_agent.comfy.ingest.normalize import (
+    START_COMFY_OR_API,
+    IngestError,
+    graph_from_history_payload,
+    load_workflow_file,
+)
+from master_agent.comfy.ingest.validate import buddy_model_inventory, union_inventories
 
 _SLUG = re.compile(r"^[a-z0-9][a-z0-9_-]{0,63}$")
 
@@ -110,6 +116,13 @@ def load_bundle(slug: str) -> dict[str, Any]:
     }
 
 
+def _object_info_hash(object_info: dict[str, Any] | None) -> str | None:
+    if not object_info:
+        return None
+    raw = json.dumps(object_info, sort_keys=True, default=str)
+    return hashlib.sha256(raw.encode("utf-8")).hexdigest()
+
+
 def ingest_graph(
     workflow: dict[str, Any],
     *,
@@ -117,21 +130,29 @@ def ingest_graph(
     source: str = "",
     object_info: dict[str, Any] | None = None,
     ui_workflow: dict[str, Any] | None = None,
+    model_inventory: set[str] | None = None,
+    provenance_extra: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
     """Learn ``workflow`` and store it. Does not queue and does not download."""
     safe = slugify(slug)
     learned = learn_workflow(
-        workflow, slug=safe, source=source, object_info=object_info
+        workflow,
+        slug=safe,
+        source=source,
+        object_info=object_info,
+        model_inventory=model_inventory,
     )
     provenance = {
         "source_path": source,
         "ingested_at": datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ"),
         "format": "api",
         "comfy_version": None,
-        "object_info_hash": None,
+        "object_info_hash": _object_info_hash(object_info),
         "workflow_sha256": hashlib.sha256(_canonical(workflow).encode("utf-8")).hexdigest(),
         "phase": "A",
     }
+    if provenance_extra:
+        provenance.update(provenance_extra)
     dest = write_bundle(
         safe, workflow, learned, provenance, ui_workflow=ui_workflow
     )
@@ -145,33 +166,165 @@ def ingest_graph(
     }
 
 
+def _comfy_model_names(client: Any) -> set[str] | None:
+    if client is None or not hasattr(client, "list_model_filenames"):
+        return None
+    try:
+        names = client.list_model_filenames()
+    except Exception:
+        return None
+    if not isinstance(names, list):
+        return None
+    return {str(name) for name in names if str(name).strip()}
+
+
+def _merge_inventory(
+    model_inventory: set[str] | None,
+    client: Any,
+) -> set[str] | None:
+    return union_inventories(model_inventory, buddy_model_inventory(), _comfy_model_names(client))
+
+
 def ingest_file(
     path: Path,
     *,
     slug: str | None = None,
     object_info: dict[str, Any] | None = None,
+    converter: Any = None,
+    client: Any = None,
+    model_inventory: set[str] | None = None,
 ) -> dict[str, Any]:
+    """Ingest a local JSON file.
+
+    UI-format JSON uses ``converter`` or ``client.convert_workflow`` (Comfy
+    ``/workflow/convert``). When neither is available the call refuses with
+    ``start Comfy or supply API JSON``. Both ``workflow_ui.json`` and
+    ``workflow_api.json`` are kept after a conversion.
+    """
     file_path = Path(path)
-    workflow, ui_workflow = load_workflow_file(file_path)
+    if not file_path.is_file():
+        raise IngestError(f"workflow not found: {file_path}")
+    live = client
+    used_convert = False
+
+    def _convert(ui: dict[str, Any]) -> dict[str, Any]:
+        nonlocal used_convert
+        used_convert = True
+        if converter is not None:
+            return converter(ui)
+        if live is not None and hasattr(live, "convert_workflow"):
+            return live.convert_workflow(ui)
+        raise IngestError(
+            f"{START_COMFY_OR_API}. "
+            "This file is UI-format JSON and Comfy /workflow/convert was not called."
+        )
+
+    # Peek so API files do not construct a converter call.
+    try:
+        raw = json.loads(file_path.read_text(encoding="utf-8"))
+    except json.JSONDecodeError as exc:
+        raise IngestError(f"workflow is not JSON: {file_path}") from exc
+    from master_agent.comfy.ingest.normalize import is_ui_workflow
+
+    convert = _convert if is_ui_workflow(raw) else None
+    workflow, ui_workflow = load_workflow_file(file_path, converter=convert)
+    info = object_info
+    if ui_workflow is not None and info is None and live is not None and hasattr(live, "fetch_object_info"):
+        try:
+            info = live.fetch_object_info()
+        except Exception:
+            info = None
+    extra: dict[str, Any] | None = None
+    if ui_workflow is not None:
+        extra = {"phase": "B", "source_format": "ui", "converted_via": "/workflow/convert"}
     chosen = slug if slug else file_path.stem
     return ingest_graph(
         workflow,
         slug=chosen,
         source=str(file_path),
-        object_info=object_info,
+        object_info=info,
         ui_workflow=ui_workflow,
+        model_inventory=_merge_inventory(model_inventory, live if used_convert else None),
+        provenance_extra=extra,
     )
 
 
-def refresh_learned(slug: str, object_info: dict[str, Any] | None = None) -> dict[str, Any]:
+def ingest_history(
+    prompt_id: str,
+    *,
+    slug: str | None = None,
+    client: Any = None,
+    object_info: dict[str, Any] | None = None,
+    model_inventory: set[str] | None = None,
+) -> dict[str, Any]:
+    """Ingest the queued graph from Comfy ``/history/<prompt_id>``.
+
+    ``client`` defaults to ``ComfyClient``. Tests pass a fake. A down server
+    refuses with ``start Comfy or supply API JSON``.
+    """
+    token = str(prompt_id or "").strip()
+    if not token:
+        raise IngestError("history ingest requires a prompt_id (history:PROMPT_ID).")
+    live = client
+    if live is None:
+        from master_agent.comfy.client import ComfyClient
+
+        live = ComfyClient()
+    try:
+        payload = live.get_history(token)
+    except IngestError:
+        raise
+    except Exception as exc:
+        raise IngestError(
+            f"{START_COMFY_OR_API}. Comfy /history/{token} failed: {exc}"
+        ) from exc
+    workflow = graph_from_history_payload(payload, token)
+    info = object_info
+    if info is None and hasattr(live, "fetch_object_info"):
+        try:
+            info = live.fetch_object_info()
+        except Exception:
+            info = None
+    version = None
+    if hasattr(live, "health"):
+        try:
+            stats = live.health() or {}
+            system = stats.get("system") if isinstance(stats, dict) else None
+            if isinstance(system, dict):
+                version = system.get("comfyui_version") or system.get("version")
+        except Exception:
+            version = None
+    chosen = slug if slug else f"history-{token[:8]}"
+    return ingest_graph(
+        workflow,
+        slug=chosen,
+        source=f"history:{token}",
+        object_info=info,
+        model_inventory=_merge_inventory(model_inventory, live),
+        provenance_extra={
+            "phase": "B",
+            "source_format": "history",
+            "prompt_id": token,
+            "comfy_version": version,
+        },
+    )
+
+
+def refresh_learned(
+    slug: str,
+    object_info: dict[str, Any] | None = None,
+    model_inventory: set[str] | None = None,
+) -> dict[str, Any]:
     """Re-run heuristics on the stored API graph and rewrite learned.yaml."""
     bundle = load_bundle(slug)
     source = str((bundle.get("provenance") or {}).get("source_path") or "")
+    inventory = model_inventory if model_inventory is not None else buddy_model_inventory()
     learned = learn_workflow(
         bundle["workflow"],
         slug=bundle["slug"],
         source=source,
         object_info=object_info,
+        model_inventory=inventory,
     )
     _write_learned(bundle["dir"] / "learned.yaml", learned)
     bundle["learned"] = learned

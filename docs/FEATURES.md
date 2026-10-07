@@ -130,4 +130,4 @@ Recorded promote class: `ByteDance2DraftToFinalVideoNode`. Policy object: `PACK_
 
 ## Ingested workflows
 
-One-off Comfy API graphs are learned from the CLI into gitignored `state/ingested/<slug>/`. They are not catalog variants and are not promoted. Commands, the field map, and the dry-run default: [Workflow ingest](WORKFLOW_INGEST.md).
+One-off Comfy graphs (API JSON, UI JSON when Comfy is up, or `/history`) are learned into gitignored `state/ingested/<slug>/`. They are not catalog variants and are not promoted. Procedure: [Workflow ingest](WORKFLOW_INGEST.md).
