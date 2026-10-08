@@ -589,6 +589,25 @@
             <option value="base">base</option>
           </select></div>
       </div>
+      <div class="card" id="ingest-card">
+        <h2>Ingest a workflow</h2>
+        <div class="sub">Drop or pick a JSON file next to the template picker. Dry-run is the default. Queue needs a confirm click and uses the same path as <code>comfy run --ingested</code>.</div>
+        <div class="drop drop-json" id="ingest-drop">
+          <input type="file" id="ingest-file" accept="application/json,.json">
+          <span class="drop-title">Drop or pick a workflow JSON</span>
+          <span class="drop-hint">API JSON, or UI JSON when Comfy is up. Nothing is queued yet.</span>
+          <span class="drop-name" id="ingest-file-name"></span>
+        </div>
+        <div id="ingest-readiness" class="muted"></div>
+        <div id="ingest-fields"></div>
+        <div class="actions">
+          <button class="btn" id="ingest-dry" type="button" disabled>Dry-run</button>
+          <label class="muted"><input type="checkbox" id="ingest-confirm"> I confirm this queues on Comfy</label>
+          <button class="btn" id="ingest-queue" type="button" disabled>Queue</button>
+          <span class="muted" id="ingest-status"></span>
+        </div>
+        <pre class="log" id="ingest-out">(not ingested yet)</pre>
+      </div>
       <div id="wf-prompt-wrap" style="display:none">
         <label>Prompt (generate)</label>
         <textarea id="wf-prompt" placeholder="cinematic rain on a window, slow push in"></textarea>
@@ -1750,6 +1769,106 @@ $("wf-run")?.addEventListener("click", async () => {
       toast("loaded " + f.name);
     } catch (e) { toast(e.message); }
   }
+})();
+(function bindIngestDrop() {
+  const drop = $("ingest-drop");
+  const file = $("ingest-file");
+  if (!drop || !file) return;
+  let slug = "";
+  const values = () => {
+    const body = { slug };
+    document.querySelectorAll("#ingest-fields [data-role]").forEach((el) => {
+      const role = el.dataset.role;
+      if (!role || el.value === "") return;
+      body[role] = el.type === "number" ? Number(el.value) : el.value;
+    });
+    return body;
+  };
+  const paint = (data) => {
+    slug = data.slug || "";
+    const fields = data.fields || {};
+    $("ingest-fields").innerHTML = Object.entries(fields).map(([role, spec]) => {
+      const conf = spec.confidence || "high";
+      const source = spec.source ? " source " + spec.source : "";
+      return `<label>${esc(role)} <span class="muted">[${esc(conf)}${esc(source)}] node ${esc(spec.node_id)} ${esc(spec.input)}</span></label>
+        <input data-role="${esc(role)}" value="">`;
+    }).join("") || '<div class="muted">No learned fields.</div>';
+    const ready = data.readiness || {};
+    const nodes = (ready.missing_nodes || []).join(", ") || "none";
+    const models = ready.models_checked ? ((ready.missing_models || []).join(", ") || "none") : "not checked";
+    const dangers = (data.dangers || []).map((d) => (d.code || "") + " " + (d.detail || "")).join("\n") || "none";
+    const family = data.family ? (data.family + " (" + (data.family_route || "generic") + ")") : "unmatched";
+    $("ingest-readiness").textContent =
+      "family: " + family + "\nmissing nodes: " + nodes + "\nmissing models: " + models + "\ndangers: " + dangers
+      + (data.family_warning ? "\n" + data.family_warning : "")
+      + (data.llm_warning ? "\n" + data.llm_warning : "");
+    $("ingest-dry").disabled = !slug;
+    $("ingest-queue").disabled = !(slug && $("ingest-confirm").checked);
+    $("ingest-status").textContent = " ingested " + slug + " — dry-run next";
+  };
+  drop.addEventListener("click", () => file.click());
+  drop.addEventListener("dragover", (e) => { e.preventDefault(); drop.classList.add("drag"); });
+  drop.addEventListener("dragleave", () => drop.classList.remove("drag"));
+  drop.addEventListener("drop", (e) => {
+    e.preventDefault();
+    drop.classList.remove("drag");
+    const f = e.dataTransfer?.files?.[0];
+    if (f) sendIngest(f);
+  });
+  file.addEventListener("click", (e) => e.stopPropagation());
+  file.addEventListener("change", () => { if (file.files?.[0]) sendIngest(file.files[0]); });
+  async function sendIngest(f) {
+    $("ingest-status").textContent = " ingesting…";
+    $("ingest-file-name").textContent = f.name;
+    const body = new FormData();
+    body.append("file", f, f.name);
+    try {
+      const r = await fetch("/api/comfy/ingest", { method: "POST", body });
+      const data = await r.json().catch(() => ({}));
+      if (!r.ok) throw new Error(data.detail || r.statusText);
+      paint(data);
+      $("ingest-out").textContent = "ingested " + data.slug + "\n" + ($("ingest-readiness").textContent || "");
+      toast("ingested " + data.slug);
+    } catch (e) {
+      $("ingest-status").textContent = " " + e.message;
+      $("ingest-out").textContent = e.message;
+      toast(e.message);
+    }
+  }
+  $("ingest-confirm")?.addEventListener("change", () => {
+    $("ingest-queue").disabled = !(slug && $("ingest-confirm").checked);
+  });
+  $("ingest-dry")?.addEventListener("click", async () => {
+    $("ingest-status").textContent = " dry-run…";
+    try {
+      const report = await api("/api/comfy/ingest/dry-run", { body: values() });
+      $("ingest-out").textContent = report.text || JSON.stringify(report, null, 2);
+      $("ingest-status").textContent = " dry-run (not queued)";
+    } catch (e) {
+      $("ingest-status").textContent = " " + e.message;
+      $("ingest-out").textContent = e.message;
+    }
+  });
+  $("ingest-queue")?.addEventListener("click", async () => {
+    if (!$("ingest-confirm").checked) {
+      toast("confirm this queues on Comfy");
+      return;
+    }
+    $("ingest-queue").disabled = true;
+    $("ingest-status").textContent = " queueing…";
+    try {
+      const report = await api("/api/comfy/ingest/run", { body: Object.assign(values(), { confirm: true }) });
+      $("ingest-out").textContent = report.text || JSON.stringify(report, null, 2);
+      $("ingest-status").textContent = " queued " + (report.prompt_id || "");
+      toast("queued " + (report.prompt_id || ""));
+    } catch (e) {
+      $("ingest-status").textContent = " " + e.message;
+      $("ingest-out").textContent = e.message;
+      toast(e.message);
+    } finally {
+      $("ingest-queue").disabled = !$("ingest-confirm").checked;
+    }
+  });
 })();
 
 // models

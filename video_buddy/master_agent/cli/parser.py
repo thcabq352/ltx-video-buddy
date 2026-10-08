@@ -581,6 +581,7 @@ def main(argv: list[str] | None = None) -> int:
             "ingest",
             "learn",
             "dry-run",
+            "promote",
             "start",
             "stop",
             "status",
@@ -592,7 +593,7 @@ def main(argv: list[str] | None = None) -> int:
         "target",
         nargs="?",
         default=None,
-        help="ingest: API workflow JSON path; learn/dry-run: slug under state/ingested/",
+        help="ingest: API workflow JSON path; learn/dry-run/promote: slug under state/ingested/",
     )
     p.add_argument("--mode", choices=["raw", "template", "generate"], default="generate")
     p.add_argument("--json", dest="workflow_json", help="pasted/path API workflow JSON (raw)")
@@ -608,6 +609,29 @@ def main(argv: list[str] | None = None) -> int:
         dest="ingest_from",
         default=None,
         help="ingest from a live Comfy history entry: history:PROMPT_ID",
+    )
+    p.add_argument(
+        "--no-family-route",
+        action="store_true",
+        help="ingest/learn/dry-run/run: keep a matched inoutpaint, sulphur, or lipsync graph on the generic path",
+    )
+    p.add_argument(
+        "--variant-name",
+        default=None,
+        help="promote: draft id in workflows/manifests.yaml (default: the ingested slug). Never a catalog default.",
+    )
+    p.add_argument(
+        "--force",
+        action="store_true",
+        help="promote: write the draft even when readiness lists missing nodes or models",
+    )
+    p.add_argument(
+        "--llm-assist",
+        action="store_true",
+        help=(
+            "ingest/learn: ask a local LLM (llama.cpp, then Ollama) to name "
+            "low-confidence widgets. Off by default. No cloud call."
+        ),
     )
     p.add_argument(
         "--ingested",

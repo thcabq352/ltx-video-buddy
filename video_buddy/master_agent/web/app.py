@@ -135,6 +135,18 @@ class ComfyWorkflowBody(BaseModel):
     request: str = "comfy run"
 
 
+class IngestActionBody(BaseModel):
+    slug: str
+    confirm: bool = False
+    prompt: str = ""
+    negative_prompt: Optional[str] = None
+    seed: Optional[int] = None
+    width: Optional[int] = None
+    height: Optional[int] = None
+    frames: Optional[int] = None
+    vae: Optional[str] = None
+
+
 class SelectorPlanBody(BaseModel):
     """Live checklist. Never downloads and never writes selector state."""
 
@@ -639,6 +651,105 @@ def api_comfy_run(req: ComfyWorkflowBody):
     label = (req.request or "comfy run").strip() or "comfy run"
     job = MANAGER.submit("comfy-run", label, workflow=workflow)
     return job.to_dict()
+
+
+def _ingest_public(result: dict[str, Any]) -> dict[str, Any]:
+    learned = result.get("learned") or {}
+    return {
+        "ok": True,
+        "slug": result.get("slug"),
+        "queued": False,
+        "next": result.get("next"),
+        "fields": learned.get("fields") or {},
+        "warnings": learned.get("warnings") or [],
+        "readiness": learned.get("readiness") or {},
+        "dangers": learned.get("dangers") or [],
+        "family": learned.get("family"),
+        "family_route": learned.get("family_route"),
+        "family_warning": learned.get("family_warning"),
+        "llm_proposals": learned.get("llm_proposals") or [],
+        "llm_warning": learned.get("llm_warning"),
+    }
+
+
+def _ingest_action_kwargs(req: IngestActionBody) -> dict[str, Any]:
+    return {
+        "prompt": req.prompt or None,
+        "negative_prompt": req.negative_prompt,
+        "seed": req.seed,
+        "width": req.width,
+        "height": req.height,
+        "frames": req.frames,
+        "vae": req.vae,
+    }
+
+
+@app.post("/api/comfy/ingest")
+async def api_comfy_ingest(file: UploadFile = File(...)):
+    """Learn a dropped JSON file. Does not queue. UI JSON needs live Comfy."""
+    import tempfile
+
+    from master_agent.comfy.client import ComfyClient
+    from master_agent.comfy.ingest.normalize import IngestError
+    from master_agent.comfy.ingest.store import ingest_file
+
+    raw = await file.read()
+    if not raw:
+        raise HTTPException(400, "empty workflow file")
+    stem = Path(file.filename or "workflow").stem or "workflow"
+    tmp = tempfile.NamedTemporaryFile(prefix="ingest-", suffix=".json", delete=False)
+    path = Path(tmp.name)
+    try:
+        tmp.write(raw)
+        tmp.close()
+        try:
+            result = ingest_file(path, slug=stem, client=ComfyClient())
+        except IngestError as exc:
+            raise HTTPException(400, str(exc)) from exc
+        except Exception as exc:
+            text = str(exc)
+            if "start Comfy or supply API JSON" in text:
+                raise HTTPException(400, text) from exc
+            raise
+    finally:
+        path.unlink(missing_ok=True)
+    return _ingest_public(result)
+
+
+@app.post("/api/comfy/ingest/dry-run")
+def api_comfy_ingest_dry_run(req: IngestActionBody):
+    from master_agent.comfy.ingest.normalize import IngestError
+    from master_agent.comfy.ingest.run import dry_run_slug
+    from master_agent.comfy.ingest.validate import MissingCustomNodeError, MissingModelError
+    from master_agent.comfy.vae_guard import TinyVAETiledDecodeError
+
+    try:
+        report = dry_run_slug(req.slug, **_ingest_action_kwargs(req))
+    except (IngestError, MissingCustomNodeError, MissingModelError, TinyVAETiledDecodeError) as exc:
+        raise HTTPException(400, str(exc)) from exc
+    report = dict(report)
+    report.pop("workflow", None)
+    report["queued"] = False
+    return report
+
+
+@app.post("/api/comfy/ingest/run")
+def api_comfy_ingest_run(req: IngestActionBody):
+    """Queue only after an explicit confirm. Same path as ``run --ingested``."""
+    if not req.confirm:
+        raise HTTPException(400, "confirm this queues on Comfy")
+    from master_agent.comfy.ingest.normalize import IngestError
+    from master_agent.comfy.ingest.run import run_ingested
+    from master_agent.comfy.ingest.validate import MissingCustomNodeError, MissingModelError
+    from master_agent.comfy.vae_guard import TinyVAETiledDecodeError
+
+    try:
+        report = run_ingested(req.slug, **_ingest_action_kwargs(req))
+    except (IngestError, MissingCustomNodeError, MissingModelError, TinyVAETiledDecodeError) as exc:
+        raise HTTPException(400, str(exc)) from exc
+    report = dict(report)
+    report.pop("workflow", None)
+    return report
 
 
 @app.post("/api/intake")

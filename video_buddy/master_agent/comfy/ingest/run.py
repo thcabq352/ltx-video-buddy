@@ -11,6 +11,12 @@ import logging
 from typing import Any
 
 from master_agent.comfy.ingest.classify import missing_class_types, missing_node_packs
+from master_agent.comfy.ingest.fingerprint import (
+    apply_family_route,
+    decide_route,
+    family_warning,
+    match_family,
+)
 from master_agent.comfy.ingest.store import load_bundle
 from master_agent.comfy.ingest.validate import (
     DOCTOR_POINTER,
@@ -104,6 +110,7 @@ def prepare_ingested(
     filename_prefix: str | None = None,
     node_overrides: dict[str, dict[str, Any]] | None = None,
     object_info: dict[str, Any] | None = None,
+    no_family_route: bool = False,
 ) -> dict[str, Any]:
     """Return a patched copy plus the dry-run report. Does not queue."""
     from master_agent.comfy.cli_run import apply_overrides
@@ -134,6 +141,16 @@ def prepare_ingested(
     _apply_named_fields(workflow, fields, values)
     if "frames" in values:
         _sync_audio_frames(workflow, int(values["frames"]))
+    matched = match_family(workflow)
+    route = decide_route(
+        matched,
+        no_family_route=no_family_route,
+        stored_route=learned.get("family_route"),
+    )
+    family_notes: list[str] = []
+    if route == "specialized":
+        family_notes = apply_family_route(workflow, matched, values=values)
+    note = family_warning(matched, route=route)
     if node_overrides:
         workflow = apply_overrides(workflow, node_overrides)
     notes = apply_vae_guard(workflow, vae=vae, node_overrides=node_overrides)
@@ -153,6 +170,7 @@ def prepare_ingested(
             "input": spec.get("input"),
             "class_type": spec.get("class_type"),
             "confidence": spec.get("confidence") or "high",
+            "source": spec.get("source"),
             "overridden": role in values,
         }
     return {
@@ -160,7 +178,13 @@ def prepare_ingested(
         "queued": False,
         "params": params,
         "warnings": warnings,
+        "family": matched,
+        "family_route": route,
+        "family_warning": note,
+        "family_notes": family_notes,
         "dangers": list(learned.get("dangers") or []),
+        "llm_proposals": list(learned.get("llm_proposals") or []),
+        "llm_warning": learned.get("llm_warning"),
         "vae_notes": notes,
         "readiness": readiness,
         "workflow": workflow,
@@ -177,15 +201,28 @@ def format_dry_run(report: dict[str, Any]) -> str:
     lines = [
         header,
         f"slug: {report.get('slug')}",
+        f"family: {report.get('family') or 'unmatched'} ({report.get('family_route') or 'generic'})",
     ]
+    if report.get("family_warning"):
+        lines.append(f"WARN  {report['family_warning']}")
+    for note in report.get("family_notes") or []:
+        lines.append(f"family_route: {note}")
     params = report.get("params") or {}
     if not params:
         lines.append("params: none")
     for role, info in params.items():
         confidence = info.get("confidence") or "high"
+        source = f" source {info['source']}" if info.get("source") else ""
         lines.append(
             f"{role}: {info.get('value')!r} [{confidence}] "
-            f"node {info.get('node_id')} {info.get('input')}"
+            f"node {info.get('node_id')} {info.get('input')}{source}"
+        )
+    if report.get("llm_warning"):
+        lines.append(f"WARN  {report['llm_warning']}")
+    for proposal in report.get("llm_proposals") or []:
+        lines.append(
+            f"llm: {proposal.get('from')} -> {proposal.get('role')} "
+            f"[{proposal.get('confidence')}] source {proposal.get('source')}"
         )
     for warning in report.get("warnings") or []:
         lines.append(
@@ -340,6 +377,21 @@ def run_ingested(
     if readiness.get("models_checked") and missing_models:
         raise MissingModelError([str(name) for name in missing_models])
     workflow = report["workflow"]
+    if (
+        report.get("family_route") == "specialized"
+        and report.get("family") in {"inoutpaint", "lipsync"}
+    ):
+        from master_agent.comfy.inoutpaint import prepare_queue_inputs
+
+        def _upload(path: Any) -> str:
+            from pathlib import Path
+
+            file_path = Path(path)
+            if hasattr(client, "upload_image"):
+                return str(client.upload_image(file_path))
+            return file_path.name
+
+        prepare_queue_inputs(workflow, _upload)
     if object_info is not None:
         from master_agent.comfy.cli_run import lint_or_raise
 

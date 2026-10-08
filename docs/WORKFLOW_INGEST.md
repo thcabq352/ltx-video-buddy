@@ -1,10 +1,10 @@
 # Workflow ingest
 
-Buddy learns a one-off ComfyUI graph and runs it through the same patcher, `vae_guard`, and Comfy client as a catalog variant. The graph stays on this machine under `state/ingested/`. It is not copied into `workflows/` and it is not added to `manifests.yaml`.
+Buddy learns a one-off ComfyUI graph and runs it through the same patcher, `vae_guard`, and Comfy client as a catalog variant. The graph stays on this machine under `state/ingested/` until an explicit `comfy promote` copies a draft into the local `workflows/` checkout. Promote does not change the catalog default.
 
-Catalog variants stay on `comfy run --variant`. Inpaint, sulphur, and lipsync are not detected or rerouted from an ingested graph. Keep using `--variant` for those.
+Catalog variants stay on `comfy run --variant`. An ingested graph that matches inoutpaint, sulphur, or lipsync is routed through that family's existing helper. `--no-family-route` keeps it generic. Unmatched graphs stay generic.
 
-No web UI. No custom-node install. No weight download. No LLM. Outputs are never deleted.
+No custom-node install. No weight download. Outputs are never deleted. Promote does not commit, push, or open a pull request. `--llm-assist` is off unless you pass it, and it stays on a local model. The Comfy tab has a drop zone beside the template picker.
 
 ## Commands
 
@@ -12,10 +12,12 @@ From `video_buddy/`:
 
 ```bash
 python -m master_agent comfy ingest path/to/workflow_api.json --slug demo
+python -m master_agent comfy ingest path/to/workflow_api.json --slug demo --llm-assist
 python -m master_agent comfy ingest path/to/workflow_ui.json --slug demo
 python -m master_agent comfy ingest --from history:PROMPT_ID --slug demo
 python -m master_agent comfy learn demo
 python -m master_agent comfy dry-run demo --prompt "neon rain" --seed 42
+python -m master_agent comfy promote demo --variant-name demo-draft
 python -m master_agent comfy run --ingested demo --prompt "neon rain" --seed 42 --frames 25
 ```
 
@@ -83,6 +85,45 @@ Every ingested run applies `vae_guard`. A baked `taeltx*` / `tae*` preview VAE t
 
 `vram_class` on a learned file is `unknown`. Model files are not downloaded and are not substituted.
 
+## Family route
+
+A fingerprint picks at most one family:
+
+| Family | Signal | Existing path |
+|---|---|---|
+| inoutpaint | `LTXVInpaintPreprocess` | `finalize_inoutpaint_graph` |
+| lipsync | `LTXAddVideoICLoRAGuide` or `LTXVSetAudioRefTokens` | source-widget prompt; `prepare_queue_inputs` at queue |
+| sulphur | `PathchSageAttentionKJ`, `LTX2SamplingPreviewOverride`, or a LoRA filename containing `sulphur` | `patch_sulphur_graph` |
+
+inoutpaint is checked first. A 2.5 in/outpaint graph (`VHS_DuplicateMasks`, `LTXVImgToVideoInplace`, or `LTXVImgToVideoConditionOnly`) is finalized with `ltx25=True`, so the PR #44 mask repeat and `trim_to_shortest=false` still run. The learned file records `family` and `family_route` (`specialized` or `generic`). Dry-run prints the same line.
+
+An unmatched graph stays on the generic patcher and dry-run warns `unmatched graph stays on the generic path`.
+
+`--no-family-route` on ingest or learn stores `family_route: generic`. The same flag on dry-run or run forces generic for that call. `learn` without the flag turns routing back on when the graph still matches.
+
+## Promote
+
+`comfy promote SLUG [--variant-name NAME]` writes two local files and prints a unified diff:
+
+- `workflows/<name>.json` — a copy of the stored API graph
+- an appended block in `workflows/manifests.yaml` — `file`, `description`, `vram_class`, `fields`, `inputs`, `outputs`, `requires`, plus `draft: true`
+
+The block uses the same field vocabulary as the rest of the manifest (`node_id` or `class_type` + `index`, plus `input`). A low-confidence role is a YAML comment above that field, not an extra key.
+
+Promote refuses when `readiness` lists missing nodes or models. `--force` writes the draft anyway and does not install nodes or substitute weights. It refuses a `--variant-name` that is already a catalog default (`base`, or any id `default_variant_ids()` publishes) and refuses a name that already exists in `manifests.yaml`. It does not replace `base`. It does not run git, and it does not open a pull request. `comfy run --variant` does not pick the new draft unless you pass that name yourself.
+
+## LLM assist
+
+`--llm-assist` on `ingest` or `learn` is off by default. It asks a local model to name widgets that the heuristics already marked low confidence. High-confidence roles are not sent and are not overwritten.
+
+The backend order is the repo's local order: llama.cpp when that server is already up, otherwise Ollama. The flag does not call `get_llm("auto")`, does not start llama.cpp, does not download a weight, and does not call Grok or any other cloud model. When neither local server is up, the command warns and keeps the heuristic names.
+
+A proposal is stored on the field as `source: llm` plus a confidence, listed under `llm_proposals`, and printed in dry-run. A proposal that would take a role the graph already mapped is shown and not applied. Low confidence still warns and proceeds.
+
+## Web drop zone
+
+The Comfy tab in the Buddy web UI has an ingest drop zone next to the template picker. The existing raw-JSON drop still loads the editor. The ingest zone accepts a JSON file, learns it, and shows the field form plus readiness and dangers. Dry-run does not queue. Queue stays disabled until the confirm checkbox is checked, then it calls the same `run --ingested` path, including `vae_guard`.
+
 ## Not in this phase
 
-URL ingest, promote-to-catalog, fingerprint routing onto inoutpaint, sulphur, or lipsync, LLM role names, and a web drop zone.
+URL ingest.
