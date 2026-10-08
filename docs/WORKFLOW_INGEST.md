@@ -68,7 +68,7 @@ Heuristics only. The field map uses `node_id` or `class_type` + `index`, plus `i
 | `negative_prompt` | Negative-titled CLIP text, else the next unbound text widget |
 | `seed` | `RandomNoise.noise_seed`, else a sampler `seed` |
 | `width`, `height`, `frames` | `Empty*Latent*` widgets. `frames` writes `length` on LTX latents |
-| `checkpoint` | `CheckpointLoaderSimple.ckpt_name` |
+| `checkpoint` | `CheckpointLoaderSimple.ckpt_name`, else `UnetLoaderGGUF.unet_name` on the shared `ltx23_av.json` graph. The text-projection `ckpt_name` on `LTXAVTextEncoderLoader` is not this role |
 | `filename_prefix` | `SaveVideo` / `SaveImage` when that widget exists |
 
 A linked `CLIPTextEncode.text` is not a tunable field. The value is written on the Primitive (or other source) widget. That is the same lesson as lipsync and LTX 2.5: writing the linked encoder breaks the graph.
