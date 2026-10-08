@@ -610,6 +610,11 @@ def main(argv: list[str] | None = None) -> int:
         help="ingest from a live Comfy history entry: history:PROMPT_ID",
     )
     p.add_argument(
+        "--no-family-route",
+        action="store_true",
+        help="ingest/learn/dry-run/run: keep a matched inoutpaint, sulphur, or lipsync graph on the generic path",
+    )
+    p.add_argument(
         "--ingested",
         default=None,
         help="comfy run: queue a learned graph from state/ingested/SLUG. Not a catalog variant.",

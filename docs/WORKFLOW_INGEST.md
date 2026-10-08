@@ -2,7 +2,7 @@
 
 Buddy learns a one-off ComfyUI graph and runs it through the same patcher, `vae_guard`, and Comfy client as a catalog variant. The graph stays on this machine under `state/ingested/`. It is not copied into `workflows/` and it is not added to `manifests.yaml`.
 
-Catalog variants stay on `comfy run --variant`. Inpaint, sulphur, and lipsync are not detected or rerouted from an ingested graph. Keep using `--variant` for those.
+Catalog variants stay on `comfy run --variant`. An ingested graph that matches inoutpaint, sulphur, or lipsync is routed through that family's existing helper. `--no-family-route` keeps it generic. Unmatched graphs stay generic.
 
 No web UI. No custom-node install. No weight download. No LLM. Outputs are never deleted.
 
@@ -83,6 +83,22 @@ Every ingested run applies `vae_guard`. A baked `taeltx*` / `tae*` preview VAE t
 
 `vram_class` on a learned file is `unknown`. Model files are not downloaded and are not substituted.
 
+## Family route
+
+A fingerprint picks at most one family:
+
+| Family | Signal | Existing path |
+|---|---|---|
+| inoutpaint | `LTXVInpaintPreprocess` | `finalize_inoutpaint_graph` |
+| lipsync | `LTXAddVideoICLoRAGuide` or `LTXVSetAudioRefTokens` | source-widget prompt; `prepare_queue_inputs` at queue |
+| sulphur | `PathchSageAttentionKJ`, `LTX2SamplingPreviewOverride`, or a LoRA filename containing `sulphur` | `patch_sulphur_graph` |
+
+inoutpaint is checked first. A 2.5 in/outpaint graph (`VHS_DuplicateMasks`, `LTXVImgToVideoInplace`, or `LTXVImgToVideoConditionOnly`) is finalized with `ltx25=True`, so the PR #44 mask repeat and `trim_to_shortest=false` still run. The learned file records `family` and `family_route` (`specialized` or `generic`). Dry-run prints the same line.
+
+An unmatched graph stays on the generic patcher and dry-run warns `unmatched graph stays on the generic path`.
+
+`--no-family-route` on ingest or learn stores `family_route: generic`. The same flag on dry-run or run forces generic for that call. `learn` without the flag turns routing back on when the graph still matches.
+
 ## Not in this phase
 
-URL ingest, promote-to-catalog, fingerprint routing onto inoutpaint, sulphur, or lipsync, LLM role names, and a web drop zone.
+URL ingest, promote-to-catalog, LLM role names, and a web drop zone.

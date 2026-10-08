@@ -21,6 +21,7 @@ def _params(args: argparse.Namespace) -> dict:
         "height": getattr(args, "height", None),
         "frames": getattr(args, "frames", None),
         "vae": getattr(args, "vae", None),
+        "no_family_route": bool(getattr(args, "no_family_route", False)),
     }
 
 
@@ -67,6 +68,10 @@ def _print_learned_warnings(learned: dict) -> None:
         )
     for pointer in readiness.get("pointers") or []:
         print(f"pointer: {pointer}")
+    if learned.get("family_warning"):
+        print(f"WARN  {learned['family_warning']}")
+    elif learned.get("family"):
+        print(f"family: {learned['family']} ({learned.get('family_route')})")
     for warning in learned.get("warnings") or []:
         print(f"WARN  low confidence {warning.get('role')}: {warning.get('detail')}")
 
@@ -94,7 +99,11 @@ def cmd_ingest(args: argparse.Namespace) -> int:
         return _fail(exc)
     if prompt_id:
         try:
-            result = ingest_history(prompt_id, slug=getattr(args, "slug", None))
+            result = ingest_history(
+                prompt_id,
+                slug=getattr(args, "slug", None),
+                no_family_route=bool(getattr(args, "no_family_route", False)),
+            )
         except (IngestError, OSError) as exc:
             return _fail(exc)
     else:
@@ -108,6 +117,7 @@ def cmd_ingest(args: argparse.Namespace) -> int:
                 Path(target),
                 slug=getattr(args, "slug", None),
                 client=ComfyClient(),
+                no_family_route=bool(getattr(args, "no_family_route", False)),
             )
         except (IngestError, OSError) as exc:
             return _fail(exc)
@@ -131,7 +141,10 @@ def cmd_learn(args: argparse.Namespace) -> int:
         print("FAIL  comfy learn requires SLUG")
         return 1
     try:
-        bundle = refresh_learned(str(slug))
+        bundle = refresh_learned(
+            str(slug),
+            no_family_route=bool(getattr(args, "no_family_route", False)),
+        )
     except (IngestError, OSError) as exc:
         return _fail(exc)
     _print_learned_warnings(bundle["learned"])

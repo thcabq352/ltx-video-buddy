@@ -11,6 +11,11 @@ from master_agent.comfy.ingest.classify import (
     missing_node_packs,
     requires_packs,
 )
+from master_agent.comfy.ingest.fingerprint import (
+    decide_route,
+    family_warning,
+    match_family,
+)
 from master_agent.comfy.ingest.validate import (
     dangers_for,
     missing_model_filenames,
@@ -39,6 +44,7 @@ def learn_workflow(
     source: str = "",
     object_info: dict[str, Any] | None = None,
     model_inventory: set[str] | None = None,
+    no_family_route: bool = False,
 ) -> dict[str, Any]:
     """Typed field map plus readiness. Low-confidence roles are kept."""
     guesses, output_id = infer_roles(workflow)
@@ -78,6 +84,18 @@ def learn_workflow(
         "vram_class": "unknown",
         "warnings": warnings,
     }
+    family = match_family(workflow)
+    route = decide_route(family, no_family_route=no_family_route, stored_route=None)
+    # An explicit flag stores generic even when a family matches. Unmatched
+    # graphs are generic too. ``stored_route=None`` lets decide_route pick
+    # specialized when a family matches and the flag is off.
+    if no_family_route:
+        route = "generic"
+    learned["family"] = family
+    learned["family_route"] = route
+    note = family_warning(family, route=route)
+    if note:
+        learned["family_warning"] = note
     missing_nodes = missing_class_types(workflow, object_info)
     missing_models = missing_model_filenames(workflow, model_inventory)
     learned["readiness"] = {
