@@ -7,8 +7,8 @@ from pathlib import Path
 
 from master_agent.comfy.ingest.normalize import IngestError
 from master_agent.comfy.ingest.run import dry_run_slug, format_dry_run, run_ingested
-from master_agent.comfy.ingest.store import ingest_file, refresh_learned
-from master_agent.comfy.ingest.validate import MissingCustomNodeError
+from master_agent.comfy.ingest.store import ingest_file, ingest_history, refresh_learned
+from master_agent.comfy.ingest.validate import MissingCustomNodeError, MissingModelError
 from master_agent.comfy.vae_guard import TinyVAETiledDecodeError
 
 
@@ -39,26 +39,78 @@ def _fail(exc: BaseException) -> int:
 
 
 def _print_learned_warnings(learned: dict) -> None:
-    missing = (learned.get("readiness") or {}).get("missing_nodes") or []
+    readiness = learned.get("readiness") or {}
+    packs = {
+        str(row.get("class_type")): row.get("pack")
+        for row in (readiness.get("missing_node_packs") or [])
+        if isinstance(row, dict)
+    }
+    missing = readiness.get("missing_nodes") or []
     if missing:
-        listed = ", ".join(str(item) for item in missing)
+        rendered = []
+        for item in missing:
+            pack = packs.get(str(item))
+            rendered.append(f"{item} ({pack})" if pack else str(item))
+        listed = ", ".join(rendered)
         print(
             f"WARN  missing custom node(s): {listed}. "
             "Buddy does not auto-install custom nodes."
         )
+    models = readiness.get("missing_models") or []
+    if models:
+        listed = ", ".join(str(item) for item in models)
+        print(
+            f"WARN  missing model(s): {listed}. "
+            "Buddy does not substitute another weight. "
+            "python -m master_agent doctor. "
+            "python -m master_agent download-models."
+        )
+    for pointer in readiness.get("pointers") or []:
+        print(f"pointer: {pointer}")
     for warning in learned.get("warnings") or []:
         print(f"WARN  low confidence {warning.get('role')}: {warning.get('detail')}")
 
 
+def _history_prompt_id(args: argparse.Namespace) -> str | None:
+    raw = getattr(args, "ingest_from", None)
+    if not raw:
+        return None
+    text = str(raw).strip()
+    if not text.startswith("history:"):
+        raise IngestError(
+            f"unsupported --from {text!r}. Use history:PROMPT_ID or a JSON path."
+        )
+    prompt_id = text.split(":", 1)[1].strip()
+    if not prompt_id:
+        raise IngestError("history ingest requires history:PROMPT_ID.")
+    return prompt_id
+
+
 def cmd_ingest(args: argparse.Namespace) -> int:
     target = getattr(args, "target", None) or getattr(args, "workflow_json", None)
-    if not target:
-        print("FAIL  comfy ingest requires PATH.json")
-        return 1
     try:
-        result = ingest_file(Path(target), slug=getattr(args, "slug", None))
-    except (IngestError, OSError) as exc:
+        prompt_id = _history_prompt_id(args)
+    except IngestError as exc:
         return _fail(exc)
+    if prompt_id:
+        try:
+            result = ingest_history(prompt_id, slug=getattr(args, "slug", None))
+        except (IngestError, OSError) as exc:
+            return _fail(exc)
+    else:
+        if not target:
+            print("FAIL  comfy ingest requires PATH.json or --from history:PROMPT_ID")
+            return 1
+        try:
+            from master_agent.comfy.client import ComfyClient
+
+            result = ingest_file(
+                Path(target),
+                slug=getattr(args, "slug", None),
+                client=ComfyClient(),
+            )
+        except (IngestError, OSError) as exc:
+            return _fail(exc)
     learned = result["learned"]
     print(f"ingested slug={result['slug']}")
     print(f"wrote {result['dir'] / 'workflow_api.json'}")
@@ -96,7 +148,7 @@ def cmd_dry_run(args: argparse.Namespace) -> int:
         return 1
     try:
         report = dry_run_slug(str(slug), node_overrides=_node_overrides(args), **_params(args))
-    except (IngestError, MissingCustomNodeError, TinyVAETiledDecodeError) as exc:
+    except (IngestError, MissingCustomNodeError, MissingModelError, TinyVAETiledDecodeError) as exc:
         return _fail(exc)
     print(report["text"])
     return 0
@@ -113,7 +165,7 @@ def cmd_run_ingested(args: argparse.Namespace, slug: str | None = None) -> int:
             node_overrides=_node_overrides(args),
             **_params(args),
         )
-    except (IngestError, MissingCustomNodeError, TinyVAETiledDecodeError) as exc:
+    except (IngestError, MissingCustomNodeError, MissingModelError, TinyVAETiledDecodeError) as exc:
         return _fail(exc)
     except Exception as exc:
         print(f"FAIL  {exc}")

@@ -604,6 +604,12 @@ def main(argv: list[str] | None = None) -> int:
         help="ingest: name under state/ingested/ (default: the JSON file stem)",
     )
     p.add_argument(
+        "--from",
+        dest="ingest_from",
+        default=None,
+        help="ingest from a live Comfy history entry: history:PROMPT_ID",
+    )
+    p.add_argument(
         "--ingested",
         default=None,
         help="comfy run: queue a learned graph from state/ingested/SLUG. Not a catalog variant.",
