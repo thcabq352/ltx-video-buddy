@@ -1,4 +1,4 @@
-"""CLI verbs for Phase A workflow ingest / learn / dry-run / run."""
+"""CLI verbs for workflow ingest / learn / dry-run / run / promote."""
 
 from __future__ import annotations
 
@@ -189,6 +189,25 @@ def cmd_run_ingested(args: argparse.Namespace, slug: str | None = None) -> int:
     return 0
 
 
+def cmd_promote(args: argparse.Namespace) -> int:
+    slug = getattr(args, "target", None) or getattr(args, "slug", None)
+    if not slug:
+        print("FAIL  comfy promote requires SLUG")
+        return 1
+    from master_agent.comfy.ingest.promote import format_promote, promote_slug
+
+    try:
+        result = promote_slug(
+            str(slug),
+            variant_name=getattr(args, "variant_name", None),
+            force=bool(getattr(args, "force", False)),
+        )
+    except (IngestError, OSError) as exc:
+        return _fail(exc)
+    print(format_promote(result), end="")
+    return 0
+
+
 def dispatch_ingest_command(args: argparse.Namespace) -> int:
     command = getattr(args, "comfy_command", "")
     if command == "ingest":
@@ -197,6 +216,8 @@ def dispatch_ingest_command(args: argparse.Namespace) -> int:
         return cmd_learn(args)
     if command == "dry-run":
         return cmd_dry_run(args)
+    if command == "promote":
+        return cmd_promote(args)
     if command == "run":
         return cmd_run_ingested(args)
     print(f"FAIL  unknown comfy command {command}")

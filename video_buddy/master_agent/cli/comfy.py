@@ -345,7 +345,7 @@ def cmd_comfy(args: argparse.Namespace) -> int:
         return cmd_update(args)
     if command == "attach":
         return cmd_comfy_attach(args)
-    if command in {"ingest", "learn", "dry-run"} or (
+    if command in {"ingest", "learn", "dry-run", "promote"} or (
         command == "run" and getattr(args, "ingested", None)
     ):
         from master_agent.cli.ingest import dispatch_ingest_command
