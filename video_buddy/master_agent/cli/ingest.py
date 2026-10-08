@@ -25,6 +25,10 @@ def _params(args: argparse.Namespace) -> dict:
     }
 
 
+def _llm(args: argparse.Namespace) -> bool:
+    return bool(getattr(args, "llm_assist", False))
+
+
 def _node_overrides(args: argparse.Namespace) -> dict:
     flags = getattr(args, "set", None) or []
     if not flags:
@@ -68,6 +72,13 @@ def _print_learned_warnings(learned: dict) -> None:
         )
     for pointer in readiness.get("pointers") or []:
         print(f"pointer: {pointer}")
+    if learned.get("llm_warning"):
+        print(f"WARN  {learned['llm_warning']}")
+    for proposal in learned.get("llm_proposals") or []:
+        print(
+            f"llm: {proposal.get('from')} -> {proposal.get('role')} "
+            f"[{proposal.get('confidence')}] source {proposal.get('source')}"
+        )
     if learned.get("family_warning"):
         print(f"WARN  {learned['family_warning']}")
     elif learned.get("family"):
@@ -103,6 +114,7 @@ def cmd_ingest(args: argparse.Namespace) -> int:
                 prompt_id,
                 slug=getattr(args, "slug", None),
                 no_family_route=bool(getattr(args, "no_family_route", False)),
+                llm_assist=_llm(args),
             )
         except (IngestError, OSError) as exc:
             return _fail(exc)
@@ -118,6 +130,7 @@ def cmd_ingest(args: argparse.Namespace) -> int:
                 slug=getattr(args, "slug", None),
                 client=ComfyClient(),
                 no_family_route=bool(getattr(args, "no_family_route", False)),
+                llm_assist=_llm(args),
             )
         except (IngestError, OSError) as exc:
             return _fail(exc)
@@ -144,6 +157,7 @@ def cmd_learn(args: argparse.Namespace) -> int:
         bundle = refresh_learned(
             str(slug),
             no_family_route=bool(getattr(args, "no_family_route", False)),
+            llm_assist=_llm(args),
         )
     except (IngestError, OSError) as exc:
         return _fail(exc)
