@@ -21,7 +21,7 @@ python -m master_agent health
 python -m master_agent comfy run --mode generate --variant ltx25_t2v_i2v --prompt "a test shot"
 ```
 
-Windows: `install.bat`. macOS / Linux: `./install.sh`. Agent entry: `python -m master_agent agent list`. Comfy is `:8188`.
+Windows: `install.bat`. macOS / Linux: `./install.sh`. `python install.py` never installs Ollama or pulls models; LLM GGUFs with no public source are skipped and the install continues. `python install.py --check` only reports. Agent entry: `python -m master_agent agent list`. Comfy is `:8188`.
 
 ## Where each fact lives
 
