@@ -168,6 +168,7 @@ def test_run_help_and_workflows_list_label_h3_r2v(capsys):
 
 
 def test_mcp_create_video_warns_on_h3_photo_voice(monkeypatch, tmp_path: Path):
+    monkeypatch.setenv("MEDIA_EXTRA_ROOTS", str(tmp_path))
     image = tmp_path / "gator.png"
     audio = tmp_path / "line.wav"
     image.write_bytes(b"png")
@@ -237,6 +238,7 @@ def test_talking_slices_h3_is_one_clip_and_ltx_continues():
 
 
 def test_mcp_create_video_forwards_image_and_audio(monkeypatch, tmp_path: Path):
+    monkeypatch.setenv("MEDIA_EXTRA_ROOTS", str(tmp_path))
     image = tmp_path / "face.png"
     audio = tmp_path / "line.wav"
     image.write_bytes(b"png")

@@ -90,7 +90,8 @@ def test_message_send_defaults_quality_draft_and_duration():
     assert captured["duration_s"] == 5.0
 
 
-def test_message_send_h3_photo_voice_includes_warning(tmp_path):
+def test_message_send_h3_photo_voice_includes_warning(tmp_path, monkeypatch):
+    monkeypatch.setenv("MEDIA_EXTRA_ROOTS", str(tmp_path))
     from master_agent.orchestrator.talking import H3_R2V_AUDIO_LABEL
 
     store = TaskStore()
@@ -145,6 +146,7 @@ def test_message_send_h3_photo_voice_includes_warning(tmp_path):
 
 
 def test_submit_orchestrator_stores_h3_voice_warning(monkeypatch, tmp_path):
+    monkeypatch.setenv("MEDIA_EXTRA_ROOTS", str(tmp_path))
     import time
 
     from master_agent.a2a.protocol import submit_orchestrator
@@ -186,7 +188,8 @@ def test_submit_orchestrator_stores_h3_voice_warning(monkeypatch, tmp_path):
     assert H3_R2V_AUDIO_LABEL in view["result"]["status"]["message"]["parts"][0]["text"]
 
 
-def test_message_send_forwards_photo_and_audio(tmp_path):
+def test_message_send_forwards_photo_and_audio(tmp_path, monkeypatch):
+    monkeypatch.setenv("MEDIA_EXTRA_ROOTS", str(tmp_path))
     store = TaskStore()
     captured = {}
 

@@ -197,11 +197,16 @@ def create_video(
     Returns paths, scores and judge notes."""
     from pathlib import Path
 
+    from master_agent.media_paths import media_path_error
+
     for label, raw in (
         ("image", image_path),
         ("audio", audio_path),
         ("video", video_path),
     ):
+        fenced = media_path_error(label, raw)
+        if fenced:
+            return {"status": "error", "error": fenced}
         if raw and not Path(raw).is_file():
             return {"status": "error", "error": f"{label} not found: {raw}"}
 
@@ -382,6 +387,11 @@ def judge_asset(video_path: str, request: str = "", full_video: bool = False) ->
     """Grade an existing video file: heuristics + text-LLM + vision legs."""
     from master_agent.judge.judge import judge_full_video, judge_segment
     from master_agent.judge.probe import analyze
+    from master_agent.media_paths import media_path_error
+
+    fenced = media_path_error("video_path", video_path)
+    if fenced:
+        return {"status": "error", "error": fenced}
 
     if full_video:
         res = judge_full_video(user_request=request, storyboard=None, video_path=video_path)

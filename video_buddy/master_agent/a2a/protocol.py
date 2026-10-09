@@ -5,6 +5,7 @@ from __future__ import annotations
 import threading
 import uuid
 from datetime import datetime, timezone
+from pathlib import Path
 from typing import Any, Callable
 
 from master_agent import __version__
@@ -173,6 +174,39 @@ def _message_media(params: dict[str, Any]) -> dict[str, str | None]:
     return out
 
 
+def _fence_media(body: dict[str, Any]) -> str | None:
+    """Reject media paths outside the allowed roots; normalise ``file://`` URIs.
+
+    A bare file name is kept as a ComfyUI input name and never read from cwd.
+    """
+    from master_agent.media_paths import (
+        is_allowed_media_path,
+        is_bare_name,
+        media_path_error,
+        to_local_path,
+    )
+
+    for key in ("image_path", "audio_path", "video_path"):
+        raw = body.get(key)
+        if not raw:
+            continue
+        if is_bare_name(raw) and not is_allowed_media_path(raw):
+            continue
+        err = media_path_error(key, raw)
+        if err:
+            return err
+        body[key] = str(to_local_path(raw))
+    return None
+
+
+def _local_media(path: str | None) -> str | None:
+    from master_agent.media_paths import is_allowed_media_path
+
+    if path and is_allowed_media_path(path) and Path(path).is_file():
+        return path
+    return None
+
+
 def handle_rpc(
     payload: dict[str, Any],
     *,
@@ -225,6 +259,9 @@ def handle_rpc(
                 or params.get("dialogue")
             ),
         }
+        fenced = _fence_media(body)
+        if fenced:
+            return err(-32602, fenced)
         task_id = store.create(text)
         submit(task_id, body)
         result: dict[str, Any] = {
@@ -279,14 +316,16 @@ def submit_orchestrator(task_id: str, body: dict[str, Any], store: TaskStore) ->
             from master_agent.orchestrator.pipeline import dry_run_pipeline, run_pipeline
             from master_agent.web.jobs import MANAGER
 
-            from pathlib import Path
-
+            fenced = _fence_media(body)
+            if fenced:
+                store.set(task_id, state="failed", error=fenced, result={"status": "error", "error": fenced})
+                return
             quality = body.get("quality") or DEFAULT_QUALITY
             image_path = body.get("image_path")
             audio_path = body.get("audio_path")
             video_path = body.get("video_path")
             duration_s = body.get("duration_s")
-            if duration_s is None and image_path and audio_path and not video_path:
+            if duration_s is None and _local_media(audio_path) and image_path and not video_path:
                 from master_agent.orchestrator.talking import duration_following_audio
 
                 duration_s, _note = duration_following_audio(str(audio_path))
@@ -329,14 +368,13 @@ def submit_orchestrator(task_id: str, body: dict[str, Any], store: TaskStore) ->
             def _uploaded(path: str | None, upload) -> str | None:
                 if not path:
                     return None
-                file = Path(path)
-                if file.is_file():
-                    return upload(file)
-                return file.name
+                if _local_media(path):
+                    return upload(Path(path))
+                return Path(path).name
 
             voice_sample = None
             spoken_line = body.get("spoken_line")
-            if image_path and audio_path and not video_path:
+            if image_path and _local_media(audio_path) and not video_path:
                 from master_agent.orchestrator.h3_voice import (
                     VoiceSampleError,
                     h3_voice_preflight,
