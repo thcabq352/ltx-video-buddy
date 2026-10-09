@@ -119,7 +119,7 @@ LLAMACPP_URL = os.getenv("LLAMACPP_URL", "http://127.0.0.1:8080").rstrip("/")
 LLAMACPP_MODEL = (os.getenv("LLAMACPP_MODEL") or OLLAMA_MODEL).strip()
 LLAMACPP_BIN = (os.getenv("LLAMACPP_BIN") or "").strip()
 # 0 = never launch llama-server from this process; use one that is already
-# listening. Set it for MCP children so each gateway does not start its own.
+# listening (e.g. the gateway host already runs one).
 LLAMACPP_AUTOSTART = os.getenv("LLAMACPP_AUTOSTART", "1").strip().lower() not in ("0", "false", "no", "off")
 
 # LLM provider selection:

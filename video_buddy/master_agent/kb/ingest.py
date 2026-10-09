@@ -5,9 +5,7 @@ from __future__ import annotations
 import hashlib
 import json
 import logging
-import os
 import re
-import sys
 import threading
 from dataclasses import dataclass
 from pathlib import Path
@@ -531,43 +529,3 @@ def ensure_knowledge_ingested() -> int:
         _disk_stamp_cache = stamp
         _disk_stamp_count = result.docs
         return result.docs
-
-
-def schedule_knowledge_ingest(*, stderr: bool = False) -> None:
-    """Ingest ``knowledge/`` on a daemon thread so process startup is not blocked.
-
-    No-op under pytest (``PYTEST_CURRENT_TEST``) and when
-    ``KB_STARTUP_INGEST`` is ``0``. MCP must pass ``stderr=True`` — stdout
-    is the stdio protocol channel.
-    """
-    if os.environ.get("PYTEST_CURRENT_TEST"):
-        return
-    flag = os.environ.get("KB_STARTUP_INGEST", "1").strip().lower()
-    if flag in ("0", "false", "no", "off"):
-        return
-
-    def _run() -> None:
-        stream = sys.stderr if stderr else sys.stdout
-        try:
-            # Several processes (one MCP child per gateway, the studio) start
-            # together; only one of them should write Chroma at a time.
-            with file_lock(_knowledge_lock_path(), blocking=False) as held:
-                if not held:
-                    print(
-                        "knowledge ingest: skipped, another process is ingesting",
-                        file=stream,
-                        flush=True,
-                    )
-                    return
-                result = ingest_knowledge()
-        except Exception:
-            log.debug("kb knowledge startup ingest failed", exc_info=True)
-            return
-        print(
-            f"knowledge ingest: {result.docs} doc(s) in Chroma "
-            f"({result.written} written, {result.skipped} skipped)",
-            file=stream,
-            flush=True,
-        )
-
-    threading.Thread(target=_run, name="knowledge-ingest", daemon=True).start()

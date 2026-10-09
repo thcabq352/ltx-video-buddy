@@ -1,11 +1,10 @@
-"""Hermes skill package: renders, matches mcp_server + CLI, install copies.
+"""Hermes skill package: renders, matches agent tools + CLI, install copies.
 
 Run: python -m pytest tests/test_hermes_skill.py -q
 """
 
 from __future__ import annotations
 
-import ast
 import re
 import sys
 from pathlib import Path
@@ -20,7 +19,6 @@ from install_hermes_skill import SKILL_FILES, install_skill  # noqa: E402
 SKILL_DIR = VIDEO_BUDDY / "skills" / "video-buddy"
 SKILL_MD = SKILL_DIR / "SKILL.md"
 TOOLS_MD = SKILL_DIR / "TOOLS.md"
-MCP_SERVER = VIDEO_BUDDY / "master_agent" / "mcp_server.py"
 MAIN_PY = VIDEO_BUDDY / "master_agent" / "__main__.py"
 
 
@@ -44,14 +42,10 @@ def _frontmatter(text: str) -> dict[str, str]:
     return out
 
 
-def registered_mcp_tools() -> list[str]:
-    tree = ast.parse(MCP_SERVER.read_text(encoding="utf-8"))
-    for node in tree.body:
-        if isinstance(node, ast.Assign) and any(
-            isinstance(t, ast.Name) and t.id == "MCP_TOOLS" for t in node.targets
-        ):
-            return list(ast.literal_eval(node.value))
-    raise AssertionError("MCP_TOOLS not found in mcp_server.py")
+def registered_agent_tools() -> list[str]:
+    from master_agent.agent_api import TOOLS
+
+    return list(TOOLS)
 
 
 def registered_cli_commands() -> set[str]:
@@ -108,27 +102,11 @@ def test_stop_lines_match_curriculum():
     assert "LESSON_BUDDY" in body or "L0→L5" in body or "L0->L5" in body
 
 
-def test_mcp_tools_match_mcp_server():
-    tools = registered_mcp_tools()
-    assert tools == [
-        "health",
-        "create_video",
-        "plan_storyboard",
-        "judge_asset",
-        "search_workflows",
-        "search_runs",
-        "kb_ingest",
-        "list_models",
-        "validate_workflow",
-        "create_character",
-        "train_lora",
-    ]
+def test_agent_tools_documented_and_no_mcp_server():
     corpus = _skill_corpus()
-    for name in tools:
-        assert name in corpus, f"MCP tool {name} missing from skill package"
-    # Do not document invented tools as MCP.
-    for fake in ("diagnose", "comfy_run", "download_models", "curriculum"):
-        assert f"def {fake}" not in MCP_SERVER.read_text(encoding="utf-8")
+    for name in registered_agent_tools():
+        assert name in corpus, f"agent tool {name} missing from skill package"
+    assert not (VIDEO_BUDDY / "master_agent" / "mcp_server.py").exists()
 
 
 def test_cli_commands_documented():

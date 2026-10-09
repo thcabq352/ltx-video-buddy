@@ -7,7 +7,7 @@ def test_studio_about_shape():
     card = studio_about()
     assert card["name"] == "VIDEO BUDDY"
     assert card["package"] == "master_agent"
-    assert card["mcp_id"] == "master-agent"
+    assert "mcp_id" not in card
     assert "hermes" not in card
     assert card["gateway"]["name"] == "LTX bot gateway"
     assert card["gateway"]["entry"].startswith("python -m master_agent agent")
