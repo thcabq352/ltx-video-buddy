@@ -14,6 +14,7 @@ from types import SimpleNamespace
 import pytest
 
 from master_agent import automatic_install as ai
+from master_agent import llamacpp_install
 from master_agent import setup as setup_mod
 from master_agent.comfy import comfy_venv, tower
 from master_agent.models import weights
@@ -30,7 +31,7 @@ def _args(**kw) -> Namespace:
 
 @pytest.fixture
 def env(tmp_path: Path, monkeypatch: pytest.MonkeyPatch):
-    """A clean, empty machine: no Comfy, no Ollama, no weights, plenty of disk, NVIDIA 24 GB."""
+    """A clean, empty machine: no Comfy, no llama.cpp, no build tools, no weights, plenty of disk, NVIDIA 24 GB."""
     state_dir = tmp_path / "state"
     state_dir.mkdir()
     models = tmp_path / "models"
@@ -46,7 +47,9 @@ def env(tmp_path: Path, monkeypatch: pytest.MonkeyPatch):
 
     monkeypatch.setattr(config, "MODELS_DIR", models)
     monkeypatch.setattr(ai, "models_dir", lambda: models)
-    monkeypatch.setattr(ai, "ollama_models_dir", lambda: tmp_path / "ollama")
+    llama_root = tmp_path / "llama.cpp"
+    monkeypatch.setattr(config, "LLAMACPP_ROOT", llama_root)
+    monkeypatch.setattr(config, "LLAMACPP_BIN", "")
     monkeypatch.setattr(weights, "model_search_roots", lambda: [models])
 
     calls: list[list[str]] = []
@@ -61,17 +64,33 @@ def env(tmp_path: Path, monkeypatch: pytest.MonkeyPatch):
     monkeypatch.setattr(ai, "disk_free", lambda path: 500 * GB)
     monkeypatch.setattr(ai, "_volume_id", lambda path: 1)
     monkeypatch.setattr(ai, "_is_root", lambda: False)
-    monkeypatch.setattr(ai, "ollama_responds", lambda url=None: False)
     monkeypatch.setattr(ai, "hf_whoami", lambda token: pytest.fail("token check must not run without a token"))
     monkeypatch.setattr(ai, "hf_repo_access", lambda repo, token: (True, "access ok"))
     gpu = {"vendor": "nvidia", "name": "RTX 4090", "vram_gb": 24.0, "sentence": "Routing: NVFP4 tier."}
     monkeypatch.setattr(ai, "detect_gpu", lambda: dict(gpu))
     monkeypatch.setattr(tower, "resolve_comfy_cli", lambda: ["comfy"])
     monkeypatch.setattr(
+        ai,
+        "plan_llamacpp",
+        lambda gpu: llamacpp_install.plan_llamacpp(
+            gpu_vendor=str(gpu.get("vendor") or ""),
+            root=llama_root,
+            ref="b11389",
+            existing=ai.existing_llama_server(),
+            which=lambda name: which.get(name),
+            system="Linux",
+            machine="x86_64",
+        ),
+    )
+    monkeypatch.setattr(
         weights, "download_files", lambda *a, **k: pytest.fail("downloads must be mocked per test")
     )
+    monkeypatch.setattr(
+        llamacpp_install, "_download", lambda url, dest: pytest.fail("llama.cpp downloads must be mocked per test")
+    )
     return SimpleNamespace(
-        tmp=tmp_path, models=models, workspace=workspace, state=state_dir, calls=calls, which=which, gpu=gpu
+        tmp=tmp_path, models=models, workspace=workspace, state=state_dir, calls=calls, which=which, gpu=gpu,
+        llama_root=llama_root,
     )
 
 
@@ -158,15 +177,19 @@ def test_preflight_order_and_happy_path(env):
         "Disk space",
         "Hugging Face access",
         "GPU / VRAM",
-        "Ollama",
+        "llama.cpp",
         "ComfyUI folder",
     ]
     assert pf.ok
     by = {c.name: c for c in pf.checks}
     assert by["Disk space"].status == ai.PASS
     assert by["GPU / VRAM"].status == ai.INFO and not by["GPU / VRAM"].blocking
-    assert by["Ollama"].status == ai.INFO and not by["Ollama"].blocking
-    assert "automatic install will install it" in " ".join(by["Ollama"].lines)
+    llama = by["llama.cpp"]
+    assert llama.status == ai.INFO and not llama.blocking
+    text = " ".join(llama.lines)
+    assert "official prebuilt release b11389" in text and "the CUDA toolkit (nvcc)" in text
+    assert "qwen3-vl-heretic" in text and "no public GGUF source is defined" in text
+    assert pf.llama.method == "prebuilt"
 
 
 def test_preflight_low_disk_fails_closed_with_free_and_needed(env, monkeypatch):
@@ -176,16 +199,17 @@ def test_preflight_low_disk_fails_closed_with_free_and_needed(env, monkeypatch):
     assert bad is not None and bad.name == "Disk space"
     text = "\n".join(bad.lines)
     assert "40.0 GB free" in text
-    # 76.5 weights + 15 Comfy + 6.4 Ollama + 5 headroom
-    assert "102.9 GB needed" in text
+    # 76.5 weights + 15 Comfy + 2.5 llama.cpp CUDA prebuilt + 5 headroom
+    assert "99.0 GB needed" in text
+    assert "llama.cpp 2.5 GB" in text
     assert "MODELS_DIR=" in text and "Free up at least" in text
 
 
 def test_preflight_disk_grouped_per_volume(env, monkeypatch):
-    ollama_dir = env.tmp / "ollama"
-    for d in (env.models, env.workspace, ollama_dir):
+    llama_dir = env.llama_root
+    for d in (env.models, env.workspace, llama_dir):
         d.mkdir()
-    volumes = {env.models: 1, env.workspace: 2, ollama_dir: 3}
+    volumes = {env.models: 1, env.workspace: 2, llama_dir: 3}
 
     def vol(path):
         return volumes[Path(path)]
@@ -196,10 +220,10 @@ def test_preflight_disk_grouped_per_volume(env, monkeypatch):
     check = ai.check_disk(
         weights_bytes=70 * GB,
         comfy_bytes=15 * GB,
-        ollama_bytes=6 * GB,
+        llama_bytes=2 * GB,
         models=env.models,
         workspace=env.workspace,
-        ollama_dir=ollama_dir,
+        llama_dir=llama_dir,
     )
     assert check.status == ai.FAIL
     text = "\n".join(check.lines)
@@ -263,11 +287,6 @@ def test_preflight_small_vram_routes_gguf_q4(env):
     assert "GGUF Q4" in text and "Routing: GGUF." in text
 
 
-def test_preflight_ollama_present_but_down_is_info(env):
-    check = ai.check_ollama(True, False)
-    assert check.status == ai.INFO and "ollama serve" in check.lines[0]
-
-
 def test_preflight_external_mode_refuses(env, monkeypatch, capsys):
     monkeypatch.setenv("COMFY_MODE", "external")
     rc = ai.cmd_automatic_install(_args(yes=True))
@@ -318,8 +337,10 @@ def test_dry_run_prints_plan_and_changes_nothing(env, capsys):
     assert out.index("pre-flight check") < out.index("plan (dry run")
     assert "Video model: LTX 2.3 only." in out
     assert "--nvidia" in out and "automatic-install --yes" in out
+    assert "PLANNED          llama.cpp (optional)" in out
+    assert "ollama" not in out.lower()
     assert env.calls == []
-    assert not env.workspace.exists() and not env.models.exists()
+    assert not env.workspace.exists() and not env.models.exists() and not env.llama_root.exists()
 
 
 def test_parser_install_all_alias_and_help(monkeypatch, capsys):
@@ -334,9 +355,14 @@ def test_parser_install_all_alias_and_help(monkeypatch, capsys):
         cli_parser.main(["--help"])
     out = capsys.readouterr().out
     assert "automatic-install" in out and "install-all" not in out
+    with pytest.raises(SystemExit):
+        cli_parser.main(["automatic-install", "--help"])
+    out = capsys.readouterr().out
+    assert "--skip-llm" in out and "llama.cpp" in out
+    assert "ollama" not in out.lower()
 
 
-# --- ComfyUI / nodes / Ollama steps -------------------------------------------
+# --- ComfyUI / nodes / ffmpeg steps -------------------------------------------
 
 
 def _fake_comfy(ws: Path, *, venv: bool = True) -> None:
@@ -419,45 +445,6 @@ def test_nodes_install_only_ltx23_packs(env, monkeypatch):
     assert ai.step_nodes(True, workspace=env.workspace).status == ai.SKIPPED
 
 
-def test_ollama_linux_without_passwordless_sudo_needs_you(env, monkeypatch):
-    monkeypatch.setattr(ai.sys, "platform", "linux")
-    env.which.update({"curl": "/usr/bin/curl", "sudo": "/usr/bin/sudo"})
-
-    def fake_run(cmd, *, timeout=600.0, env=None):
-        env_calls.append(cmd)
-        return (1, "a password is required") if cmd[:2] == ["sudo", "-n"] else (0, "")
-
-    env_calls: list[list[str]] = []
-    monkeypatch.setattr(ai, "_run", fake_run)
-    res = ai.step_ollama(True)
-    assert res.status == ai.NEEDS_YOU
-    assert ai.OLLAMA_LINUX_SCRIPT in res.detail
-    assert env_calls == [["sudo", "-n", "true"]]
-
-
-def test_ollama_linux_with_passwordless_sudo_runs_official_script(env, monkeypatch, capsys):
-    monkeypatch.setattr(ai.sys, "platform", "linux")
-    env.which.update({"curl": "/usr/bin/curl", "sudo": "/usr/bin/sudo"})
-
-    which = env.which
-
-    def fake_run(cmd, **kw):
-        if cmd[0] == "sh":
-            which["ollama"] = "/usr/local/bin/ollama"
-        return 0, ""
-
-    monkeypatch.setattr(ai, "_run", fake_run)
-    assert ai.step_ollama(True).status == ai.OK
-    assert ai.OLLAMA_LINUX_SCRIPT in capsys.readouterr().out
-
-
-def test_ollama_windows_uses_winget(env, monkeypatch):
-    monkeypatch.setattr(ai.sys, "platform", "win32")
-    env.which["winget"] = "winget"
-    plan = ai.step_ollama(False)
-    assert plan.status == ai.PLANNED and "Ollama.Ollama" in plan.detail
-
-
 def test_ffmpeg_linux_never_sudo_silently(env, monkeypatch):
     monkeypatch.setattr(ai.sys, "platform", "linux")
     env.which["apt-get"] = "/usr/bin/apt-get"
@@ -465,15 +452,6 @@ def test_ffmpeg_linux_never_sudo_silently(env, monkeypatch):
     assert res.status == ai.NEEDS_YOU
     assert "sudo apt-get install -y ffmpeg" in res.detail
     assert env.calls == []
-
-
-def test_ollama_model_pull_failure_is_nonfatal(env, monkeypatch):
-    env.which["ollama"] = "/usr/bin/ollama"
-    monkeypatch.setattr(setup_mod, "ollama_list_text", lambda: "nomic-embed-text:latest  abc  274 MB")
-    monkeypatch.setattr(ai, "_run", lambda cmd, **k: (1, "pull model manifest: file does not exist"))
-    res = ai.step_ollama_models(True)
-    assert res.status == ai.NONFATAL and not res.required
-    assert "qwen3-vl-heretic" in res.detail and "nomic" not in res.detail.split("could not pull")[1]
 
 
 def test_model_paths_written_outside_comfy_tree(env):
@@ -494,12 +472,20 @@ def test_apply_summary_reports_needs_you(env, monkeypatch, capsys):
     monkeypatch.setattr(ai, "step_accel", lambda apply, **k: ai.StepResult("Triton + SageAttention", ai.NONFATAL, "x", required=False))
     monkeypatch.setattr(ai, "step_weights", lambda apply, **k: ai.StepResult("LTX 2.3 weights", ai.OK, "ready"))
     monkeypatch.setattr(ai, "verify_rows", lambda: [{"ok": False, "name": "ffmpeg", "detail": "missing"}])
+
+    def offline(url, dest):
+        raise OSError("offline")
+
+    monkeypatch.setattr(llamacpp_install, "_download", offline)
     rc = ai.cmd_automatic_install(_args(yes=True))
     out = capsys.readouterr().out
     assert rc == 1
     assert "AUTOMATIC INSTALL — summary" in out
     assert "Not ready for generate yet. Still needs you:" in out
-    assert "Triton + SageAttention" not in out.split("Still needs you:")[1]
+    needs = out.split("Still needs you:")[1]
+    assert "ffmpeg" in needs
+    assert "Triton + SageAttention" not in needs and "llama.cpp" not in needs and "LLM models" not in needs
+    assert "No local LLM runtime yet" in out
 
 
 def test_install_py_forwards_automatic_install_flags(monkeypatch, tmp_path):
@@ -521,3 +507,135 @@ def test_install_py_forwards_automatic_install_flags(monkeypatch, tmp_path):
     assert mod.main() == 0
     assert calls[-1][1:] == ["-m", "master_agent", "automatic-install", "--yes", "--skip-sage", "--gpu", "cpu"]
     assert not any("setup" in c for c in calls)
+
+
+# --- Ollama is gone; llama.cpp + LLM models ---------------------------------------
+
+
+def test_full_yes_run_never_invokes_ollama_and_skipped_models_do_not_block(env, monkeypatch, capsys):
+    """Every subprocess / download is recorded. Nothing mentions Ollama; the run still ends ready."""
+    import subprocess as sp
+    import tarfile
+
+    recorded: list[str] = []
+
+    def fake_sp_run(cmd, *a, **k):
+        recorded.append(" ".join(map(str, cmd)))
+        return sp.CompletedProcess(cmd, 0, "version: 0.5.0-dev (build 11389)", "")
+
+    def fake_download(url, dest):
+        recorded.append(url)
+        stage = env.tmp / "stage" / "llama-b11389"
+        stage.mkdir(parents=True, exist_ok=True)
+        (stage / "llama-server").write_text("#!/bin/sh\n")
+        with tarfile.open(dest, "w:gz") as tf:
+            tf.add(stage, arcname="llama-b11389")
+
+    def fake_run(cmd, *, timeout=600.0, env=None):
+        recorded.append(" ".join(cmd))
+        return 0, ""
+
+    monkeypatch.setattr(sp, "run", fake_sp_run)
+    monkeypatch.setattr(llamacpp_install, "_download", fake_download)
+    monkeypatch.setattr(ai, "_run", fake_run)
+    env.which["ffmpeg"] = "/usr/bin/ffmpeg"
+    monkeypatch.setattr(ai, "step_playwright", lambda apply: ai.StepResult("Playwright Chromium", ai.OK, "ready", required=False))
+    monkeypatch.setattr(ai, "step_comfy_cli", lambda apply: ai.StepResult("comfy-cli", ai.SKIPPED, "pinned"))
+    monkeypatch.setattr(ai, "step_comfyui", lambda apply, **k: ai.StepResult("ComfyUI", ai.OK, "installed"))
+    monkeypatch.setattr(ai, "step_nodes", lambda apply, **k: ai.StepResult("custom nodes", ai.OK, "installed"))
+    monkeypatch.setattr(ai, "step_accel", lambda apply, **k: ai.StepResult("Triton + SageAttention", ai.SKIPPED, "cpu", required=False))
+    monkeypatch.setattr(ai, "step_weights", lambda apply, **k: ai.StepResult("LTX 2.3 weights", ai.OK, "ready"))
+    monkeypatch.setattr(ai, "verify_rows", lambda: [{"ok": True, "name": "ffmpeg", "detail": "ok"}])
+
+    rc = ai.cmd_automatic_install(_args(yes=True))
+    out = capsys.readouterr().out
+    assert rc == 0
+    assert "Ready for generate (LTX 2.3)" in out
+    assert "Skipped qwen3-vl-heretic: no public GGUF source is defined; continuing." in out
+    assert "Skipped nomic-embed-text: no public GGUF source is defined; continuing." in out
+    assert "Skipped (no public GGUF source is defined): qwen3-vl-heretic, nomic-embed-text" in out
+    assert "SKIPPED          LLM models (optional)" in out
+    assert "Still needs you" not in out
+    assert "OK               llama.cpp (optional): official prebuilt b11389 (cuda)" in out
+    assert any("llama-b11389-bin-ubuntu-cuda-12.8-x64.tar.gz" in r for r in recorded)
+    assert all("ollama" not in r.lower() for r in recorded), recorded
+    assert "ollama" not in out.lower()
+    assert (env.llama_root / "installed.json").is_file()
+
+
+def test_llm_models_skip_and_continue_without_source(env, capsys):
+    res = ai.step_llm_models(True, skip=False)
+    out = capsys.readouterr().out
+    assert res.status == ai.SKIPPED and not res.required and not res.failed_required
+    assert out.splitlines() == [
+        "Skipped qwen3-vl-heretic: no public GGUF source is defined; continuing.",
+        "Skipped nomic-embed-text: no public GGUF source is defined; continuing.",
+    ]
+    assert "skipped (no public GGUF source): qwen3-vl-heretic, nomic-embed-text" == res.detail
+
+
+def test_llm_models_already_in_models_dir_are_found(env, capsys):
+    env.models.mkdir()
+    (env.models / "qwen3-vl-heretic-Q4_K_M.gguf").write_bytes(b"x")
+    (env.models / "nomic-embed-text").mkdir()
+    (env.models / "nomic-embed-text" / "nomic-embed-text-v1.5.f16.gguf").write_bytes(b"x")
+    res = ai.step_llm_models(True, skip=False)
+    assert capsys.readouterr().out == ""
+    assert res.detail == "present: qwen3-vl-heretic, nomic-embed-text"
+    assert ai.check_llamacpp(ai.plan_llamacpp(env.gpu), skip=False).lines[-1].startswith("This is information only")
+
+
+def test_skip_llm_leaves_llama_out_of_disk_and_steps(env, monkeypatch, capsys):
+    monkeypatch.setattr(ai, "disk_free", lambda path: 97 * GB)
+    pf = ai.run_preflight(skip_llm=True)
+    assert pf.ok and pf.llama is None
+    assert "llama.cpp" not in "\n".join(next(c for c in pf.checks if c.name == "Disk space").lines)
+    assert "--skip-llm" in next(c for c in pf.checks if c.name == "llama.cpp").lines[0]
+    assert ai.step_llamacpp(True, plan=None, skip=True).status == ai.SKIPPED
+    assert ai.step_llm_models(True, skip=True).status == ai.SKIPPED
+    assert capsys.readouterr().out == ""
+
+
+def test_llamacpp_row_found_on_path(env):
+    env.which["llama-server"] = "/usr/local/bin/llama-server"
+    pf = ai.run_preflight()
+    row = next(c for c in pf.checks if c.name == "llama.cpp")
+    assert row.lines[0] == "llama.cpp found: /usr/local/bin/llama-server (LLAMACPP_BIN or PATH)."
+    assert pf.llama.disk_bytes == 0
+
+
+def test_llamacpp_row_will_build_with_toolchain(env, monkeypatch):
+    env.gpu["vendor"] = "unknown"
+    env.which.update({"git": "git", "cmake": "cmake", "c++": "c++"})
+    pf = ai.run_preflight()
+    row = next(c for c in pf.checks if c.name == "llama.cpp")
+    assert "will be built from source" in row.lines[0] and "tag b11389, CPU backend" in row.lines[0]
+
+
+def test_llamacpp_unavailable_needs_you_prints_command_never_runs_sudo(env, monkeypatch):
+    monkeypatch.setattr(
+        ai,
+        "plan_llamacpp",
+        lambda gpu: llamacpp_install.plan_llamacpp(
+            gpu_vendor="unknown", root=env.llama_root, ref="b11389", existing=None,
+            which=lambda n: None, system="Linux", machine="riscv64",
+        ),
+    )
+    pf = ai.run_preflight()
+    row = next(c for c in pf.checks if c.name == "llama.cpp")
+    assert row.status == ai.INFO and pf.ok
+    assert "unavailable" in row.lines[0]
+    assert any("sudo apt-get install -y git cmake build-essential" in line for line in row.lines)
+    res = ai.step_llamacpp(True, plan=pf.llama, skip=False)
+    assert res.status == ai.NEEDS_YOU and not res.required and not res.failed_required
+    assert "sudo apt-get install -y git cmake build-essential" in res.detail
+    assert env.calls == []
+
+
+def test_existing_llama_server_honors_llamacpp_bin(env, monkeypatch, tmp_path):
+    from master_agent import config
+
+    binary = tmp_path / "my-llama-server"
+    binary.write_text("")
+    monkeypatch.setattr(config, "LLAMACPP_BIN", str(binary))
+    assert ai.existing_llama_server() == str(binary)
