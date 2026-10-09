@@ -6,9 +6,9 @@ Creates .venv, installs requirements, then checks/installs ffmpeg, Playwright,
 
     python install.py --automatic-install --yes
 
-runs automatic install instead (pre-flight, then ComfyUI + Ollama + LTX 2.3).
+runs automatic install instead (pre-flight, then ComfyUI + LTX 2.3 + llama.cpp).
 Without --yes it prints the pre-flight and the plan and changes nothing.
-Also forwards --preflight-only, --dry-run, --skip-weights, --skip-sage, --gpu X.
+Also forwards --preflight-only, --dry-run, --skip-weights, --skip-sage, --skip-llm, --gpu X.
 """
 
 from __future__ import annotations
@@ -22,7 +22,7 @@ MIN_PY = (3, 10)
 ROOT = Path(__file__).resolve().parent
 VENV = ROOT / ".venv"
 REQ = ROOT / "requirements.txt"
-AUTOMATIC_INSTALL_FLAGS = ("--yes", "--preflight-only", "--dry-run", "--skip-weights", "--skip-sage")
+AUTOMATIC_INSTALL_FLAGS = ("--yes", "--preflight-only", "--dry-run", "--skip-weights", "--skip-sage", "--skip-llm")
 
 
 def _die(msg: str, code: int = 1) -> None:

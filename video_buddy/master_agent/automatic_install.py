@@ -3,13 +3,19 @@
 ``python -m master_agent automatic-install`` runs a plain-English pre-flight
 first, then prints the plan. Nothing changes without ``--yes``.
 
-With ``--yes`` it installs, in order: ffmpeg, Ollama, the two Ollama models,
-comfy-cli at the requirements.txt pin, ComfyUI into its own folder
-(``MANAGED_COMFY_ROOT`` or ``PROJECT_ROOT/ComfyUI``), the custom nodes the
-LTX 2.3 graphs need, Triton + SageAttention inside the Comfy venv (optional),
-and the LTX 2.3 weights into ``MODELS_DIR``. LTX 2.3 is the only video model
-this command installs. Weights are never written into the Comfy tree; managed
-launch keeps passing Buddy's ``extra_model_paths.yaml``.
+With ``--yes`` it installs, in order: ffmpeg, comfy-cli at the
+requirements.txt pin, ComfyUI into its own folder (``MANAGED_COMFY_ROOT`` or
+``PROJECT_ROOT/ComfyUI``), the custom nodes the LTX 2.3 graphs need, Triton +
+SageAttention inside the Comfy venv (optional), the LTX 2.3 weights into
+``MODELS_DIR``, then llama.cpp into ``LLAMACPP_ROOT`` (optional). LTX 2.3 is
+the only video model this command installs. Weights are never written into
+the Comfy tree; managed launch keeps passing Buddy's ``extra_model_paths.yaml``.
+
+The local LLM models (``LLAMACPP_MODEL`` for brief / director / judge,
+``KB_EMBED_MODEL`` for knowledge-base embeddings) are GGUFs llama-server
+serves from ``MODELS_DIR``. The repo defines no public download source for
+them, so they are skipped with a plain message and the install continues.
+Automatic install never calls Ollama.
 
 ``doctor`` stays a scanner. This module is the only thing that installs.
 """
@@ -22,14 +28,11 @@ import shutil
 import subprocess
 import sys
 import tempfile
-import urllib.error
-import urllib.request
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any, Callable, Iterable
 
 LTX23_BUNDLE = "ltx23_core"
-OLLAMA_MODELS = ("qwen3-vl-heretic", "nomic-embed-text")
 # Packs whose classes the shipped LTX 2.3 graphs (base / eros / directors) use,
 # per state/object_info.json python_module: GuiderParameters / MultimodalGuider /
 # LTXVTiledVAEDecode (ComfyUI-LTXVideo) and UnetLoaderGGUF, which the patcher
@@ -37,14 +40,9 @@ OLLAMA_MODELS = ("qwen3-vl-heretic", "nomic-embed-text")
 REQUIRED_NODES = ("ComfyUI-LTXVideo", "ComfyUI-GGUF")
 
 GB = 1_000_000_000
-# Estimates, not attested sizes. qwen3-vl-heretic is not in the public Ollama
-# library; qwen3-vl:latest (6.14 GB) stands in. nomic-embed-text is 274 MB.
-OLLAMA_MODEL_ESTIMATE_BYTES = {"qwen3-vl-heretic": 6_140_415_328, "nomic-embed-text": 274_302_030}
 # ComfyUI checkout + its own venv with CUDA PyTorch + custom nodes + Triton.
 COMFY_OVERHEAD_BYTES = 15 * GB
 DISK_HEADROOM_BYTES = 5 * GB
-
-OLLAMA_LINUX_SCRIPT = "curl -fsSL https://ollama.com/install.sh | sh"
 
 PASS, FAIL, INFO = "PASS", "FAIL", "INFO"
 OK, SKIPPED, FAILED, NONFATAL, PLANNED, NEEDS_YOU = (
@@ -114,15 +112,6 @@ def hf_repo_access(repo_id: str, token: str | None) -> tuple[bool, str]:
         return False, f"metadata check failed ({type(exc).__name__})"
 
 
-def ollama_responds(url: str | None = None) -> bool:
-    base = (url or os.getenv("OLLAMA_URL") or "http://127.0.0.1:11434").rstrip("/")
-    try:
-        with urllib.request.urlopen(f"{base}/api/tags", timeout=2.0) as resp:
-            return 200 <= int(getattr(resp, "status", 200)) < 300
-    except (urllib.error.URLError, OSError, ValueError):
-        return False
-
-
 def detect_gpu() -> dict[str, Any]:
     from master_agent.comfy.hardware import scan_hardware
 
@@ -145,13 +134,65 @@ def models_dir() -> Path:
     return Path(config.MODELS_DIR)
 
 
-def ollama_models_dir() -> Path:
-    raw = (os.getenv("OLLAMA_MODELS") or "").strip()
-    if raw:
-        return Path(raw).expanduser()
-    if sys.platform.startswith("linux") and Path("/usr/share/ollama/.ollama/models").exists():
-        return Path("/usr/share/ollama/.ollama/models")
-    return Path.home() / ".ollama" / "models"
+def llamacpp_root() -> Path:
+    from master_agent import config
+
+    return Path(config.LLAMACPP_ROOT)
+
+
+def llamacpp_ref() -> str:
+    from master_agent import config
+
+    return str(config.LLAMACPP_REF)
+
+
+def existing_llama_server() -> str | None:
+    """``LLAMACPP_BIN`` or ``llama-server`` on PATH. Buddy's own copy is checked by the plan."""
+    from master_agent import config
+
+    explicit = (config.LLAMACPP_BIN or "").strip().strip('"')
+    if explicit:
+        return explicit if Path(explicit).is_file() else _which(explicit)
+    return _which("llama-server")
+
+
+def plan_llamacpp(gpu: dict[str, Any]) -> Any:
+    from master_agent.llamacpp_install import plan_llamacpp as _plan
+
+    return _plan(
+        gpu_vendor=str(gpu.get("vendor") or ""),
+        root=llamacpp_root(),
+        ref=llamacpp_ref(),
+        existing=existing_llama_server(),
+        which=_which,
+    )
+
+
+def llm_models() -> list[tuple[str, str]]:
+    """The GGUF names the existing llama.cpp config serves, and what each is for."""
+    from master_agent import config
+
+    out: list[tuple[str, str]] = []
+    for name, role in (
+        (config.LLAMACPP_MODEL, "text + vision: brief, director, judge"),
+        (config.KB_EMBED_MODEL, "knowledge-base embeddings"),
+    ):
+        if name and name not in {n for n, _ in out}:
+            out.append((name, role))
+    return out
+
+
+def local_llm_gguf(name: str) -> Path | None:
+    """A GGUF llama-server's ``--models-dir`` router would serve as ``name``."""
+    want = name.strip().lower()
+    root = models_dir()
+    if not want or not root.is_dir():
+        return None
+    for path in sorted(root.glob("*.gguf")) + sorted(root.glob("*/*.gguf")):
+        label = (path.parent.name if path.parent != root else path.stem).lower()
+        if label == want or label.startswith(want + "-") or label.startswith(want + "."):
+            return path
+    return None
 
 
 def existing_ancestor(path: Path) -> Path:
@@ -241,7 +282,7 @@ class Preflight:
     weights: Any = None  # WeightStatus for LTX23_BUNDLE
     gpu: dict[str, Any] = field(default_factory=dict)
     workspace_state: str = "absent"
-    ollama_present: bool = False
+    llama: Any = None  # llamacpp_install.LlamaPlan, None with --skip-llm
 
     @property
     def first_failure(self) -> Check | None:
@@ -252,29 +293,20 @@ class Preflight:
         return self.first_failure is None
 
 
-def _missing_ollama_models(present: bool) -> list[str]:
-    if not present:
-        return list(OLLAMA_MODELS)
-    from master_agent.setup import ollama_has_model, ollama_list_text
-
-    listed = ollama_list_text()
-    return [m for m in OLLAMA_MODELS if not ollama_has_model(listed, m)]
-
-
 def check_disk(
     *,
     weights_bytes: int,
     comfy_bytes: int,
-    ollama_bytes: int,
+    llama_bytes: int,
     models: Path,
     workspace: Path,
-    ollama_dir: Path,
+    llama_dir: Path,
 ) -> Check:
     needs: dict[int, dict[str, Any]] = {}
     for label, path, size, env_var in (
         ("LTX 2.3 weights", models, weights_bytes, "MODELS_DIR"),
         ("ComfyUI + its venv", workspace, comfy_bytes, "MANAGED_COMFY_ROOT"),
-        ("Ollama models", ollama_dir, ollama_bytes, "OLLAMA_MODELS"),
+        ("llama.cpp", llama_dir, llama_bytes, "LLAMACPP_ROOT"),
     ):
         if size <= 0:
             continue
@@ -403,16 +435,26 @@ def check_gpu(gpu: dict[str, Any]) -> Check:
     return Check("GPU / VRAM", INFO, lines)
 
 
-def check_ollama(present: bool, responds: bool) -> Check:
-    if responds:
-        return Check("Ollama", INFO, ["Ollama is installed and responding."])
-    if present:
-        return Check(
-            "Ollama",
-            INFO,
-            ["Ollama is installed but not responding right now. It usually starts by itself; if not, run: ollama serve"],
+def check_llamacpp(plan: Any, *, skip: bool) -> Check:
+    if skip:
+        return Check("llama.cpp", INFO, ["--skip-llm: llama.cpp and the local LLM models are left out."])
+    lines = [plan.describe(), *plan.notes]
+    if plan.method == "unavailable":
+        lines.append(
+            "Buddy still renders video without it. To get the local LLM later, install the build tools: "
+            + _toolchain_hint(plan.system)
         )
-    return Check("Ollama", INFO, ["Ollama is not installed; automatic install will install it."])
+    for name, role in llm_models():
+        if local_llm_gguf(name) is None:
+            lines.append(f"{name} ({role}): no public GGUF source is defined; it will be skipped.")
+    lines.append("This is information only; it never stops the install.")
+    return Check("llama.cpp", INFO, lines)
+
+
+def _toolchain_hint(system: str) -> str:
+    from master_agent.llamacpp_install import toolchain_hint
+
+    return toolchain_hint(system)
 
 
 def check_workspace(workspace: Path, *, state: str, mode: str) -> Check:
@@ -477,7 +519,7 @@ def check_workspace(workspace: Path, *, state: str, mode: str) -> Check:
     return Check("ComfyUI folder", PASS, lines, blocking=True)
 
 
-def run_preflight(*, skip_weights: bool = False) -> Preflight:
+def run_preflight(*, skip_weights: bool = False, skip_llm: bool = False) -> Preflight:
     from master_agent.comfy.tower import effective_mode, load_state
     from master_agent.models.weights import scan_bundle
     from master_agent.setup import ENV_FILE
@@ -490,29 +532,25 @@ def run_preflight(*, skip_weights: bool = False) -> Preflight:
     state = comfy_install_state(workspace) if mode != "external" else "absent"
     weights = scan_bundle(LTX23_BUNDLE)
     missing_weights = [] if skip_weights else list(weights.missing_mandatory)
-    present = _which("ollama") is not None
-    responds = ollama_responds() if present else False
-    missing_models = _missing_ollama_models(present and responds)
     gpu = detect_gpu()
+    llama = None if skip_llm else plan_llamacpp(gpu)
     checks = [
         check_workspace(workspace, state=state, mode=mode),
         check_disk(
             weights_bytes=sum(int(w.size_bytes) for w in missing_weights),
             comfy_bytes=0 if state == "installed" else COMFY_OVERHEAD_BYTES,
-            ollama_bytes=sum(OLLAMA_MODEL_ESTIMATE_BYTES.get(m, 0) for m in missing_models),
+            llama_bytes=0 if llama is None else int(llama.disk_bytes),
             models=models_dir(),
             workspace=workspace,
-            ollama_dir=ollama_models_dir(),
+            llama_dir=llamacpp_root(),
         ),
         check_hf(missing_weights, env_file=ENV_FILE),
         check_gpu(gpu),
-        check_ollama(present, responds),
+        check_llamacpp(llama, skip=skip_llm),
     ]
-    order = {"Disk space": 0, "Hugging Face access": 1, "GPU / VRAM": 2, "Ollama": 3, "ComfyUI folder": 4}
+    order = {"Disk space": 0, "Hugging Face access": 1, "GPU / VRAM": 2, "llama.cpp": 3, "ComfyUI folder": 4}
     checks.sort(key=lambda c: order.get(c.name, 9))
-    return Preflight(
-        checks=checks, weights=weights, gpu=gpu, workspace_state=state, ollama_present=present
-    )
+    return Preflight(checks=checks, weights=weights, gpu=gpu, workspace_state=state, llama=llama)
 
 
 def print_preflight(pf: Preflight) -> None:
@@ -619,72 +657,48 @@ def step_ffmpeg(apply: bool) -> StepResult:
     return StepResult("ffmpeg", OK, "installed")
 
 
-def step_ollama(apply: bool) -> StepResult:
-    if _which("ollama"):
-        return StepResult("Ollama", SKIPPED, "already installed")
-    if sys.platform == "win32":
-        cmd = ["winget", "install", "--id", "Ollama.Ollama", "-e", "--accept-package-agreements", "--accept-source-agreements"]
-        tool = "winget"
-    elif sys.platform == "darwin":
-        cmd = ["brew", "install", "ollama"]
-        tool = "brew"
-    else:
-        cmd = ["sh", "-c", OLLAMA_LINUX_SCRIPT]
-        tool = "curl"
-    if not _which(tool):
-        return StepResult(
-            "Ollama", NEEDS_YOU, f"{tool} not found. Install Ollama from https://ollama.com/download, then run again."
-        )
-    if not apply:
-        return StepResult("Ollama", PLANNED, OLLAMA_LINUX_SCRIPT if tool == "curl" else " ".join(cmd))
-    argv: list[str] | None = cmd
-    if tool == "curl" and not _is_root():
-        # The official script calls sudo itself. Run it only when sudo will not prompt.
-        code, _ = _run(["sudo", "-n", "true"], timeout=10) if _which("sudo") else (1, "")
-        if code != 0:
-            argv = None
-    if argv is None:
-        return StepResult(
-            "Ollama",
-            NEEDS_YOU,
-            "the official Ollama installer needs administrator rights. Run this yourself (it will ask for "
-            f"your password), then run automatic install again:  {OLLAMA_LINUX_SCRIPT}",
-        )
-    print("$ " + (OLLAMA_LINUX_SCRIPT if tool == "curl" else " ".join(argv)))
-    code, out = _run(argv, timeout=1800)
-    if code != 0 or not _which("ollama"):
-        return StepResult("Ollama", FAILED, f"install did not finish: {out[-300:]}")
-    return StepResult("Ollama", OK, "installed")
+def step_llamacpp(apply: bool, *, plan: Any, skip: bool) -> StepResult:
+    """Buddy-owned llama-server: build the pinned tag, else the official prebuilt. Non-fatal."""
+    from master_agent.llamacpp_install import install_llamacpp
+
+    if skip or plan is None:
+        return StepResult("llama.cpp", SKIPPED, "--skip-llm", required=False)
+    res = install_llamacpp(plan, apply=apply)
+    return StepResult("llama.cpp", res.status, res.detail, required=False, lines=res.lines)
 
 
-def step_ollama_models(apply: bool) -> StepResult:
-    """Same as ``setup --fix --yes``: pull only models missing from ``ollama list``. Non-fatal."""
-    from master_agent.setup import ollama_has_model, ollama_list_text
-
-    if not _which("ollama"):
-        return StepResult(
-            "Ollama models", PLANNED if not apply else NONFATAL, "waits for Ollama", required=False
+def step_llm_models(apply: bool, *, skip: bool) -> StepResult:
+    """GGUFs for ``LLAMACPP_MODEL`` / ``KB_EMBED_MODEL``. No public source is defined: skip, continue."""
+    if skip:
+        return StepResult("LLM models", SKIPPED, "--skip-llm", required=False)
+    present: list[str] = []
+    skipped: list[str] = []
+    lines: list[str] = []
+    for name, role in llm_models():
+        found = local_llm_gguf(name)
+        if found is not None:
+            present.append(name)
+            lines.append(f"{name} ({role}): found {found}")
+            continue
+        skipped.append(name)
+        line = f"Skipped {name}: no public GGUF source is defined; continuing."
+        lines.append(line)
+        if apply:
+            print(line)
+    if skipped:
+        lines.append(
+            f"To use them, put the GGUF files in {models_dir()} (llama-server serves that folder); "
+            "nothing else needs to change."
         )
-    listed = ollama_list_text()
-    missing = [m for m in OLLAMA_MODELS if not ollama_has_model(listed, m)]
-    if not missing:
-        return StepResult("Ollama models", SKIPPED, "already pulled: " + ", ".join(OLLAMA_MODELS), required=False)
-    if not apply:
-        return StepResult("Ollama models", PLANNED, " && ".join(f"ollama pull {m}" for m in missing), required=False)
-    failed: list[str] = []
-    for model in missing:
-        print(f"$ ollama pull {model}")
-        code, out = _run(["ollama", "pull", model], timeout=3600)
-        if code != 0:
-            failed.append(f"{model} ({out[-160:]})")
-    if failed:
-        return StepResult(
-            "Ollama models",
-            NONFATAL,
-            "could not pull " + "; ".join(failed) + ". Video generation still works; the local LLM brain needs these.",
-            required=False,
+    detail = "; ".join(
+        part
+        for part in (
+            ("present: " + ", ".join(present)) if present else "",
+            ("skipped (no public GGUF source): " + ", ".join(skipped)) if skipped else "",
         )
-    return StepResult("Ollama models", OK, "pulled " + ", ".join(missing), required=False)
+        if part
+    )
+    return StepResult("LLM models", SKIPPED, detail, required=False, lines=lines)
 
 
 def step_comfy_cli(apply: bool) -> StepResult:
@@ -806,9 +820,16 @@ def step_weights(apply: bool, *, skip: bool) -> StepResult:
 
 def verify_rows() -> list[dict[str, Any]]:
     """Doctor's own scan rows (read-only) for the pieces generate needs."""
-    from master_agent.setup import check_ffmpeg, check_ltx23_weights, check_ollama
+    from master_agent.llamacpp_server import resolve_binary
+    from master_agent.setup import check_ffmpeg, check_ltx23_weights
 
-    return [check_ffmpeg(), check_ollama(), check_ltx23_weights()]
+    binary = resolve_binary()
+    llama = {
+        "name": "llama.cpp",
+        "ok": bool(binary),
+        "detail": binary or "not installed (optional: Buddy renders without a local LLM)",
+    }
+    return [check_ffmpeg(), check_ltx23_weights(), llama]
 
 
 # --- command -------------------------------------------------------------------
@@ -827,9 +848,10 @@ def cmd_automatic_install(args: Any) -> int:
     apply = bool(getattr(args, "yes", False)) and not bool(getattr(args, "dry_run", False))
     skip_weights = bool(getattr(args, "skip_weights", False))
     skip_sage = bool(getattr(args, "skip_sage", False))
+    skip_llm = bool(getattr(args, "skip_llm", False))
     gpu_override = str(getattr(args, "gpu", "auto") or "auto")
 
-    pf = run_preflight(skip_weights=skip_weights)
+    pf = run_preflight(skip_weights=skip_weights, skip_llm=skip_llm)
     print_preflight(pf)
     if preflight_only:
         return 0 if pf.ok else 1
@@ -841,25 +863,28 @@ def cmd_automatic_install(args: Any) -> int:
     print("AUTOMATIC INSTALL — " + ("installing" if apply else "plan (dry run; nothing will change)"))
     print("Video model: LTX 2.3 only.")
     print()
-    steps: list[Callable[[], StepResult]] = [
-        lambda: step_env_file(apply),
-        lambda: step_playwright(apply),
-        lambda: step_ffmpeg(apply),
-        lambda: step_ollama(apply),
-        lambda: step_ollama_models(apply),
-        lambda: step_comfy_cli(apply),
-        lambda: step_comfyui(apply, workspace=workspace, state=comfy_install_state(workspace), gpu_flag=flag),
-        lambda: step_model_paths(apply),
-        lambda: step_nodes(apply, workspace=workspace),
-        lambda: step_accel(apply, workspace=workspace, gpu=pf.gpu, skip=skip_sage),
-        lambda: step_weights(apply, skip=skip_weights),
+    steps: list[tuple[str, bool, Callable[[], StepResult]]] = [
+        (".env", False, lambda: step_env_file(apply)),
+        ("Playwright Chromium", False, lambda: step_playwright(apply)),
+        ("ffmpeg", True, lambda: step_ffmpeg(apply)),
+        ("comfy-cli", True, lambda: step_comfy_cli(apply)),
+        ("ComfyUI", True, lambda: step_comfyui(
+            apply, workspace=workspace, state=comfy_install_state(workspace), gpu_flag=flag
+        )),
+        ("model paths", True, lambda: step_model_paths(apply)),
+        ("custom nodes", True, lambda: step_nodes(apply, workspace=workspace)),
+        ("Triton + SageAttention", False, lambda: step_accel(apply, workspace=workspace, gpu=pf.gpu, skip=skip_sage)),
+        ("LTX 2.3 weights", True, lambda: step_weights(apply, skip=skip_weights)),
+        ("llama.cpp", False, lambda: step_llamacpp(apply, plan=pf.llama, skip=skip_llm)),
+        ("LLM models", False, lambda: step_llm_models(apply, skip=skip_llm)),
     ]
     results: list[StepResult] = []
-    for make in steps:
+    for name, required, make in steps:
         try:
             result = make()
         except Exception as exc:
-            result = StepResult("step", FAILED, f"{type(exc).__name__}: {exc}"[:400])
+            status = FAILED if required else NONFATAL
+            result = StepResult(name, status, f"{type(exc).__name__}: {exc}"[:400], required=required)
         results.append(result)
         if apply:
             _print_steps([result])
@@ -879,6 +904,18 @@ def cmd_automatic_install(args: Any) -> int:
         print(f"  {'OK  ' if row['ok'] else 'NEED'}  {row['name']:<14} {row['detail']}")
     failed = [r for r in results if r.failed_required]
     print()
+    skipped_models = [
+        line.split(":", 1)[0].removeprefix("Skipped ")
+        for r in results
+        if r.name == "LLM models"
+        for line in r.lines
+        if line.startswith("Skipped ")
+    ]
+    if skipped_models:
+        print("Skipped (no public GGUF source is defined): " + ", ".join(skipped_models))
+    llama = next((r for r in results if r.name == "llama.cpp"), None)
+    if llama is not None and llama.status in {NONFATAL, NEEDS_YOU}:
+        print("No local LLM runtime yet: video generation works; the local brief / judge LLM stays off.")
     if failed:
         print("Not ready for generate yet. Still needs you:")
         for r in failed:

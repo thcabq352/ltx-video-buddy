@@ -36,14 +36,16 @@ def main(argv: list[str] | None = None) -> int:
 
     p = sub.add_parser(
         "automatic-install",
-        help="automatic install: pre-flight, then ComfyUI (own folder), Ollama + models, LTX 2.3 weights (--yes to apply)",
+        help="automatic install: pre-flight, then ComfyUI (own folder), LTX 2.3 weights, llama.cpp (--yes to apply)",
         description=(
             "Automatic install. One command takes an empty machine to a working LTX 2.3 generate. "
-            "It first runs a plain-English pre-flight (disk space, Hugging Face access, GPU, Ollama, "
+            "It first runs a plain-English pre-flight (disk space, Hugging Face access, GPU, llama.cpp, "
             "ComfyUI folder) and stops on the first blocking failure. Without --yes it only prints the "
-            "plan. With --yes it installs ffmpeg, Ollama and its two models, comfy-cli (pinned), ComfyUI "
-            "in its own folder (MANAGED_COMFY_ROOT or ./ComfyUI) with the LTX 2.3 custom nodes, optional "
-            "Triton + SageAttention inside the Comfy venv, and the LTX 2.3 weights into MODELS_DIR. "
+            "plan. With --yes it installs ffmpeg, comfy-cli (pinned), ComfyUI in its own folder "
+            "(MANAGED_COMFY_ROOT or ./ComfyUI) with the LTX 2.3 custom nodes, optional Triton + "
+            "SageAttention inside the Comfy venv, the LTX 2.3 weights into MODELS_DIR, and optional "
+            "llama.cpp (built from the pinned LLAMACPP_REF into LLAMACPP_ROOT, else the official prebuilt). "
+            "Local LLM models with no public GGUF source are skipped and the install continues. "
             "LTX 2.3 is the only video model it installs."
         ),
     )
@@ -58,6 +60,7 @@ def main(argv: list[str] | None = None) -> int:
     )
     p.add_argument("--skip-weights", action="store_true", help="install everything except the LTX 2.3 weights")
     p.add_argument("--skip-sage", action="store_true", help="do not install Triton / SageAttention")
+    p.add_argument("--skip-llm", action="store_true", help="do not install llama.cpp or look for local LLM models")
     p.set_defaults(func=cmd_automatic_install)
 
     p = sub.add_parser(
