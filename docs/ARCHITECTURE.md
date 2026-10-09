@@ -98,3 +98,20 @@ ChromaDB at `video_buddy/state/chroma/` (gitignored) holds `workflows`, `runs`, 
 | 8642 | Hermes. Buddy does not bind it. |
 
 Shift budget is about 80 VRAM-minutes. Over cap, the queue HOLDs. HOLD is A2A `input-required`, not `failed`. `done_with_warnings` maps to `completed`. Diagnose and dry-run do not increment `used`.
+
+## Target: one gateway (planned, not done)
+
+The plan is to keep a single agent entry point, the **LTX bot gateway**. It
+would call the pipeline directly through the CLI and the importable
+`master_agent` functions. These surfaces would then be retired:
+
+- the separate Hermes `ltx` seat and its profile writers (`master_agent/hermes/`)
+- the `master-agent` MCP server (`master_agent/mcp_server.py`)
+- the studio on `:8189`: UI, A2A, the Hermes facade, and the ingest drop zone (`master_agent/web/`)
+- the `.bat` launchers and the docs and skills that point at those surfaces
+
+Nothing has been removed yet. Which gateway survives has not been
+confirmed. Until it is, MCP, `:8189` and the profile writers stay
+supported, and changes must not break them. The MCP tools are plain sync
+functions so the surviving gateway can import them. Budget resume no longer
+needs `master_agent.web`.
