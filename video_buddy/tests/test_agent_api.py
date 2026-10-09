@@ -89,8 +89,9 @@ def test_control_set_round_trip_and_budget_reset(monkeypatch):
         lambda background=None, client=None: [],
     )
     before = agent_api.control_get()
-    out = agent_api.control_set(judge_score_threshold=0.61, session="test")
-    assert out["judge_score_threshold"] == pytest.approx(0.61)
+    target = 0.62 if before["judge_score_threshold"] == pytest.approx(0.61) else 0.61
+    out = agent_api.control_set(judge_score_threshold=target, session="test")
+    assert out["judge_score_threshold"] == pytest.approx(target)
     assert out["hash"] != before["hash"]
     reset = agent_api.control_set(reset_budget=True)
     assert reset["render_budget_used_vram_min"] == 0
