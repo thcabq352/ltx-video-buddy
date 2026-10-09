@@ -38,6 +38,16 @@ def test_external_server_is_not_spawned():
         assert srv.ensure_started() == "external"
 
 
+def test_autostart_off_never_spawns(monkeypatch):
+    monkeypatch.setattr(config, "LLAMACPP_AUTOSTART", False)
+    with patch.object(srv, "_listening", return_value=False), patch.object(
+        srv, "resolve_binary", return_value="/opt/llama-server"
+    ), patch.object(srv, "_popen", side_effect=AssertionError("spawned")):
+        assert srv.ensure_started() == "disabled"
+    with patch.object(srv, "_listening", return_value=True):
+        assert srv.ensure_started() == "external"
+
+
 def test_missing_binary_warns_and_does_not_raise(capsys):
     with patch.object(srv, "_listening", return_value=False), patch.object(
         srv, "resolve_binary", return_value=None

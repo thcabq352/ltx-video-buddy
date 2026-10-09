@@ -197,7 +197,8 @@ def _wait_until_listening(
 def ensure_started(*, fall_through: bool | None = None) -> str:
     """Start llama.cpp when nothing is listening. Never raises.
 
-    Returns ``external`` (already up), ``started``, ``missing``, or ``failed``.
+    Returns ``external`` (already up), ``started``, ``missing``, ``failed``,
+    or ``disabled`` (``LLAMACPP_AUTOSTART=0`` and nothing listening).
     """
     with _LOCK:
         return _ensure(fall_through)
@@ -217,6 +218,8 @@ def _ensure(fall_through: bool | None) -> str:
     if not owned and _listening(connect, port):
         reset_endpoint_cache()
         return "external"
+    if not cfg.LLAMACPP_AUTOSTART:
+        return "disabled"
     if _failure_at and time.time() - _failure_at < _COOLDOWN_S:
         return "failed"
 
