@@ -44,9 +44,9 @@ def test_extra_roots_opt_in(tmp_path, monkeypatch):
     assert is_allowed_media_path(tmp_path / "clip.mp4")
 
 
-def test_mcp_create_video_refuses_outside_path(monkeypatch):
+def test_agent_create_video_refuses_outside_path(monkeypatch):
     monkeypatch.delenv("MEDIA_EXTRA_ROOTS", raising=False)
-    from master_agent.mcp_server import create_video, judge_asset
+    from master_agent.agent_api import create_video, judge_asset
 
     out = create_video("a cat", image_path="/etc/hostname", dry_run=True)
     assert out["status"] == "error"

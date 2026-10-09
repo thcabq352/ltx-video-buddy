@@ -34,6 +34,7 @@ is hours. Prefer ~900s MCP timeout.
 
 | Command | What it does |
 |---|---|
+| `agent <tool> --args '<json>'` | Call any agent tool (`master_agent/agent_api.py`) and print one JSON document on stdout; logs go to stderr. `agent list` prints every tool with its parameters. Covers the MCP tools plus `about`, `search_knowledge`, `list_runs`, `control_get`, `control_set`, `budget_status`, `budget_reset_shift`; `create_video` also takes `seed`, `storyboard`, `upscale`. Exit 1 on `status` error or busy (another render holds the GPU). |
 | `about` | Studio identity card (`--json` ok). |
 | `curriculum` | Print L0→L5 + Part 2 overnight gate (`--json` ok). |
 | `inventory` | List discovered weights (path + role) before doctor. `--json` optional. Consent rules: repo `docs/WEIGHTS.md`. |

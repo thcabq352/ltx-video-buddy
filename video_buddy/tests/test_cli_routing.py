@@ -204,7 +204,7 @@ def test_mcp_create_video_warns_on_h3_photo_voice(monkeypatch, tmp_path: Path):
     # Live H3 voice mode probes the sample before queue. Stub bytes have
     # duration 0, so the gate must see a 2–12 s sample.
     monkeypatch.setattr("master_agent.music.beats.audio_duration", lambda _path: 4.0)
-    from master_agent.mcp_server import create_video
+    from master_agent.agent_api import create_video
 
     warned = create_video(
         "a cartoon gator says the line",
@@ -237,7 +237,7 @@ def test_talking_slices_h3_is_one_clip_and_ltx_continues():
     assert ltx.audio_starts[1] == ltx.durations[0]
 
 
-def test_mcp_create_video_forwards_image_and_audio(monkeypatch, tmp_path: Path):
+def test_agent_create_video_forwards_image_and_audio(monkeypatch, tmp_path: Path):
     monkeypatch.setenv("MEDIA_EXTRA_ROOTS", str(tmp_path))
     image = tmp_path / "face.png"
     audio = tmp_path / "line.wav"
@@ -274,7 +274,7 @@ def test_mcp_create_video_forwards_image_and_audio(monkeypatch, tmp_path: Path):
         "master_agent.orchestrator.talking.duration_following_audio",
         lambda _path, probe=None: (3.2, None),
     )
-    from master_agent.mcp_server import create_video
+    from master_agent.agent_api import create_video
 
     out = create_video(
         "she says the line",

@@ -46,17 +46,12 @@ def _frontmatter(text: str) -> dict[str, str]:
 
 def registered_mcp_tools() -> list[str]:
     tree = ast.parse(MCP_SERVER.read_text(encoding="utf-8"))
-    names: list[str] = []
     for node in tree.body:
-        if not isinstance(node, ast.FunctionDef):
-            continue
-        for dec in node.decorator_list:
-            call = dec if isinstance(dec, ast.Call) else None
-            func = call.func if call else dec
-            if isinstance(func, ast.Attribute) and func.attr == "tool":
-                names.append(node.name)
-                break
-    return names
+        if isinstance(node, ast.Assign) and any(
+            isinstance(t, ast.Name) and t.id == "MCP_TOOLS" for t in node.targets
+        ):
+            return list(ast.literal_eval(node.value))
+    raise AssertionError("MCP_TOOLS not found in mcp_server.py")
 
 
 def registered_cli_commands() -> set[str]:

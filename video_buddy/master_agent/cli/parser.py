@@ -18,6 +18,7 @@ from master_agent.cli.models import cmd_download_flux, cmd_download_models, cmd_
 from master_agent.cli.fractal import cmd_fractal
 from master_agent.cli.music import cmd_mv, cmd_music, cmd_heartmula
 from master_agent.cli.persona import cmd_persona, cmd_soul, cmd_character, cmd_lora
+from master_agent.cli.agent import cmd_agent
 
 def main(argv: list[str] | None = None) -> int:
     # Windows console is cp1252 — never crash on LLM-emitted unicode (e.g. →)
@@ -879,6 +880,18 @@ def main(argv: list[str] | None = None) -> int:
     p.add_argument("--json", action="store_true", help="machine-readable snapshot")
     p.set_defaults(func=cmd_budget)
 
+    p = sub.add_parser(
+        "agent",
+        help="call an agent tool and print JSON (gateway entry point; `agent list` shows tools)",
+    )
+    p.add_argument("tool", help="tool name from `agent list`, or list")
+    p.add_argument(
+        "--args",
+        default=None,
+        help="JSON object of keyword arguments, or @path/to/args.json",
+    )
+    p.set_defaults(func=cmd_agent)
+
     p = sub.add_parser("hermes", help="Hermes profile ltx: status | register")
     p.add_argument("hermes_command", choices=["status", "register"])
     p.add_argument("--hermes-home", help="override HERMES_HOME / ~/.hermes")
@@ -897,6 +910,8 @@ def main(argv: list[str] | None = None) -> int:
     args = parser.parse_args(argv)
     from master_agent.control.versioned_config import announce_config
 
-    print(announce_config(), flush=True)
+    # `agent` reserves stdout for its JSON result.
+    banner_stream = sys.stderr if args.command == "agent" else sys.stdout
+    print(announce_config(), file=banner_stream, flush=True)
     return args.func(args)
 
