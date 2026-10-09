@@ -270,58 +270,6 @@ def test_run_fail_closes_seedance_before_any_partner_queue(capsys):
     assert rc == 0
 
 
-def test_api_jobs_rewrite_partner_ids_to_local_variants(monkeypatch):
-    from fastapi.testclient import TestClient
-
-    from master_agent.web.app import app
-
-    captured: dict[str, object] = {}
-
-    class _Job:
-        def to_dict(self):
-            return {"id": "job", "status": "queued", "variant": captured.get("variant")}
-
-    def fake_submit(kind, request, **params):
-        captured["kind"] = kind
-        captured["request"] = request
-        captured["variant"] = params.get("variant")
-        return _Job()
-
-    monkeypatch.setattr("master_agent.web.app.MANAGER.submit", fake_submit)
-    client = TestClient(app)
-
-    listed = client.get("/api/variants")
-    assert listed.status_code == 200
-    ids = {item["id"] for item in listed.json()["items"]}
-    assert "seedance25_draft_t2v" not in ids
-    assert "ltx25_t2v_i2v" in ids
-
-    refused = client.post(
-        "/api/jobs",
-        json={"request": "rain on a window", "variant": "api_seedance2_5_draft_i2v"},
-    )
-    assert refused.status_code == 200
-    assert captured["variant"] == "ltx25_t2v_i2v"
-    assert "api_seedance2_5_draft_i2v" not in str(refused.json())
-
-    brief = client.post(
-        "/api/jobs",
-        json={"request": "promote this seedance draft_task_id", "quality": "draft", "dry_run": True},
-    )
-    assert brief.status_code == 200
-    assert captured["variant"] == "ltx25_t2v_i2v"
-    assert captured["kind"] == "dry-run"
-
-    monkeypatch.setattr("master_agent.config.COMFYUI_URL", "https://api.kie.ai")
-    blocked = client.post(
-        "/api/jobs",
-        json={"request": "Seedance 2.5 draft one-take", "dry_run": True},
-    )
-    assert blocked.status_code == 400
-    assert "Local-only is a hard requirement" in blocked.json()["detail"]
-    assert "http://127.0.0.1:8188" in blocked.json()["detail"]
-
-
 def test_capability_probe_does_not_treat_partner_nodes_as_wired():
     from master_agent.comfy.capabilities import probe_capabilities
 

@@ -396,7 +396,7 @@ def test_h3_r2v_voice_reference_label_is_on_picker_surfaces():
         repo / "docs" / "FEATURES.md",
         root / "skills" / "video-buddy" / "TOOLS.md",
         root / "master_agent" / "orchestrator" / "prompts" / "director.md",
-        root / "master_agent" / "web" / "static" / "index.html",
+        root / "master_agent" / "agent_api.py",
         repo / "docs" / "AGENTS.md",
         repo / "README.md",
     ):

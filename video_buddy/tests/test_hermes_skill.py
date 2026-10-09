@@ -144,7 +144,6 @@ def test_cli_commands_documented():
         "scan-models",
         "validate",
         "kb",
-        "ui",
         "run",
         "power-tune",
         "persona",

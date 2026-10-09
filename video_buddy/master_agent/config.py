@@ -113,7 +113,7 @@ OLLAMA_URL = os.getenv("OLLAMA_URL", "http://127.0.0.1:11434").rstrip("/")
 OLLAMA_MODEL = os.getenv("OLLAMA_MODEL", "qwen3-vl-heretic")
 
 # llama.cpp OpenAI-compat server (llama-server). Default :8080 — do not
-# collide with Hermes 8642 or the studio facade 8189. Buddy starts this
+# collide with Hermes 8642. Buddy starts this
 # process against MODELS_DIR when LLM_PROVIDER is auto or llamacpp.
 LLAMACPP_URL = os.getenv("LLAMACPP_URL", "http://127.0.0.1:8080").rstrip("/")
 LLAMACPP_MODEL = (os.getenv("LLAMACPP_MODEL") or OLLAMA_MODEL).strip()

@@ -322,16 +322,3 @@ def test_schedule_stderr_for_mcp(monkeypatch, capsys):
     assert captured.out == ""
     assert "2 doc(s)" in captured.err
     assert "4 skipped" in captured.err
-
-
-def test_studio_lifespan_schedules_ingest():
-    from unittest.mock import patch
-
-    from fastapi.testclient import TestClient
-
-    from master_agent.web.app import app
-
-    with patch("master_agent.kb.ingest.schedule_knowledge_ingest") as sched:
-        with TestClient(app):
-            pass
-    sched.assert_called_once_with()

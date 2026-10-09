@@ -8,7 +8,7 @@ from pathlib import Path
 
 from master_agent.config import LIPDUB_ANCHOR, LIPDUB_REFRAME, LIPDUB_SILENCE_MODE, ensure_dirs
 from master_agent.cli.common import _DurationSet, _DimSet, _add_selector_flags
-from master_agent.cli.studio import cmd_curriculum, cmd_about, cmd_kb, cmd_ui, cmd_budget
+from master_agent.cli.studio import cmd_curriculum, cmd_about, cmd_kb, cmd_budget
 from master_agent.cli.doctor import cmd_setup, cmd_inventory, cmd_health, cmd_scan_models
 from master_agent.cli.comfy import cmd_fetch_object_info, cmd_capabilities, cmd_validate, cmd_power_tune, cmd_diagnose, cmd_comfy
 from master_agent.cli.run import cmd_run, cmd_brief
@@ -105,16 +105,6 @@ def main(argv: list[str] | None = None) -> int:
         help="search the git-synced knowledge/ collection",
     )
     p.set_defaults(func=cmd_kb)
-
-    p = sub.add_parser("ui", help="web dashboard (FastAPI) on 127.0.0.1:8189")
-    p.add_argument("--host", default="127.0.0.1")
-    p.add_argument("--port", type=int, default=8189)
-    p.add_argument(
-        "--allow-remote",
-        action="store_true",
-        help="allow a non-loopback --host and skip the Host/Origin check (no auth!)",
-    )
-    p.set_defaults(func=cmd_ui)
 
     p = sub.add_parser("run", help="orchestrated generation: patch -> validate -> submit -> judge")
     p.add_argument("request", help="what to generate (natural language)")

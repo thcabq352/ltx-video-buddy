@@ -1,4 +1,4 @@
-"""Studio identity card — CLI `about`, GET /api/about, and the About tab."""
+"""Studio identity card — CLI `about` and agent tool `about`."""
 
 from __future__ import annotations
 
@@ -6,7 +6,6 @@ from typing import Any
 
 from master_agent import __version__
 
-STUDIO_PORT = 8189
 REPO = "https://github.com/thcabq352/ltx-video-buddy"
 DRIVE_GRAPH = (
     'python -m master_agent comfy run --mode generate --prompt "BRIEF" --variant base'
@@ -46,7 +45,6 @@ def studio_about() -> dict[str, Any]:
         "mcp_id": "master-agent",
         "repo": REPO,
         "comfy": {"url": cfg.COMFYUI_URL, "port": cfg.COMFYUI_PORT},
-        "studio": {"url": f"http://127.0.0.1:{STUDIO_PORT}", "port": STUDIO_PORT},
         "drive": {
             "first": "cli",
             "health": "python -m master_agent health",
@@ -81,14 +79,12 @@ def format_about(card: dict[str, Any] | None = None) -> str:
     models = data.get("models") or {}
     drive = data.get("drive") or {}
     comfy = data.get("comfy") or {}
-    studio = data.get("studio") or {}
     gateway = data.get("gateway") or {}
     lines = [
         f"{data.get('name', 'VIDEO BUDDY')}  v{data.get('version', '')}",
         data.get("tagline") or "",
         "",
         f"Comfy    {comfy.get('url')}",
-        f"Studio   {studio.get('url')}  (optional dashboard)",
         f"Persona  {persona.get('slug')} ({persona.get('name')})   soul {soul.get('slug')} ({soul.get('name')})",
         f"Local    llamacpp={models.get('llamacpp')}  ollama={models.get('ollama')}   provider {models.get('llm_provider')}",
         f"Package  {data.get('package')}   MCP {data.get('mcp_id')}",

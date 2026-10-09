@@ -18,7 +18,7 @@ PART2_ID = "LESSON_BUDDY_DURATION_LADDER"
 PART1_LESSONS: tuple[dict[str, str], ...] = (
     {"id": "L0", "name": "tree", "do": "Know this tree: video_buddy / master_agent."},
     {"id": "L1", "name": "about", "do": "python -m master_agent about — studio card before any GPU claim."},
-    {"id": "L2", "name": "health", "do": "python -m master_agent health — Comfy :8188 up. Studio :8189 is not proof."},
+    {"id": "L2", "name": "health", "do": "python -m master_agent health — Comfy :8188 up. A gateway reply is not proof."},
     {"id": "L3", "name": "dry-run", "do": "python -m master_agent run \"BRIEF\" --dry-run — plan/lint only, no queue, no budget spend."},
     {"id": "L4", "name": "speed diagnose", "do": "python -m master_agent diagnose --variant base --prompt \"garden proof\" — 9-frame hull, print sec/step."},
     {"id": "L5", "name": "short proof", "do": "Short 9-frame proof in outputs/; ffprobe frames + size. Junk <100KB or <3 frames is FAIL."},

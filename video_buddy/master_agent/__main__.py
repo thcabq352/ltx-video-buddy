@@ -77,7 +77,6 @@ from master_agent.cli.studio import (
     cmd_budget,
     cmd_curriculum,
     cmd_kb,
-    cmd_ui,
 )
 
 __all__ = [
@@ -112,7 +111,6 @@ __all__ = [
     "cmd_scan_models",
     "cmd_setup",
     "cmd_soul",
-    "cmd_ui",
     "cmd_validate",
     "cmd_workflows",
     "main",
