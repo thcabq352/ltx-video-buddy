@@ -15,7 +15,7 @@ Authoritative framing: **Briefing for LTX Video Buddy (`master_agent`) — fleet
 - **Brain ranks stories. Hands answers fit.** Contract `buddy.capability.contract/v1` has no VRAM, slot, or weight path. See [Architecture](ARCHITECTURE.md#brain-and-hands).
 - **Missing optional nodes bypass** (`TeaCache`, `WanVideoTeaCache`, `LanPaint_KSampler`, `GetWarpedNoiseFromVideo`, `MMAudioSampler`). Do not bypass structural nodes (`WanFunInpaintToVideo`, `Wan22FunControlToVideo`). FaceID, ControlNet, Voronoi, Perlin, Stand-In, LanPaint, MMAudio, WanVideoWrapper, and K3NK AIO are retired, not deferred. There is no `VideoNoiseWarp` class.
 - **Tracker `DONE` can lie.** Confirm with history, `ffprobe`, size, and frames. Junk under 100KB or under 3 frames is FAIL.
-- **Port in use is not a reason to kill the cook.** If `:8188` or `:8189` is bound, attach or wait.
+- **Port in use is not a reason to kill the cook.** If `:8188` is bound, attach or wait.
 - **Budget HOLD** is `input-required`, not failed. `budget reset-shift` archives `previous_used` / `previous_shift_id` and does not wipe history.
 - **LoRA A/B locks the encoder.** Do not swap `gemma_3_12B_it_fp8_scaled` for Heretic mid-comparison. Windows folder-prefixed weight names stay backslash style.
 

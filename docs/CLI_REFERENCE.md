@@ -40,7 +40,7 @@ python -m master_agent power-tune "neon rain" --variant base --json
 
 ## LLM provider
 
-`LLM_PROVIDER` defaults to `auto` when unset. Order: llama.cpp, then Ollama, then Grok. llama.cpp is the preferred local backend. `ollama` or `llamacpp` pins that backend and does not hop.
+`LLM_PROVIDER` defaults to `auto` when unset. Order: llama.cpp, then Ollama. `auto` never calls a cloud model; Grok runs only with `LLM_PROVIDER=grok` or a panel that names it. llama.cpp is the preferred local backend. `ollama` or `llamacpp` pins that backend and does not hop.
 
 | Env | Default |
 |---|---|
@@ -69,35 +69,27 @@ python -m master_agent download-flux
 
 Also `--vace`, `--krea`, `--qwen`, `--flux-pack`, `--bundle`, `--optional`, `--selector`. Nothing is fetched until you agree. See [Weights](WEIGHTS.md#consent). `--ltx23` is the LTX 2.3 pack that automatic install downloads (distilled 1.1 all-in-one, GGUF Q4_K_S, Gemma fp4 text encoder, distilled LoRA, video VAE, tiny VAE).
 
-## Studio, identity, knowledge
+## Agent entry, identity, knowledge
 
 | Command | Role |
 |---|---|
-| `ui --port 8189` | Create, Comfy, Voice, Fractal, Music, Jobs, Runs, Knowledge, Models, About. Localhost, no auth |
+| `agent <tool> --args JSON` | The gateway entry. One JSON document on stdout, logs on stderr. `agent list` prints the tools. Exit 1 on `status` error/busy, 2 on a bad call |
 | `persona list\|show\|set` | Interview voice |
 | `soul list\|show\|set` | Standing values |
 | `kb ingest\|search\|stats` | Local Chroma. `--knowledge` searches the git folder. `--workflows` searches digests |
-| `hermes status\|register` | Profile `ltx`. `--force` overwrites a custom `SOUL.md`. No `.env` |
 
 ### Hermes
 
 ```bash
 cd video_buddy
-python install_hermes_skill.py
-python -m master_agent hermes status
+python install_hermes_skill.py      # skill only → ~/.hermes/skills/video-buddy/
+python -m master_agent agent list
+python -m master_agent agent create_video --args '{"request": "neon rain", "dry_run": true}'
 ```
 
-Skill source: `video_buddy/skills/video-buddy/`. MCP tools (the only ones): `health`, `create_video`, `plan_storyboard`, `judge_asset`, `search_workflows`, `search_runs`, `kb_ingest`, `list_models`, `validate_workflow`, `create_character`, `train_lora`. Diagnose, curriculum, `comfy run`, doctor, budget, hermes, and `ui` are CLI-only.
+Skill source: `video_buddy/skills/video-buddy/`. Agent tools (`master_agent/agent_api.py`): `about`, `health`, `create_video`, `plan_storyboard`, `judge_asset`, `search_workflows`, `search_runs`, `search_knowledge`, `kb_ingest`, `list_runs`, `list_models`, `validate_workflow`, `create_character`, `train_lora`, `control_get`, `control_set`, `budget_status`, `budget_reset_shift`. Diagnose, curriculum, `comfy run`, doctor and ingest/promote are CLI commands.
 
-```yaml
-mcp_servers:
-  master-agent:
-    command: "<VIDEO_BUDDY>/.venv/bin/python"
-    args:
-      - "<VIDEO_BUDDY>/master_agent/mcp_server.py"
-```
-
-Prefer `hermes -p ltx` or `hermes mcp add` / `hermes mcp test master-agent`. A2A on `:8189` (`GET /.well-known/agent.json`, `POST /a2a`) is the fallback.
+There is no MCP server, A2A endpoint or studio port. An older install's `~/.hermes/profiles/ltx/config.yaml` may still list `mcp_servers.master-agent`; delete that entry before deploying. See `video_buddy/skills/video-buddy/PROFILE.md`.
 
 ## Feature commands
 

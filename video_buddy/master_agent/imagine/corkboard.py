@@ -31,9 +31,9 @@ class PanelRecord:
 
 
 def _default_generate(prompt: str, dest: Path, **kwargs) -> dict[str, Any]:
-    from master_agent.imagine.client import generate_image
-
-    return generate_image(prompt, dest, **kwargs)
+    raise RuntimeError(
+        "no panel image generator configured; pass generate_fn (a local Comfy image graph)"
+    )
 
 
 def _default_vision(path: Path | str, **kwargs) -> Optional[dict[str, Any]]:

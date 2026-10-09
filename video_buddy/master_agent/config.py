@@ -113,7 +113,7 @@ OLLAMA_URL = os.getenv("OLLAMA_URL", "http://127.0.0.1:11434").rstrip("/")
 OLLAMA_MODEL = os.getenv("OLLAMA_MODEL", "qwen3-vl-heretic")
 
 # llama.cpp OpenAI-compat server (llama-server). Default :8080 — do not
-# collide with Hermes 8642 or the studio facade 8189. Buddy starts this
+# collide with Hermes 8642. Buddy starts this
 # process against MODELS_DIR when LLM_PROVIDER is auto or llamacpp.
 LLAMACPP_URL = os.getenv("LLAMACPP_URL", "http://127.0.0.1:8080").rstrip("/")
 LLAMACPP_MODEL = (os.getenv("LLAMACPP_MODEL") or OLLAMA_MODEL).strip()
@@ -125,9 +125,9 @@ LLAMACPP_ROOT = Path(os.getenv("LLAMACPP_ROOT", str(PROJECT_ROOT / "llama.cpp"))
 LLAMACPP_REF = (os.getenv("LLAMACPP_REF") or "b11389").strip()
 
 # LLM provider selection:
-#   auto (default; llamacpp -> ollama -> grok)
+#   auto (default; llamacpp -> ollama, local only)
 #   ollama[:model] | llamacpp[:model] (aliases: llama.cpp, llama-cpp)
-#   grok
+#   grok (cloud, opt-in only)
 LLM_PROVIDER = (os.getenv("LLM_PROVIDER", "auto") or "auto").strip().lower()
 
 # Storyboard LLM panel: preset (default|local | grok | grok+local|both |

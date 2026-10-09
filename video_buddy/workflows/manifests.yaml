@@ -952,7 +952,10 @@ ltx25_t2v_i2v_two_stage:
   safer_alternate: ltx25_t2v_i2v
   requires: [ComfyUI-LTXVideo, VideoHelperSuite, LTXVLatentUpsampler]
   fields:
-    prompt: { class_type: CLIPTextEncode, index: 0, input: text }
+    # Primitives feed the Positive / Negative encoders; CLIPTextEncode index 0
+    # is the Negative encoder in these graphs.
+    prompt: { node_id: "5508", input: value }
+    negative_prompt: { node_id: "5509", input: value }
     seed:
       node_id: ["5516:4832", "5517:4967"]
       input: noise_seed
@@ -966,7 +969,10 @@ ltx25_flf2v:
   vram_peak_gb: 12.8
   requires: [ComfyUI-LTXVideo, VideoHelperSuite]
   fields:
-    prompt: { class_type: CLIPTextEncode, index: 0, input: text }
+    # Primitives feed the Positive / Negative encoders; CLIPTextEncode index 0
+    # is the Negative encoder in these graphs.
+    prompt: { node_id: "5508", input: value }
+    negative_prompt: { node_id: "5509", input: value }
     seed: { node_id: "5516:4832", input: noise_seed }
     frames: { class_type: EmptyLTXVLatentVideo, index: 0, input: length }
 
@@ -978,7 +984,10 @@ ltx25_msr:
   vram_peak_gb: 13.2
   requires: [ComfyUI-LTXVideo (ComfyUILTX25MSR*), VideoHelperSuite]
   fields:
-    prompt: { class_type: CLIPTextEncode, index: 0, input: text }
+    # Primitives feed the Positive / Negative encoders; CLIPTextEncode index 0
+    # is the Negative encoder in these graphs.
+    prompt: { node_id: "5508", input: value }
+    negative_prompt: { node_id: "5509", input: value }
     seed: { node_id: "5516:9017", input: noise_seed }
     width: { class_type: EmptyLTXVLatentVideo, index: 0, input: width }
     height: { class_type: EmptyLTXVLatentVideo, index: 0, input: height }
@@ -992,7 +1001,10 @@ ltx25_v2v_ic_lora:
   vram_peak_gb: 13.0
   requires: [ComfyUI-LTXVideo (LTXVICLoRALoader), VideoHelperSuite]
   fields:
-    prompt: { class_type: CLIPTextEncode, index: 0, input: text }
+    # Primitives feed the Positive / Negative encoders; CLIPTextEncode index 0
+    # is the Negative encoder in these graphs.
+    prompt: { node_id: "5508", input: value }
+    negative_prompt: { node_id: "5509", input: value }
     seed: { node_id: "5516:4832", input: noise_seed }
     width: { class_type: EmptyLTXVLatentVideo, index: 0, input: width }
     height: { class_type: EmptyLTXVLatentVideo, index: 0, input: height }
@@ -1006,7 +1018,10 @@ ltx25_a2v:
   vram_peak_gb: 12.8
   requires: [ComfyUI-LTXVideo, VideoHelperSuite]
   fields:
-    prompt: { class_type: CLIPTextEncode, index: 0, input: text }
+    # Primitives feed the Positive / Negative encoders; CLIPTextEncode index 0
+    # is the Negative encoder in these graphs.
+    prompt: { node_id: "5508", input: value }
+    negative_prompt: { node_id: "5509", input: value }
     seed:
       node_id: ["5516:4832", "5517:4967"]
       input: noise_seed
@@ -1022,7 +1037,8 @@ ltx25_t2a:
   vram_peak_gb: 8.5
   requires: [ComfyUI-LTXVideo]
   fields:
-    prompt: { class_type: CLIPTextEncode, index: 0, input: text }
+    prompt: { node_id: "6", input: value }
+    negative_prompt: { node_id: "7", input: value }
     frames: { class_type: LTXVEmptyLatentAudio, index: 0, input: frames_number }
 
 # --- MiniMax H3 API pack (native Comfy ≥0.30 + ComfyUI-GGUF) ---

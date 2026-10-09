@@ -21,7 +21,7 @@ python -m master_agent health
 python -m master_agent comfy run --mode generate --variant ltx25_t2v_i2v --prompt "a test shot"
 ```
 
-Windows: `install.bat`. macOS / Linux: `./install.sh`. Studio UI (optional): `python -m master_agent ui --port 8189`. Comfy is `:8188`. A live studio tab is not proof Comfy is up.
+Windows: `install.bat`. macOS / Linux: `./install.sh`. Agent entry: `python -m master_agent agent list`. Comfy is `:8188`.
 
 ## Where each fact lives
 

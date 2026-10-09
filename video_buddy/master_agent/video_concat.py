@@ -3,10 +3,11 @@
 from __future__ import annotations
 
 import shutil
-import subprocess
 import tempfile
 from pathlib import Path
 from typing import Optional
+
+from master_agent.proc import run_media
 
 
 def find_ffmpeg() -> Optional[str]:
@@ -38,7 +39,7 @@ def trim_leading_frames(video: Path, dest: Path, *, frames: int = 1) -> Path:
         "copy",
         str(dest),
     ]
-    proc = subprocess.run(cmd, capture_output=True, text=True)
+    proc = run_media(cmd, text=True)
     if proc.returncode == 0 and dest.is_file() and dest.stat().st_size > 0:
         return dest
     shutil.copy2(video, dest)
@@ -79,7 +80,7 @@ def concat_videos(paths: list[Path], dest: Path) -> Path:
                 "copy",
                 str(dest),
             ]
-            proc = subprocess.run(cmd, capture_output=True, text=True)
+            proc = run_media(cmd, text=True)
             if proc.returncode == 0 and dest.is_file():
                 return dest
             # re-encode fallback
@@ -100,7 +101,7 @@ def concat_videos(paths: list[Path], dest: Path) -> Path:
                 "aac",
                 str(dest),
             ]
-            proc = subprocess.run(cmd, capture_output=True, text=True)
+            proc = run_media(cmd, text=True)
             if proc.returncode == 0 and dest.is_file():
                 return dest
             raise RuntimeError(f"ffmpeg concat failed: {proc.stderr[-500:]}")
@@ -132,7 +133,7 @@ def mux_audio(video: Path, audio: Path, dest: Path) -> Path:
         "-shortest",
         str(dest),
     ]
-    proc = subprocess.run(cmd, capture_output=True, text=True)
+    proc = run_media(cmd, text=True)
     if proc.returncode != 0 or not dest.is_file():
         raise RuntimeError(f"ffmpeg mux failed: {proc.stderr[-500:]}")
     return dest
@@ -171,7 +172,7 @@ def cut_to_windows(
             "-an",
             str(dest),
         ]
-        proc = subprocess.run(cmd, capture_output=True, text=True)
+        proc = run_media(cmd, text=True)
         if proc.returncode != 0 or not dest.is_file():
             raise RuntimeError(
                 f"ffmpeg cut window {i} ({start:.2f}-{end:.2f}) failed: {proc.stderr[-500:]}"

@@ -1,4 +1,4 @@
-"""Studio identity card — CLI `about`, GET /api/about, and the About tab."""
+"""Studio identity card — CLI `about` and agent tool `about`."""
 
 from __future__ import annotations
 
@@ -6,7 +6,6 @@ from typing import Any
 
 from master_agent import __version__
 
-STUDIO_PORT = 8189
 REPO = "https://github.com/thcabq352/ltx-video-buddy"
 DRIVE_GRAPH = (
     'python -m master_agent comfy run --mode generate --prompt "BRIEF" --variant base'
@@ -43,10 +42,8 @@ def studio_about() -> dict[str, Any]:
         "tagline": "Local ComfyUI video studio. Drive Comfy from the CLI first.",
         "version": __version__,
         "package": "master_agent",
-        "mcp_id": "master-agent",
         "repo": REPO,
         "comfy": {"url": cfg.COMFYUI_URL, "port": cfg.COMFYUI_PORT},
-        "studio": {"url": f"http://127.0.0.1:{STUDIO_PORT}", "port": STUDIO_PORT},
         "drive": {
             "first": "cli",
             "health": "python -m master_agent health",
@@ -65,12 +62,10 @@ def studio_about() -> dict[str, Any]:
         },
         "personas": ["ara", "exec", "zod"],
         "souls": ["studio", "play"],
-        "hermes": {
-            "profile": "ltx",
+        "gateway": {
+            "name": "LTX bot gateway",
             "skill": "video-buddy",
-            "mcp_id": "master-agent",
-            "facade": f"http://127.0.0.1:{STUDIO_PORT}/p/ltx/v1/chat/completions",
-            "a2a_fallback": f"http://127.0.0.1:{STUDIO_PORT}/a2a",
+            "entry": "python -m master_agent agent <tool> --args JSON",
         },
     }
 
@@ -83,18 +78,16 @@ def format_about(card: dict[str, Any] | None = None) -> str:
     models = data.get("models") or {}
     drive = data.get("drive") or {}
     comfy = data.get("comfy") or {}
-    studio = data.get("studio") or {}
-    hermes = data.get("hermes") or {}
+    gateway = data.get("gateway") or {}
     lines = [
         f"{data.get('name', 'VIDEO BUDDY')}  v{data.get('version', '')}",
         data.get("tagline") or "",
         "",
         f"Comfy    {comfy.get('url')}",
-        f"Studio   {studio.get('url')}  (optional dashboard)",
         f"Persona  {persona.get('slug')} ({persona.get('name')})   soul {soul.get('slug')} ({soul.get('name')})",
         f"Local    llamacpp={models.get('llamacpp')}  ollama={models.get('ollama')}   provider {models.get('llm_provider')}",
-        f"Package  {data.get('package')}   MCP {data.get('mcp_id')}",
-        f"Hermes   profile ltx (primary)   A2A fallback {hermes.get('a2a_fallback')}",
+        f"Package  {data.get('package')}",
+        f"Gateway  {gateway.get('name')}   skill {gateway.get('skill')}   {gateway.get('entry')}",
         "",
         "Drive a graph:",
         f"  {drive.get('health')}",

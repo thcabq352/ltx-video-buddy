@@ -18,25 +18,49 @@ from master_agent.comfy.ingest.classify import class_types, iter_nodes
 _LORA_CLASSES = frozenset({"LoraLoader", "LoraLoaderModelOnly", "LTXICLoRALoaderModelOnly"})
 
 
-def match_family(workflow: dict[str, Any]) -> str | None:
-    """Return ``inoutpaint``, ``lipsync``, ``sulphur``, or None.
+_VIDEO_GUIDES = frozenset({"LTXAddVideoICLoRAGuide", "LTXVSetAudioRefTokens"})
+_SULPHUR_HINT_NODES = frozenset({"PathchSageAttentionKJ", "LTX2SamplingPreviewOverride"})
 
-    inoutpaint wins when ``LTXVInpaintPreprocess`` is present so that family
-    is not mistaken for lipsync or sulphur.
-    """
-    classes = set(class_types(workflow))
-    if "LTXVInpaintPreprocess" in classes:
-        return "inoutpaint"
-    if "LTXAddVideoICLoRAGuide" in classes or "LTXVSetAudioRefTokens" in classes:
-        return "lipsync"
-    if "PathchSageAttentionKJ" in classes or "LTX2SamplingPreviewOverride" in classes:
-        return "sulphur"
+
+def _has_sulphur_lora(workflow: dict[str, Any]) -> bool:
     for _node_id, node in iter_nodes(workflow):
         if node.get("class_type") not in _LORA_CLASSES:
             continue
         name = str((node.get("inputs") or {}).get("lora_name") or "").lower()
         if "sulphur" in name:
-            return "sulphur"
+            return True
+    return False
+
+
+def _save_prefix_mentions(workflow: dict[str, Any], word: str) -> bool:
+    for _node_id, node in iter_nodes(workflow):
+        prefix = str((node.get("inputs") or {}).get("filename_prefix") or "")
+        if word in prefix.lower():
+            return True
+    return False
+
+
+def match_family(workflow: dict[str, Any]) -> str | None:
+    """Return ``inoutpaint``, ``lipsync``, ``sulphur``, or None.
+
+    inoutpaint wins when ``LTXVInpaintPreprocess`` is present so that family
+    is not mistaken for lipsync or sulphur.
+
+    lipsync needs an audio encode plus a video guide: IC-LoRA guides alone
+    also appear in LTX 2.5 MSR / V2V. sulphur needs a sulphur LoRA (or a
+    sulphur-only node plus a ``sulphur`` save prefix): sage attention and
+    the sampling preview override also appear in Movie Builder and other
+    LTX 2.3 graphs.
+    """
+    classes = set(class_types(workflow))
+    if "LTXVInpaintPreprocess" in classes:
+        return "inoutpaint"
+    if "LTXVAudioVAEEncode" in classes and classes & _VIDEO_GUIDES:
+        return "lipsync"
+    if _has_sulphur_lora(workflow):
+        return "sulphur"
+    if classes & _SULPHUR_HINT_NODES and _save_prefix_mentions(workflow, "sulphur"):
+        return "sulphur"
     return None
 
 

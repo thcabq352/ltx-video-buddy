@@ -705,8 +705,8 @@ def cmd_setup(
         if mode not in {"download"} and not fix_models:
             return rc
     elif do_fix and mode == "scan":
-        rc = fix(pull_ollama=False)
-        return print_report(snapshot(), weight_optional=False) if rc == 0 else rc
+        print("--scan-only: --fix ignored. Nothing installed or downloaded.")
+        return print_report(snapshot(), weight_optional=False)
     if mode in {"scan", "existing"} or (not fix_models and mode != "download"):
         return print_report(snapshot(), weight_optional=weight_optional) or rc
     from master_agent.models.weights import MissingWeightsError, download_missing_bundle, format_ask, scan_bundle

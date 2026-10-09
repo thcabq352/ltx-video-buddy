@@ -7,9 +7,10 @@ def test_studio_about_shape():
     card = studio_about()
     assert card["name"] == "VIDEO BUDDY"
     assert card["package"] == "master_agent"
-    assert card["mcp_id"] == "master-agent"
-    assert card["hermes"]["profile"] == "ltx"
-    assert card["hermes"]["a2a_fallback"].endswith("/a2a")
+    assert "mcp_id" not in card
+    assert "hermes" not in card
+    assert card["gateway"]["name"] == "LTX bot gateway"
+    assert card["gateway"]["entry"].startswith("python -m master_agent agent")
     assert card["drive"]["first"] == "cli"
     assert "llamacpp" in card["models"]
     assert "ollama" in card["models"]

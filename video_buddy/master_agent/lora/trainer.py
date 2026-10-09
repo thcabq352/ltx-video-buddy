@@ -9,9 +9,12 @@ safetensors is copied into MODELS_DIR/loras.
 
 from __future__ import annotations
 
+import os
 import shutil
+import signal
 import subprocess
 import sys
+import threading
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
@@ -41,27 +44,65 @@ def _toolkit_python() -> Path:
     return AI_TOOLKIT_DIR / "venv" / "bin" / "python"
 
 
+def _kill_tree(proc: subprocess.Popen) -> None:
+    if proc.poll() is not None:
+        return
+    try:
+        if os.name == "nt":
+            proc.kill()
+        else:
+            os.killpg(os.getpgid(proc.pid), signal.SIGKILL)
+    except (OSError, ProcessLookupError):
+        proc.kill()
+    try:
+        proc.wait(timeout=10)
+    except subprocess.TimeoutExpired:
+        pass
+
+
 def _default_runner(cmd: list[str], log_path: Path) -> int:
-    """Stream ai-toolkit stdout to the log file; return the exit code."""
+    """Stream ai-toolkit stdout to the log file; return the exit code.
+
+    The trainer runs in its own process group and is killed if this call
+    exits early (exception, interrupt) or exceeds ``LORA_TRAIN_TIMEOUT_S``
+    (0 = no limit), so it never outlives the caller as an orphan.
+    """
     log_path.parent.mkdir(parents=True, exist_ok=True)
+    kwargs: dict = {}
+    if os.name == "nt":
+        kwargs["creationflags"] = getattr(subprocess, "CREATE_NEW_PROCESS_GROUP", 0)
+    else:
+        kwargs["start_new_session"] = True
+    timeout_s = float(os.getenv("LORA_TRAIN_TIMEOUT_S", "0") or 0)
     with log_path.open("w", encoding="utf-8", errors="replace") as log:
         proc = subprocess.Popen(
             cmd,
             cwd=str(AI_TOOLKIT_DIR),
+            stdin=subprocess.DEVNULL,
             stdout=subprocess.PIPE,
             stderr=subprocess.STDOUT,
             text=True,
             encoding="utf-8",
             errors="replace",
+            **kwargs,
         )
-        assert proc.stdout is not None
-        for line in proc.stdout:
-            log.write(line)
-            try:
-                print(line, end="")
-            except UnicodeEncodeError:
-                print(line.encode("ascii", "replace").decode("ascii"), end="")
-        return proc.wait()
+        watchdog = threading.Timer(timeout_s, _kill_tree, args=(proc,)) if timeout_s > 0 else None
+        if watchdog:
+            watchdog.daemon = True
+            watchdog.start()
+        try:
+            assert proc.stdout is not None
+            for line in proc.stdout:
+                log.write(line)
+                try:
+                    print(line, end="")
+                except UnicodeEncodeError:
+                    print(line.encode("ascii", "replace").decode("ascii"), end="")
+            return proc.wait()
+        finally:
+            if watchdog:
+                watchdog.cancel()
+            _kill_tree(proc)
 
 
 def _log_tail(log_path: Path, chars: int = 2000) -> str:

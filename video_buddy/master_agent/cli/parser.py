@@ -8,7 +8,7 @@ from pathlib import Path
 
 from master_agent.config import LIPDUB_ANCHOR, LIPDUB_REFRAME, LIPDUB_SILENCE_MODE, ensure_dirs
 from master_agent.cli.common import _DurationSet, _DimSet, _add_selector_flags
-from master_agent.cli.studio import cmd_curriculum, cmd_about, cmd_kb, cmd_ui, cmd_budget, cmd_hermes
+from master_agent.cli.studio import cmd_curriculum, cmd_about, cmd_kb, cmd_budget
 from master_agent.cli.doctor import cmd_setup, cmd_inventory, cmd_health, cmd_scan_models
 from master_agent.cli.comfy import cmd_fetch_object_info, cmd_capabilities, cmd_validate, cmd_power_tune, cmd_diagnose, cmd_comfy
 from master_agent.cli.run import cmd_run, cmd_brief
@@ -18,6 +18,7 @@ from master_agent.cli.models import cmd_download_flux, cmd_download_models, cmd_
 from master_agent.cli.fractal import cmd_fractal
 from master_agent.cli.music import cmd_mv, cmd_music, cmd_heartmula
 from master_agent.cli.persona import cmd_persona, cmd_soul, cmd_character, cmd_lora
+from master_agent.cli.agent import cmd_agent
 
 def main(argv: list[str] | None = None) -> int:
     # Windows console is cp1252 — never crash on LLM-emitted unicode (e.g. →)
@@ -137,11 +138,6 @@ def main(argv: list[str] | None = None) -> int:
         help="search the git-synced knowledge/ collection",
     )
     p.set_defaults(func=cmd_kb)
-
-    p = sub.add_parser("ui", help="web dashboard (FastAPI) on 127.0.0.1:8189")
-    p.add_argument("--host", default="127.0.0.1")
-    p.add_argument("--port", type=int, default=8189)
-    p.set_defaults(func=cmd_ui)
 
     p = sub.add_parser("run", help="orchestrated generation: patch -> validate -> submit -> judge")
     p.add_argument("request", help="what to generate (natural language)")
@@ -661,7 +657,7 @@ def main(argv: list[str] | None = None) -> int:
     p.add_argument(
         "--force",
         action="store_true",
-        help="promote: write the draft even when readiness lists missing nodes or models",
+        help="promote: write the draft even when readiness lists missing nodes or models, or overwrite an existing workflows/<variant>.json",
     )
     p.add_argument(
         "--llm-assist",
@@ -912,12 +908,17 @@ def main(argv: list[str] | None = None) -> int:
     p.add_argument("--json", action="store_true", help="machine-readable snapshot")
     p.set_defaults(func=cmd_budget)
 
-    p = sub.add_parser("hermes", help="Hermes profile ltx: status | register")
-    p.add_argument("hermes_command", choices=["status", "register"])
-    p.add_argument("--hermes-home", help="override HERMES_HOME / ~/.hermes")
-    p.add_argument("--force", action="store_true", help="overwrite custom profiles/ltx/SOUL.md")
-    p.add_argument("--json", action="store_true", help="machine-readable status")
-    p.set_defaults(func=cmd_hermes)
+    p = sub.add_parser(
+        "agent",
+        help="call an agent tool and print JSON (gateway entry point; `agent list` shows tools)",
+    )
+    p.add_argument("tool", help="tool name from `agent list`, or list")
+    p.add_argument(
+        "--args",
+        default=None,
+        help="JSON object of keyword arguments, or @path/to/args.json",
+    )
+    p.set_defaults(func=cmd_agent)
 
     p = sub.add_parser(
         "capabilities",

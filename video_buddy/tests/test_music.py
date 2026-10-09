@@ -142,13 +142,13 @@ class TestShotWindows(unittest.TestCase):
 
 class TestMuxAndDecode(unittest.TestCase):
     def test_mux_command_construction(self):
-        from master_agent import video_concat
+        from master_agent import proc, video_concat
 
         with TemporaryDirectory() as td:
             dest = Path(td) / "out.mp4"
             dest.write_bytes(b"x")  # dest exists so the rc==0 path passes
             with patch.object(video_concat, "find_ffmpeg", return_value="ffmpeg"), \
-                 patch.object(video_concat.subprocess, "run") as run:
+                 patch.object(proc.subprocess, "run") as run:
                 run.return_value.returncode = 0
                 video_concat.mux_audio(Path("v.mp4"), Path("a.mp3"), dest)
             cmd = run.call_args[0][0]

@@ -1,4 +1,4 @@
-"""Grok Imagine corkboard: parallel panels, vision gate, KB records.
+"""Imagine corkboard: parallel panels, vision gate, KB records.
 
 Run: .venv/Scripts/python.exe -m pytest tests/test_imagine_corkboard.py -q
 """

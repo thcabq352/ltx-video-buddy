@@ -7,7 +7,6 @@ from __future__ import annotations
 
 from argparse import Namespace
 
-from master_agent.a2a.protocol import a2a_task_state
 from master_agent.comfy.diagnose import run_diagnose
 from master_agent.control.budget import RenderBudget
 from master_agent.control.cost import estimate_cost
@@ -20,6 +19,7 @@ def test_reset_shift_archives_ledger_and_zeros_used(tmp_path):
     budget.paused = True
     first_id = budget.shift_id
     budget.log.append({"event": "admit", "scene_id": "keep-me"})
+    budget.persist()
     prior_len = len(budget.log)
 
     row = budget.reset_shift()
@@ -106,15 +106,6 @@ def test_diagnose_and_dry_run_do_not_increment_used(tmp_path):
     charged = budget.consider("real-shot", cheap, charge=True)
     assert charged["charged"] is True
     assert budget.used > 6.0
-
-
-def test_hold_is_input_required_not_failed():
-    assert a2a_task_state("hold") == "input-required"
-    assert a2a_task_state("held") == "input-required"
-    assert a2a_task_state("paused") == "input-required"
-    assert a2a_task_state("done_with_warnings") == "completed"
-    assert a2a_task_state("started") == "working"
-    assert a2a_task_state("error") == "failed"
 
 
 def test_cmd_budget_status_and_reset(monkeypatch, tmp_path, capsys):

@@ -2,13 +2,17 @@
 
 from __future__ import annotations
 
+import contextlib
 import json
+import shutil
+import sys
 import uuid
 from datetime import datetime, timezone
 from pathlib import Path
-from typing import Any
+from typing import Any, Iterator
 
 from master_agent.control.cost import estimate_cost
+from master_agent.fileutil import atomic_write_text, file_lock
 
 
 def vram_minutes(cost: dict[str, Any]) -> float:
@@ -39,24 +43,86 @@ class RenderBudget:
         )
 
         self.path = None if ephemeral else (Path(path) if path else STATE_DIR / "control" / "budget.json")
-        loaded = {} if ephemeral or self.path is None else self._read()
-        self.cap = float(cap if cap is not None else loaded.get("cap", RENDER_BUDGET_CAP_VRAM_MIN))
-        self.used = float(used if used is not None else loaded.get("used", RENDER_BUDGET_USED_VRAM_MIN))
-        self.paused = bool(loaded.get("paused", False))
-        self.pending: list[dict[str, Any]] = list(loaded.get("pending") or [])
-        self.log: list[dict[str, Any]] = list(loaded.get("log") or [])
-        self.shift_id = str(loaded.get("shift_id") or uuid.uuid4().hex[:12])
-        self.shift_started_at = str(loaded.get("shift_started_at") or _now())
+        self.cap = float(RENDER_BUDGET_CAP_VRAM_MIN)
+        self.used = float(RENDER_BUDGET_USED_VRAM_MIN)
+        self.paused = False
+        self.pending: list[dict[str, Any]] = []
+        self.log: list[dict[str, Any]] = []
+        self.shift_id = uuid.uuid4().hex[:12]
+        self.shift_started_at = _now()
+        if self.path is not None:
+            self._load_from_disk()
+        if cap is not None:
+            self.cap = float(cap)
+        if used is not None:
+            self.used = float(used)
+        if self.path is not None and (cap is not None or used is not None):
+            self.persist()
 
-    def _read(self) -> dict[str, Any]:
-        if self.path.is_file():
-            try:
-                data = json.loads(self.path.read_text(encoding="utf-8"))
-                if isinstance(data, dict):
-                    return data
-            except (OSError, json.JSONDecodeError):
-                return {}
-        return {}
+    def _read(self) -> dict[str, Any] | None:
+        """Return the ledger dict, ``{}`` when absent, or None when unreadable."""
+        if self.path is None or not self.path.is_file():
+            return {}
+        try:
+            data = json.loads(self.path.read_text(encoding="utf-8"))
+        except (OSError, ValueError):
+            return None
+        return data if isinstance(data, dict) else None
+
+    def _load_from_disk(self) -> None:
+        data = self._read()
+        if data is None:
+            self._quarantine_unreadable()
+            return
+        if "cap" in data:
+            self.cap = float(data["cap"])
+        if "used" in data:
+            self.used = float(data["used"])
+        if "paused" in data:
+            self.paused = bool(data["paused"])
+        if "pending" in data:
+            self.pending = list(data.get("pending") or [])
+        if "log" in data:
+            self.log = list(data.get("log") or [])
+        if data.get("shift_id"):
+            self.shift_id = str(data["shift_id"])
+        if data.get("shift_started_at"):
+            self.shift_started_at = str(data["shift_started_at"])
+
+    def _quarantine_unreadable(self) -> None:
+        # An unreadable ledger must not silently become an empty one: keep the
+        # bytes and hold the queue until someone reviews the budget.
+        backup = None
+        try:
+            stamp = datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%S")
+            backup = self.path.with_name(f"{self.path.name}.corrupt-{stamp}")
+            shutil.copy2(self.path, backup)
+        except OSError:
+            backup = None
+        print(
+            f"[budget] {self.path} is unreadable; kept a copy at {backup} and paused the queue for review",
+            file=sys.stderr,
+        )
+        self.paused = True
+        self.log.append(
+            {
+                "ts": _now(),
+                "event": "ledger_unreadable",
+                "backup": str(backup) if backup else None,
+            }
+        )
+
+    @contextlib.contextmanager
+    def _transaction(self) -> Iterator[None]:
+        """Lock the ledger, reload what other processes wrote, then save."""
+        if self.path is None:
+            yield
+            return
+        with file_lock(self.path):
+            self._load_from_disk()
+            yield
+            self._write()
+        self._sync_config()
 
     def snapshot(self) -> dict[str, Any]:
         return {
@@ -69,11 +135,10 @@ class RenderBudget:
             "shift_started_at": self.shift_started_at,
         }
 
-    def persist(self) -> None:
-        if self.path is None:
-            return
-        self.path.parent.mkdir(parents=True, exist_ok=True)
-        self.path.write_text(json.dumps(self.snapshot(), indent=1) + "\n", encoding="utf-8")
+    def _write(self) -> None:
+        atomic_write_text(self.path, json.dumps(self.snapshot(), indent=1) + "\n")
+
+    def _sync_config(self) -> None:
         try:
             from master_agent.control.versioned_config import sync_budget_used
 
@@ -81,33 +146,41 @@ class RenderBudget:
         except (OSError, TypeError, ValueError):
             pass
 
+    def persist(self) -> None:
+        """Save this instance's state as-is (no reload of other writers)."""
+        if self.path is None:
+            return
+        with file_lock(self.path):
+            self._write()
+        self._sync_config()
+
     def set_cap(self, cap: float) -> None:
-        self.cap = max(0.0, float(cap))
-        if self.used < self.cap:
-            self.paused = False
-        self.persist()
+        with self._transaction():
+            self.cap = max(0.0, float(cap))
+            if self.used < self.cap:
+                self.paused = False
 
     def reset_used(self) -> None:
-        self.used = 0.0
-        self.paused = False
-        self.pending = []
-        self.persist()
+        with self._transaction():
+            self.used = 0.0
+            self.paused = False
+            self.pending = []
 
     def reset_shift(self) -> dict[str, Any]:
         """Archive the current shift, then zero used. Never wipe the ledger."""
-        row = {
-            "ts": _now(),
-            "event": "shift_reset",
-            "previous_used": round(self.used, 4),
-            "previous_shift_id": self.shift_id,
-        }
-        self.log.append(row)
-        self.used = 0.0
-        self.paused = False
-        self.pending = []
-        self.shift_id = uuid.uuid4().hex[:12]
-        self.shift_started_at = _now()
-        self.persist()
+        with self._transaction():
+            row = {
+                "ts": _now(),
+                "event": "shift_reset",
+                "previous_used": round(self.used, 4),
+                "previous_shift_id": self.shift_id,
+            }
+            self.log.append(row)
+            self.used = 0.0
+            self.paused = False
+            self.pending = []
+            self.shift_id = uuid.uuid4().hex[:12]
+            self.shift_started_at = _now()
         return row
 
     def consider(
@@ -117,6 +190,19 @@ class RenderBudget:
         *,
         commit: bool = True,
         charge: bool = True,
+    ) -> dict[str, Any]:
+        if not commit:
+            return self._decide(scene_id, cost, commit=False, charge=charge)
+        with self._transaction():
+            return self._decide(scene_id, cost, commit=True, charge=charge)
+
+    def _decide(
+        self,
+        scene_id: str,
+        cost: dict[str, Any],
+        *,
+        commit: bool,
+        charge: bool,
     ) -> dict[str, Any]:
         add = vram_minutes(cost)
         used_before = self.used
@@ -153,7 +239,6 @@ class RenderBudget:
             elif charge:
                 self.used = used_after
             self.log.append(row)
-            self.persist()
         return row
 
     def apply_queue(

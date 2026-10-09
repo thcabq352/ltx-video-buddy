@@ -1,6 +1,8 @@
-"""LLM client — llama.cpp first, then Ollama, then Grok.
+"""LLM client — llama.cpp first, then Ollama. Grok only when asked for.
 
-Provider chain for ``auto`` (default, and when unset): llamacpp -> ollama -> grok.
+Provider chain for ``auto`` (default, and when unset): llamacpp -> ollama.
+Local-only is the default. Grok (cloud) runs only when ``LLM_PROVIDER=grok``
+or a panel / provider spec names it explicitly.
 llama.cpp is the preferred local backend. Main model: ``qwen3-vl-heretic``
 (local Qwen3-VL 9B-class; see ``LLAMACPP_MODEL`` / ``OLLAMA_MODEL``).
 
@@ -33,7 +35,7 @@ from master_agent.config import (
     XAI_BASE_URL,
 )
 
-AUTO_CHAIN = ("llamacpp", "ollama", "grok")
+AUTO_CHAIN = ("llamacpp", "ollama")
 
 # Canonical local name -> accepted LLM_PROVIDER / panel prefixes
 _LLAMACPP_ALIASES = frozenset(
@@ -120,18 +122,23 @@ def provider_available(spec: str) -> bool:
     if name == "llamacpp":
         return _llamacpp_up()
     if name == "grok":
-        if has_valid_api_key():
-            return True
-        try:
-            from master_agent.xai_oauth import resolve_access_token
-
-            resolve_access_token()
-            return True
-        except Exception:
-            return False
+        return grok_configured()
     if name == "claude":
         return bool((os.getenv("ANTHROPIC_API_KEY") or "").strip())
     return False
+
+
+def grok_configured() -> bool:
+    """Grok credentials are present. Read-only: no token refresh, no network,
+    and never writes the Hermes auth store."""
+    if has_valid_api_key():
+        return True
+    try:
+        from master_agent.xai_oauth import has_xai_oauth
+
+        return has_xai_oauth()
+    except Exception:
+        return False
 
 
 def preferred_local_provider() -> str | None:
@@ -185,10 +192,10 @@ def prepare_local_llm(spec: str | None = None) -> None:
 
 
 def local_llm_health() -> dict[str, Any]:
-    """Reachability for llama.cpp, Ollama, and Grok — each reported separately."""
+    """Reachability for llama.cpp and Ollama, plus whether opt-in Grok credentials exist."""
     ollama_up = _ollama_up()
     llamacpp_up = _llamacpp_up()
-    grok_up = provider_available("grok")
+    grok_up = grok_configured()
     preferred = preferred_local_provider()
     return {
         "llamacpp": {
@@ -325,7 +332,7 @@ def _grok_llm(temperature: float) -> ChatOpenAI:
 
 
 def get_llm(temperature: float = 0.2, provider: str | None = None) -> ChatOpenAI:
-    """Build a chat model. ``auto`` tries llamacpp -> ollama -> grok."""
+    """Build a chat model. ``auto`` tries llamacpp -> ollama (never cloud)."""
     spec = (provider or LLM_PROVIDER or "auto").strip().lower()
     prepare_local_llm(spec)
     if spec != "auto":
@@ -339,7 +346,8 @@ def get_llm(temperature: float = 0.2, provider: str | None = None) -> ChatOpenAI
         except Exception as e:
             errors.append(f"{candidate}: {e}")
     raise RuntimeError(
-        "No LLM provider available (tried llamacpp -> ollama -> grok). "
+        "No local LLM provider available (tried llamacpp -> ollama). "
+        "Start llama-server or Ollama. Cloud Grok is opt-in: LLM_PROVIDER=grok. "
         + "; ".join(errors)
     )
 

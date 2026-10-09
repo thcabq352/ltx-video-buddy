@@ -14,7 +14,6 @@ import pytest
 
 from master_agent.control.budget import RenderBudget
 from master_agent.orchestrator.state import RunState
-from master_agent.web.jobs import Job, JobManager
 
 
 class _Orch:
@@ -64,6 +63,7 @@ def test_single_clip_hold_resumes_after_reset_used(budget_box):
 
     budget_box.used = 80
     budget_box.paused = True
+    budget_box.persist()
     held = run_pipeline(
         "rain on a window",
         variant="base",
@@ -131,33 +131,3 @@ def test_reset_shift_clears_pending_and_cli_resumes(budget_box, monkeypatch, cap
     assert budget_box.used == 0
     assert seen["background"] is False
     assert "continuing paused generate: run-from-cli" in capsys.readouterr().out
-
-
-def test_job_manager_resume_requeues_same_job(monkeypatch):
-    started: list = []
-
-    class _Thread:
-        def __init__(self, target=None, args=(), daemon=None):
-            self.target = target
-            self.args = args
-
-        def start(self):
-            started.append(self.args)
-
-    monkeypatch.setattr("master_agent.web.jobs.threading.Thread", _Thread)
-    mgr = JobManager()
-    job = Job(
-        id="job1",
-        kind="run",
-        request="rain on a window",
-        params={"variant": "base", "duration_s": 5},
-        status="paused",
-    )
-    job.result = {"status": "paused", "resume": {"run_id": "pipe1", "request": "rain on a window"}}
-    job.error = "render budget paused"
-    mgr._jobs[job.id] = job
-    assert mgr.resume_paused() == ["pipe1"]
-    assert job.status == "queued"
-    assert job.error is None
-    assert job.params["_resume"]["run_id"] == "pipe1"
-    assert started and started[0][0] is job

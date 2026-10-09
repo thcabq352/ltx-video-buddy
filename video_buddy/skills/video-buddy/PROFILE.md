@@ -1,41 +1,43 @@
-# Hermes profile `ltx`
+# LTX bot gateway
 
-Video Buddy seats itself as Hermes profile **`ltx`**. That is the primary
-discovery path. A2A on studio `:8189` is the fallback for A2A-only peers.
+Video Buddy has exactly one gateway: the **LTX bot gateway**, the Hermes
+gateway that serves the LTX bot (historically profile `ltx`, standalone or
+mux `/p/ltx/` on **8642**). Buddy does not host, register, discover, or
+probe it. The gateway calls Buddy; Buddy never listens.
 
-## What the installer writes
+## What the gateway needs
 
-`python install_hermes_skill.py` (or `python -m master_agent hermes register`):
+- This skill at `~/.hermes/skills/video-buddy/` (`python install_hermes_skill.py`).
+- A terminal whose cwd is this repo's `video_buddy/` and whose Python is the
+  project venv.
+- Nothing else: no MCP server entry, no API key, no `.env` from Buddy.
 
-- Skill folder `~/.hermes/skills/video-buddy/` (`SKILL.md`, `TOOLS.md`, this file)
-- Profile dir `~/.hermes/profiles/ltx/`
-  - `SOUL.md` — `LTX_RESEARCH_SYSTEM` (Ltx research seat)
-  - `profile.yaml` — name + description
-  - `config.yaml` — `terminal.cwd` + MCP `master-agent` (merged if the file exists)
+Suggested system prompt for the bot (optional, set by the operator):
 
-Never written: `.env`, API keys, `API_SERVER_KEY`. Do not invent them.
+> You are Ltx, the LTX research bot. Specialize in LTX Video on the Video
+> Buddy portable ComfyUI. Stay short. Never print tokens, API keys, or bearers.
 
-SOUL refresh is merge-safe: a custom `SOUL.md` is left alone unless it still
-equals the stock `LTX_RESEARCH_SYSTEM` text or you pass `--force`.
-
-## Discovery order
-
-1. Healthy real Hermes `ltx` gateway (standalone or mux `/p/ltx/` on **8642**).
-2. Buddy facade on studio **8189**: `http://127.0.0.1:8189/p/ltx/v1/chat/completions`
-   (`source=buddy-adapter`). Studio must be up (`python -m master_agent ui`).
-3. A2A fallback: `GET /.well-known/agent.json` (also `agent-card.json`) and
-   `POST /a2a` (`message/send`, `tasks/get`).
-
-Buddy **never binds 8642**. That port belongs to the default Hermes API server.
-
-## Pitch
-
-The facade runs `hermes_pitch` only when the user explicitly asks for a pitch
-(or `metadata.pitch=true`). A raw brief goes straight to the director pipeline.
-
-## Check
+## Calls
 
 ```bash
-python -m master_agent hermes status
-python -m master_agent hermes register --hermes-home "$HERMES_HOME"
+python -m master_agent agent list
+python -m master_agent agent create_video --args '{"request": "BRIEF", "dry_run": true}'
 ```
+
+Exit codes, `busy`, `paused` and media-path rules: [SKILL.md](SKILL.md#calling-buddy).
+
+## One-time cleanup on an existing install (operator step)
+
+Older installs wrote `~/.hermes/profiles/ltx/config.yaml` with an
+`mcp_servers.master-agent` entry pointing at `master_agent/mcp_server.py`.
+That file no longer exists. Before deploying this version, delete the
+`master-agent` entry under `mcp_servers` in that profile (and in
+`~/.hermes/config.yaml` if it was added there). Keep `terminal.cwd`.
+Buddy no longer edits Hermes config, so it will not do this for you.
+
+Removed, with no replacement port: the studio dashboard and Comfy-tab drop
+zone on **8189**, the `/p/ltx/v1/chat/completions` facade, A2A
+(`/.well-known/agent.json`, `POST /a2a`), `python -m master_agent hermes
+status|register`, and `python -m master_agent ui`.
+
+Buddy **never binds 8642**. That port belongs to the default Hermes API server.

@@ -1067,40 +1067,29 @@ def resume_paused_pipeline_records(
 def resume_after_budget_clear(
     *,
     client: Optional[ComfyClient] = None,
-    background: Optional[bool] = None,
+    background: bool = False,
 ) -> list[str]:
     """Continue generates that paused on the render budget.
 
-    The studio control uses a background thread so the HTTP handler does not
-    wait on a GPU render. The CLI resumes in-process: a daemon thread would
-    die when ``budget reset-shift`` exits. In-memory jobs are resumed first;
-    disk records with those run ids are skipped so one process does not queue
-    the same generate twice. The studio button and the CLI are different
-    processes and can both start the run if both are used.
+    Resumes in-process by default: a daemon thread would die when a
+    short-lived caller (``budget reset-shift``, an ``agent`` call) exits.
+    ``background=True`` returns the run ids at once and resumes on a thread
+    for long-lived callers.
     """
-    if background is None:
-        background = True
-    from master_agent.web.jobs import MANAGER
-
-    live = MANAGER.resume_paused()
-    skip = {str(run_id) for run_id in live}
-    pending_disk = [
+    pending = [
         run_id
         for run_id, record in _latest_pipeline_records().items()
-        if run_id not in skip
-        and record.get("status") == "paused"
-        and isinstance(record.get("resume"), dict)
+        if record.get("status") == "paused" and isinstance(record.get("resume"), dict)
     ]
     if background:
-        if pending_disk:
+        if pending:
             threading.Thread(
                 target=resume_paused_pipeline_records,
-                kwargs={"skip_run_ids": skip, "client": client},
+                kwargs={"client": client},
                 daemon=True,
             ).start()
-        return list(live) + pending_disk
-    disk = resume_paused_pipeline_records(skip_run_ids=skip, client=client)
-    return list(live) + disk
+        return pending
+    return resume_paused_pipeline_records(client=client)
 
 
 def _stitch(result: PipelineResult, segment_paths: list[str], *, suffix: str) -> Optional[Path]:

@@ -1,11 +1,10 @@
-"""Hermes skill package: renders, matches mcp_server + CLI, install copies.
+"""Hermes skill package: renders, matches agent tools + CLI, install copies.
 
 Run: python -m pytest tests/test_hermes_skill.py -q
 """
 
 from __future__ import annotations
 
-import ast
 import re
 import sys
 from pathlib import Path
@@ -20,7 +19,6 @@ from install_hermes_skill import SKILL_FILES, install_skill  # noqa: E402
 SKILL_DIR = VIDEO_BUDDY / "skills" / "video-buddy"
 SKILL_MD = SKILL_DIR / "SKILL.md"
 TOOLS_MD = SKILL_DIR / "TOOLS.md"
-MCP_SERVER = VIDEO_BUDDY / "master_agent" / "mcp_server.py"
 MAIN_PY = VIDEO_BUDDY / "master_agent" / "__main__.py"
 
 
@@ -44,19 +42,10 @@ def _frontmatter(text: str) -> dict[str, str]:
     return out
 
 
-def registered_mcp_tools() -> list[str]:
-    tree = ast.parse(MCP_SERVER.read_text(encoding="utf-8"))
-    names: list[str] = []
-    for node in tree.body:
-        if not isinstance(node, ast.FunctionDef):
-            continue
-        for dec in node.decorator_list:
-            call = dec if isinstance(dec, ast.Call) else None
-            func = call.func if call else dec
-            if isinstance(func, ast.Attribute) and func.attr == "tool":
-                names.append(node.name)
-                break
-    return names
+def registered_agent_tools() -> list[str]:
+    from master_agent.agent_api import TOOLS
+
+    return list(TOOLS)
 
 
 def registered_cli_commands() -> set[str]:
@@ -83,23 +72,24 @@ def test_skill_renders_frontmatter_and_sections():
     desc = meta.get("description") or ""
     assert desc.startswith("Use when")
     assert "Video Buddy" in desc or "video buddy" in desc.lower()
-    assert "master-agent" in desc
+    assert "master_agent agent" in desc
     body = text.split("\n---\n", 1)[1]
     assert "# Video Buddy" in body
     for needle in (
-        "MCP ≠ skills",
+        "One gateway",
+        "LTX bot gateway",
         "~/.hermes/skills/video-buddy/",
-        "master-agent",
+        "python -m master_agent agent",
+        "agent list",
         ":8188",
-        ":8189",
         "8n+1",
         "L0",
         "L5",
         "Imagine",
-        "ltx",
-        "A2A",
     ):
         assert needle in body, f"missing {needle!r}"
+    for gone in ("mcp_server.py", "mcp_servers", "hermes register", "master_agent ui", "/a2a"):
+        assert gone not in _skill_corpus(), f"removed surface still documented: {gone!r}"
     assert "Not a Hermes profile" not in body
 
 
@@ -113,27 +103,11 @@ def test_stop_lines_match_curriculum():
     assert "LESSON_BUDDY" in body or "L0→L5" in body or "L0->L5" in body
 
 
-def test_mcp_tools_match_mcp_server():
-    tools = registered_mcp_tools()
-    assert tools == [
-        "health",
-        "create_video",
-        "plan_storyboard",
-        "judge_asset",
-        "search_workflows",
-        "search_runs",
-        "kb_ingest",
-        "list_models",
-        "validate_workflow",
-        "create_character",
-        "train_lora",
-    ]
+def test_agent_tools_documented_and_no_mcp_server():
     corpus = _skill_corpus()
-    for name in tools:
-        assert name in corpus, f"MCP tool {name} missing from skill package"
-    # Do not document invented tools as MCP.
-    for fake in ("diagnose", "comfy_run", "download_models", "curriculum"):
-        assert f"def {fake}" not in MCP_SERVER.read_text(encoding="utf-8")
+    for name in registered_agent_tools():
+        assert name in corpus, f"agent tool {name} missing from skill package"
+    assert not (VIDEO_BUDDY / "master_agent" / "mcp_server.py").exists()
 
 
 def test_cli_commands_documented():
@@ -149,7 +123,6 @@ def test_cli_commands_documented():
         "scan-models",
         "validate",
         "kb",
-        "ui",
         "run",
         "power-tune",
         "persona",
@@ -165,7 +138,7 @@ def test_cli_commands_documented():
         "comfy",
         "diagnose",
         "budget",
-        "hermes",
+        "agent",
         "capabilities",
     }
     assert expected <= commands
@@ -193,7 +166,7 @@ def test_install_hermes_skill_uses_hermes_home(tmp_path: Path, monkeypatch: pyte
     assert (out / "SKILL.md").is_file()
 
 
-def test_install_hermes_skill_seats_ltx_profile(tmp_path: Path):
+def test_install_hermes_skill_writes_skill_only(tmp_path: Path):
     from install_hermes_skill import main
 
     home = tmp_path / "hermes-home"
@@ -201,5 +174,4 @@ def test_install_hermes_skill_seats_ltx_profile(tmp_path: Path):
     assert rc == 0
     assert (home / "skills" / "video-buddy" / "SKILL.md").is_file()
     assert (home / "skills" / "video-buddy" / "PROFILE.md").is_file()
-    assert (home / "profiles" / "ltx" / "SOUL.md").is_file()
-    assert not (home / "profiles" / "ltx" / ".env").exists()
+    assert not (home / "profiles").exists()

@@ -5,15 +5,14 @@ from __future__ import annotations
 import hashlib
 import json
 import logging
-import os
 import re
-import sys
 import threading
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 
 from master_agent.config import CHROMA_DIR, KNOWLEDGE_DIR, RUNS_DIR, WORKFLOWS_DIR
+from master_agent.fileutil import file_lock
 from master_agent.kb.store import (
     COLLECTION_KNOWLEDGE,
     COLLECTION_RUNS,
@@ -505,6 +504,10 @@ def _ingest_knowledge_locked(root: Path | None) -> KnowledgeSync:
     return KnowledgeSync(unchanged + written, skipped, written, deleted)
 
 
+def _knowledge_lock_path() -> Path:
+    return CHROMA_DIR.with_name(f"{CHROMA_DIR.name}-knowledge-ingest")
+
+
 def ensure_knowledge_ingested() -> int:
     """Ingest ``knowledge/`` when files changed since the last pass in this process.
 
@@ -518,40 +521,11 @@ def ensure_knowledge_ingested() -> int:
         if stamp == _disk_stamp_cache:
             return _disk_stamp_count
         try:
-            result = ingest_knowledge(root)
+            with file_lock(_knowledge_lock_path(), timeout_s=120.0):
+                result = ingest_knowledge(root)
         except Exception:
             log.debug("kb knowledge ensure failed", exc_info=True)
             result = KnowledgeSync(0, 0, 0, 0)
         _disk_stamp_cache = stamp
         _disk_stamp_count = result.docs
         return result.docs
-
-
-def schedule_knowledge_ingest(*, stderr: bool = False) -> None:
-    """Ingest ``knowledge/`` on a daemon thread so process startup is not blocked.
-
-    No-op under pytest (``PYTEST_CURRENT_TEST``) and when
-    ``KB_STARTUP_INGEST`` is ``0``. MCP must pass ``stderr=True`` — stdout
-    is the stdio protocol channel.
-    """
-    if os.environ.get("PYTEST_CURRENT_TEST"):
-        return
-    flag = os.environ.get("KB_STARTUP_INGEST", "1").strip().lower()
-    if flag in ("0", "false", "no", "off"):
-        return
-
-    def _run() -> None:
-        try:
-            result = ingest_knowledge()
-        except Exception:
-            log.debug("kb knowledge startup ingest failed", exc_info=True)
-            return
-        stream = sys.stderr if stderr else sys.stdout
-        print(
-            f"knowledge ingest: {result.docs} doc(s) in Chroma "
-            f"({result.written} written, {result.skipped} skipped)",
-            file=stream,
-            flush=True,
-        )
-
-    threading.Thread(target=_run, name="knowledge-ingest", daemon=True).start()

@@ -4,7 +4,6 @@ from __future__ import annotations
 
 import argparse
 import json
-from pathlib import Path
 
 def cmd_curriculum(args: argparse.Namespace) -> int:
     from master_agent.curriculum import curriculum_card, format_curriculum
@@ -96,20 +95,6 @@ def cmd_kb(args: argparse.Namespace) -> int:
     return 2
 
 
-def cmd_ui(args: argparse.Namespace) -> int:
-    try:
-        import uvicorn
-    except ImportError:
-        print("FAIL  uvicorn not installed (pip install uvicorn fastapi)")
-        return 1
-    from master_agent.web.app import app
-
-    print(f"VIDEO BUDDY studio: http://{args.host}:{args.port}")
-    print("  Voice chat: open in Chrome/Edge → Voice tab (mic + spoken replies)")
-    uvicorn.run(app, host=args.host, port=args.port, log_level="warning")
-    return 0
-
-
 def cmd_budget(args: argparse.Namespace) -> int:
     from master_agent.control.budget import get_project_budget
 
@@ -135,72 +120,3 @@ def cmd_budget(args: argparse.Namespace) -> int:
     )
     print(f"        pending={len(snap['pending'])} ledger={len(snap['log'])}")
     return 0
-
-
-def cmd_hermes(args: argparse.Namespace) -> int:
-    from master_agent.hermes.gateways import discover_gateways, discover_primary_seat
-    from master_agent.hermes.profile import default_python, register_ltx_profile
-
-    video_buddy_root = Path(__file__).resolve().parent.parent
-    home = Path(args.hermes_home).expanduser() if getattr(args, "hermes_home", None) else None
-    if args.hermes_command == "register":
-        result = register_ltx_profile(
-            home=home,
-            video_buddy_root=video_buddy_root,
-            python=default_python(video_buddy_root),
-            force=bool(getattr(args, "force", False)),
-        )
-        print(f"OK    ltx profile at {result.profile_dir}")
-        if result.soul_written:
-            print("      SOUL.md written from LTX_RESEARCH_SYSTEM")
-        if result.soul_skipped:
-            print("      custom SOUL.md left in place (pass --force to overwrite)")
-        for note in result.notes:
-            print(f"      {note}")
-        print("      A2A fallback remains on :8189  POST /a2a")
-        return 0
-
-    rows = discover_gateways(home=home, host="127.0.0.1")
-    primary = discover_primary_seat(home=home, host="127.0.0.1")
-    payload = {
-        "primary": None
-        if primary is None
-        else {
-            "profile": primary.profile,
-            "source": primary.source,
-            "port": primary.port,
-            "chat_url": primary.chat_url,
-            "healthy": primary.healthy,
-        },
-        "gateways": [
-            {
-                "profile": g.profile,
-                "source": g.source,
-                "port": g.port,
-                "chat_url": g.chat_url,
-                "healthy": g.healthy,
-                "can_speak": g.can_speak,
-            }
-            for g in rows
-        ],
-        "a2a_fallback": "http://127.0.0.1:8189/a2a",
-    }
-    if args.json:
-        print(json.dumps(payload, indent=1))
-        return 0
-    if primary:
-        print(
-            f"primary  {primary.profile} source={primary.source} "
-            f"healthy={primary.healthy} {primary.chat_url}"
-        )
-    else:
-        print("primary  (none) — start studio :8189 for the buddy-adapter facade")
-    print("a2a     http://127.0.0.1:8189/a2a  (fallback)")
-    for g in rows:
-        mark = "*" if primary is not None and g.chat_url == primary.chat_url and g.source == primary.source else " "
-        print(
-            f"{mark} {g.profile:12} {g.source:14} port={g.port:<5} "
-            f"healthy={str(g.healthy):5} {g.chat_url}"
-        )
-    return 0
-

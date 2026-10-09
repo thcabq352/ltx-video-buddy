@@ -39,7 +39,7 @@ python -m master_agent run "The ringmaster clown speaks directly to camera, lips
 slots (`ref_images.ref_image_0`, `ref_audios.ref_audio_0`).
 H3 speaks your line in the voice of your 2-12 s sample and animates the mouth to it (coarse sync). For tight lip-sync to an exact recording, use ltx25_a2v.
 The route still goes to `h3_r2v` when the brief names MiniMax, Hailuo, H3,
-or ref2va, and the CLI / studio / MCP response warn with that sentence.
+or ref2va, and the CLI and agent `create_video` response warn with that sentence.
 fl2va graphs do not take a voice file. One H3 clip, capped at 12s.
 Default photo + voice stays `ltx25_a2v`.
 
