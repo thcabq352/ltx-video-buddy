@@ -25,7 +25,12 @@ python -m master_agent health
 
 Local LLM order for `LLM_PROVIDER=auto` (the default when unset): llama.cpp, then Ollama, then Grok. llama.cpp is preferred. Buddy starts `llama-server` against `MODELS_DIR` when `LLAMACPP_BIN` or `llama-server` is available, and stops it on shutdown. If that binary is missing, Buddy warns and uses Ollama. Pin `LLM_PROVIDER=llamacpp` or `LLM_PROVIDER=ollama` to force one backend. See [Architecture](ARCHITECTURE.md#local-model).
 
-Windows portable Comfy: `ComfyUI_windows_portable\run_api_8188.bat`. Elsewhere start Comfy with `--port 8188`, or set `COMFYUI_URL`.
+ComfyUI, either way:
+
+- **Managed (default).** `python -m master_agent comfy start` launches an existing comfy-cli workspace on `127.0.0.1:8188` with the Buddy model-paths YAML. It does not run `comfy install`. `comfy status` and `comfy stop` do what they say.
+- **Your own server.** Windows portable: `ComfyUI_windows_portable\run_api_8188.bat`. Elsewhere start Comfy with `--port 8188`, or set `COMFYUI_URL`. Set `COMFY_MODE=external` so Buddy never stops or restarts it.
+
+Details: [Comfy](COMFY.md).
 
 ```bash
 python -m master_agent comfy run --mode generate --variant ltx25_t2v_i2v --prompt "neon rain"

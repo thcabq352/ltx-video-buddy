@@ -23,12 +23,19 @@ The director allowlist is every on-disk `workflows/manifests.yaml` slug (`WORKFL
 | LTX TeaCache | **wired** | inject-when-registered; missing class soft-bypasses |
 | SeedVR2 upscale | **wired** | post-stage only |
 | HeartMuLa | **wired** | `heartmula` CLI via heartlib, not Comfy nodes |
+| Sulphur LTX 2.3 graphs | **wired** | director `ltx23_{i2v,t2v}_{base,distilled}`; LoRA weights stay local, not downloaded |
+| Rainey1 preset / rubric / batch | **wired** | recipes in `orchestrator/presets/rainey1.json`; `PANEL_JUDGE_RUBRIC=rainey1`; `rainey1-batch`. See [Rainey1](RAINEY1.md) |
+| Workflow ingest | **wired** | `comfy ingest` / `learn` / `dry-run` / `promote` / `run --ingested`; Comfy-tab drop zone. URL ingest is not shipped. See [Workflow ingest](WORKFLOW_INGEST.md) |
+| Managed ComfyUI | **wired** | `comfy start` / `stop` / `status` / `restart` via comfy-cli; `COMFY_MODE=external` refuses lifecycle. See [Comfy](COMFY.md) |
+| SageAttention | **wired** | managed launches add `--use-sage-attention` when `sageattention` imports; Sulphur graphs carry `PathchSageAttentionKJ` |
+| Tiny preview VAE guard | **wired** | `taeltx*` / `tae*` never feed tiled decode; swapped or refused before queue |
+| LTX 2.3 / 2.5 model selector | **wired** | `models select`, studio Models tab; consent before any fetch |
 | LightX2V LoRAs | **unwired** | baked into wan22 widgets when the file is present; patcher does not toggle them |
 | Wan TeaCache | **unwired** | bypass only; do not inject onto native wan22 |
 | WAN Fun Control | **unwired** | example graph is gitignored |
 | Warp (`GetWarpedNoiseFromVideo`) | **unwired** | soft-bypass if a graph names it; no Buddy graph |
 | SAM2 masks | **unwired** | preprocess uses SAM3 |
-| Realistic Vision / RAFT / sage-attention | **unwired** | not in Buddy graphs |
+| Realistic Vision / RAFT | **unwired** | not in Buddy graphs |
 | Seedance 2.5 draft pointers | **unwired** | field-shape records; local Comfy only; never queued |
 | RTX upscale | **unwired** | gitignored source JSON |
 | K3NK WAN AIO I2V | **retired** | no attested pack; not a variant |

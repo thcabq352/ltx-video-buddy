@@ -23,7 +23,7 @@ Local ComfyUI video studio in this repo (`video_buddy/`). Package is `master_age
 | Signal | Route elsewhere |
 |---|---|
 | Grok / Imagine cloud clip, no local Comfy | default cloud video skills — not Buddy |
-| Pixie Forge brand / scotty.fyi / HyperFrames | `hermes -p forge` |
+| Brand, web, or design work owned by another Hermes profile | that profile (`hermes -p <profile>`) |
 | Generic node poke on a **different** Comfy install | that install's MCP, not `master-agent` |
 | A checkout other than this `video_buddy/` tree | that checkout's own docs — L0 is this package only |
 
@@ -35,7 +35,7 @@ Local ComfyUI video studio in this repo (`video_buddy/`). Package is `master_age
 4. Prefer `hermes -p ltx` or the studio facade `http://127.0.0.1:8189/p/ltx/v1/chat/completions`.
 5. A2A-only peers: `GET /.well-known/agent.json` + `POST /a2a` on `:8189`.
 
-Check: `python -m master_agent hermes status`. Buddy never binds **8642**.
+Check: `python -m master_agent hermes status`. Buddy never binds **8642**. The MCP / facade / A2A entry points are being consolidated into one gateway on a separate branch; until that lands, the steps above are current. Status note: repo `docs/ARCHITECTURE.md` (Status: agent gateway).
 
 ## MCP must be running
 
@@ -113,7 +113,7 @@ Full signatures: [TOOLS.md](TOOLS.md). Invoke MCP as `master-agent.<tool>`. CLI 
 | `create_character(description, name="", shots=0, train=False)` | `python -m master_agent character create "DESC" [--name N --shots N --train]` |
 | `train_lora(character_name, steps=0, lr=0, rank=0, validate=True)` | `python -m master_agent lora train NAME [--steps N --lr X --rank N --validate]` |
 
-CLI-only (no MCP tool): `about`, `curriculum`, `inventory`, `doctor`/`setup`, `workflows`, `capabilities`, `download-models`, `download-flux`, `comfy run`, `diagnose`, `budget`, `hermes`, `ui`, `fetch-object-info`, `power-tune`, `persona`, `soul`, `brief`, `fractal`, `music`, `mv plan`/`mv render`, `heartmula generate`/`heartmula transcribe`, `lora setup`/`validate`, `character list`.
+CLI-only (no MCP tool): `about`, `curriculum`, `inventory`, `doctor`/`setup`, `workflows`, `capabilities`, `download-models`, `download-flux`, `models`, `comfy run`, `comfy ingest`/`learn`/`dry-run`/`promote`, `comfy start`/`stop`/`status`/`restart`/`update`, `rainey1-batch`, `diagnose`, `budget`, `hermes`, `ui`, `fetch-object-info`, `power-tune`, `persona`, `soul`, `brief`, `fractal`, `music`, `mv plan`/`mv render`, `heartmula generate`/`heartmula transcribe`, `lora setup`/`validate`, `character list`.
 
 Drive graphs with CLI first: `comfy run`. Director pipeline: `run`. Unattended: `--no-interview`.
 

@@ -44,6 +44,10 @@ is hours. Prefer ~900s MCP timeout.
 | `diagnose` | 9-frame hull fire; prints `sec/step`; no shift-budget spend. `--prepare` lints only. |
 | `comfy run` | Prepare, lint, queue, copy into `outputs/`. `--prepare` stops before GPU. Modes: `generate` / `template` / `raw`. |
 | `comfy attach` | Apply previs `buddy.comfy.attach/v1` / WorkflowPatchPlan JSON. Default dry-run (patch + `/object_info`). `--submit` POSTs `/prompt`. |
+| `comfy ingest` / `learn` / `dry-run` / `promote` | Learn a one-off API or UI graph (or `--from history:PROMPT_ID`) into `state/ingested/<slug>/`. Ingest does not queue. `dry-run` never POSTs. `promote` writes a local draft only. `--llm-assist` is local-only. `comfy run --ingested SLUG` queues. Repo `docs/WORKFLOW_INGEST.md`. |
+| `comfy start` / `stop` / `status` / `restart` / `update` | Managed Comfy via comfy-cli on `127.0.0.1:8188`. `COMFY_MODE=external` refuses start/stop/restart. `update` only reports until `--yes`. Repo `docs/COMFY.md`. |
+| `models manifest` / `models select` | LTX 2.3 / 2.5 checklist. `--scan-only` never fetches. |
+| `rainey1-batch` | Rainey1 seed sweep → junk drop → judge → top-K copy. `--dry-run` queues zero jobs. Repo `docs/RAINEY1.md`. |
 | `run "BRIEF"` | Director pipeline. `--dry-run` plan+lint only. `--self-improve-dry` closes judge→revise→rejudge (quality_bar a/c/d, no Comfy). `--attach RECIPE.json` patches a previs pack. `--no-interview` for unattended. `--variant` forces a catalog slug. Every clip writes `shot-N.buddy.json` + run-row ClipProvenance. |
 | `download-models` | List confirmed-missing slots. `--ltx25` / `--h3` / `--heartmula` / `--wan` / … HeartMuLa codec id and consent flags: repo `docs/WEIGHTS.md`. |
 | `download-flux` | One-time Flux fp8 weights (~17GB). |

@@ -92,9 +92,15 @@ ChromaDB at `video_buddy/state/chroma/` (gitignored) holds `workflows`, `runs`, 
 | Port | Role |
 |---|---|
 | 8188 | ComfyUI HTTP |
-| 8189 | Studio UI, Hermes facade `POST /p/ltx/v1/chat/completions`, A2A |
+| 8189 | Studio UI, Hermes facade `POST /p/ltx/v1/chat/completions`, A2A (see [Status](#status-agent-gateway)) |
 | 11434 | Ollama |
 | 8080 | llama.cpp |
 | 8642 | Hermes. Buddy does not bind it. |
 
 Shift budget is about 80 VRAM-minutes. Over cap, the queue HOLDs. HOLD is A2A `input-required`, not `failed`. `done_with_warnings` maps to `completed`. Diagnose and dry-run do not increment `used`.
+
+## Status: agent gateway
+
+> **Status (in progress).** Work is under way, on a separate branch, to consolidate the agent entry points into a single LTX bot gateway. Until that lands, the MCP server (`master-agent`), the Hermes facade, and A2A on `:8189` are what ships, and they are documented here and in the [CLI reference](CLI_REFERENCE.md#hermes). Treat them as current, not permanent. ComfyUI on `:8188` and the CLI are not affected.
+
+This is the only status note for that change. Other pages link here instead of repeating it.

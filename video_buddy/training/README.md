@@ -2,8 +2,10 @@
 
 Train your own **scene LoRAs** (a location, set, or lighting look) and
 **style LoRAs** (lego, claymation, pixel-art, …) for the **LTX 2.3** and
-**Wan 2.2** workflows in this project, using [ostris/ai-toolkit](../ai-toolkit)
-on the local 16GB GPU.
+**Wan 2.2** workflows in this project, using [ostris/ai-toolkit](https://github.com/ostris/ai-toolkit)
+on the local 16GB GPU. `python -m master_agent lora setup` clones it into
+`video_buddy/ai-toolkit/` (override with `AI_TOOLKIT_DIR`). That folder is not
+part of this repository.
 
 Default-catalog **LTX 2.5** graphs (`ltx25_*`) are a separate distilled
 split pack — see [`docs/WEIGHTS.md`](../../docs/WEIGHTS.md). These
@@ -32,9 +34,8 @@ training/
   a forest, wide shot`.
 - Scene LoRA: 10-40 varied angles/lighting of the same scene work well.
   Style LoRA: 20-100 images in the target style.
-- Good source material: Blender viewport renders (the bundled Blender 5.3
-  alpha in this project), frames from `outputs/`, or AI-generated sets from
-  the Qwen-Edit / Krea workflows.
+- Good source material: Blender viewport renders, frames from `outputs/`, or
+  AI-generated sets from the Qwen-Edit / Krea workflows.
 
 ## 2. Train
 

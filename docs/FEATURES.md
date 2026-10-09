@@ -27,7 +27,7 @@ H3 speaks your line in the voice of your 2-12 s sample and animates the mouth to
 
 A brief that names MiniMax, Hailuo, H3, or ref2va still routes to `h3_r2v` and must warn with that sentence. fl2va does not take a voice file. One H3 clip, capped at 12s. Default photo + voice stays `ltx25_a2v`. Pass the exact words with `--line`. Samples longer than 12s are trimmed to the loudest 12s.
 
-LTX 2.3 (`base`, `eros`, `directors`, `lipsync`), Wan 2.2 (`wan22`), Fun Inpaint (`wan_fun_inpaint`), and the Mick graphs stay on the director allowlist. Large graphs that queue with baked leftover widgets are safer as `comfy run --template <slug>`.
+LTX 2.3 (`base`, `eros`, `directors`, `lipsync`), the Sulphur LTX 2.3 graphs (`ltx23_{i2v,t2v}_{base,distilled}`, [`video_buddy/workflows/sulphur/`](../video_buddy/workflows/sulphur/README.md)), Wan 2.2 (`wan22`), Fun Inpaint (`wan_fun_inpaint`), and the Mick graphs stay on the director allowlist. Large graphs that queue with baked leftover widgets are safer as `comfy run --template <slug>`.
 
 Public H3 still: [`docs/demo/`](demo/).
 
@@ -67,6 +67,10 @@ python -m master_agent heartmula transcribe --audio vocals.wav --out words.json 
 ```
 
 Tags are lowercase and comma-separated without spaces. Default duration is 30s (`HEARTMULA_DURATION_S`). `--seed` is `torch.manual_seed` before the call. The pipeline `__call__` has no seed argument. Defaults: topk 50, temperature 1.0, cfg_scale 1.5. `HEARTMULA_DTYPE` defaults to bf16. Codec dtype stays fp32. Lazy-load is on when `VRAM_GB` ≤ 16.
+
+KV window: heartlib builds the backbone at 8192 tokens, and that cache OOMs on a 16GB card during the GQA expand. Buddy sizes the window to the clip (audio frames plus a lyric/tag estimate, rounded to 128, never above 8192) and caps it by the card. A 16GB card holds about 3072 tokens at cfg 1.5, so a 30s track fits and a 240s track fails in the plan before heartlib is imported. `--max-seq-len` / `HEARTMULA_MAX_SEQ_LEN` sets an exact window (`512` is the 5s smoke). `--low-vram` / `HEARTMULA_LOW_VRAM=1` plans as if the card is 16GB. `--dry-run` prints the window.
+
+Wav save: when `torchaudio.save` fails (a missing or broken torchcodec is common in Comfy's embedded Python), the same waveform is written with `soundfile`. Nothing in the Comfy environment is installed or changed.
 
 Tower Comfy classes, measured 2026-09-30, and the only names to use: `HeartMuLa_Generate`, `HeartMuLa_Transcribe` (`benjiyaya/HeartMuLa_ComfyUI` @ `fdb53c4`). Do not invent others. Buddy's own commands use heartlib, not those nodes.
 
@@ -127,6 +131,10 @@ Generate only on `http://127.0.0.1:8188` with the on-disk catalog: text or one-t
 | `seedance25_draft_r2v` | `api_seedance2_5_draft_r2v` | `ByteDance2ReferenceNodeV2` |
 
 Recorded promote class: `ByteDance2DraftToFinalVideoNode`. Policy object: `PACK_C_LOCAL_ONLY` in `master_agent/config.py`.
+
+## Rainey1
+
+Director recipes, an opt-in judge rubric with hard-fail gates, and `rainey1-batch` for a seed sweep with a top-K cut. Procedure and gates: [Rainey1](RAINEY1.md).
 
 ## Ingested workflows
 

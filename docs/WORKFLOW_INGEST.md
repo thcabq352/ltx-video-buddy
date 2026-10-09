@@ -95,7 +95,7 @@ A fingerprint picks at most one family:
 | lipsync | `LTXAddVideoICLoRAGuide` or `LTXVSetAudioRefTokens` | source-widget prompt; `prepare_queue_inputs` at queue |
 | sulphur | `PathchSageAttentionKJ`, `LTX2SamplingPreviewOverride`, or a LoRA filename containing `sulphur` | `patch_sulphur_graph` |
 
-inoutpaint is checked first. A 2.5 in/outpaint graph (`VHS_DuplicateMasks`, `LTXVImgToVideoInplace`, or `LTXVImgToVideoConditionOnly`) is finalized with `ltx25=True`, so the PR #44 mask repeat and `trim_to_shortest=false` still run. The learned file records `family` and `family_route` (`specialized` or `generic`). Dry-run prints the same line.
+inoutpaint is checked first. A 2.5 in/outpaint graph (`VHS_DuplicateMasks`, `LTXVImgToVideoInplace`, or `LTXVImgToVideoConditionOnly`) is finalized with `ltx25=True`, so the outpaint pad-mask repeat and `trim_to_shortest=false` still run. The learned file records `family` and `family_route` (`specialized` or `generic`). Dry-run prints the same line.
 
 An unmatched graph stays on the generic patcher and dry-run warns `unmatched graph stays on the generic path`.
 
@@ -124,6 +124,6 @@ A proposal is stored on the field as `source: llm` plus a confidence, listed und
 
 The Comfy tab in the Buddy web UI has an ingest drop zone next to the template picker. The existing raw-JSON drop still loads the editor. The ingest zone accepts a JSON file, learns it, and shows the field form plus readiness and dangers. Dry-run does not queue. Queue stays disabled until the confirm checkbox is checked, then it calls the same `run --ingested` path, including `vae_guard`.
 
-## Not in this phase
+## Not shipped
 
 URL ingest.

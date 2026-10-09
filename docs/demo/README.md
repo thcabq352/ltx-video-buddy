@@ -1,8 +1,8 @@
 # MiniMax H3 demo — BMX berm / backflip
 
 Photoreal clip produced with **MiniMax H3** through **Video Buddy** (ComfyUI
-`h3_t2v` / fl2va). Public GitHub viewers get these files from the repo — no
-Tailscale, no extra host.
+`h3_t2v` / fl2va). The files are committed to this repository; no extra host
+is needed to view them.
 
 Public path: `docs/demo/` in this repository.
 

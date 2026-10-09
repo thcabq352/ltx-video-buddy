@@ -1,6 +1,6 @@
 # Sulphur LTX 2.3 workflows
 
-Phase 0 packaging for the Sulphur adult-studio graphs. The public repo
+Packaging for the Sulphur adult-studio graphs. The public repo
 ships workflow JSON plus the path convention. LoRA weight blobs stay on
 the tower. Buddy does not download them.
 
@@ -84,5 +84,4 @@ Public Lightricks / Comfy-Org URLs already embedded in the UI graphs
 (base LTX 2.3 checkpoint, Gemma, spatial upscaler, camera LoRA) stay in
 those UI files. They are not Sulphur weight downloads.
 
-Do not commit `.safetensors` or `.gguf` LoRA blobs. smut/ Smart Maker
-packaging is out of scope for this pack.
+Do not commit `.safetensors` or `.gguf` LoRA blobs.

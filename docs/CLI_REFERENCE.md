@@ -35,7 +35,7 @@ python -m master_agent power-tune "neon rain" --variant base --json
 
 `run` is the director pipeline. Useful flags: `--variant`, `--dry-run` (plan and lint, no GPU), `--self-improve-dry` (judge loop, no Comfy), `--no-judge`, `--no-interview`, `--storyboard`, `--llm-panel`, `--panel-judge`, `--attach`, `--upscale seedvr2|rtx`, `--image`, `--video`, `--audio`, `--mask`, `--outpaint`, `--aspect`, `--line`, and the lipdub flags in [Features](FEATURES.md#lipdub). H3 voice warning is stated once in [Features](FEATURES.md#default-catalog).
 
-`comfy` subcommands: `run`, `attach`, `ingest`, `learn`, `dry-run`, `promote`, `start`, `stop`, `status`, `restart`, `update`. `run --ingested SLUG` queues a learned graph. `ingest` takes a JSON path or `--from history:PROMPT_ID`, stores under `state/ingested/`, and does not queue; the next command is dry-run. `--llm-assist` is optional and local. `promote` writes a local draft manifest entry. Procedure: [Workflow ingest](WORKFLOW_INGEST.md). Process ownership and the attach schema: [Comfy](COMFY.md).
+`comfy` subcommands: `run`, `attach`, `ingest`, `learn`, `dry-run`, `promote`, `start`, `stop`, `status`, `restart`, `update`. `run --ingested SLUG` queues a learned graph. `ingest` takes a JSON path or `--from history:PROMPT_ID`, stores under `state/ingested/`, and does not queue; the next command is dry-run. `--llm-assist` is optional and local. `--no-family-route` keeps a matched inoutpaint, sulphur, or lipsync graph on the generic path. `promote` writes a local draft manifest entry. Procedure: [Workflow ingest](WORKFLOW_INGEST.md). Process ownership and the attach schema: [Comfy](COMFY.md).
 
 ## LLM provider
 
@@ -93,7 +93,7 @@ mcp_servers:
       - "<VIDEO_BUDDY>/master_agent/mcp_server.py"
 ```
 
-Prefer `hermes -p ltx` or `hermes mcp add` / `hermes mcp test master-agent`. A2A on `:8189` (`GET /.well-known/agent.json`, `POST /a2a`) is the fallback.
+Prefer `hermes -p ltx` or `hermes mcp add` / `hermes mcp test master-agent`. A2A on `:8189` (`GET /.well-known/agent.json`, `POST /a2a`) is the fallback. These agent entry points may change: see the [gateway status note](ARCHITECTURE.md#status-agent-gateway).
 
 ## Feature commands
 
@@ -106,5 +106,6 @@ Prefer `hermes -p ltx` or `hermes mcp add` / `hermes mcp test master-agent`. A2A
 | `heartmula generate\|transcribe` | heartlib. `--dry-run` does not import it |
 | `character create\|list` | CCC sheet. `--train` chains LoRA |
 | `lora setup\|train\|validate` | Separate ai-toolkit venv |
+| `rainey1-batch` | One Rainey1 recipe over several seeds, junk drop, judge, top-K copy. `--dry-run` queues nothing |
 
-Details: [Features](FEATURES.md).
+Details: [Features](FEATURES.md), [Rainey1](RAINEY1.md).

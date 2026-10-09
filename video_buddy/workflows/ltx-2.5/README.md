@@ -46,7 +46,9 @@ python -m master_agent run "BRIEF" --variant flf2v --image start.png --no-interv
 ```
 
 Research aliases (`t2v_i2v`, `flf2v`, …) resolve without an env flag. Frame
-counts snap to 8n+1 (min 9). Sibling `ltx_director/workflows/ltx-2.5/` is a
-filename fallback if a JSON is missing from this folder.
+counts snap to 8n+1 (min 9). If a JSON is missing from this folder, the
+catalog also looks for the same filename in a local sibling
+`ltx_director/workflows/ltx-2.5/` checkout. That sibling is optional and is
+not part of this repository.
 
 Do not reconvert UI JSON with `/workflow/convert` without re-checking subgraph prefixes.
