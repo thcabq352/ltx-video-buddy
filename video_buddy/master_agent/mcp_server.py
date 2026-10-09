@@ -8,12 +8,22 @@ search_workflows, search_runs, kb_ingest, list_models, validate_workflow,
 create_character, train_lora.
 
 NOTE: stdio is the protocol channel — anything the pipeline prints would
-corrupt it, so tool bodies redirect stdout to stderr.
+corrupt it. ``__main__`` hands the real stdout to the transport once and
+points ``sys.stdout`` at stderr for the rest of the process.
+
+Tools are plain sync functions (importable and callable directly). When
+registered with FastMCP they run in a worker thread so a long render does
+not block pings or other calls on the event loop.
+
+Set ``LLAMACPP_AUTOSTART=0`` in the gateway's environment to stop this
+process from launching its own llama-server (useful when several gateways
+each spawn an MCP child).
 """
 
 from __future__ import annotations
 
-import contextlib
+import functools
+import os
 import sys
 from pathlib import Path
 
@@ -49,13 +59,64 @@ class _ToolPassthrough:
 mcp = FastMCP("master-agent") if FastMCP is not None else _ToolPassthrough()
 
 
-def _quiet(fn, *args, **kwargs):
-    """Run fn with stdout redirected to stderr (protects the stdio channel)."""
-    with contextlib.redirect_stdout(sys.stderr):
-        return fn(*args, **kwargs)
+class _ThreadedTools:
+    """Register sync tools with FastMCP behind an async worker-thread wrapper.
+
+    The decorated name stays the original sync function, so tests and other
+    callers (e.g. a future single gateway) can call it directly.
+    """
+
+    def __init__(self, server):
+        self._server = server
+
+    def tool(self):
+        def deco(fn):
+            if FastMCP is None:
+                return fn
+
+            @functools.wraps(fn)
+            async def _threaded(*args, **kwargs):
+                import anyio
+
+                return await anyio.to_thread.run_sync(functools.partial(fn, *args, **kwargs))
+
+            self._server.tool()(_threaded)
+            return fn
+
+        return deco
 
 
-@mcp.tool()
+tools = _ThreadedTools(mcp)
+
+
+def run_stdio() -> None:
+    """Serve MCP over stdio with the protocol on the real stdout only.
+
+    Everything else that prints (pipeline logs, worker threads, child
+    libraries) goes to stderr, for the whole process.
+    """
+    if FastMCP is None:
+        mcp.run()
+        return
+    import io
+
+    import anyio
+    from mcp.server.stdio import stdio_server
+
+    protocol_out = io.TextIOWrapper(os.fdopen(os.dup(sys.stdout.fileno()), "wb"), encoding="utf-8")
+    sys.stdout.flush()
+    os.dup2(sys.stderr.fileno(), sys.stdout.fileno())
+    sys.stdout = sys.stderr
+
+    async def _serve() -> None:
+        async with stdio_server(stdout=anyio.wrap_file(protocol_out)) as (read_stream, write_stream):
+            server = mcp._mcp_server
+            await server.run(read_stream, write_stream, server.create_initialization_options())
+
+    anyio.run(_serve)
+
+
+@tools.tool()
 def health() -> dict:
     """ComfyUI reachability + GPU VRAM, local LLM (llama.cpp, Ollama), opt-in Grok credentials (read-only), KB counts."""
     from master_agent.comfy.client import ComfyClient
@@ -101,7 +162,7 @@ def health() -> dict:
     return out
 
 
-@mcp.tool()
+@tools.tool()
 def create_video(
     request: str,
     duration_s: float | None = None,
@@ -205,8 +266,7 @@ def create_video(
     if dry_run:
         from master_agent.orchestrator.pipeline import dry_run_pipeline
 
-        code = _quiet(
-            dry_run_pipeline,
+        code = dry_run_pipeline(
             request,
             variant=variant,
             duration_s=float(duration_s),
@@ -243,8 +303,7 @@ def create_video(
     except (ComfyClientError, OSError) as exc:
         return {"status": "error", "error": str(exc), "warning": voice_warn, "notes": voice_warn}
 
-    result = _quiet(
-        run_pipeline,
+    result = run_pipeline(
         request,
         variant=variant,
         duration_s=float(duration_s),
@@ -277,7 +336,7 @@ def create_video(
     }
 
 
-@mcp.tool()
+@tools.tool()
 def plan_storyboard(
     request: str,
     duration_s: float = 8.0,
@@ -290,8 +349,7 @@ def plan_storyboard(
 
     segs = plan_story_segments(duration_s, quality=quality)
     logs: list[str] = []
-    cards, style, meta = _quiet(
-        _plan_storyboard,
+    cards, style, meta = _plan_storyboard(
         request,
         segs,
         variant=None,
@@ -309,18 +367,17 @@ def plan_storyboard(
     }
 
 
-@mcp.tool()
+@tools.tool()
 def judge_asset(video_path: str, request: str = "", full_video: bool = False) -> dict:
     """Grade an existing video file: heuristics + text-LLM + vision legs."""
     from master_agent.judge.judge import judge_full_video, judge_segment
     from master_agent.judge.probe import analyze
 
     if full_video:
-        res = _quiet(judge_full_video, user_request=request, storyboard=None, video_path=video_path)
+        res = judge_full_video(user_request=request, storyboard=None, video_path=video_path)
     else:
         heuristic, issues = analyze(video_path)
-        res = _quiet(
-            judge_segment,
+        res = judge_segment(
             user_request=request,
             ltx_prompt=request,
             video_path=video_path,
@@ -330,7 +387,7 @@ def judge_asset(video_path: str, request: str = "", full_video: bool = False) ->
     return res.to_dict()
 
 
-@mcp.tool()
+@tools.tool()
 def search_workflows(query: str, k: int = 3) -> list[dict]:
     """Semantic search over the workflow template knowledge base."""
     from master_agent.kb.store import COLLECTION_WORKFLOWS, search
@@ -338,7 +395,7 @@ def search_workflows(query: str, k: int = 3) -> list[dict]:
     return search(COLLECTION_WORKFLOWS, query, k=k)
 
 
-@mcp.tool()
+@tools.tool()
 def search_runs(query: str, k: int = 3) -> list[dict]:
     """Semantic search over past generation runs (what worked, judge notes)."""
     from master_agent.kb.store import COLLECTION_RUNS, search
@@ -346,7 +403,7 @@ def search_runs(query: str, k: int = 3) -> list[dict]:
     return search(COLLECTION_RUNS, query, k=k)
 
 
-@mcp.tool()
+@tools.tool()
 def kb_ingest() -> dict:
     """Bulk-load workflows, run records, and git-synced knowledge/ markdown."""
     from master_agent.kb.ingest import ingest_all_runs, ingest_knowledge, ingest_workflows
@@ -360,29 +417,29 @@ def kb_ingest() -> dict:
     }
 
 
-@mcp.tool()
+@tools.tool()
 def list_models() -> dict:
     """Local model inventory summary (LTX weights, bundles, runnable state)."""
-    from master_agent.models.inventory import scan_inventory
+    from master_agent.models.inventory import format_summary, scan_inventory
 
-    inv = _quiet(scan_inventory)
+    inv = scan_inventory()
     return {
         "models_found": len(inv.files) if hasattr(inv, "files") else None,
         "bundles": inv.bundles,
-        "summary": _quiet(lambda: __import__("master_agent.models.inventory", fromlist=["format_summary"]).format_summary(inv)),
+        "summary": format_summary(inv),
     }
 
 
-@mcp.tool()
+@tools.tool()
 def validate_workflow(path: str) -> dict:
     """Validate a workflow JSON against ComfyUI's node registry + local models."""
     from master_agent.comfy.validator import validate_workflow_file
 
-    report = _quiet(validate_workflow_file, Path(path))
+    report = validate_workflow_file(Path(path))
     return report.to_dict()
 
 
-@mcp.tool()
+@tools.tool()
 def create_character(
     description: str,
     name: str = "",
@@ -399,15 +456,11 @@ def create_character(
         make_character_bible,
     )
 
-    bible = _quiet(make_character_bible, description)
+    bible = make_character_bible(description)
     if name:
         bible.name = name
-    sheet = _quiet(
-        generate_character_sheet,
-        bible,
-        shots=shots or None,
-    )
-    dataset = _quiet(build_dataset, bible.name)
+    sheet = generate_character_sheet(bible, shots=shots or None)
+    dataset = build_dataset(bible.name)
     out = {
         "bible": bible.to_dict(),
         "hero": sheet.get("hero"),
@@ -418,11 +471,11 @@ def create_character(
     if train and dataset.get("ok"):
         from master_agent.lora import train_lora
 
-        out["training"] = _quiet(train_lora, bible.name)
+        out["training"] = train_lora(bible.name)
     return out
 
 
-@mcp.tool()
+@tools.tool()
 def train_lora(
     character_name: str,
     steps: int = 0,
@@ -441,9 +494,9 @@ def train_lora(
         for k, v in (("steps", steps), ("lr", lr), ("rank", rank))
         if v
     }
-    result = _quiet(_train, character_name, overrides=overrides or None)
+    result = _train(character_name, overrides=overrides or None)
     if validate and result.get("ok"):
-        result["validation"] = _quiet(validate_lora, character_name)
+        result["validation"] = validate_lora(character_name)
     return result
 
 
@@ -463,6 +516,12 @@ if __name__ == "__main__":
         get_client()
     except Exception as e:
         print(f"[mcp_server] warmup failed (tools will fall back): {e}", file=sys.stderr)
+    # Tool bodies run in worker threads, so import their modules here too.
+    for _mod in ("master_agent.orchestrator.pipeline", "master_agent.judge.judge"):
+        try:
+            __import__(_mod)
+        except Exception as e:
+            print(f"[mcp_server] warmup import {_mod} failed: {e}", file=sys.stderr)
     print(f"[mcp_server] warmup {_time.time() - _t:.1f}s", file=sys.stderr)
     try:
         from master_agent.control.versioned_config import announce_config
@@ -482,4 +541,4 @@ if __name__ == "__main__":
         prepare_local_llm()
     except Exception as e:
         print(f"[mcp_server] llama.cpp not started: {e}", file=sys.stderr)
-    mcp.run()  # stdio transport
+    run_stdio()
