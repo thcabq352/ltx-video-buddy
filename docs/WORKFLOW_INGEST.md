@@ -4,7 +4,7 @@ Buddy learns a one-off ComfyUI graph and runs it through the same patcher, `vae_
 
 Catalog variants stay on `comfy run --variant`. An ingested graph that matches inoutpaint, sulphur, or lipsync is routed through that family's existing helper. `--no-family-route` keeps it generic. Unmatched graphs stay generic.
 
-No custom-node install. No weight download. Outputs are never deleted. Promote does not commit, push, or open a pull request. `--llm-assist` is off unless you pass it, and it stays on a local model. The Comfy tab has a drop zone beside the template picker.
+No custom-node install. No weight download. Outputs are never deleted. Promote does not commit, push, or open a pull request. `--llm-assist` is off unless you pass it, and it stays on a local model.
 
 ## Commands
 
@@ -119,10 +119,6 @@ Promote refuses when `readiness` lists missing nodes or models. `--force` writes
 The backend order is the repo's local order: llama.cpp when that server is already up, otherwise Ollama. The flag does not call `get_llm("auto")`, does not start llama.cpp, does not download a weight, and does not call Grok or any other cloud model. When neither local server is up, the command warns and keeps the heuristic names.
 
 A proposal is stored on the field as `source: llm` plus a confidence, listed under `llm_proposals`, and printed in dry-run. A proposal that would take a role the graph already mapped is shown and not applied. Low confidence still warns and proceeds.
-
-## Web drop zone
-
-The Comfy tab in the Buddy web UI has an ingest drop zone next to the template picker. The existing raw-JSON drop still loads the editor. The ingest zone accepts a JSON file, learns it, and shows the field form plus readiness and dangers. Dry-run does not queue. Queue stays disabled until the confirm checkbox is checked, then it calls the same `run --ingested` path, including `vae_guard`.
 
 ## Not in this phase
 

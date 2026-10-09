@@ -54,7 +54,7 @@ knowledge/             git-synced learnings (Chroma stays local and gitignored)
 video_buddy/           master_agent, workflows, tests
 ```
 
-Hermes: `cd video_buddy && python install_hermes_skill.py`. MCP is not the skill. Profile `ltx`. Buddy does not bind 8642. Details: [CLI](docs/CLI_REFERENCE.md#hermes).
+Hermes: `cd video_buddy && python install_hermes_skill.py` (skill only). The LTX bot gateway is the one entry: `python -m master_agent agent <tool>`. Buddy does not bind 8642. Details: [CLI](docs/CLI_REFERENCE.md#hermes).
 
 ## Acknowledgments
 

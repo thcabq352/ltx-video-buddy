@@ -1,6 +1,6 @@
 # Architecture
 
-Video Buddy is the local operator in front of ComfyUI. Package `master_agent`. MCP id `master-agent`. No cloud render farm is required. Cloud LLMs are optional panel members.
+Video Buddy is the local operator in front of ComfyUI. Package `master_agent`. One gateway: the LTX bot gateway. No cloud render farm is required. Cloud LLMs are optional panel members.
 
 ```
 you ──▶ persona intake ──▶ creative brief
@@ -66,7 +66,7 @@ Judge, quality bar, and provenance: [Judge](JUDGE.md), [Provenance](PROVENANCE.m
 
 ## Local model
 
-llama.cpp is the preferred local backend. Buddy starts `llama-server` for the studio, the MCP server, and LLM calls when `LLM_PROVIDER` is `auto` (the default) or `llamacpp`. The process is `LLAMACPP_BIN` or `llama-server` on `PATH`, bound to `LLAMACPP_URL` (default `:8080`), with `--models-dir` set to `MODELS_DIR` (default `video_buddy/models/`). Buddy stops that process on shutdown. A server that was already listening is left alone. If the binary is missing, auto warns and continues to Ollama. It does not crash.
+llama.cpp is the preferred local backend. Buddy starts `llama-server` on the first LLM call when `LLM_PROVIDER` is `auto` (the default) or `llamacpp`. The process is `LLAMACPP_BIN` or `llama-server` on `PATH`, bound to `LLAMACPP_URL` (default `:8080`), with `--models-dir` set to `MODELS_DIR` (default `video_buddy/models/`). Buddy stops that process on shutdown. A server that was already listening is left alone. If the binary is missing, auto warns and continues to Ollama. It does not crash.
 
 `LLM_PROVIDER=auto` (and an unset provider) tries llama.cpp, then Ollama, and stops there. Grok (cloud) is opt-in only: `LLM_PROVIDER=grok` or a panel that names it. Pin `llamacpp` or `ollama` to force that backend. A pin does not hop to the other local server.
 
@@ -81,7 +81,7 @@ Default vision and text model name is `qwen3-vl-heretic` (`LLAMACPP_MODEL` / `OL
 | Embeddings | `POST /v1/embeddings` | `POST /api/embed` | — |
 | Vision | multimodal `/v1/chat/completions` | `POST /api/chat` + images | — |
 
-Health reports llama.cpp and Ollama reachability, and whether opt-in Grok credentials exist (read-only; health never refreshes tokens or writes `~/.hermes/auth.json`). The active backend follows the order above. Do not bind 8642 or 8189 for llama.cpp. If embeddings or vision are missing, KB calls no-op with a warning and the judge stays heuristic-only.
+Health reports llama.cpp and Ollama reachability, and whether opt-in Grok credentials exist (read-only; health never refreshes tokens or writes `~/.hermes/auth.json`). The active backend follows the order above. Do not bind 8642 for llama.cpp. If embeddings or vision are missing, KB calls no-op with a warning and the judge stays heuristic-only.
 
 ## Knowledge
 
@@ -92,26 +92,31 @@ ChromaDB at `video_buddy/state/chroma/` (gitignored) holds `workflows`, `runs`, 
 | Port | Role |
 |---|---|
 | 8188 | ComfyUI HTTP |
-| 8189 | Studio UI, Hermes facade `POST /p/ltx/v1/chat/completions`, A2A |
 | 11434 | Ollama |
 | 8080 | llama.cpp |
 | 8642 | Hermes. Buddy does not bind it. |
 
-Shift budget is about 80 VRAM-minutes. Over cap, the queue HOLDs. HOLD is A2A `input-required`, not `failed`. `done_with_warnings` maps to `completed`. Diagnose and dry-run do not increment `used`.
+Shift budget is about 80 VRAM-minutes. Over cap, the queue HOLDs and the run reports `paused`, not `error`. Diagnose and dry-run do not increment `used`.
 
-## Target: one gateway (planned, not done)
+## One gateway
 
-The plan is to keep a single agent entry point, the **LTX bot gateway**. It
-would call the pipeline directly through the CLI and the importable
-`master_agent` functions. These surfaces would then be retired:
+The **LTX bot gateway** is the only agent entry point. It loads the
+`video-buddy` skill and runs `python -m master_agent agent <tool> --args JSON`
+from `video_buddy/` (or imports `master_agent.agent_api`). Buddy listens on no
+port of its own.
 
-- the separate Hermes `ltx` seat and its profile writers (`master_agent/hermes/`)
-- the `master-agent` MCP server (`master_agent/mcp_server.py`)
-- the studio on `:8189`: UI, A2A, the Hermes facade, and the ingest drop zone (`master_agent/web/`)
-- the `.bat` launchers and the docs and skills that point at those surfaces
+Assumption, pending confirmation: "LTX bot gateway" means the Hermes gateway
+that serves the LTX bot (formerly profile `ltx`, standalone or mux `/p/ltx/`
+on 8642), driving Buddy through its terminal. If a different surface was meant,
+the removal commits can be reverted one at a time.
 
-Nothing has been removed yet. Which gateway survives has not been
-confirmed. Until it is, MCP, `:8189` and the profile writers stay
-supported, and changes must not break them. The MCP tools are plain sync
-functions so the surviving gateway can import them. Budget resume no longer
-needs `master_agent.web`.
+Removed: the `master-agent` MCP server (`master_agent/mcp_server.py`), the
+Hermes `ltx` seat machinery and profile writers (`master_agent/hermes/`,
+`hermes status|register`), the studio on `:8189` (UI, Comfy-tab ingest drop
+zone, job manager, `ui`, `run_ui_8189.bat`), the Hermes chat facade and A2A
+(`master_agent/a2a/`).
+
+Concurrency: `agent_api.create_video` holds `state/gpu.lock` for a render and
+returns `status=busy` when another render has it. A budget HOLD returns
+`status=paused`; `control_set(reset_budget=true)` or `budget_reset_shift`
+resumes paused runs in-process.

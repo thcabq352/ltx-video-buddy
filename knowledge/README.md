@@ -52,15 +52,10 @@ Recorded entries are embedded into each machine's local Chroma collection
 same Ollama / llama.cpp embedding path). Workflow digests and run records
 are unchanged.
 
-Buddy does this on startup:
-
-- `python -m master_agent ui` (studio process, background)
-- the Hermes MCP server (`master_agent/mcp_server.py`, background, logs on stderr)
-
-The same pass runs inside `python -m master_agent kb ingest` and before
-storyboard / power-mode recall, so a new process picks up a pull without a
-separate command. After you edit this folder while a studio is already
-running, restart Buddy or run `kb ingest` again.
+The pass runs inside `python -m master_agent kb ingest` (agent tool
+`kb_ingest`) and before storyboard / power-mode recall, so a new process
+picks up a pull without a separate command. After you edit this folder, the next recall
+picks it up, or run `kb ingest` again.
 
 **What is indexed.** `knowledge/**/*.md` with a real learning. One Chroma
 document per file, split into ~4000-character chunks only when an entry is
@@ -102,7 +97,5 @@ cd video_buddy
 ```
 
 `kb ingest` prints `N knowledge doc(s)` and a skipped-file count. Run it
-twice: `knowledge=` in `kb stats` stays the same. Starting the studio
-(`python -m master_agent ui`) or Hermes runs the same ingest; then `kb stats`
-in another shell shows the count. `GET /api/health` includes
-`kb.knowledge`. Search the studio with `/api/kb/search?collection=knowledge`.
+twice: `knowledge=` in `kb stats` stays the same. `agent health` includes
+`kb.knowledge`; `agent search_knowledge --args '{"query": "..."}'` searches it.

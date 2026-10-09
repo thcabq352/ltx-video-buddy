@@ -72,23 +72,24 @@ def test_skill_renders_frontmatter_and_sections():
     desc = meta.get("description") or ""
     assert desc.startswith("Use when")
     assert "Video Buddy" in desc or "video buddy" in desc.lower()
-    assert "master-agent" in desc
+    assert "master_agent agent" in desc
     body = text.split("\n---\n", 1)[1]
     assert "# Video Buddy" in body
     for needle in (
-        "MCP ≠ skills",
+        "One gateway",
+        "LTX bot gateway",
         "~/.hermes/skills/video-buddy/",
-        "master-agent",
+        "python -m master_agent agent",
+        "agent list",
         ":8188",
-        ":8189",
         "8n+1",
         "L0",
         "L5",
         "Imagine",
-        "ltx",
-        "A2A",
     ):
         assert needle in body, f"missing {needle!r}"
+    for gone in ("mcp_server.py", "mcp_servers", "hermes register", "master_agent ui", "/a2a"):
+        assert gone not in _skill_corpus(), f"removed surface still documented: {gone!r}"
     assert "Not a Hermes profile" not in body
 
 

@@ -1,40 +1,48 @@
-# Video Buddy — MCP + CLI inventory
+# Video Buddy — agent tools + CLI inventory
 
-Authoritative lists. Do not invent names. MCP tools come from
-`master_agent/mcp_server.py`. CLI commands come from
-`python -m master_agent` (dispatcher `master_agent/__main__.py`, commands in `master_agent/cli/`).
+Authoritative lists. Do not invent names. Agent tools come from
+`master_agent/agent_api.py` (`python -m master_agent agent list`). CLI commands
+come from `python -m master_agent` (dispatcher `master_agent/__main__.py`,
+commands in `master_agent/cli/`).
 
 Cwd for CLI: the `video_buddy/` directory. Use the project venv.
 
-## MCP tools (`master-agent`)
+## Agent tools (`python -m master_agent agent <tool> --args '<json>'`)
 
-Server: FastMCP `"master-agent"`. Hermes spawns
-`<venv python> master_agent/mcp_server.py` over stdio. Stdout inside tools is
-redirected to stderr so the protocol channel stays clean.
+The LTX bot gateway is the only caller. stdout is one JSON document; logs go
+to stderr. Exit 1 when the result `status` is `error` or `busy`; exit 2 for an
+unknown tool or bad `--args`. Python callers: `from master_agent import agent_api`.
 
 | Tool | Arguments | What it does |
 |---|---|---|
-| `health` | *(none)* | ComfyUI reachability + GPU VRAM, Ollama up, llama.cpp up (`local_llm`), KB counts, config hash. |
-| `create_video` | `request: str`, `duration_s: float=5.0`, `quality: str="draft"`, `variant: str\|None=None`, `llm_panel: str\|None=None`, `dry_run: bool=False` | Full director pipeline (route, storyboard, per-segment judge, stitch, full judge). `dry_run=True` plans + validates, no GPU. |
+| `about` | *(none)* | Studio identity card. |
+| `health` | *(none)* | ComfyUI reachability + GPU VRAM, Ollama up, llama.cpp up (`local_llm`), opt-in Grok credentials (read-only), KB counts, config hash + values. |
+| `create_video` | `request: str`, `duration_s: float\|None=None` (5 s, or follows the audio for photo + voice), `quality: str="draft"`, `variant: str\|None=None`, `llm_panel: str\|None=None`, `dry_run: bool=False`, `image_path`, `audio_path`, `video_path`, `line: str\|None=None`, `seed: int\|None=None`, `storyboard: str\|None=None` (smart\|always\|multi_only\|off), `upscale: str\|None=None` (rtx\|seedvr2) | Full director pipeline (route, storyboard, per-segment judge, stitch, full judge). `dry_run=True` plans + validates, no GPU. `status="busy"` when another render holds the GPU (`state/gpu.lock`); `status="paused"` when the render budget held it. |
 | `plan_storyboard` | `request: str`, `duration_s: float=8.0`, `quality: str="draft"`, `llm_panel: str\|None=None` | Segment split + LLM-panel storyboard with KB recall. **No GPU, no validation.** |
 | `judge_asset` | `video_path: str`, `request: str=""`, `full_video: bool=False` | Grade an existing file (heuristics + text LLM + vision). `full_video=True` uses the full-video judge. |
 | `search_workflows` | `query: str`, `k: int=3` | Semantic search over the workflow KB. |
 | `search_runs` | `query: str`, `k: int=3` | Semantic search over past run records. |
-| `kb_ingest` | *(none)* | Bulk-load workflows + all run records into the KB. |
-| `list_models` | *(none)* | Local inventory summary (LTX weights, bundles, runnable state). |
+| `search_knowledge` | `query: str`, `k: int=3` | Semantic search over git-synced `knowledge/`. |
+| `kb_ingest` | *(none)* | Bulk-load workflows, run records and `knowledge/` into the KB. |
+| `list_runs` | `limit: int=50` | Newest run records: request, variant, status, judge score, video path. |
+| `list_models` | *(none)* | Local inventory: bundles, files (name, size, dir), summary text. |
 | `validate_workflow` | `path: str` | Validate one workflow JSON against the live/cached node registry + local models. |
 | `create_character` | `description: str`, `name: str=""`, `shots: int=0`, `train: bool=False` | CCC: bible → Flux sheet → captioned dataset. `train=True` chains Flux LoRA (hours on 16GB). |
 | `train_lora` | `character_name: str`, `steps: int=0`, `lr: float=0.0`, `rank: int=0`, `validate: bool=True` | Train Flux LoRA for an existing character (ai-toolkit, resumable). |
+| `control_get` | *(none)* | Studio knobs (judge strictness/threshold, learning rate, VRAM cost gate, budget cap/used, persona, soul) + config history. |
+| `control_set` | any of `judge_strictness`, `learning_rate`, `cost_vram_threshold_gb`, `render_budget_cap_vram_min`, `judge_score_threshold`, `persona`, `soul`; `reset_budget: bool=False`; `session: str="agent"` | Versioned, hash-stamped knob change. `reset_budget=True` zeroes used VRAM-minutes and resumes budget-paused generates. |
+| `budget_status` | *(none)* | Shift budget snapshot: used, cap, paused, shift id, pending, ledger. |
+| `budget_reset_shift` | *(none)* | Archive the shift ledger, zero used, resume budget-paused generates. |
 
 Latency: `health` / `search_*` / `validate_workflow` / `kb_ingest` ~seconds.
 `judge_asset` and `create_video` can take minutes (cold local LLM). `train_lora`
-is hours. Prefer ~900s MCP timeout.
+is hours. Allow ~900s per call.
 
 ## CLI (`python -m master_agent <cmd>`)
 
 | Command | What it does |
 |---|---|
-| `agent <tool> --args '<json>'` | Call any agent tool (`master_agent/agent_api.py`) and print one JSON document on stdout; logs go to stderr. `agent list` prints every tool with its parameters. Covers the MCP tools plus `about`, `search_knowledge`, `list_runs`, `control_get`, `control_set`, `budget_status`, `budget_reset_shift`; `create_video` also takes `seed`, `storyboard`, `upscale`. Exit 1 on `status` error or busy (another render holds the GPU). |
+| `agent <tool> --args '<json>'` | Call an agent tool (table above) and print one JSON document on stdout. `--args @file.json` reads a file. `agent list` prints every tool with its parameters. |
 | `about` | Studio identity card (`--json` ok). |
 | `curriculum` | Print L0→L5 + Part 2 overnight gate (`--json` ok). |
 | `inventory` | List discovered weights (path + role) before doctor. `--json` optional. Consent rules: repo `docs/WEIGHTS.md`. |
@@ -52,8 +60,6 @@ is hours. Prefer ~900s MCP timeout.
 | `scan-models` | Scan `models/` → inventory. |
 | `fetch-object-info` | Cache Comfy `/object_info` to `state/`. |
 | `budget status` / `budget reset-shift` | VRAM-min shift ledger. Reset archives history; never wipes. |
-| `hermes status` / `hermes register` | Discover ltx seat (Hermes / buddy-adapter / A2A fallback). Register seats `~/.hermes/profiles/ltx/` (no `.env`). |
-| `ui` | Studio dashboard, default `:8189`. |
 | `kb ingest` / `kb search` / `kb stats` | Local RAG. `search` defaults to runs; `--workflows` for templates; `--knowledge` for git-synced `knowledge/` (failures recalled first). |
 | `persona list\|show\|set` | Interview voice (`ara`, `exec`, `zod`). |
 | `soul list\|show\|set` | Standing values (`studio`, `play`). |

@@ -1,6 +1,6 @@
 # Getting started
 
-From `video_buddy/`. Python 3.10+. ComfyUI listens on `:8188`. The studio dashboard on `:8189` is optional and is not proof that Comfy is up.
+From `video_buddy/`. Python 3.10+. ComfyUI listens on `:8188`.
 
 Weights, consent, and the loader order have one home: [Weights](WEIGHTS.md#loader-policy). This page does not restate them.
 
@@ -29,10 +29,10 @@ Windows portable Comfy: `ComfyUI_windows_portable\run_api_8188.bat`. Elsewhere s
 
 ```bash
 python -m master_agent comfy run --mode generate --variant ltx25_t2v_i2v --prompt "neon rain"
-python -m master_agent ui --port 8189
+python -m master_agent agent health
 ```
 
-Hermes: `python install_hermes_skill.py` copies `skills/video-buddy/` to `~/.hermes/skills/video-buddy/` and seats profile `ltx`. No `.env` is written. MCP server id is `master-agent`. Buddy does not bind 8642. See [CLI reference](CLI_REFERENCE.md#hermes).
+Hermes: `python install_hermes_skill.py` copies `skills/video-buddy/` to `~/.hermes/skills/video-buddy/`. Nothing else is written. The LTX bot gateway calls `python -m master_agent agent <tool>`. Buddy binds no gateway port and never 8642. See [CLI reference](CLI_REFERENCE.md#hermes).
 
 ## Curriculum
 
@@ -46,7 +46,7 @@ Do these in order. Do not jump to Part 2.
 |---|---|---|
 | L0 | tree | This tree is `video_buddy` / `master_agent`. |
 | L1 | about | `python -m master_agent about` before any GPU claim. |
-| L2 | health | `python -m master_agent health`. Comfy **:8188** up. Studio `:8189` is not proof. |
+| L2 | health | `python -m master_agent health`. Comfy **:8188** up. A gateway reply is not proof. |
 | L3 | dry-run | `python -m master_agent run "BRIEF" --dry-run`. Plan and lint only. No queue. No shift-budget spend. |
 | L4 | diagnose | `python -m master_agent diagnose --variant base --prompt "garden proof"`. 9-frame hull. Print `sec/step`. |
 | L5 | short proof | A real file in `outputs/`. `ffprobe` frames and size. Junk under 100KB or under 3 frames is FAIL. |
