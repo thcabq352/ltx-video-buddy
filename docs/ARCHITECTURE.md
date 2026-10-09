@@ -66,7 +66,7 @@ Judge, quality bar, and provenance: [Judge](JUDGE.md), [Provenance](PROVENANCE.m
 
 ## Local model
 
-llama.cpp is the preferred local backend. Buddy starts `llama-server` on the first LLM call when `LLM_PROVIDER` is `auto` (the default) or `llamacpp`. The process is `LLAMACPP_BIN` or `llama-server` on `PATH`, bound to `LLAMACPP_URL` (default `:8080`), with `--models-dir` set to `MODELS_DIR` (default `video_buddy/models/`). Buddy stops that process on shutdown. A server that was already listening is left alone. If the binary is missing, auto warns and continues to Ollama. It does not crash.
+llama.cpp is the preferred local backend. Buddy starts `llama-server` on the first LLM call when `LLM_PROVIDER` is `auto` (the default) or `llamacpp`. The process is `LLAMACPP_BIN` or `llama-server` on `PATH`, bound to `LLAMACPP_URL` (default `:8080`), with `--models-dir` set to `MODELS_DIR` (default `video_buddy/models/`). Buddy stops that process on shutdown. A server that was already listening is left alone. `LLAMACPP_AUTOSTART=0` turns off the start; Buddy then only uses a server that is already listening. If the binary is missing, auto warns and continues to Ollama. It does not crash.
 
 `LLM_PROVIDER=auto` (and an unset provider) tries llama.cpp, then Ollama, and stops there. Grok (cloud) is opt-in only: `LLM_PROVIDER=grok` or a panel that names it. Pin `llamacpp` or `ollama` to force that backend. A pin does not hop to the other local server.
 

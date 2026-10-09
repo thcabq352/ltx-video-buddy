@@ -118,6 +118,9 @@ OLLAMA_MODEL = os.getenv("OLLAMA_MODEL", "qwen3-vl-heretic")
 LLAMACPP_URL = os.getenv("LLAMACPP_URL", "http://127.0.0.1:8080").rstrip("/")
 LLAMACPP_MODEL = (os.getenv("LLAMACPP_MODEL") or OLLAMA_MODEL).strip()
 LLAMACPP_BIN = (os.getenv("LLAMACPP_BIN") or "").strip()
+# 0 = never launch llama-server from this process; use one that is already
+# listening (e.g. the gateway host already runs one).
+LLAMACPP_AUTOSTART = os.getenv("LLAMACPP_AUTOSTART", "1").strip().lower() not in ("0", "false", "no", "off")
 # Buddy-owned llama.cpp (automatic install): source checkout, build, or the
 # official prebuilt release. LLAMACPP_REF pins the ggml-org/llama.cpp release
 # tag so every machine builds the same code; b11389 is commit 16c163d56.
