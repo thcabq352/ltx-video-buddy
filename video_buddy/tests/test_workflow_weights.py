@@ -36,7 +36,8 @@ from master_agent.models.weights import (
 from master_agent.orchestrator.talking import H3_R2V_AUDIO_LABEL
 from master_agent.setup import snapshot
 
-BAKE = "LTX2.3_DISTILLED-1.1_BAKED_LTX_10Eros_v14_r768.safetensors"
+BAKE = "10Eros_v1.5-Q4_K_M.gguf"
+OLD_BAKE = "LTX2.3_DISTILLED-1.1_BAKED_LTX_10Eros_v14_r768.safetensors"
 RANK111 = "ltx-2.3-22b-distilled-1.1_lora-dynamic_fro09_avg_rank_111_bf16.safetensors"
 TAE = "taeltx2_3.safetensors"
 DEV_FP8 = "ltx-2.3-22b-dev-fp8.safetensors"
@@ -46,7 +47,7 @@ IC_23 = "ltx-2.3-22b-ic-lora-ingredients-0.9.safetensors"
 DEBLUR_23 = "ltx-2.3-22b-ic-lora-deblur-0.9.safetensors"
 HERETIC = "gemma4-12b-heretic-ltx25-int8convrot.safetensors"
 ENHANCER = "gemma4_e2b_it_bf16.safetensors"
-LEAK = (BAKE, RANK111, TAE)
+LEAK = (BAKE, OLD_BAKE, RANK111, TAE)
 
 # (variant, substrings that must survive patching)
 KEEP = (
@@ -148,7 +149,14 @@ def test_ltx23_base_family_still_uses_its_own_bundle(variant):
     workflow, meta = _patch(variant)
     blob = _blob(workflow)
     assert BAKE in blob
+    assert OLD_BAKE not in blob
     assert RANK111 in blob
+    assert "gemma_3_12B_it_fp4_mixed.safetensors" in blob
+    assert "ltx-2.3-22b-dev-fp8.safetensors" in blob
+    assert "LTX23_audio_vae_bf16.safetensors" in blob
+    assert "taeltx2_3.safetensors" in blob
+    assert workflow["1"]["class_type"] == "UnetLoaderGGUF"
+    assert workflow["1"]["inputs"] == {"unet_name": BAKE}
     assert meta["checkpoint"] == BAKE
 
 

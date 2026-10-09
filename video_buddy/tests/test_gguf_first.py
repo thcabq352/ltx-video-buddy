@@ -32,7 +32,12 @@ from master_agent.models.weights import (
 Q4_DISTILLED = "LTX-2.3-22B-distilled-1.1-Q4_K_S.gguf"
 Q4_DEV = "LTX-2.3-dev-Q4_K_S.gguf"
 SULPHUR = "sulphur_dev-Q3_K_S.gguf"
-EROS = "LTX2.3_DISTILLED-1.1_BAKED_LTX_10Eros_v14_r768.safetensors"
+EROS = "10Eros_v1.5-Q4_K_M.gguf"
+OLD_BAKE = "LTX2.3_DISTILLED-1.1_BAKED_LTX_10Eros_v14_r768.safetensors"
+PROJ = "ltx-2.3-22b-dev-fp8.safetensors"
+AUDIO_VAE = "LTX23_audio_vae_bf16.safetensors"
+VIDEO_VAE = "taeltx2_3.safetensors"
+GEMMA = "gemma_3_12B_it_fp4_mixed.safetensors"
 LTX25_GGUF = "ltx-2.5-22b-distilled-transformer-bf16-Q4_K_M.gguf"
 LTX25_BF16 = "ltx-2.5-22b-distilled-transformer-bf16.safetensors"
 
@@ -98,7 +103,7 @@ def test_wan_gguf_beats_fp8_without_force(tmp_path: Path, monkeypatch):
 def test_quantstack_q4_beats_sulphur_and_eros(tmp_path: Path):
     q4 = _write(tmp_path / "unet" / Q4_DISTILLED)
     _write(tmp_path / "unet" / SULPHUR)
-    _write(tmp_path / "checkpoints" / EROS)
+    _write(tmp_path / "diffusion_models" / EROS)
     assert resolve_ltx23_gguf("base", [tmp_path]) == q4
     assert resolve_ltx23_gguf("eros", [tmp_path]) == q4
 
@@ -117,7 +122,7 @@ def test_sulphur_used_when_it_is_the_only_gguf(tmp_path: Path):
 
 
 def test_no_gguf_returns_none_so_eros_can_stay(tmp_path: Path):
-    _write(tmp_path / "checkpoints" / EROS)
+    _write(tmp_path / "checkpoints" / OLD_BAKE)
     assert resolve_ltx23_gguf("base", [tmp_path]) is None
 
 
@@ -145,7 +150,7 @@ def _patch(variant: str, roots: list[Path]):
 def test_ltx23_graph_uses_gguf_for_model_and_keeps_eros_for_vae(variant: str, gguf_name: str, tmp_path: Path):
     _write(tmp_path / "unet" / Q4_DISTILLED)
     _write(tmp_path / "unet" / Q4_DEV)
-    _write(tmp_path / "checkpoints" / EROS)
+    _write(tmp_path / "diffusion_models" / EROS)
     workflow, meta = _patch(variant, [tmp_path])
     gguf_nodes = [
         node
@@ -153,26 +158,25 @@ def test_ltx23_graph_uses_gguf_for_model_and_keeps_eros_for_vae(variant: str, gg
         if isinstance(node, dict) and node.get("class_type") == "UnetLoaderGGUF"
     ]
     assert len(gguf_nodes) == 1
-    assert gguf_nodes[0]["inputs"]["unet_name"] == gguf_name
-    assert workflow["4"]["inputs"]["model"][0] != "1"
-    assert workflow["4"]["inputs"]["model"][1] == 0
-    assert workflow["1"]["class_type"] == "CheckpointLoaderSimple"
-    assert workflow["1"]["inputs"]["ckpt_name"] == EROS
-    assert workflow["70"]["inputs"]["vae"] == ["1", 2]
-    assert workflow["2"]["inputs"]["ckpt_name"] == EROS
-    assert meta["gguf_unet"] == gguf_name
-    assert meta["checkpoint"] == EROS
-
-
-def test_base_without_gguf_stays_on_eros(tmp_path: Path):
-    _write(tmp_path / "checkpoints" / EROS)
-    workflow, meta = _patch("base", [tmp_path])
-    assert workflow["1"]["class_type"] == "CheckpointLoaderSimple"
+    assert gguf_nodes[0]["class_type"] == "UnetLoaderGGUF"
+    assert gguf_nodes[0]["inputs"] == {"unet_name": EROS}
+    assert gguf_nodes[0]["inputs"]["unet_name"] != gguf_name
+    assert "dequant_dtype" not in gguf_nodes[0]["inputs"]
     assert workflow["4"]["inputs"]["model"] == ["1", 0]
-    assert meta["gguf_unet"] is None
+    assert workflow["1"]["class_type"] == "UnetLoaderGGUF"
+    assert workflow["2"]["inputs"]["text_encoder"] == GEMMA
+    assert workflow["2"]["inputs"]["ckpt_name"] == PROJ
+    assert workflow["3"]["class_type"] == "VAELoader"
+    assert workflow["3"]["inputs"]["vae_name"] == AUDIO_VAE
+    assert workflow["5"]["inputs"]["vae_name"] == VIDEO_VAE
+    assert workflow["70"]["class_type"] == "VAEDecode"
+    assert workflow["70"]["inputs"] == {"samples": ["60", 0], "vae": ["5", 0]}
+    assert workflow["71"]["inputs"]["audio_vae"] == ["3", 0]
+    assert OLD_BAKE not in str(workflow)
+    assert meta["gguf_unet"] == EROS
     assert meta["checkpoint"] == EROS
     assert not any(
-        isinstance(node, dict) and node.get("class_type") == "UnetLoaderGGUF"
+        isinstance(node, dict) and "fp8" in str(node.get("class_type") or "").lower()
         for node in workflow.values()
     )
 

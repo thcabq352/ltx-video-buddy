@@ -159,7 +159,7 @@ _H3 = (
 
 # config.MODEL_FILES + state/download_models.py
 _LTX23 = (
-    "LTX2.3_DISTILLED-1.1_BAKED_LTX_10Eros_v14_r768.safetensors",
+    "10Eros_v1.5-Q4_K_M.gguf",
     "ltx-2.3-22b-distilled-1.1_transformer_only_fp8_scaled.safetensors",
     "ltx-2.3-22b-dev-fp8.safetensors",
     "ltx-2.3-22b-dev_transformer_only_fp8_scaled.safetensors",
@@ -240,13 +240,15 @@ QWEN_EDIT_PREFERENCE: tuple[str, ...] = (
     "qwen-image-edit-2511-Q5_0.gguf",
 )
 # QuantStack Q4_K_S, then Sulphur Q3_K_S, then the other aliases #52 already
-# accepts. fp8 and the EROS all-in-one are fallbacks when none of these exist.
+# accepts. 10Eros_v1.5-Q4_K_M.gguf is last: the base/eros/directors graphs
+# keep it when that file is on disk, and these tuples fill the slot when it is not.
 LTX23_DISTILLED_GGUF: tuple[str, ...] = (
     "LTX-2.3-22B-distilled-1.1-Q4_K_S.gguf",
     "ltx-2.3-22b-distilled-Q3_K_S.gguf",
     "LTX-2.3-distilled-Q3_K_S.gguf",
     "sulphur_dev-Q3_K_S.gguf",
     "LTX-2.3-dev-Q4_K_S.gguf",
+    "10Eros_v1.5-Q4_K_M.gguf",
 )
 LTX23_DEV_GGUF: tuple[str, ...] = (
     "LTX-2.3-dev-Q4_K_S.gguf",
@@ -254,6 +256,7 @@ LTX23_DEV_GGUF: tuple[str, ...] = (
     "LTX-2.3-22B-distilled-1.1-Q4_K_S.gguf",
     "ltx-2.3-22b-distilled-Q3_K_S.gguf",
     "LTX-2.3-distilled-Q3_K_S.gguf",
+    "10Eros_v1.5-Q4_K_M.gguf",
 )
 LTX23_PREFERENCE: tuple[str, ...] = (
     "LTX-2.3-22B-distilled-1.1-Q4_K_S.gguf",
@@ -264,7 +267,7 @@ LTX23_PREFERENCE: tuple[str, ...] = (
     "ltx-2.3-22b-distilled-1.1_transformer_only_fp8_scaled.safetensors",
     "ltx-2.3-22b-dev_transformer_only_fp8_scaled.safetensors",
     "ltx-2.3-22b-dev-fp8.safetensors",
-    "LTX2.3_DISTILLED-1.1_BAKED_LTX_10Eros_v14_r768.safetensors",
+    "10Eros_v1.5-Q4_K_M.gguf",
 )
 
 
@@ -469,11 +472,11 @@ def _build_rows() -> dict[str, WorkflowVramRow]:
         )
 
     ltx23_notes = (
-        "Standing rule: if a compatible GGUF is on disk, load it "
-        "(QuantStack Q4_K_S, then Sulphur Q3_K_S, then other LTX 2.3 GGUF aliases). "
-        "fp8 and the EROS all-in-one are the MODEL fallback only when no GGUF matches. "
-        "The all-in-one checkpoint still feeds VAE and text projection. "
-        "Not a new download pack. 16GB+ machines that only have EROS or bf16 keep those files."
+        "10Eros diffusion is 10Eros_v1.5-Q4_K_M.gguf via UnetLoaderGGUF "
+        "(quantized ops, diffusion_models/). Gemma, text projection, video VAE, "
+        "and audio VAE stay on their split files. No fp8 cast on the audio VAE. "
+        "When that GGUF is absent, QuantStack Q4_K_S then Sulphur Q3_K_S fill the "
+        "MODEL slot. Not a download pack."
     )
     for slug, pack, vram, klass in (
         ("base", LTX23_DISTILLED_GGUF[0], 9.5, "safe"),
@@ -789,7 +792,7 @@ def _fallback_row(slug: str) -> WorkflowVramRow:
             LTX23_DISTILLED_GGUF[0],
             10.0,
             "safe",
-            notes="Inherits LTX 2.3 GGUF-first; EROS/fp8 when no GGUF is on disk.",
+            notes="Inherits LTX 2.3 GGUF-first. 10Eros v1.5 when that file is on disk; QuantStack then Sulphur when it is not.",
         ),
         "wan22": WorkflowVramRow(slug, family, WAN22_HIGH_PREFERENCE[0], 13.2, "tight", notes="Inherits Wan 2.2 Lightx2v path."),
         "vace": WorkflowVramRow(slug, family, _VACE[0], 13.6, "tight", notes="Inherits VACE GGUF Q4_K_M."),
@@ -860,7 +863,7 @@ def format_vram_table() -> str:
             "base / eros / directors",
             LTX23_DISTILLED_GGUF[0],
             9.5,
-            "GGUF Q4_K_S when on disk; Sulphur Q3; EROS/fp8 fallback",
+            "10Eros v1.5 GGUF when on disk; else QuantStack Q4_K_S then Sulphur Q3",
         ),
         ("LTX 2.5", "ltx25_t2v_i2v (default 2.5)", _LTX25[0], 12.5, "GGUF Q4 → NVFP4 → int8 → bf16; two-stage is quality"),
         ("MiniMax H3", "h3_t2v / i2v / flf / r2v", _H3[0], 13.0, "Q4_K + NVFP4 TE; ≤12s / 0.8MP / 4 steps / CFG 1.0"),
