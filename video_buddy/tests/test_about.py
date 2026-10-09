@@ -9,7 +9,8 @@ def test_studio_about_shape():
     assert card["package"] == "master_agent"
     assert card["mcp_id"] == "master-agent"
     assert card["hermes"]["profile"] == "ltx"
-    assert card["hermes"]["a2a_fallback"].endswith("/a2a")
+    assert "a2a_fallback" not in card["hermes"]
+    assert "facade" not in card["hermes"]
     assert card["drive"]["first"] == "cli"
     assert "llamacpp" in card["models"]
     assert "ollama" in card["models"]

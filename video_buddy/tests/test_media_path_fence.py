@@ -1,11 +1,10 @@
-"""MCP / A2A media paths are fenced to Buddy's media folders (U8)."""
+"""Agent tool media paths are fenced to Buddy's media folders (U8)."""
 
 from __future__ import annotations
 
 from pathlib import Path
 
 import master_agent.config as cfg
-from master_agent.a2a.protocol import TaskStore, handle_rpc
 from master_agent.media_paths import is_allowed_media_path, media_path_error
 
 
@@ -53,63 +52,3 @@ def test_agent_create_video_refuses_outside_path(monkeypatch):
     assert "must be under" in out["error"]
     judged = judge_asset("/etc/hostname")
     assert judged["status"] == "error"
-
-
-def test_a2a_refuses_outside_path_before_creating_task(monkeypatch):
-    monkeypatch.delenv("MEDIA_EXTRA_ROOTS", raising=False)
-    store = TaskStore()
-    submitted = []
-    resp = handle_rpc(
-        {
-            "jsonrpc": "2.0",
-            "id": 1,
-            "method": "message/send",
-            "params": {
-                "message": {
-                    "parts": [
-                        {"type": "text", "text": "animate this"},
-                        {"type": "file", "file": {"uri": "file:///etc/hostname", "mimeType": "image/png"}},
-                    ]
-                }
-            },
-        },
-        store=store,
-        submit=lambda tid, body: submitted.append(body),
-    )
-    assert resp["error"]["code"] == -32602
-    assert submitted == []
-
-
-def test_a2a_bare_comfy_input_name_passes_through(monkeypatch):
-    monkeypatch.delenv("MEDIA_EXTRA_ROOTS", raising=False)
-    store = TaskStore()
-    submitted = []
-    resp = handle_rpc(
-        {
-            "jsonrpc": "2.0",
-            "id": 1,
-            "method": "message/send",
-            "params": {
-                "message": {"text": "animate"},
-                "metadata": {"image_path": "face.png", "confirm": True},
-            },
-        },
-        store=store,
-        submit=lambda tid, body: submitted.append(body),
-    )
-    assert "result" in resp
-    assert submitted[0]["image_path"] == "face.png"
-
-
-def test_a2a_real_render_needs_confirm():
-    store = TaskStore()
-    submitted = []
-    payload = {"jsonrpc": "2.0", "id": 1, "method": "message/send", "params": {"message": {"text": "rain"}}}
-    resp = handle_rpc(payload, store=store, submit=lambda tid, body: submitted.append(body))
-    assert "confirm" in resp["error"]["message"]
-    assert submitted == []
-    payload["params"]["metadata"] = {"dry_run": True}
-    assert "result" in handle_rpc(payload, store=store, submit=lambda tid, body: submitted.append(body))
-    payload["params"]["metadata"] = {"confirm": True}
-    assert "result" in handle_rpc(payload, store=store, submit=lambda tid, body: submitted.append(body))
-    assert len(submitted) == 2

@@ -69,8 +69,6 @@ def studio_about() -> dict[str, Any]:
             "profile": "ltx",
             "skill": "video-buddy",
             "mcp_id": "master-agent",
-            "facade": f"http://127.0.0.1:{STUDIO_PORT}/p/ltx/v1/chat/completions",
-            "a2a_fallback": f"http://127.0.0.1:{STUDIO_PORT}/a2a",
         },
     }
 
@@ -94,7 +92,7 @@ def format_about(card: dict[str, Any] | None = None) -> str:
         f"Persona  {persona.get('slug')} ({persona.get('name')})   soul {soul.get('slug')} ({soul.get('name')})",
         f"Local    llamacpp={models.get('llamacpp')}  ollama={models.get('ollama')}   provider {models.get('llm_provider')}",
         f"Package  {data.get('package')}   MCP {data.get('mcp_id')}",
-        f"Hermes   profile ltx (primary)   A2A fallback {hermes.get('a2a_fallback')}",
+        f"Hermes   profile {hermes.get('profile')}   skill {hermes.get('skill')}",
         "",
         "Drive a graph:",
         f"  {drive.get('health')}",

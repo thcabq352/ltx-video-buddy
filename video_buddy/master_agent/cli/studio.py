@@ -168,7 +168,6 @@ def cmd_hermes(args: argparse.Namespace) -> int:
             print("      custom SOUL.md left in place (pass --force to overwrite)")
         for note in result.notes:
             print(f"      {note}")
-        print("      A2A fallback remains on :8189  POST /a2a")
         return 0
 
     rows = discover_gateways(home=home, host="127.0.0.1")
@@ -194,7 +193,6 @@ def cmd_hermes(args: argparse.Namespace) -> int:
             }
             for g in rows
         ],
-        "a2a_fallback": "http://127.0.0.1:8189/a2a",
     }
     if args.json:
         print(json.dumps(payload, indent=1))
@@ -205,8 +203,7 @@ def cmd_hermes(args: argparse.Namespace) -> int:
             f"healthy={primary.healthy} {primary.chat_url}"
         )
     else:
-        print("primary  (none) — start studio :8189 for the buddy-adapter facade")
-    print("a2a     http://127.0.0.1:8189/a2a  (fallback)")
+        print("primary  (none)")
     for g in rows:
         mark = "*" if primary is not None and g.chat_url == primary.chat_url and g.source == primary.source else " "
         print(

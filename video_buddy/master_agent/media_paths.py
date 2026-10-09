@@ -1,6 +1,6 @@
-"""Which local media files agent-facing tools (MCP, A2A) may read.
+"""Which local media files agent-facing tools may read.
 
-A caller on MCP or A2A can name any path; without a fence that is an
+An agent caller can name any path; without a fence that is an
 arbitrary local file read (and upload into Comfy). Paths must resolve
 inside one of:
 

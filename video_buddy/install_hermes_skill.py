@@ -89,7 +89,6 @@ def main(argv: list[str] | None = None) -> int:
     if result.soul_skipped:
         print("      custom SOUL.md left in place (pass --force to overwrite)")
     print("Next  python -m master_agent hermes status")
-    print("      A2A fallback remains on :8189  GET /.well-known/agent.json  POST /a2a")
     print("      do not bind 8642 from Buddy — that port is the default Hermes gateway")
     return 0
 

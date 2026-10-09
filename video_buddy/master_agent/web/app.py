@@ -11,7 +11,7 @@ from contextlib import asynccontextmanager
 from pathlib import Path
 from typing import Any, Optional
 
-from fastapi import FastAPI, File, HTTPException, Query, Request, UploadFile
+from fastapi import FastAPI, File, HTTPException, Query, UploadFile
 from fastapi.responses import FileResponse
 from pydantic import BaseModel
 
@@ -1035,82 +1035,6 @@ def api_judge(req: JudgeRequest):
             heuristic_issues=issues,
         )
     return res.to_dict()
-
-
-# A2A sits beside MCP (master_agent/mcp_server.py). Protocol lives in a2a/.
-_A2A = None
-
-
-def _a2a_store():
-    global _A2A
-    if _A2A is None:
-        from master_agent.a2a.protocol import TaskStore
-
-        _A2A = TaskStore()
-    return _A2A
-
-
-def _a2a_bind(request: Request) -> tuple[str, int]:
-    host = request.url.hostname or "127.0.0.1"
-    port = request.url.port or 8189
-    return host, port
-
-
-@app.get("/.well-known/agent.json")
-@app.get("/.well-known/agent-card.json")
-def a2a_agent_card(request: Request):
-    from master_agent.a2a.protocol import agent_card
-
-    host, port = _a2a_bind(request)
-    return agent_card(host=host, port=port)
-
-
-@app.get("/tasks/{task_id}")
-def a2a_task_rest(task_id: str):
-    from master_agent.a2a.protocol import task_view
-
-    store = _a2a_store()
-    task = store.get(task_id)
-    if not task:
-        raise HTTPException(404, f"task not found: {task_id}")
-    return task_view(task, task_id)
-
-
-@app.post("/a2a")
-def a2a_rpc(payload: dict[str, Any], request: Request):
-    from master_agent.a2a.protocol import handle_rpc, submit_orchestrator
-
-    store = _a2a_store()
-    host, port = _a2a_bind(request)
-    return handle_rpc(
-        payload,
-        store=store,
-        submit=lambda tid, body: submit_orchestrator(tid, body, store),
-        host=host,
-        port=port,
-    )
-
-
-@app.get("/v1/models")
-@app.get("/p/ltx/v1/models")
-def hermes_models() -> dict[str, Any]:
-    from master_agent.hermes.adapter import openai_models
-
-    return openai_models()
-
-
-@app.post("/v1/chat/completions")
-@app.post("/p/ltx/v1/chat/completions")
-def hermes_chat_completions(payload: dict[str, Any]):
-    from master_agent.a2a.protocol import submit_orchestrator
-    from master_agent.hermes.adapter import hermes_complete
-
-    store = _a2a_store()
-    return hermes_complete(
-        payload,
-        store=store,
-        submit=lambda tid, body: submit_orchestrator(tid, body, store),
-    )
 
 
 class ControlUpdate(BaseModel):

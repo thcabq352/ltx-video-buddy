@@ -27,7 +27,7 @@ PASSTHROUGH_METHOD = "passthrough"
 
 H3_MISSING_LINE_WARNING = (
     'H3 voice mode has no spoken line. Pass --line "the exact words" '
-    "(or line / dialogue on the brief, A2A, or MCP request) so H3 says that "
+    "(or line / dialogue on the brief or agent request) so H3 says that "
     "sentence in the sample's voice and animates the mouth. "
     "The run continues, but the mouth may not follow the voice."
 )
