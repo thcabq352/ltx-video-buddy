@@ -483,6 +483,115 @@ WEIGHT_FILES["qwen_edit"] = WeightFile(
     accepts=QWEN_EDIT_PREFERENCE,
 )
 
+# LTX 2.3 16GB-tier pack: the files config.MODEL_FILES["base"] loads, plus the
+# full video VAE that tiled decode needs. Repo paths and byte sizes are from
+# the Hub file listings (2026-10-09). All four repos are public (gated=False).
+# The baked EROS all-in-one has no public Hub source, so the download target
+# for the checkpoint slot is the official distilled 1.1 all-in-one, which
+# workflow_patcher.CHECKPOINT_FALLBACKS already accepts.
+# ``accepts`` stays empty on purpose: find_weight_file widens a lookup to every
+# candidate of the first matching entry, and the patcher must keep resolving
+# the EROS / dev GGUF literals to themselves. On-disk stand-ins for the scan
+# live in LTX23_SCAN_ALTERNATES instead.
+HF_LTX23 = "Lightricks/LTX-2.3"
+HF_LTX23_GGUF = "QuantStack/LTX-2.3-GGUF"
+HF_LTX23_KIJAI = "Kijai/LTX2.3_comfy"
+HF_LTX2_COMFY = "Comfy-Org/ltx-2"
+HF_LTX23_LICENSE = "https://huggingface.co/Lightricks/LTX-2.3"
+
+WEIGHT_FILES["ltx23_checkpoint"] = WeightFile(
+    key="ltx23_checkpoint",
+    filename="ltx-2.3-22b-distilled-1.1.safetensors",
+    dest_folder="checkpoints",
+    repo_id=HF_LTX23,
+    repo_filename="ltx-2.3-22b-distilled-1.1.safetensors",
+    size_bytes=46_149_345_334,
+    mandatory=True,
+    gated=False,
+    license_url=HF_LTX23_LICENSE,
+    note=(
+        "Official LTX 2.3 distilled 1.1 all-in-one (~46 GB). CheckpointLoaderSimple "
+        "reads VAE, audio VAE and text projection from it. A baked EROS all-in-one "
+        "already on disk also counts."
+    ),
+)
+WEIGHT_FILES["ltx23_gguf"] = WeightFile(
+    key="ltx23_gguf",
+    filename="LTX-2.3-22B-distilled-1.1-Q4_K_S.gguf",
+    dest_folder="diffusion_models",
+    repo_id=HF_LTX23_GGUF,
+    repo_filename="LTX-2.3-distilled-1.1/LTX-2.3-22B-distilled-1.1-Q4_K_S.gguf",
+    size_bytes=16_706_378_400,
+    mandatory=True,
+    gated=False,
+    license_url=HF_LTX23_LICENSE,
+    note="QuantStack GGUF Q4_K_S diffusion (~16.7 GB). The MODEL slot loads it via UnetLoaderGGUF.",
+)
+WEIGHT_FILES["ltx23_text_encoder"] = WeightFile(
+    key="ltx23_text_encoder",
+    filename="gemma_3_12B_it_fp4_mixed.safetensors",
+    dest_folder="text_encoders",
+    repo_id=HF_LTX2_COMFY,
+    repo_filename="split_files/text_encoders/gemma_3_12B_it_fp4_mixed.safetensors",
+    size_bytes=9_447_702_218,
+    mandatory=True,
+    gated=False,
+    license_url=HF_LTX23_LICENSE,
+    note="Gemma 3 12B fp4 text encoder (~9.4 GB) named by LTXAVTextEncoderLoader in the 2.3 graphs.",
+)
+WEIGHT_FILES["ltx23_distilled_lora"] = WeightFile(
+    key="ltx23_distilled_lora",
+    filename="ltx-2.3-22b-distilled-1.1_lora-dynamic_fro09_avg_rank_111_bf16.safetensors",
+    dest_folder="loras",
+    repo_id=HF_LTX23_KIJAI,
+    repo_filename="loras/ltx-2.3-22b-distilled-1.1_lora-dynamic_fro09_avg_rank_111_bf16.safetensors",
+    size_bytes=2_741_024_390,
+    mandatory=True,
+    gated=False,
+    license_url=HF_LTX23_LICENSE,
+    note="Distilled 1.1 LoRA (rank 111, ~2.7 GB) loaded by LoraLoaderModelOnly in base / eros / directors.",
+)
+WEIGHT_FILES["ltx23_video_vae"] = WeightFile(
+    key="ltx23_video_vae",
+    filename="LTX23_video_vae_bf16.safetensors",
+    dest_folder="vae",
+    repo_id=HF_LTX23_KIJAI,
+    repo_filename="vae/LTX23_video_vae_bf16.safetensors",
+    size_bytes=1_452_258_578,
+    mandatory=True,
+    gated=False,
+    license_url=HF_LTX23_LICENSE,
+    note="Full LTX 2.3 video VAE (~1.5 GB). Tiled decode needs it; vae_guard swaps it in.",
+)
+WEIGHT_FILES["ltx23_tiny_vae"] = WeightFile(
+    key="ltx23_tiny_vae",
+    filename="taeltx2_3.safetensors",
+    dest_folder="vae",
+    repo_id=HF_LTX23_KIJAI,
+    repo_filename="vae/taeltx2_3.safetensors",
+    size_bytes=23_531_296,
+    mandatory=True,
+    gated=False,
+    license_url=HF_LTX23_LICENSE,
+    note="Tiny preview VAE (~24 MB). Plain VAEDecode only, never tiled decode.",
+)
+
+# Scan-only stand-ins for the LTX 2.3 pack. A slot filled by one of these is
+# reported present and is not downloaded again.
+LTX23_SCAN_ALTERNATES: dict[str, tuple[str, ...]] = {
+    "ltx23_checkpoint": (
+        "LTX2.3_DISTILLED-1.1_BAKED_LTX_10Eros_v14_r768.safetensors",
+        "ltx-2.3-22b-distilled-10-eros_fp8.safetensors",
+    ),
+    "ltx23_gguf": (
+        "ltx-2.3-22b-distilled-Q3_K_S.gguf",
+        "LTX-2.3-distilled-Q3_K_S.gguf",
+        "sulphur_dev-Q3_K_S.gguf",
+        "LTX-2.3-dev-Q4_K_S.gguf",
+    ),
+    "ltx23_text_encoder": ("gemma_3_12B_it_fp8_scaled.safetensors",),
+}
+
 # Official Hub pack keys. duration_head and text_enhancer are optional
 # (mandatory=False on the WeightFile). IC-LoRA is a separate gated repo.
 _LTX25_OFFICIAL = (
@@ -516,6 +625,14 @@ _VACE = ("vace",)
 _KREA2 = ("krea2",)
 _FLUX = ("flux",)
 _QWEN_EDIT = ("qwen_edit",)
+_LTX23_CORE = (
+    "ltx23_checkpoint",
+    "ltx23_gguf",
+    "ltx23_text_encoder",
+    "ltx23_distilled_lora",
+    "ltx23_video_vae",
+    "ltx23_tiny_vae",
+)
 
 # Bundle → weight keys. Mandatory flags on WeightFile still apply per key.
 # ltx25_all stays LTX-only so adding H3 keys never pulls MiniMax into --ltx25.
@@ -533,6 +650,7 @@ BUNDLES: dict[str, tuple[str, ...]] = {
     "krea2": _KREA2,
     "flux": _FLUX,
     "qwen_edit": _QWEN_EDIT,
+    "ltx23_core": _LTX23_CORE,
 }
 
 # Variant id / alias → bundle
@@ -1189,7 +1307,7 @@ def resolve_weight(weight: WeightFile, roots: Iterable[Path] | None = None) -> P
 
         order = preference_order(weight.candidates)
     else:
-        order = weight.candidates
+        order = (*weight.candidates, *LTX23_SCAN_ALTERNATES.get(weight.key, ()))
     for name in order:
         found = _search_name(name, search)
         if found is not None:
@@ -1647,6 +1765,7 @@ def format_ask(status: WeightStatus) -> str:
             "krea2": "--krea",
             "flux": "--flux-pack",
             "qwen_edit": "--qwen",
+            "ltx23_core": "--ltx23",
         }.get(status.bundle or "", f"--bundle {status.bundle}")
         lines.append(f"  python -m master_agent download-models {flag} --yes")
     return "\n".join(lines)
