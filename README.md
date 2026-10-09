@@ -18,7 +18,9 @@ Play [`docs/demo/H3-SHOWCASE-BMX-8s-720p.mp4`](docs/demo/H3-SHOWCASE-BMX-8s-720p
 
 The operator manual is [`docs/INDEX.md`](docs/INDEX.md).
 
-New machine, no experience needed: run automatic install. One command installs ComfyUI in its own folder, LTX 2.3, and llama.cpp for the local LLM, after a plain-English pre-flight check.
+New machine, no experience needed: run automatic install. One command installs ffmpeg, ComfyUI in its own folder, LTX 2.3, and llama.cpp for the local LLM, after a plain-English pre-flight check.
+
+Before you start, you need Python 3.10+ with `venv`, git, an internet connection, and about 100 GB of free disk. An NVIDIA driver is recommended for GPU speed; the CUDA toolkit is not needed. Without a GPU, Buddy runs in CPU mode, which works but is very slow (expect hours per clip). Details: [Before you start](docs/GETTING_STARTED.md#before-you-start).
 
 ```bash
 cd video_buddy

@@ -1,12 +1,26 @@
 # Getting started
 
-From `video_buddy/`. Python 3.10+. ComfyUI listens on `:8188`.
+From `video_buddy/`. Python 3.10+ and git; see [Before you start](#before-you-start). ComfyUI listens on `:8188`.
 
 Weights, consent, and the loader order have one home: [Weights](WEIGHTS.md#loader-policy). This page does not restate them.
 
+## Before you start
+
+You need:
+
+- **Python 3.10 or newer, with `venv`.** On Debian / Ubuntu that is the `python3-venv` package. On Windows, tick "Add Python to PATH" in the installer.
+- **git.** ComfyUI is downloaded with git. Windows: `winget install --id Git.Git -e`. macOS: `xcode-select --install`. Linux: `sudo apt-get install -y git`.
+- **An internet connection.**
+- **About 100 GB of free disk.** The LTX 2.3 weights are about 76.5 GB; ComfyUI, its PyTorch, and llama.cpp take the rest. The pre-flight checks this and stops if there is not enough.
+- **An NVIDIA driver, for GPU speed (recommended).** Buddy finds the card through `nvidia-smi`, which the driver installs. You do not need the CUDA toolkit: the PyTorch build ComfyUI installs brings its own CUDA runtime.
+
+No GPU, or no NVIDIA driver? Buddy treats the machine as having no GPU and uses CPU mode: ComfyUI is installed for CPU and started with `--cpu`. It works, but it is very slow. Expect hours per clip.
+
+You do not need to install ffmpeg, ComfyUI, the LTX 2.3 weights, or llama.cpp yourself. Automatic install sets them up for you.
+
 ## Automatic install
 
-New to all of this? Use automatic install. It is one command. It takes an empty machine to a working LTX 2.3 video generate. You only need Python 3.10+ and an internet connection.
+New to all of this? Use automatic install. It is one command. It takes an empty machine to a working LTX 2.3 video generate. Check [Before you start](#before-you-start) first.
 
 | OS | Command (from the `video_buddy` folder) |
 |---|---|
@@ -19,7 +33,7 @@ What it installs:
 
 - ffmpeg
 - comfy-cli at the pin in `requirements.txt` (`comfy-cli==1.20.0`)
-- ComfyUI in its own folder (`MANAGED_COMFY_ROOT`, default `video_buddy/ComfyUI`), with the PyTorch build for your GPU. Buddy only ever uses this ComfyUI.
+- ComfyUI in its own folder (`MANAGED_COMFY_ROOT`, default `video_buddy/ComfyUI`), with the PyTorch build for your GPU: NVIDIA CUDA, AMD ROCm, Apple Silicon, or CPU. Buddy only ever uses this ComfyUI.
 - The two custom node packs the LTX 2.3 graphs need: `ComfyUI-LTXVideo` and `ComfyUI-GGUF`
 - Triton and SageAttention inside ComfyUI's own venv (optional; see [Comfy](COMFY.md#triton-and-sageattention))
 - The LTX 2.3 weights, about 76.5 GB, into `MODELS_DIR` only (never into the ComfyUI folder)
@@ -34,8 +48,9 @@ The pre-flight runs first, before anything is downloaded or installed. It prints
 | Check | Kind | What it looks at |
 |---|---|---|
 | Disk space | stops on FAIL | Free space on each drive that will hold the LTX 2.3 weights (`MODELS_DIR`), the ComfyUI folder, and llama.cpp (`LLAMACPP_ROOT`). Uses the real file sizes of what is still missing, plus 5 GB headroom. On an empty machine that is about 97–99 GB (llama.cpp takes 0.3–5 GB depending on build or prebuilt, CPU or CUDA). Prints free vs needed, and how to free space or move a folder to a bigger drive. |
+| git | stops on FAIL | `git` must be on `PATH`, because ComfyUI and its node packs are downloaded with it. Prints the install command for your system. Information only when ComfyUI and its node packs are already installed. |
 | Hugging Face access | stops on FAIL | The LTX 2.3 files are public, so no token is needed. If `HF_TOKEN` is set, it is checked with a lightweight sign-in call, because a bad token breaks even public downloads. The token is never printed. |
-| GPU / VRAM | information only | Reads `nvidia-smi`. Under 14 GB VRAM, the GGUF Q4 loader is used. No GPU means CPU mode: it works, but is very slow. |
+| GPU / VRAM | information only | Reads `nvidia-smi`. Under 14 GB VRAM, the GGUF Q4 loader is used. No GPU means CPU mode: ComfyUI is installed for CPU and started with `--cpu`. It works, but is very slow (hours per clip). |
 | llama.cpp | information only | One of: found (`LLAMACPP_BIN`, `PATH`, or Buddy's own copy), will build from source, will use the official prebuilt release (and which build tool is missing), or unavailable (with the command that installs the build tools). Also lists each local LLM model that will be skipped. |
 | ComfyUI folder | stops on FAIL | The folder must be writable and either empty, a ComfyUI, or missing. Notes an existing install (that step is then skipped). Refuses when `COMFY_MODE=external`. |
 

@@ -9,7 +9,7 @@ Python package for the local ComfyUI studio. Git root is the parent repo. The op
 
 ## Install and first commands
 
-Need Python 3.10+. Full steps and the L0→L5 curriculum: [Getting started](../docs/GETTING_STARTED.md).
+Before you start: Python 3.10+ with `venv`, git, an internet connection, and about 100 GB of free disk. An NVIDIA driver is recommended for GPU speed (the CUDA toolkit is not needed). Without a GPU, Buddy runs in CPU mode, which works but is very slow. Details: [Before you start](../docs/GETTING_STARTED.md#before-you-start). Full steps and the L0→L5 curriculum: [Getting started](../docs/GETTING_STARTED.md).
 
 Empty machine: `python install.py --automatic-install --yes` (or `python -m master_agent automatic-install --yes` once `.venv` exists). Automatic install runs a pre-flight check, then installs ComfyUI in its own folder, LTX 2.3, and llama.cpp. See [Getting started](../docs/GETTING_STARTED.md#automatic-install).
 
