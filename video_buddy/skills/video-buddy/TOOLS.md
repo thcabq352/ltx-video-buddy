@@ -46,7 +46,7 @@ is hours. Allow ~900s per call.
 | `about` | Studio identity card (`--json` ok). |
 | `curriculum` | Print L0→L5 + Part 2 overnight gate (`--json` ok). |
 | `inventory` | List discovered weights (path + role) before doctor. `--json` optional. Consent rules: repo `docs/WEIGHTS.md`. |
-| `setup` / `doctor` | Deps + LTX 2.5 / H3 / LTX 2.3 scan. Flags and the loader order: repo `docs/WEIGHTS.md`. `--fix` installs deps; Ollama pull skips models already in `ollama list` unless you pass `--yes`. |
+| `setup` / `doctor` | Deps + LTX 2.5 / H3 / LTX 2.3 scan. Flags and the loader order: repo `docs/WEIGHTS.md`. `--fix` installs deps; LLM GGUFs with no public source are skipped and it never pulls Ollama. |
 | `health` | Comfy `:8188` + GPU stats. |
 | `workflows` | Default catalog (includes `ltx25_*` and `h3_*`). `--vram` prints 16GB pack table. |
 | `capabilities` | Comfy pack vs Buddy wiring. `--offline` uses cache. |

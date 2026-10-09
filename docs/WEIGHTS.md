@@ -29,9 +29,9 @@ python -m master_agent workflows --vram
 | Flag | Effect |
 |---|---|
 | *(none)* | Scan and print `OK` / `NEED` |
-| `--scan-only` | Report only. Does not fetch weights or pull Ollama |
+| `--scan-only` | Report only. Does not install or fetch weights |
 | `--use-existing` | Keep files already on disk. Does not download |
-| `--fix` | Venv, pip, Playwright, `.env`, ffmpeg, and Ollama models missing from `ollama list`. Still no video weights. Ollama pulls need `y` or `--yes` |
+| `--fix` | Venv, pip, Playwright, `.env`, ffmpeg. LLM GGUFs not in `MODELS_DIR` are skipped ("no public GGUF source is defined; continuing"). Never pulls Ollama. Still no video weights |
 | `--fix-models` | After the scan, fetch confirmed-missing LTX 2.5 weights. Explicit consent |
 | `download-models` | List confirmed-missing slots. Exit 2 if something is missing. Nothing downloaded |
 | `download-models --yes` | Fetch that missing set only |

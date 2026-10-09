@@ -2,7 +2,12 @@
 """VIDEO BUDDY installer — run with system Python 3.10+ on Windows, macOS, or Linux.
 
 Creates .venv, installs requirements, then checks/installs ffmpeg, Playwright,
-.env, and Ollama models.
+and .env (``setup --fix``). Local LLM GGUFs with no public source are skipped;
+Ollama is never installed or pulled.
+
+    python install.py --check
+
+only reports (``setup``): no venv, no pip, no installs. It needs an existing .venv.
 
     python install.py --automatic-install --yes
 
@@ -36,11 +41,25 @@ def _venv_python() -> Path:
     return VENV / "bin" / "python"
 
 
+def _check_only(argv: list[str]) -> int:
+    py = _venv_python()
+    if not (VENV / "pyvenv.cfg").is_file() or not py.is_file():
+        print(f"NEED  {VENV} missing — run `python install.py` (without --check) to create it. Nothing changed.")
+        return 1
+    if "--fix" in argv:
+        print("--check: --fix ignored. Nothing installed.")
+    sys.stdout.flush()
+    return subprocess.call([str(py), "-m", "master_agent", "setup"])
+
+
 def main() -> int:
     print("VIDEO BUDDY installer")
     if sys.version_info[:2] < MIN_PY:
         _die(f"Python {MIN_PY[0]}.{MIN_PY[1]}+ required (found {sys.version.split()[0]})")
     os.chdir(ROOT)
+    argv = sys.argv[1:]
+    if "--check" in argv and "--automatic-install" not in argv:
+        return _check_only(argv)
     py = _venv_python()
     if not (VENV / "pyvenv.cfg").is_file():
         print(f"creating {VENV}")
@@ -55,7 +74,6 @@ def main() -> int:
     code = subprocess.call([str(py), "-m", "pip", "install", "-r", str(REQ)])
     if code != 0:
         _die("pip install failed")
-    argv = sys.argv[1:]
     if "--automatic-install" in argv:
         forward = [a for a in argv if a in AUTOMATIC_INSTALL_FLAGS]
         if "--gpu" in argv:
@@ -63,10 +81,7 @@ def main() -> int:
             if i + 1 < len(argv):
                 forward += ["--gpu", argv[i + 1]]
         return subprocess.call([str(py), "-m", "master_agent", "automatic-install", *forward])
-    extra = [a for a in argv if a in ("--fix", "--check")]
-    if "--check" not in extra:
-        extra = ["--fix"]
-    return subprocess.call([str(py), "-m", "master_agent", "setup", *extra])
+    return subprocess.call([str(py), "-m", "master_agent", "setup", "--fix"])
 
 
 if __name__ == "__main__":

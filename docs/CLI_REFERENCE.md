@@ -9,7 +9,7 @@ All commands are `python -m master_agent …` from `video_buddy/`. `python -m ma
 | `automatic-install` | Automatic install: pre-flight, then ffmpeg, comfy-cli, ComfyUI in its own folder, LTX 2.3 nodes, Triton + SageAttention in the Comfy venv, LTX 2.3 weights, llama.cpp (built from the pinned `LLAMACPP_REF`, official prebuilt as fallback; optional), LLM models (skipped with a note when no public GGUF source is defined). Never installs or calls Ollama. Plan only until `--yes`. `--preflight-only`, `--dry-run`, `--gpu auto\|nvidia\|amd\|m-series\|cpu`, `--skip-weights`, `--skip-sage`, `--skip-llm`. Also `python install.py --automatic-install …`. See [Getting started](GETTING_STARTED.md#automatic-install) |
 | `curriculum` | L0→L5 card. `--json` |
 | `about` | Studio card. Also `GET /api/about` |
-| `doctor` / `setup` | Deps + weight scan. See [Weights](WEIGHTS.md#consent) |
+| `doctor` / `setup` | Deps + weight scan. `--fix` installs deps, skips LLM GGUFs with no public source, and never pulls Ollama. `python install.py` runs `setup --fix`; `python install.py --check` runs `setup` (report only, needs an existing `.venv`). See [Weights](WEIGHTS.md#consent) |
 | `inventory` | Discovered files and roles. `--json` |
 | `workflows` | Default catalog. `--vram` prints the pack table. `--json` |
 | `health` | Comfy `:8188` and GPU stats |

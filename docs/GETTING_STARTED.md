@@ -76,7 +76,9 @@ The LLM models are GGUF files llama-server serves from `MODELS_DIR`: `LLAMACPP_M
 
 ## Install
 
-`install.py` without `--automatic-install` is the lighter install. It creates `.venv`, installs pip deps, Playwright Chromium, copies `.env`, and tries ffmpeg plus the Ollama models `qwen3-vl-heretic` and `nomic-embed-text`. It does not install ComfyUI or download video weights.
+`install.py` without `--automatic-install` is the lighter install. It creates `.venv`, installs pip deps, Playwright Chromium, copies `.env`, and tries ffmpeg. It does not install ComfyUI or download video weights. It handles the LLM models the same way automatic install does: each one not already in `MODELS_DIR` is skipped with "Skipped qwen3-vl-heretic: no public GGUF source is defined; continuing." and the install carries on. It never installs Ollama or runs `ollama pull`.
+
+`python install.py --check` only reports: it runs `setup` (the doctor) with the existing `.venv` and creates, installs, and downloads nothing. With no `.venv` yet it says so and exits 1.
 
 | OS | Command |
 |---|---|
@@ -91,7 +93,7 @@ python -m master_agent workflows
 python -m master_agent health
 ```
 
-`setup` is `doctor`. `setup --fix` installs missing deps (ffmpeg via winget, brew, or apt-get when that tool exists). Ollama pulls only models missing from `ollama list`, and only after `y` or `--yes`. Ollama itself is installed from https://ollama.com/download.
+`setup` is `doctor`. `setup --fix` installs missing deps (ffmpeg via winget, brew, or apt-get when that tool exists) and skips LLM GGUFs with no public source, as above. It never pulls Ollama models. Doctor lists them on an informational `llm-models` row that never fails the check. If you run Ollama yourself, install it from https://ollama.com/download and pull your own models; Buddy does not.
 
 Local LLM order for `LLM_PROVIDER=auto` (the default when unset): llama.cpp, then Ollama. `auto` never calls a cloud model; Grok is opt-in with `LLM_PROVIDER=grok`. llama.cpp is preferred. Buddy starts `llama-server` against `MODELS_DIR` when `LLAMACPP_BIN` or `llama-server` is available, and stops it on shutdown. If that binary is missing, Buddy warns and uses Ollama. Pin `LLM_PROVIDER=llamacpp` or `LLM_PROVIDER=ollama` to force one backend. See [Architecture](ARCHITECTURE.md#local-model).
 

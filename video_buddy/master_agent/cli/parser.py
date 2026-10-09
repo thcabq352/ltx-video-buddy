@@ -80,15 +80,15 @@ def main(argv: list[str] | None = None) -> int:
         aliases=["doctor"],
         help="check local deps + 16GB pack policy + LTX 2.5 / H3 weights (scan first; --fix-models after you agree)",
     )
-    p.add_argument("--fix", action="store_true", help="create venv, pip install, Playwright, .env, ffmpeg; Ollama pulls only for models missing from `ollama list` and only with --yes or y/n")
+    p.add_argument("--fix", action="store_true", help="create venv, pip install, Playwright, .env, ffmpeg; local LLM GGUFs with no public source are skipped (never pulls Ollama)")
     p.add_argument(
         "--fix-models",
         action="store_true",
         help="after the inventory, download confirmed-missing LTX 2.5 weights (explicit consent)",
     )
-    p.add_argument("--yes", action="store_true", help="consent for Ollama pulls (--fix) and for --download")
+    p.add_argument("--yes", action="store_true", help="consent for --download / --fix-models weight fetches")
     fetch = p.add_mutually_exclusive_group()
-    fetch.add_argument("--scan-only", action="store_true", help="inventory and report only; never fetch weights or pull Ollama")
+    fetch.add_argument("--scan-only", action="store_true", help="inventory and report only; never install or fetch weights")
     fetch.add_argument("--use-existing", action="store_true", help="use weights already on disk; do not download")
     fetch.add_argument("--download", action="store_true", help="fetch confirmed-missing weights after --yes or a y/n prompt")
     p.set_defaults(func=cmd_setup)
