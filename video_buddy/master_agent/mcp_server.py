@@ -103,13 +103,23 @@ def run_stdio() -> None:
     import anyio
     from mcp.server.stdio import stdio_server
 
+    protocol_in = io.TextIOWrapper(
+        os.fdopen(os.dup(sys.stdin.fileno()), "rb"), encoding="utf-8", errors="replace"
+    )
     protocol_out = io.TextIOWrapper(os.fdopen(os.dup(sys.stdout.fileno()), "wb"), encoding="utf-8")
     sys.stdout.flush()
     os.dup2(sys.stderr.fileno(), sys.stdout.fileno())
     sys.stdout = sys.stderr
+    # Child processes (ffmpeg, trainers, Comfy) must not read protocol bytes.
+    devnull = os.open(os.devnull, os.O_RDONLY)
+    os.dup2(devnull, sys.stdin.fileno())
+    os.close(devnull)
 
     async def _serve() -> None:
-        async with stdio_server(stdout=anyio.wrap_file(protocol_out)) as (read_stream, write_stream):
+        async with stdio_server(
+            stdin=anyio.wrap_file(protocol_in),
+            stdout=anyio.wrap_file(protocol_out),
+        ) as (read_stream, write_stream):
             server = mcp._mcp_server
             await server.run(read_stream, write_stream, server.create_initialization_options())
 

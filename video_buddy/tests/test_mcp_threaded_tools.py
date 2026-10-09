@@ -76,6 +76,7 @@ def test_stdout_prints_do_not_corrupt_stdio(tmp_path):
             def noisy() -> str:
                 print("junk from a worker thread")
                 subprocess.run([sys.executable, "-c", "print('junk from a child process')"])
+                subprocess.run([sys.executable, "-c", "import sys; print('child stdin=' + repr(sys.stdin.read()))"])
                 return "ok"
 
             m.run_stdio()
@@ -100,3 +101,4 @@ def test_stdout_prints_do_not_corrupt_stdio(tmp_path):
     err = (tmp_path / "stderr.txt").read_text()
     assert "junk from a worker thread" in err
     assert "junk from a child process" in err
+    assert "child stdin=''" in err
