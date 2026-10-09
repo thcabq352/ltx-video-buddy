@@ -17,38 +17,6 @@ jobs:
           sudo apt-get update
           sudo apt-get install -y ffmpeg
           pip install -r video_buddy/requirements.txt
-          # Catalog/loader/frame law (existing) plus the suites README and
-          # AUDIT already treat as the no-GPU bar: director, upscale,
-          # accelerator bypass, music video, clip provenance.
-          PYTHONPATH=video_buddy pytest -q \
-            video_buddy/tests/test_ltx25_catalog.py \
-            video_buddy/tests/test_prompt_polarity.py \
-            video_buddy/tests/test_blaze_remake.py \
-            video_buddy/tests/test_brain_hands.py \
-            video_buddy/tests/test_loader_names.py \
-            video_buddy/tests/test_ltx_frames.py \
-            video_buddy/tests/test_director_allowlist.py \
-            video_buddy/tests/test_rainey1_preset.py \
-            video_buddy/tests/test_director_vision.py \
-            video_buddy/tests/test_upscale.py \
-            video_buddy/tests/test_accelerator_bypass.py \
-            video_buddy/tests/test_music_video.py \
-            video_buddy/tests/test_clip_provenance.py \
-            video_buddy/tests/test_judge_revise_fixes.py \
-            video_buddy/tests/test_rainey1_rubric.py \
-            video_buddy/tests/test_h3_voice_sample.py \
-            video_buddy/tests/test_h3_catalog.py \
-            video_buddy/tests/test_cli_routing.py \
-            video_buddy/tests/test_lipdub_segments.py \
-            video_buddy/tests/test_lipdub_likeness.py \
-            video_buddy/tests/test_a2a.py \
-            video_buddy/tests/test_knowledge_ingest.py \
-            video_buddy/tests/test_seedance_partner_pointers.py \
-            video_buddy/tests/test_heartmula.py \
-            video_buddy/tests/test_sulphur_workflows.py \
-            video_buddy/tests/test_managed_comfy_tower.py \
-            video_buddy/tests/test_model_paths.py \
-            video_buddy/tests/test_model_selector.py \
-            video_buddy/tests/test_model_selector_web.py \
-            video_buddy/tests/test_ingest_learn.py \
-            video_buddy/tests/test_tiny_vae_tiled_decode.py
+          # Whole suite. tests/conftest.py points STATE_DIR / CHROMA_DIR /
+          # OUTPUTS_DIR at a temp dir so runs never touch real state/.
+          PYTHONPATH=video_buddy pytest -q video_buddy/tests
