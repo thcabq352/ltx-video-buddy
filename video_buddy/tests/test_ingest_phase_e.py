@@ -292,3 +292,22 @@ def test_web_ui_json_refuses_when_convert_is_down(web):
     assert response.status_code == 400
     assert "start Comfy or supply API JSON" in response.json()["detail"]
     assert _FakeComfy.calls == 0
+
+
+def test_web_ingest_refuses_oversized_upload(web, monkeypatch):
+    import master_agent.web.app as app_mod
+
+    monkeypatch.setattr(app_mod, "_INGEST_MAX_BYTES", 64)
+    response = web.post(
+        "/api/comfy/ingest",
+        files={"file": ("big.json", b"{" + b" " * 200 + b"}", "application/json")},
+    )
+    assert response.status_code == 413
+    assert _FakeComfy.calls == 0
+
+
+def test_web_comfy_run_needs_confirm(web):
+    workflow = {"1": {"class_type": "SaveVideo", "inputs": {}}}
+    refused = web.post("/api/comfy/run", json={"workflow": workflow})
+    assert refused.status_code == 400
+    assert "confirm" in refused.json()["detail"]

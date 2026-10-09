@@ -133,6 +133,7 @@ class ComfyPrepareRequest(BaseModel):
 class ComfyWorkflowBody(BaseModel):
     workflow: dict[str, Any]
     request: str = "comfy run"
+    confirm: bool = False
 
 
 class IngestActionBody(BaseModel):
@@ -640,7 +641,11 @@ def api_comfy_lint(req: ComfyWorkflowBody):
 
 @app.post("/api/comfy/run")
 def api_comfy_run(req: ComfyWorkflowBody):
+    """Queue a raw workflow on Comfy. Needs ``confirm: true`` (the Run click)."""
     from master_agent.comfy.cli_run import unwrap_workflow
+
+    if not req.confirm:
+        raise HTTPException(400, "confirm this queues on Comfy")
 
     try:
         workflow = unwrap_workflow(req.workflow)
@@ -684,6 +689,9 @@ def _ingest_action_kwargs(req: IngestActionBody) -> dict[str, Any]:
     }
 
 
+_INGEST_MAX_BYTES = 32 * 1024 * 1024
+
+
 @app.post("/api/comfy/ingest")
 async def api_comfy_ingest(file: UploadFile = File(...)):
     """Learn a dropped JSON file. Does not queue. UI JSON needs live Comfy."""
@@ -693,9 +701,13 @@ async def api_comfy_ingest(file: UploadFile = File(...)):
     from master_agent.comfy.ingest.normalize import IngestError
     from master_agent.comfy.ingest.store import ingest_file
 
-    raw = await file.read()
+    from starlette.concurrency import run_in_threadpool
+
+    raw = await file.read(_INGEST_MAX_BYTES + 1)
     if not raw:
         raise HTTPException(400, "empty workflow file")
+    if len(raw) > _INGEST_MAX_BYTES:
+        raise HTTPException(413, f"workflow too large (max {_INGEST_MAX_BYTES // (1024 * 1024)} MB)")
     stem = Path(file.filename or "workflow").stem or "workflow"
     tmp = tempfile.NamedTemporaryFile(prefix="ingest-", suffix=".json", delete=False)
     path = Path(tmp.name)
@@ -703,7 +715,7 @@ async def api_comfy_ingest(file: UploadFile = File(...)):
         tmp.write(raw)
         tmp.close()
         try:
-            result = ingest_file(path, slug=stem, client=ComfyClient())
+            result = await run_in_threadpool(ingest_file, path, slug=stem, client=ComfyClient())
         except IngestError as exc:
             raise HTTPException(400, str(exc)) from exc
         except Exception as exc:

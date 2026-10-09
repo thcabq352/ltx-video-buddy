@@ -1732,7 +1732,7 @@ $("wf-run")?.addEventListener("click", async () => {
   $("wf-status").textContent = " queueing…";
   $("wf-run").disabled = true;
   try {
-    const job = await api("/api/comfy/run", { body: { workflow: wfParse(), request: "comfy run" } });
+    const job = await api("/api/comfy/run", { body: { workflow: wfParse(), request: "comfy run", confirm: true } });
     $("wf-status").textContent = " queued " + job.id;
     toast("queued — watch Jobs");
     pollJob(job.id, false);
