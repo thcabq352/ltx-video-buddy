@@ -545,9 +545,9 @@ mic permission.
 
 **MCP ≠ skills.** Hermes only reliably uses Buddy when the skill folder is
 installed. `python install_hermes_skill.py` copies
-[`skills/video-buddy/`](skills/video-buddy/SKILL.md) to
+[`skills/video-buddy/`](../../../video_buddy/skills/video-buddy/SKILL.md) to
 `~/.hermes/skills/video-buddy/` **and** seats profile `ltx`.
-See the repo-root [Hermes install](../README.md#hermes-install) section.
+See the [Hermes section of the CLI reference](../../CLI_REFERENCE.md#hermes).
 Primary path: `hermes -p ltx` or the `:8189` facade. A2A (`POST /a2a`) is fallback.
 
 `master_agent/mcp_server.py` exposes the agent to Hermes over stdio MCP
@@ -577,7 +577,7 @@ local models (19-27GB) and can take several minutes — allow long timeouts.
 ## Status (2026-09-18)
 
 - **MiniMax H3 public showcase.** Photoreal BMX still + originating
-  provenance are in [`docs/demo/`](../docs/demo/) (linked from the
+  provenance are in [`docs/demo/`](../../demo/) (linked from the
   repo-root README). A playable 720p MP4 is **not** in git until a
   complete attach (or other untruncated copy) lands.
 - **Music-video Remotion mode.** `python -m master_agent mv render --audio …`

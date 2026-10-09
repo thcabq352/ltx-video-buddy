@@ -28,9 +28,9 @@ not need Tailscale or a private share.
 <p align="center"><em>Golden-hour BMX berm → backflip → dusty stick. ~8s. MiniMax H3 via Video Buddy / Comfy.</em></p>
 
 Play in the GitHub blob viewer:
-[`docs/demo/H3-SHOWCASE-BMX-8s-720p.mp4`](docs/demo/H3-SHOWCASE-BMX-8s-720p.mp4)
+[`docs/demo/H3-SHOWCASE-BMX-8s-720p.mp4`](../../docs/demo/H3-SHOWCASE-BMX-8s-720p.mp4)
 (8.0 s, 1280×720, 4 197 204 bytes). Poster + provenance live at
-[`docs/demo/`](docs/demo/). [`docs/showcase/h3-bmx/`](docs/showcase/h3-bmx/)
+[`docs/demo/`](../../docs/demo/). [`docs/showcase/h3-bmx/`](../../docs/showcase/h3-bmx/)
 is a pointer to that folder (no second copy). The 1080p encode is omitted
 from git (~10 MB).
 
@@ -225,12 +225,12 @@ video_buddy/
 
 Each machine's ChromaDB stays local (`video_buddy/state/chroma/`,
 gitignored). Learnings the other machine should see live in
-[`knowledge/`](knowledge/). **Pull before a run. Commit after** you add
+[`knowledge/`](../../knowledge/). **Pull before a run. Commit after** you add
 an entry. No secrets, API keys, or local absolute paths. Studio startup,
 the Hermes MCP server, and `python -m master_agent kb ingest` embed
 recorded entries into the local `knowledge` Chroma collection. Schema
 docs and `EXAMPLE` files are skipped. See
-[`knowledge/README.md`](knowledge/README.md).
+[`knowledge/README.md`](../../knowledge/README.md).
 
 ## Documentation
 
@@ -238,17 +238,17 @@ docs and `EXAMPLE` files are skipped. See
 - [Doctor / download-models / catalog](video_buddy/docs/QUICKSTART.md) — inventory-first LTX 2.5 flow
 - [Managed Comfy / external mode](video_buddy/docs/MANAGED_COMFY.md) — Buddy-owned model paths; no writes into an attached install
 - [Required files](video_buddy/REQUIRED-FILES.md) — accepted local names + Hub catalog
-- [MiniMax H3 demo](docs/demo/) — photoreal BMX still + run sidecar
-- [MiniMax H3 showcase](docs/showcase/h3-bmx/) — pointer to `docs/demo/`
-- [LTX 2.5 workflows](video_buddy/workflows/ltx-2.5/README.md) — ids and invoke examples
-- [MiniMax H3 workflows](video_buddy/workflows/minimax-h3/README.md) — fl2va / ref2va ids
+- [MiniMax H3 demo](../../docs/demo/) — photoreal BMX still + run sidecar
+- [MiniMax H3 showcase](../../docs/showcase/h3-bmx/) — pointer to `docs/demo/`
+- [LTX 2.5 workflows](../../video_buddy/workflows/ltx-2.5/README.md) — ids and invoke examples
+- [MiniMax H3 workflows](../../video_buddy/workflows/minimax-h3/README.md) — fl2va / ref2va ids
 - [Self-improvement loop](video_buddy/docs/SELF_IMPROVEMENT_LOOP.md) — live judge → revise → re-run map
 - [ClipProvenance](video_buddy/docs/CLIP_PROVENANCE.md) — sidecar + run-row prompt/seed/judge contract
 - [Music-video mode](video_buddy/docs/MUSIC_VIDEO.md) — Comfy/LTX burns → Remotion MTV stitch (not Grok)
 - [Capability audit](video_buddy/AUDIT.md) — wired / unwired / retired matrix
-- [Movie Builder guide](video_buddy/workflows/260507_VIDEO-BUDDY_MOVIE-BUILDER_GUIDE.md) — LTX 2.3 shot-by-shot film
+- [Movie Builder guide](../../video_buddy/workflows/260507_VIDEO-BUDDY_MOVIE-BUILDER_GUIDE.md) — LTX 2.3 shot-by-shot film
 - [Agent notes](video_buddy/AGENTS.md) — Rainey fleet stop-lines
-- [Hermes skill](video_buddy/skills/video-buddy/SKILL.md) — install into `~/.hermes/skills/video-buddy/`
+- [Hermes skill](../../video_buddy/skills/video-buddy/SKILL.md) — install into `~/.hermes/skills/video-buddy/`
 - White paper & investor materials — not published in this repo; available on request
 
 ## Hermes install
