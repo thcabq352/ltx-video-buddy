@@ -180,3 +180,16 @@ def test_cli_promote_uses_checkout_and_prints_diff(state_dir, workflows, monkeyp
     loaded = yaml.safe_load((workflows / "manifests.yaml").read_text(encoding="utf-8"))
     assert loaded["phase-d-cli"]["draft"] is True
     assert loaded["base"]["vram_class"] == "safe"
+
+
+def test_promote_refuses_to_overwrite_existing_workflow_file(state_dir, workflows, monkeypatch):
+    _forbid_subprocess(monkeypatch)
+    ingest_file(FIXTURE, slug="phase-d-demo")
+    existing = workflows / "hand-made.json"
+    existing.write_text('{"keep": true}\n', encoding="utf-8")
+    with pytest.raises(IngestError, match="already exists"):
+        promote_slug("phase-d-demo", variant_name="hand-made", workflows_dir=workflows)
+    assert existing.read_text(encoding="utf-8") == '{"keep": true}\n'
+    assert "hand-made" not in (workflows / "manifests.yaml").read_text(encoding="utf-8")
+    promote_slug("phase-d-demo", variant_name="hand-made", workflows_dir=workflows, force=True)
+    assert existing.read_text(encoding="utf-8") != '{"keep": true}\n'

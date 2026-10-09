@@ -188,6 +188,11 @@ def promote_slug(
         )
     if "base" in existing and variant == "base":
         raise IngestError("refuse to promote over the catalog default 'base'.")
+    if workflow_path.exists() and not force:
+        raise IngestError(
+            f"workflows/{filename} already exists. Promote does not overwrite a "
+            "workflow file; pick another --variant-name or pass --force."
+        )
     before_workflow = workflow_path.read_text(encoding="utf-8") if workflow_path.is_file() else ""
     workflow_text = json.dumps(bundle["workflow"], indent=2) + "\n"
     entry = render_manifest_entry(learned, variant=variant, filename=filename)

@@ -628,7 +628,7 @@ def main(argv: list[str] | None = None) -> int:
     p.add_argument(
         "--force",
         action="store_true",
-        help="promote: write the draft even when readiness lists missing nodes or models",
+        help="promote: write the draft even when readiness lists missing nodes or models, or overwrite an existing workflows/<variant>.json",
     )
     p.add_argument(
         "--llm-assist",
