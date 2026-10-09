@@ -65,10 +65,10 @@ def studio_about() -> dict[str, Any]:
         },
         "personas": ["ara", "exec", "zod"],
         "souls": ["studio", "play"],
-        "hermes": {
-            "profile": "ltx",
+        "gateway": {
+            "name": "LTX bot gateway",
             "skill": "video-buddy",
-            "mcp_id": "master-agent",
+            "entry": "python -m master_agent agent <tool> --args JSON",
         },
     }
 
@@ -82,7 +82,7 @@ def format_about(card: dict[str, Any] | None = None) -> str:
     drive = data.get("drive") or {}
     comfy = data.get("comfy") or {}
     studio = data.get("studio") or {}
-    hermes = data.get("hermes") or {}
+    gateway = data.get("gateway") or {}
     lines = [
         f"{data.get('name', 'VIDEO BUDDY')}  v{data.get('version', '')}",
         data.get("tagline") or "",
@@ -92,7 +92,7 @@ def format_about(card: dict[str, Any] | None = None) -> str:
         f"Persona  {persona.get('slug')} ({persona.get('name')})   soul {soul.get('slug')} ({soul.get('name')})",
         f"Local    llamacpp={models.get('llamacpp')}  ollama={models.get('ollama')}   provider {models.get('llm_provider')}",
         f"Package  {data.get('package')}   MCP {data.get('mcp_id')}",
-        f"Hermes   profile {hermes.get('profile')}   skill {hermes.get('skill')}",
+        f"Gateway  {gateway.get('name')}   skill {gateway.get('skill')}   {gateway.get('entry')}",
         "",
         "Drive a graph:",
         f"  {drive.get('health')}",

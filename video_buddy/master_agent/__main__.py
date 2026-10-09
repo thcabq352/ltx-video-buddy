@@ -35,7 +35,7 @@ Commands:
   diagnose            9-frame hull fire (sec/step); does not spend shift budget
   rainey1-batch       Rainey1 seeds → junk filter → judge → top-K (.buddy.json)
   budget              status | reset-shift  (VRAM-min shift ledger)
-  hermes              status | register  (profile ltx + discovery)
+  agent               <tool> --args JSON  (gateway entry; `agent list`)
   capabilities        Gap matrix: tower-ish Comfy nodes vs Buddy wiring
   curriculum          Print LESSON_BUDDY_WORKS_HERE (L0→L5) and Part 2 gate
   about               Print the studio identity card
@@ -76,7 +76,6 @@ from master_agent.cli.studio import (
     cmd_about,
     cmd_budget,
     cmd_curriculum,
-    cmd_hermes,
     cmd_kb,
     cmd_ui,
 )
@@ -100,7 +99,6 @@ __all__ = [
     "cmd_fractal",
     "cmd_health",
     "cmd_heartmula",
-    "cmd_hermes",
     "cmd_inventory",
     "cmd_kb",
     "cmd_lora",

@@ -8,7 +8,7 @@ from pathlib import Path
 
 from master_agent.config import LIPDUB_ANCHOR, LIPDUB_REFRAME, LIPDUB_SILENCE_MODE, ensure_dirs
 from master_agent.cli.common import _DurationSet, _DimSet, _add_selector_flags
-from master_agent.cli.studio import cmd_curriculum, cmd_about, cmd_kb, cmd_ui, cmd_budget, cmd_hermes
+from master_agent.cli.studio import cmd_curriculum, cmd_about, cmd_kb, cmd_ui, cmd_budget
 from master_agent.cli.doctor import cmd_setup, cmd_inventory, cmd_health, cmd_scan_models
 from master_agent.cli.comfy import cmd_fetch_object_info, cmd_capabilities, cmd_validate, cmd_power_tune, cmd_diagnose, cmd_comfy
 from master_agent.cli.run import cmd_run, cmd_brief
@@ -891,13 +891,6 @@ def main(argv: list[str] | None = None) -> int:
         help="JSON object of keyword arguments, or @path/to/args.json",
     )
     p.set_defaults(func=cmd_agent)
-
-    p = sub.add_parser("hermes", help="Hermes profile ltx: status | register")
-    p.add_argument("hermes_command", choices=["status", "register"])
-    p.add_argument("--hermes-home", help="override HERMES_HOME / ~/.hermes")
-    p.add_argument("--force", action="store_true", help="overwrite custom profiles/ltx/SOUL.md")
-    p.add_argument("--json", action="store_true", help="machine-readable status")
-    p.set_defaults(func=cmd_hermes)
 
     p = sub.add_parser(
         "capabilities",

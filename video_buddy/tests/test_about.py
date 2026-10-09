@@ -8,9 +8,9 @@ def test_studio_about_shape():
     assert card["name"] == "VIDEO BUDDY"
     assert card["package"] == "master_agent"
     assert card["mcp_id"] == "master-agent"
-    assert card["hermes"]["profile"] == "ltx"
-    assert "a2a_fallback" not in card["hermes"]
-    assert "facade" not in card["hermes"]
+    assert "hermes" not in card
+    assert card["gateway"]["name"] == "LTX bot gateway"
+    assert card["gateway"]["entry"].startswith("python -m master_agent agent")
     assert card["drive"]["first"] == "cli"
     assert "llamacpp" in card["models"]
     assert "ollama" in card["models"]

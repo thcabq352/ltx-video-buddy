@@ -160,7 +160,7 @@ def test_cli_commands_documented():
         "comfy",
         "diagnose",
         "budget",
-        "hermes",
+        "agent",
         "capabilities",
     }
     assert expected <= commands
@@ -188,7 +188,7 @@ def test_install_hermes_skill_uses_hermes_home(tmp_path: Path, monkeypatch: pyte
     assert (out / "SKILL.md").is_file()
 
 
-def test_install_hermes_skill_seats_ltx_profile(tmp_path: Path):
+def test_install_hermes_skill_writes_skill_only(tmp_path: Path):
     from install_hermes_skill import main
 
     home = tmp_path / "hermes-home"
@@ -196,5 +196,4 @@ def test_install_hermes_skill_seats_ltx_profile(tmp_path: Path):
     assert rc == 0
     assert (home / "skills" / "video-buddy" / "SKILL.md").is_file()
     assert (home / "skills" / "video-buddy" / "PROFILE.md").is_file()
-    assert (home / "profiles" / "ltx" / "SOUL.md").is_file()
-    assert not (home / "profiles" / "ltx" / ".env").exists()
+    assert not (home / "profiles").exists()
