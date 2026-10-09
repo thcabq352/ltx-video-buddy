@@ -4,9 +4,13 @@ from __future__ import annotations
 
 import hashlib
 import json
+import shutil
+import sys
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
+
+from master_agent.fileutil import atomic_write_text, file_lock
 
 TUNABLE_KEYS = (
     "judge_strictness",
@@ -102,17 +106,36 @@ class VersionedConfig:
             return {}
         try:
             data = json.loads(self.path.read_text(encoding="utf-8"))
-        except (OSError, json.JSONDecodeError):
+        except (OSError, ValueError):
+            self._keep_unreadable()
             return {}
         if isinstance(data, dict) and isinstance(data.get("values"), dict):
             return data["values"]
         return data if isinstance(data, dict) else {}
 
-    def persist(self) -> dict[str, Any]:
+    def _keep_unreadable(self) -> None:
+        backup = None
+        try:
+            stamp = datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%S")
+            backup = self.path.with_name(f"{self.path.name}.corrupt-{stamp}")
+            shutil.copy2(self.path, backup)
+        except OSError:
+            backup = None
+        print(f"[config] {self.path} is unreadable; kept a copy at {backup}", file=sys.stderr)
+
+    def _reload(self) -> None:
+        loaded = self._read_snapshot()
+        if loaded:
+            self.values.update({k: loaded[k] for k in (*TUNABLE_KEYS, *SNAPSHOT_ONLY) if k in loaded})
+
+    def _write(self) -> dict[str, Any]:
         snap = self.snapshot()
-        self.path.parent.mkdir(parents=True, exist_ok=True)
-        self.path.write_text(json.dumps(snap, indent=1) + "\n", encoding="utf-8")
+        atomic_write_text(self.path, json.dumps(snap, indent=1) + "\n")
         return snap
+
+    def persist(self) -> dict[str, Any]:
+        with file_lock(self.path):
+            return self._write()
 
     def snapshot(self) -> dict[str, Any]:
         values = dict(self.values)
@@ -147,32 +170,33 @@ class VersionedConfig:
         sync_budget: bool = False,
     ) -> list[dict[str, Any]]:
         changes: list[dict[str, Any]] = []
-        for key, raw in updates.items():
-            if key not in TUNABLE_KEYS:
-                continue
-            new = _coerce(key, raw)
-            old = self.values.get(key)
-            if old == new:
-                continue
-            entry = {
-                "ts": _now(),
-                "key": key,
-                "old": old,
-                "new": new,
-                "session": session,
-            }
-            self.values[key] = new
-            changes.append(entry)
-        if not changes:
+        with file_lock(self.path):
+            self._reload()
+            for key, raw in updates.items():
+                if key not in TUNABLE_KEYS:
+                    continue
+                new = _coerce(key, raw)
+                old = self.values.get(key)
+                if old == new:
+                    continue
+                entry = {
+                    "ts": _now(),
+                    "key": key,
+                    "old": old,
+                    "new": new,
+                    "session": session,
+                }
+                self.values[key] = new
+                changes.append(entry)
+            if changes:
+                self.history_path.parent.mkdir(parents=True, exist_ok=True)
+                with self.history_path.open("a", encoding="utf-8") as fh:
+                    for entry in changes:
+                        fh.write(json.dumps(entry, default=str) + "\n")
             apply_live(self.values)
-            self.persist()
+            self._write()
+        if not changes:
             return []
-        self.history_path.parent.mkdir(parents=True, exist_ok=True)
-        with self.history_path.open("a", encoding="utf-8") as fh:
-            for entry in changes:
-                fh.write(json.dumps(entry, default=str) + "\n")
-        apply_live(self.values)
-        self.persist()
         if sync_budget and any(c["key"] == "render_budget_cap_vram_min" for c in changes):
             try:
                 from master_agent.control.budget import get_project_budget
@@ -183,11 +207,13 @@ class VersionedConfig:
         return changes
 
     def sync_used(self, used: float, cap: float | None = None) -> None:
-        self.values["render_budget_used_vram_min"] = round(float(used), 4)
-        if cap is not None:
-            self.values["render_budget_cap_vram_min"] = float(cap)
-        apply_live(self.values)
-        self.persist()
+        with file_lock(self.path):
+            self._reload()
+            self.values["render_budget_used_vram_min"] = round(float(used), 4)
+            if cap is not None:
+                self.values["render_budget_cap_vram_min"] = float(cap)
+            apply_live(self.values)
+            self._write()
 
 
 _STORE: VersionedConfig | None = None

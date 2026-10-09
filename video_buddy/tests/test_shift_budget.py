@@ -20,6 +20,7 @@ def test_reset_shift_archives_ledger_and_zeros_used(tmp_path):
     budget.paused = True
     first_id = budget.shift_id
     budget.log.append({"event": "admit", "scene_id": "keep-me"})
+    budget.persist()
     prior_len = len(budget.log)
 
     row = budget.reset_shift()

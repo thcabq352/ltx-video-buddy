@@ -64,6 +64,7 @@ def test_single_clip_hold_resumes_after_reset_used(budget_box):
 
     budget_box.used = 80
     budget_box.paused = True
+    budget_box.persist()
     held = run_pipeline(
         "rain on a window",
         variant="base",
