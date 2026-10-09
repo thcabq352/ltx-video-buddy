@@ -162,3 +162,19 @@ def test_job_manager_resume_requeues_same_job(monkeypatch):
     assert job.error is None
     assert job.params["_resume"]["run_id"] == "pipe1"
     assert started and started[0][0] is job
+
+
+def test_resume_works_without_the_web_package(budget_box, monkeypatch):
+    import builtins
+
+    from master_agent.orchestrator import pipeline as pipeline_mod
+
+    real_import = builtins.__import__
+
+    def no_web(name, *args, **kwargs):
+        if name.startswith("master_agent.web"):
+            raise ImportError("web package removed")
+        return real_import(name, *args, **kwargs)
+
+    monkeypatch.setattr(builtins, "__import__", no_web)
+    assert pipeline_mod.resume_after_budget_clear(background=False) == []

@@ -1080,9 +1080,14 @@ def resume_after_budget_clear(
     """
     if background is None:
         background = True
-    from master_agent.web.jobs import MANAGER
-
-    live = MANAGER.resume_paused()
+    # The studio job manager is optional: a CLI-only install (or the single
+    # gateway after the web package is retired) resumes disk records only.
+    try:
+        from master_agent.web.jobs import MANAGER
+    except ImportError:
+        live = []
+    else:
+        live = MANAGER.resume_paused()
     skip = {str(run_id) for run_id in live}
     pending_disk = [
         run_id
