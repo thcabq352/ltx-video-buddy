@@ -932,7 +932,9 @@ def main(argv: list[str] | None = None) -> int:
     if args.command != "automatic-install":
         from master_agent.control.versioned_config import announce_config
 
-        print(announce_config(), flush=True)
+        # `agent` reserves stdout for its JSON result.
+        banner_stream = sys.stderr if args.command == "agent" else sys.stdout
+        print(announce_config(), file=banner_stream, flush=True)
     return args.func(args)
 
 
