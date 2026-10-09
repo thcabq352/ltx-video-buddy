@@ -49,6 +49,7 @@ python -m master_agent power-tune "neon rain" --variant base --json
 | `LLAMACPP_BIN` | `llama-server` on `PATH`, then Buddy's own build in `LLAMACPP_ROOT` |
 | `LLAMACPP_ROOT` | `video_buddy/llama.cpp` (automatic install builds or unpacks here) |
 | `LLAMACPP_REF` | `b11389` (pinned ggml-org/llama.cpp release tag) |
+| `LLAMACPP_AUTOSTART` | `1`. `0` (or `false`/`no`/`off`) never starts `llama-server`; Buddy only uses one already listening on `LLAMACPP_URL` |
 | `OLLAMA_URL` | `http://127.0.0.1:11434` |
 | `OLLAMA_MODEL` | `qwen3-vl-heretic` |
 
