@@ -155,6 +155,7 @@ def test_lipsync_routes_prepare_queue_inputs_and_not_inoutpaint(state_dir, monke
         "3": {"class_type": "CLIPTextEncode", "inputs": {"text": ["2", 0]}},
         "4": {"class_type": "LoadVideo", "inputs": {"file": "talk.mp4"}},
         "5": {"class_type": "SaveVideo", "inputs": {"filename_prefix": "lips"}},
+        "6": {"class_type": "LTXVAudioVAEEncode", "inputs": {}},
     }
     learned = ingest_graph(graph, slug="lips", source="memory")["learned"]
     assert learned["family"] == "lipsync"
