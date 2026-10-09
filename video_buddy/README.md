@@ -30,6 +30,9 @@ Windows: `install.bat`. macOS / Linux: `./install.sh`. Studio UI (optional): `py
 | Managed Comfy and attach | [Comfy](../docs/COMFY.md) |
 | Judge | [Judge](../docs/JUDGE.md) |
 | Catalog, lipdub, HeartMuLa, Pack C | [Features](../docs/FEATURES.md) |
+| One-off Comfy graphs | [Workflow ingest](../docs/WORKFLOW_INGEST.md) |
+| Rainey1 recipes and batch | [Rainey1](../docs/RAINEY1.md) |
+| Release history | [Changelog](../CHANGELOG.md) |
 | Stop-lines | [Agents](../docs/AGENTS.md) |
 | Wired / retired | [Audit](../docs/AUDIT.md) |
 

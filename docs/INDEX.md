@@ -13,10 +13,12 @@ Operator manual. One fact lives in one file. Other pages link here instead of re
 | [Provenance](PROVENANCE.md) | `buddy.clip.provenance/v1` sidecars |
 | [Features](FEATURES.md) | Catalog, lipdub, HeartMuLa, music video, Pack C |
 | [Workflow ingest](WORKFLOW_INGEST.md) | Ingest, learn, dry-run, promote, and run a one-off Comfy graph |
+| [Rainey1](RAINEY1.md) | Recipes, opt-in judge rubric, batch top-cut |
 | [Agents](AGENTS.md) | Stop-lines and field lessons |
 | [Audit](AUDIT.md) | Wired / unwired / retired |
+| [Releasing](RELEASING.md) | Commit, squash-merge, and release-notes conventions |
 
-Package entry: [`video_buddy/README.md`](../video_buddy/README.md). Repo entry: [`README.md`](../README.md). How to change these pages: [`CONTRIBUTING.md`](../CONTRIBUTING.md).
+Package entry: [`video_buddy/README.md`](../video_buddy/README.md). Repo entry: [`README.md`](../README.md). Release history: [`CHANGELOG.md`](../CHANGELOG.md). How to change these pages: [`CONTRIBUTING.md`](../CONTRIBUTING.md).
 
 Still next to the code, not folded:
 

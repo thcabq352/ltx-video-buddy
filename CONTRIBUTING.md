@@ -12,8 +12,12 @@ Video Buddy docs have one home per fact.
 | Judge or the revise loop | [`docs/JUDGE.md`](docs/JUDGE.md) |
 | Sidecar schema | [`docs/PROVENANCE.md`](docs/PROVENANCE.md) |
 | A product feature | [`docs/FEATURES.md`](docs/FEATURES.md) |
+| Workflow ingest | [`docs/WORKFLOW_INGEST.md`](docs/WORKFLOW_INGEST.md) |
+| Rainey1 recipes, rubric, batch | [`docs/RAINEY1.md`](docs/RAINEY1.md) |
 | A stop-line | [`docs/AGENTS.md`](docs/AGENTS.md) |
 | Wired / retired | [`docs/AUDIT.md`](docs/AUDIT.md) |
+| Release notes | [`CHANGELOG.md`](CHANGELOG.md), following [`docs/RELEASING.md`](docs/RELEASING.md) |
+| Commit and PR messages | [`docs/RELEASING.md`](docs/RELEASING.md) |
 
 Index: [`docs/INDEX.md`](docs/INDEX.md).
 
