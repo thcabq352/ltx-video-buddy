@@ -7,14 +7,14 @@ in timeline order, and muxes the original wav.
 
 from __future__ import annotations
 
-import subprocess
 from pathlib import Path
 
+from master_agent.proc import run_media
 from master_agent.video_concat import find_ffmpeg
 
 
 def _run(cmd: list[str]) -> None:
-    proc = subprocess.run(cmd, capture_output=True, text=True)
+    proc = run_media(cmd, text=True)
     if proc.returncode != 0:
         err = (proc.stderr or proc.stdout or "")[-600:]
         raise RuntimeError(f"ffmpeg failed: {err}")
@@ -172,7 +172,7 @@ def video_size(path: Path) -> tuple[int, int]:
     if ff:
         probe = __import__("shutil").which("ffprobe")
         if probe:
-            proc = subprocess.run(
+            proc = run_media(
                 [
                     probe, "-v", "error",
                     "-select_streams", "v:0",
@@ -180,7 +180,6 @@ def video_size(path: Path) -> tuple[int, int]:
                     "-of", "csv=p=0:s=x",
                     str(path),
                 ],
-                capture_output=True,
                 text=True,
             )
             text = (proc.stdout or "").strip()

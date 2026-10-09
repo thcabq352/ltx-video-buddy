@@ -12,11 +12,12 @@ Everything is unit-testable on synthetic click tracks (no audio files needed).
 from __future__ import annotations
 
 import shutil
-import subprocess
 from dataclasses import dataclass, field
 from pathlib import Path
 
 import numpy as np
+
+from master_agent.proc import run_media
 
 SAMPLE_RATE = 22050
 FFT_SIZE = 1024
@@ -56,7 +57,7 @@ def decode_audio(path: str | Path, sr: int = SAMPLE_RATE) -> tuple[np.ndarray, i
         ff, "-v", "error", "-i", str(path),
         "-ac", "1", "-ar", str(sr), "-f", "f32le", "-",
     ]
-    proc = subprocess.run(cmd, capture_output=True)
+    proc = run_media(cmd)
     if proc.returncode != 0:
         err = proc.stderr.decode("utf-8", errors="replace")[-300:]
         raise RuntimeError(f"ffmpeg audio decode failed: {err}")
@@ -76,7 +77,7 @@ def audio_duration(path: str | Path) -> float:
         "-of", "default=noprint_wrappers=1:nokey=1", str(path),
     ]
     try:
-        proc = subprocess.run(cmd, capture_output=True, text=True)
+        proc = run_media(cmd, text=True)
         return float(proc.stdout.strip())
     except (OSError, ValueError):
         return 0.0

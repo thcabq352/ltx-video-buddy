@@ -18,12 +18,13 @@ import json
 import math
 import shutil
 import struct
-import subprocess
 import tempfile
 import zlib
 from collections.abc import Callable
 from pathlib import Path
 from typing import Any
+
+from master_agent.proc import run_media
 
 VARIANT = "ltx23_inoutpaint"
 LTX25_VARIANT = "ltx25_inoutpaint"
@@ -355,7 +356,7 @@ def probe_video_size(path: Path) -> tuple[int, int]:
         str(path),
     ]
     try:
-        proc = subprocess.run(cmd, capture_output=True, text=True, check=False)
+        proc = run_media(cmd, text=True)
     except FileNotFoundError as exc:
         raise RuntimeError("ffprobe is not on PATH; cannot read the source video size") from exc
     if proc.returncode != 0:
@@ -388,7 +389,7 @@ def probe_video_frames(path: Path) -> int | None:
         str(path),
     ]
     try:
-        proc = subprocess.run(cmd, capture_output=True, text=True, check=False)
+        proc = run_media(cmd, text=True)
     except FileNotFoundError as exc:
         raise RuntimeError("ffprobe is not on PATH; cannot count source frames") from exc
     if proc.returncode != 0:
@@ -442,7 +443,7 @@ def trim_video_to_frame_count(path: Path, frames: int) -> Path:
         str(dest),
     ]
     try:
-        proc = subprocess.run(cmd, capture_output=True, text=True, check=False)
+        proc = run_media(cmd, text=True)
     except FileNotFoundError as exc:
         raise RuntimeError("ffmpeg is not on PATH; cannot trim the source to --frames") from exc
     if proc.returncode != 0 or not dest.is_file():
@@ -880,7 +881,7 @@ def _ffprobe_video_stream(path: Path, *, count_frames: bool) -> dict[str, Any]:
         str(path),
     ]
     try:
-        proc = subprocess.run(cmd, capture_output=True, text=True, check=False)
+        proc = run_media(cmd, text=True)
     except FileNotFoundError as exc:
         raise SourceVideoTrimError("ffprobe is not on PATH; cannot read the source frame count") from exc
     if proc.returncode != 0:
@@ -969,7 +970,7 @@ def trim_video_command(src: Path, frames: int, dest: Path) -> list[str]:
 def trim_video_to_frames(src: Path, frames: int, dest: Path) -> None:
     cmd = trim_video_command(src, frames, dest)
     try:
-        proc = subprocess.run(cmd, capture_output=True, text=True, check=False)
+        proc = run_media(cmd, text=True)
     except FileNotFoundError as exc:
         raise SourceVideoTrimError("ffmpeg is not on PATH; cannot trim the source video") from exc
     if proc.returncode != 0 or not dest.is_file():

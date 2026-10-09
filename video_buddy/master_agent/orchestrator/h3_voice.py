@@ -11,7 +11,6 @@ from __future__ import annotations
 
 import os
 import shutil
-import subprocess
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any, Callable, Optional
@@ -19,6 +18,7 @@ from typing import Any, Callable, Optional
 import numpy as np
 
 from master_agent.config import H3_MAX_DURATION_S
+from master_agent.proc import run_media
 
 H3_VOICE_MIN_S = 2.0
 H3_VOICE_MAX_S = float(H3_MAX_DURATION_S)
@@ -173,7 +173,7 @@ def _default_trim(src: str, dest: str, start_s: float, duration_s: float) -> Non
         "1",
         str(dest_path),
     ]
-    proc = subprocess.run(cmd, capture_output=True)
+    proc = run_media(cmd)
     if proc.returncode != 0 or not dest_path.is_file():
         err = proc.stderr.decode("utf-8", errors="replace")[-300:]
         raise VoiceSampleError(

@@ -439,9 +439,9 @@ def _ffmpeg() -> str:
 
 
 def _run(cmd: list[str]) -> None:
-    import subprocess
+    from master_agent.proc import run_media
 
-    proc = subprocess.run(cmd, capture_output=True, text=True)
+    proc = run_media(cmd, text=True)
     if proc.returncode != 0:
         err = (proc.stderr or proc.stdout or "")[-600:]
         raise RuntimeError(f"ffmpeg failed: {err}")
