@@ -500,7 +500,7 @@ class Orchestrator:
             st.variant = self._select_variant(st, variant)
         except PartnerPointerError as exc:
             st.fail(str(exc))
-            return st
+            return self._finish(st)
         try:
             from master_agent.orchestrator.talking import h3_r2v_audio_warning, media_route_error
 
