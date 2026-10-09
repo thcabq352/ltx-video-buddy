@@ -169,6 +169,20 @@ def sageattention_available() -> bool:
         return False
 
 
+def comfy_sageattention_available(workspace: Path | str | None) -> bool:
+    """Probe the interpreter Comfy runs in (``<workspace>/.venv``).
+
+    When that interpreter cannot be found, fall back to
+    :func:`sageattention_available` on this interpreter.
+    """
+    from master_agent.comfy.comfy_venv import module_importable, workspace_venv_python
+
+    py = workspace_venv_python(workspace)
+    if py is None:
+        return sageattention_available()
+    return module_importable(py, "sageattention")
+
+
 def comfy_cli_present() -> bool:
     """True when an operator binary, PATH entry, or the ``comfy_cli`` module exists."""
     if (os.getenv("COMFY_CLI") or "").strip():
@@ -236,11 +250,13 @@ def effective_mode(st: TowerState | None = None) -> str:
     return mode if mode in _MODES else "managed"
 
 
-def _child_env() -> dict[str, str]:
+def _child_env(workspace: Path | str | None = None) -> dict[str, str]:
+    from master_agent.comfy.comfy_venv import strip_outer_venv
+
     env = os.environ.copy()
     # comfy-cli routes to Comfy Cloud when a session exists. Force local.
     env["COMFY_WHERE"] = "local"
-    return env
+    return strip_outer_venv(env, workspace)
 
 
 def _run_comfy(
@@ -267,7 +283,7 @@ def _run_comfy(
             text=True,
             timeout=timeout,
             check=False,
-            env=_child_env(),
+            env=_child_env(workspace),
         )
     except FileNotFoundError as exc:
         raise TowerError(
@@ -435,16 +451,19 @@ class ManagedComfyTower:
             # ComfyUI flag, so it stays after `--`. This function only forwards the path.
             args.extend(["--extra-model-paths-config", str(emp)])
         # ComfyUI flag, last, after `--` and after extra-model-paths when present.
-        # The check is this interpreter. comfy-cli on the tower may use another
-        # Python; a miss here omits the flag instead of crashing that launch.
-        if sageattention_available():
+        # The check runs in the workspace venv Comfy launches with; without one
+        # it falls back to this interpreter. A miss omits the flag instead of
+        # crashing that launch.
+        if comfy_sageattention_available(self.workspace):
             args.append("--use-sage-attention")
         else:
+            from master_agent.comfy.comfy_venv import workspace_venv_python
+
             log.warning(
                 "sageattention is not importable in %s; omitting --use-sage-attention "
                 "so Comfy does not crash. Install sageattention in the Comfy "
                 "interpreter to enable it.",
-                sys.executable,
+                workspace_venv_python(self.workspace) or sys.executable,
             )
         return args
 
