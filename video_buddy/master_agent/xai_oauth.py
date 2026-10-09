@@ -54,9 +54,9 @@ def _load_store() -> dict[str, Any]:
 
 
 def _save_store(data: dict[str, Any]) -> None:
-    path = auth_json_path()
-    path.parent.mkdir(parents=True, exist_ok=True)
-    path.write_text(json.dumps(data, indent=2) + "\n", encoding="utf-8")
+    from master_agent.fileutil import atomic_write_text
+
+    atomic_write_text(auth_json_path(), json.dumps(data, indent=2) + "\n")
 
 
 def _provider_state(store: dict[str, Any]) -> Optional[dict[str, Any]]:
@@ -228,10 +228,19 @@ def resolve_access_token(*, force_refresh: bool = False) -> str:
 
     need_refresh = force_refresh or _is_expiring(access)
     if need_refresh:
-        endpoint = _token_endpoint(state)
-        tokens = _refresh_tokens(tokens, endpoint)
-        _persist_tokens(store, tokens, endpoint)
-        access = str(tokens.get("access_token") or "").strip()
+        from master_agent.fileutil import file_lock
+
+        with file_lock(auth_json_path()):
+            # Another process may have refreshed while we waited.
+            store = _load_store()
+            state = _provider_state(store) or state
+            tokens = state.get("tokens") if isinstance(state.get("tokens"), dict) else tokens
+            access = str(tokens.get("access_token") or "").strip()
+            if force_refresh or not access or _is_expiring(access):
+                endpoint = _token_endpoint(state)
+                tokens = _refresh_tokens(tokens, endpoint)
+                _persist_tokens(store, tokens, endpoint)
+                access = str(tokens.get("access_token") or "").strip()
 
     return access
 

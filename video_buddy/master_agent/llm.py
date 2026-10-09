@@ -120,18 +120,23 @@ def provider_available(spec: str) -> bool:
     if name == "llamacpp":
         return _llamacpp_up()
     if name == "grok":
-        if has_valid_api_key():
-            return True
-        try:
-            from master_agent.xai_oauth import resolve_access_token
-
-            resolve_access_token()
-            return True
-        except Exception:
-            return False
+        return grok_configured()
     if name == "claude":
         return bool((os.getenv("ANTHROPIC_API_KEY") or "").strip())
     return False
+
+
+def grok_configured() -> bool:
+    """Grok credentials are present. Read-only: no token refresh, no network,
+    and never writes the Hermes auth store."""
+    if has_valid_api_key():
+        return True
+    try:
+        from master_agent.xai_oauth import has_xai_oauth
+
+        return has_xai_oauth()
+    except Exception:
+        return False
 
 
 def preferred_local_provider() -> str | None:
@@ -188,7 +193,7 @@ def local_llm_health() -> dict[str, Any]:
     """Reachability for llama.cpp, Ollama, and Grok — each reported separately."""
     ollama_up = _ollama_up()
     llamacpp_up = _llamacpp_up()
-    grok_up = provider_available("grok")
+    grok_up = grok_configured()
     preferred = preferred_local_provider()
     return {
         "llamacpp": {
