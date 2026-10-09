@@ -20,6 +20,7 @@ Commands:
   download-models     Scan packs; --scan-only / --use-existing / --download; --yes to fetch
   models manifest     Print the capability-grouped selector catalog
   models select       LTX 2.3|2.5 checklist, totals, disk gate, Soundtrack Studio
+  automatic-install   Automatic install: pre-flight, then ComfyUI + LTX 2.3 + llama.cpp (--yes)
   setup | doctor      Scan deps + weights (fetch rules: repo docs/WEIGHTS.md)
   workflows           List default catalog variants (no env flags)
   comfy run           Drive ComfyUI from the CLI (prepare + lint + queue)

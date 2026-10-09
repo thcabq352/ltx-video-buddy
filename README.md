@@ -18,15 +18,16 @@ Play [`docs/demo/H3-SHOWCASE-BMX-8s-720p.mp4`](docs/demo/H3-SHOWCASE-BMX-8s-720p
 
 The operator manual is [`docs/INDEX.md`](docs/INDEX.md).
 
+New machine, no experience needed: run automatic install. One command installs ComfyUI in its own folder, LTX 2.3, and llama.cpp for the local LLM, after a plain-English pre-flight check.
+
 ```bash
 cd video_buddy
-python install.py
-python -m master_agent doctor
-python -m master_agent workflows
-python -m master_agent comfy run --mode generate --variant ltx25_t2v_i2v --prompt "neon rain"
+python install.py --automatic-install --yes      # Windows: install.bat --automatic-install --yes
+python -m master_agent comfy start
+python -m master_agent comfy run --mode generate --variant base --prompt "a test shot"
 ```
 
-Install, the L0→L5 curriculum, and the first generate: [Getting started](docs/GETTING_STARTED.md).
+Drop `--yes` to see the pre-flight and the plan without changing anything. Install, the L0→L5 curriculum, and the first generate: [Getting started](docs/GETTING_STARTED.md#automatic-install).
 
 H3 speaks your line in the voice of your 2-12 s sample and animates the mouth to it (coarse sync). For tight lip-sync to an exact recording, use ltx25_a2v.
 

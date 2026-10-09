@@ -118,6 +118,11 @@ OLLAMA_MODEL = os.getenv("OLLAMA_MODEL", "qwen3-vl-heretic")
 LLAMACPP_URL = os.getenv("LLAMACPP_URL", "http://127.0.0.1:8080").rstrip("/")
 LLAMACPP_MODEL = (os.getenv("LLAMACPP_MODEL") or OLLAMA_MODEL).strip()
 LLAMACPP_BIN = (os.getenv("LLAMACPP_BIN") or "").strip()
+# Buddy-owned llama.cpp (automatic install): source checkout, build, or the
+# official prebuilt release. LLAMACPP_REF pins the ggml-org/llama.cpp release
+# tag so every machine builds the same code; b11389 is commit 16c163d56.
+LLAMACPP_ROOT = Path(os.getenv("LLAMACPP_ROOT", str(PROJECT_ROOT / "llama.cpp"))).expanduser().resolve()
+LLAMACPP_REF = (os.getenv("LLAMACPP_REF") or "b11389").strip()
 
 # LLM provider selection:
 #   auto (default; llamacpp -> ollama -> grok)
