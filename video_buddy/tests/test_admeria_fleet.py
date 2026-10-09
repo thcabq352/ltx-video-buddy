@@ -18,7 +18,6 @@ from master_agent.models.weights import (
     resolve_weight,
     transformer_preference_order,
 )
-from master_agent.setup import install_ollama_models, ollama_has_model
 
 
 def _write(path: Path, blob: bytes = b"weight") -> Path:
@@ -46,56 +45,6 @@ def _download_ns(**overrides) -> Namespace:
     )
     base.update(overrides)
     return Namespace(**base)
-
-
-def test_ollama_has_model_matches_tags():
-    listed = "NAME ID SIZE MODIFIED\nqwen3-vl-heretic:latest abc 4.1 GB\nnomic-embed-text:latest def 274 MB\n"
-    assert ollama_has_model(listed, "qwen3-vl-heretic")
-    assert ollama_has_model(listed, "nomic-embed-text")
-    assert not ollama_has_model(listed, "missing-model")
-
-
-def test_install_ollama_skips_models_already_listed(monkeypatch, capsys):
-    calls: list[list[str]] = []
-
-    monkeypatch.setattr("master_agent.setup._which", lambda name: "/usr/bin/ollama" if name == "ollama" else None)
-
-    def fake_run(cmd, timeout=120):
-        calls.append(list(cmd))
-        if cmd[:2] == ["ollama", "list"]:
-            return 0, (
-                "NAME ID SIZE\n"
-                "qwen3-vl-heretic:latest abc 4 GB\n"
-                "nomic-embed-text:latest def 274 MB\n"
-            )
-        raise AssertionError(f"unexpected command {cmd}")
-
-    monkeypatch.setattr("master_agent.setup._run", fake_run)
-    install_ollama_models(consent=True)
-    out = capsys.readouterr().out
-    assert "already in ollama list" in out
-    assert all(cmd[:2] != ["ollama", "pull"] for cmd in calls)
-
-
-def test_install_ollama_missing_model_needs_confirmation(monkeypatch, capsys):
-    calls: list[list[str]] = []
-
-    monkeypatch.setattr("master_agent.setup._which", lambda name: "/usr/bin/ollama")
-
-    def fake_run(cmd, timeout=120):
-        calls.append(list(cmd))
-        if cmd[:2] == ["ollama", "list"]:
-            return 0, "NAME ID SIZE\n"
-        if cmd[:2] == ["ollama", "pull"]:
-            raise AssertionError("pull must not run without confirmation")
-        return 0, ""
-
-    monkeypatch.setattr("master_agent.setup._run", fake_run)
-    monkeypatch.setattr("master_agent.setup.confirm_prompt", lambda _prompt: False)
-    install_ollama_models(consent=False)
-    out = capsys.readouterr().out
-    assert "no confirmation" in out
-    assert all(cmd[:2] != ["ollama", "pull"] for cmd in calls)
 
 
 def test_vram_12_and_force_gguf_hide_nvfp4_and_bf16():

@@ -1,6 +1,9 @@
 """VIDEO BUDDY setup — check and install local dependencies.
 
-Pip packages, Playwright Chromium, .env, ffmpeg, and Ollama models.
+Pip packages, Playwright Chromium, .env, and ffmpeg. The local LLM GGUFs
+(``LLAMACPP_MODEL``, ``KB_EMBED_MODEL``) have no public download source, so
+they are reported and skipped, the same way automatic install skips them.
+Setup never installs Ollama or pulls Ollama models.
 ComfyUI itself is a separate render engine (not downloaded here).
 """
 
@@ -14,7 +17,6 @@ from pathlib import Path
 from typing import Any
 
 MIN_PY = (3, 10)
-OLLAMA_MODELS = ("qwen3-vl-heretic", "nomic-embed-text")
 
 ROOT = Path(__file__).resolve().parent.parent
 REQ = ROOT / "requirements.txt"
@@ -141,34 +143,8 @@ def check_ffmpeg() -> dict[str, Any]:
     )
 
 
-def ollama_list_text() -> str:
-    """Raw ``ollama list`` output, or empty when the CLI is missing."""
-    if not _which("ollama"):
-        return ""
-    code, out = _run(["ollama", "list"], timeout=20)
-    return out if code == 0 else ""
-
-
-def ollama_has_model(listed: str, model: str) -> bool:
-    """True when ``model`` (or ``model:tag``) is already in ``ollama list``."""
-    want = (model or "").strip().lower()
-    if not want:
-        return False
-    for line in (listed or "").splitlines():
-        parts = line.split()
-        if not parts:
-            continue
-        token = parts[0].lower()
-        if token in {"name", "name:"}:
-            continue
-        base = token.split(":", 1)[0]
-        if token == want or base == want or token.startswith(want + ":"):
-            return True
-    return False
-
-
 def confirm_prompt(prompt: str) -> bool:
-    """y/n. Non-interactive stdin defaults to no so nothing is pulled by surprise."""
+    """y/n. Non-interactive stdin defaults to no so nothing is downloaded by surprise."""
     if sys.stdin is None or not sys.stdin.isatty():
         print(prompt + "n  (non-interactive; pass --yes)")
         return False
@@ -179,24 +155,25 @@ def confirm_prompt(prompt: str) -> bool:
     return answer in {"y", "yes"}
 
 
-def check_ollama() -> dict[str, Any]:
-    path = _which("ollama")
-    if not path:
-        return _row(
-            "ollama",
-            False,
-            "not on PATH",
-            fix="Install from https://ollama.com/download then: ollama pull qwen3-vl-heretic",
-        )
-    out = ollama_list_text()
-    missing = [m for m in OLLAMA_MODELS if not ollama_has_model(out, m)]
-    ok = not missing
-    return _row(
-        "ollama",
-        ok,
-        path if ok else f"{path} — pull {', '.join(missing)}",
-        fix=" && ".join(f"ollama pull {m}" for m in missing) if missing else "",
-    )
+def check_llm_models() -> dict[str, Any]:
+    """Local LLM GGUFs in ``MODELS_DIR``. Scan only; informational, never fails doctor."""
+    try:
+        from master_agent.automatic_install import llm_models, local_llm_gguf, models_dir
+
+        found: list[str] = []
+        skipped: list[str] = []
+        for name, _role in llm_models():
+            (found if local_llm_gguf(name) is not None else skipped).append(name)
+        folder = models_dir()
+    except Exception as exc:
+        return _row("llm-models", True, f"scan skipped: {exc}")
+    parts = []
+    if found:
+        parts.append("present: " + ", ".join(found))
+    if skipped:
+        parts.append("skipped (no public GGUF source is defined): " + ", ".join(skipped))
+    fix = f"put the GGUF files in {folder} (llama-server serves that folder)" if skipped else ""
+    return _row("llm-models", not skipped, "; ".join(parts) or "none configured", fix=fix)
 
 
 def check_comfy() -> dict[str, Any]:
@@ -486,7 +463,7 @@ def snapshot() -> list[dict[str, Any]]:
         check_playwright(),
         check_env(),
         check_ffmpeg(),
-        check_ollama(),
+        check_llm_models(),
         check_comfy(),
         check_vram_policy(),
         check_hardware(),
@@ -518,8 +495,10 @@ _WEIGHT_ROWS = frozenset(
 
 # Optional or report-only rows: show them, and do not fail doctor.
 # Hardware never blocks install. Stale packs wait for an explicit comfy update.
+# LLM GGUFs have no public source; Buddy renders video without them.
 _OPTIONAL_INFO_ROWS = frozenset(
     {
+        "llm-models",
         "heartlib",
         "heartmula-weights",
         "heartmula-comfy",
@@ -621,32 +600,21 @@ def install_ffmpeg() -> None:
     print("WARN  could not auto-install ffmpeg — " + check_ffmpeg()["fix"])
 
 
-def install_ollama_models(*, consent: bool = False) -> None:
-    """Pull Ollama models only when they are absent and the operator opted in.
+def install_llm_models() -> None:
+    """Same step as automatic install: GGUFs with no public source are skipped. Never fails."""
+    try:
+        from master_agent.automatic_install import step_llm_models
 
-    Models already listed by ``ollama list`` are skipped. A missing model is
-    not pulled unless ``consent`` is true (``--yes``) or the operator answers
-    ``y`` at the prompt. Non-interactive runs without ``--yes`` do not pull.
-    """
-    if not _which("ollama"):
-        print("WARN  ollama not on PATH — install from https://ollama.com/download")
+        result = step_llm_models(True, skip=False)
+    except Exception as exc:
+        print(f"WARN  LLM model check skipped ({exc}); continuing.")
         return
-    listed = ollama_list_text()
-    for model in OLLAMA_MODELS:
-        if ollama_has_model(listed, model):
-            print(f"SKIP  ollama {model} — already in ollama list")
-            continue
-        allowed = consent or confirm_prompt(f"Pull ollama model {model}? [y/N] ")
-        if not allowed:
-            print(f"SKIP  ollama pull {model} — no confirmation (pass --yes to pull)")
-            continue
-        print(f"ollama pull {model}…")
-        code, out = _run(["ollama", "pull", model], timeout=1800)
-        if code != 0:
-            print(f"WARN  ollama pull {model}: {out[-300:]}")
+    for line in result.lines:
+        if not line.startswith("Skipped "):
+            print(line)
 
 
-def fix(*, pull_ollama: bool = False) -> int:
+def fix() -> int:
     """Install local tooling. Does not run ``comfy install`` or ``comfy update``."""
     print("VIDEO BUDDY setup --fix")
     if sys.version_info[:2] < MIN_PY:
@@ -658,7 +626,7 @@ def fix(*, pull_ollama: bool = False) -> int:
         install_playwright()
         install_env()
         install_ffmpeg()
-        install_ollama_models(consent=pull_ollama)
+        install_llm_models()
     except RuntimeError as exc:
         print(f"FAIL  {exc}")
         return 1
@@ -701,7 +669,7 @@ def cmd_setup(
     weight_optional = mode == "existing"
     rc = 0
     if do_fix and mode != "scan":
-        rc = fix(pull_ollama=yes)
+        rc = fix()
         if mode not in {"download"} and not fix_models:
             return rc
     elif do_fix and mode == "scan":
