@@ -6,6 +6,7 @@ All commands are `python -m master_agent …` from `video_buddy/`. `python -m ma
 
 | Command | Role |
 |---|---|
+| `automatic-install` | Automatic install: pre-flight, then ffmpeg, Ollama + 2 models, comfy-cli, ComfyUI in its own folder, LTX 2.3 nodes, Triton + SageAttention in the Comfy venv, LTX 2.3 weights. Plan only until `--yes`. `--preflight-only`, `--dry-run`, `--gpu auto\|nvidia\|amd\|m-series\|cpu`, `--skip-weights`, `--skip-sage`. Also `python install.py --automatic-install …`. See [Getting started](GETTING_STARTED.md#automatic-install) |
 | `curriculum` | L0→L5 card. `--json` |
 | `about` | Studio card. Also `GET /api/about` |
 | `doctor` / `setup` | Deps + weight scan. See [Weights](WEIGHTS.md#consent) |
@@ -54,6 +55,7 @@ Buddy starts `llama-server --models-dir $MODELS_DIR` (default `video_buddy/model
 ## Models
 
 ```bash
+python -m master_agent download-models --ltx23
 python -m master_agent download-models --ltx25
 python -m master_agent download-models --h3
 python -m master_agent download-models --heartmula
@@ -63,7 +65,7 @@ python -m master_agent models select --version 2.5 --scan-only
 python -m master_agent download-flux
 ```
 
-Also `--vace`, `--krea`, `--qwen`, `--flux-pack`, `--bundle`, `--optional`, `--selector`. Nothing is fetched until you agree. See [Weights](WEIGHTS.md#consent).
+Also `--vace`, `--krea`, `--qwen`, `--flux-pack`, `--bundle`, `--optional`, `--selector`. Nothing is fetched until you agree. See [Weights](WEIGHTS.md#consent). `--ltx23` is the LTX 2.3 pack that automatic install downloads (distilled 1.1 all-in-one, GGUF Q4_K_S, Gemma fp4 text encoder, distilled LoRA, video VAE, tiny VAE).
 
 ## Studio, identity, knowledge
 

@@ -4,9 +4,66 @@ From `video_buddy/`. Python 3.10+. ComfyUI listens on `:8188`. The studio dashbo
 
 Weights, consent, and the loader order have one home: [Weights](WEIGHTS.md#loader-policy). This page does not restate them.
 
+## Automatic install
+
+New to all of this? Use automatic install. It is one command. It takes an empty machine to a working LTX 2.3 video generate. You only need Python 3.10+ and an internet connection.
+
+| OS | Command (from the `video_buddy` folder) |
+|---|---|
+| Windows | `install.bat --automatic-install --yes` |
+| macOS / Linux | `./install.sh --automatic-install --yes` |
+
+Already have `.venv`? `python -m master_agent automatic-install --yes` does the same thing.
+
+What it installs:
+
+- ffmpeg, Ollama, and the two Ollama models `qwen3-vl-heretic` and `nomic-embed-text`
+- comfy-cli at the pin in `requirements.txt` (`comfy-cli==1.20.0`)
+- ComfyUI in its own folder (`MANAGED_COMFY_ROOT`, default `video_buddy/ComfyUI`), with the PyTorch build for your GPU. Buddy only ever uses this ComfyUI.
+- The two custom node packs the LTX 2.3 graphs need: `ComfyUI-LTXVideo` and `ComfyUI-GGUF`
+- Triton and SageAttention inside ComfyUI's own venv (optional; see [Comfy](COMFY.md#triton-and-sageattention))
+- The LTX 2.3 weights, about 76.5 GB, into `MODELS_DIR` only (never into the ComfyUI folder)
+
+LTX 2.3 is the only video model automatic install sets up. Other packs stay opt-in through `download-models`.
+
+### Pre-flight
+
+The pre-flight runs first, before anything is downloaded or installed. It prints one PASS, FAIL, or INFO line per check in plain English. It stops at the first FAIL, says how to fix it, and changes nothing.
+
+| Check | Kind | What it looks at |
+|---|---|---|
+| Disk space | stops on FAIL | Free space on each drive that will hold the LTX 2.3 weights (`MODELS_DIR`), the ComfyUI folder, and the Ollama models (`OLLAMA_MODELS`). Uses the real file sizes of what is still missing, plus 5 GB headroom. On an empty machine that is about 103 GB. Prints free vs needed, and how to free space or move a folder to a bigger drive. |
+| Hugging Face access | stops on FAIL | The LTX 2.3 files are public, so no token is needed. If `HF_TOKEN` is set, it is checked with a lightweight sign-in call, because a bad token breaks even public downloads. The token is never printed. |
+| GPU / VRAM | information only | Reads `nvidia-smi`. Under 14 GB VRAM, the GGUF Q4 loader is used. No GPU means CPU mode: it works, but is very slow. |
+| Ollama | information only | Says whether Ollama is installed and running. If missing: "Ollama is not installed; automatic install will install it." |
+| ComfyUI folder | stops on FAIL | The folder must be writable and either empty, a ComfyUI, or missing. Notes an existing install (that step is then skipped). Refuses when `COMFY_MODE=external`. |
+
+```bash
+python -m master_agent automatic-install --preflight-only   # pre-flight only, changes nothing
+python -m master_agent automatic-install                    # pre-flight + the plan, changes nothing
+python -m master_agent automatic-install --yes              # pre-flight, then install
+```
+
+Other flags: `--gpu auto|nvidia|amd|m-series|cpu` picks the ComfyUI PyTorch build (default: detect). `--skip-weights` installs everything but the weights. `--skip-sage` skips Triton and SageAttention.
+
+### If something fails
+
+- A pre-flight FAIL stops the run before any change. Fix the item and run the same command again.
+- Running it again is safe. Finished steps are skipped. A half-finished ComfyUI is repaired with `comfy install --restore`.
+- Buddy never uses `sudo` silently. On Linux, when Ollama or ffmpeg needs administrator rights and `sudo` would ask for a password, the step shows `NEEDS-YOU` with the exact command to run yourself.
+- Optional steps (Playwright, Ollama models, Triton, SageAttention) are `FAILED-NONFATAL` when they fail. Video generation still works.
+- The summary ends with doctor's own read-only scan, then either "Ready for generate (LTX 2.3)" or the list of items that still need you (exit 1).
+
+When it says ready:
+
+```bash
+python -m master_agent comfy start
+python -m master_agent comfy run --mode generate --variant base --prompt "a test shot"
+```
+
 ## Install
 
-`install.py` creates `.venv`, installs pip deps, Playwright Chromium, copies `.env`, and tries ffmpeg plus the Ollama models `qwen3-vl-heretic` and `nomic-embed-text`. It does not download video weights.
+`install.py` without `--automatic-install` is the lighter install. It creates `.venv`, installs pip deps, Playwright Chromium, copies `.env`, and tries ffmpeg plus the Ollama models `qwen3-vl-heretic` and `nomic-embed-text`. It does not install ComfyUI or download video weights.
 
 | OS | Command |
 |---|---|

@@ -52,11 +52,25 @@ If you start Comfy yourself:
 - `--where local` (no Comfy Cloud routing)
 - after `--`: `--disable-auto-launch`, `--port 8188`, `--listen 127.0.0.1`
 - `--extra-model-paths-config` pointing at the Buddy YAML, unless `--extra-model-paths` names an existing file
-- `--use-sage-attention` is last, after `--listen` and after the extra-model-paths pair when that pair is present, when `sageattention` imports in the interpreter running Buddy. If that import fails, Buddy logs a warning and omits the flag so Comfy does not crash. A separate Comfy venv is not probed.
+- `--use-sage-attention` is last, after `--listen` and after the extra-model-paths pair when that pair is present, when `sageattention` imports in the interpreter Comfy runs in. Buddy checks that with a subprocess `import sageattention` in `<workspace>/.venv` (or `<workspace>/venv`). Only when the workspace has no venv does it fall back to the interpreter running Buddy. If the import fails, Buddy logs a warning naming that interpreter and omits the flag so Comfy does not crash.
 
-Start, stop, status, and restart do not run `comfy install` or `comfy update`. `--no-watch` skips the crash-restart watchdog. `--no-wait` returns before `/system_stats` is ready. If `:8188` is already bound, do not kill a running render. Attach or wait.
+Once the workspace venv exists, comfy-cli calls run with `VIRTUAL_ENV` and `CONDA_PREFIX` removed. comfy-cli 1.20.0 would otherwise pick Buddy's activated venv over the workspace one.
+
+Start, stop, status, and restart do not run `comfy install` or `comfy update`. Installing is the job of [automatic install](GETTING_STARTED.md#automatic-install), which runs `comfy --workspace=<root> --where local --skip-prompt install <gpu flag>` (`--nvidia`, `--amd`, `--m-series`, or `--cpu`; `--restore` added to repair a half-finished install), then `comfy … node install ComfyUI-LTXVideo ComfyUI-GGUF`. It refuses `COMFY_MODE=external`. `--no-watch` skips the crash-restart watchdog. `--no-wait` returns before `/system_stats` is ready. If `:8188` is already bound, do not kill a running render. Attach or wait.
 
 `comfy update` only reports stale packs until `--yes`. `COMFY_MODE=external` refuses core and node updates. `--cli --yes` pip-installs the pin in `requirements.txt` (`comfy-cli==1.20.0`). It does not float to latest. Before a core or node update, Buddy saves `state/comfy_snapshots/pre-update-….json` via `comfy node save-snapshot`. That snapshot is not a weight rollback. Keep/wipe of LTX packs is `models select`, not this snapshot.
+
+## Triton and SageAttention
+
+Automatic install puts both into the Comfy venv, never Buddy's `.venv` or the system Python. It runs `<comfy-python> -m pip install …`, Triton first, then SageAttention, and prints the Comfy Python, torch, and CUDA versions.
+
+| Platform | Triton | SageAttention |
+|---|---|---|
+| Linux, NVIDIA | `triton`, pinned to torch's own `triton==` requirement when torch declares one | `sageattention` (PyPI) |
+| Windows, NVIDIA | `triton-windows` matched to torch (2.6 → `>=3.2,<3.3` … 2.10 → `>=3.6,<3.7`; newer torch is extrapolated and marked unverified) | Prebuilt wheel from `woct0rdho/SageAttention` releases for the CUDA tag and torch version. If none matches, or it fails to install or import, `sageattention` from PyPI. |
+| macOS, CPU-only, AMD, non-CUDA torch, other CPUs | skipped | skipped |
+
+After each install Buddy runs `import triton` / `import sageattention` in the Comfy Python. Every failure is `FAILED-NONFATAL` with a plain message, for example "No Triton build could be installed for Python 3.12 / CUDA 12.8 on this machine; continuing without Sage Attention. Comfy will run, just slower." A failed Triton skips SageAttention. Already-installed packages are skipped. `--skip-sage` skips the step.
 
 ## Attach contract
 
