@@ -11,7 +11,7 @@ Python package for the local ComfyUI studio. Git root is the parent repo. The op
 
 Need Python 3.10+. Full steps and the L0→L5 curriculum: [Getting started](../docs/GETTING_STARTED.md).
 
-Empty machine: `python install.py --automatic-install --yes` (or `python -m master_agent automatic-install --yes` once `.venv` exists). Automatic install runs a pre-flight check, then installs ComfyUI in its own folder, Ollama and its models, and LTX 2.3. See [Getting started](../docs/GETTING_STARTED.md#automatic-install).
+Empty machine: `python install.py --automatic-install --yes` (or `python -m master_agent automatic-install --yes` once `.venv` exists). Automatic install runs a pre-flight check, then installs ComfyUI in its own folder, LTX 2.3, and llama.cpp. See [Getting started](../docs/GETTING_STARTED.md#automatic-install).
 
 ```bash
 python install.py

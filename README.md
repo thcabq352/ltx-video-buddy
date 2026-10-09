@@ -18,7 +18,7 @@ Play [`docs/demo/H3-SHOWCASE-BMX-8s-720p.mp4`](docs/demo/H3-SHOWCASE-BMX-8s-720p
 
 The operator manual is [`docs/INDEX.md`](docs/INDEX.md).
 
-New machine, no experience needed: run automatic install. One command installs ComfyUI in its own folder, Ollama and its models, and LTX 2.3, after a plain-English pre-flight check.
+New machine, no experience needed: run automatic install. One command installs ComfyUI in its own folder, LTX 2.3, and llama.cpp for the local LLM, after a plain-English pre-flight check.
 
 ```bash
 cd video_buddy
