@@ -68,7 +68,7 @@ Judge, quality bar, and provenance: [Judge](JUDGE.md), [Provenance](PROVENANCE.m
 
 llama.cpp is the preferred local backend. Buddy starts `llama-server` for the studio, the MCP server, and LLM calls when `LLM_PROVIDER` is `auto` (the default) or `llamacpp`. The process is `LLAMACPP_BIN` or `llama-server` on `PATH`, bound to `LLAMACPP_URL` (default `:8080`), with `--models-dir` set to `MODELS_DIR` (default `video_buddy/models/`). Buddy stops that process on shutdown. A server that was already listening is left alone. If the binary is missing, auto warns and continues to Ollama. It does not crash.
 
-`LLM_PROVIDER=auto` (and an unset provider) tries llama.cpp, then Ollama, then Grok. Pin `llamacpp` or `ollama` to force that backend. A pin does not hop to the other local server.
+`LLM_PROVIDER=auto` (and an unset provider) tries llama.cpp, then Ollama, and stops there. Grok (cloud) is opt-in only: `LLM_PROVIDER=grok` or a panel that names it. Pin `llamacpp` or `ollama` to force that backend. A pin does not hop to the other local server.
 
 Default vision and text model name is `qwen3-vl-heretic` (`LLAMACPP_MODEL` / `OLLAMA_MODEL`). That model is not the LTX text encoder. Do not swap it onto a LoRA A/B graph.
 
@@ -81,7 +81,7 @@ Default vision and text model name is `qwen3-vl-heretic` (`LLAMACPP_MODEL` / `OL
 | Embeddings | `POST /v1/embeddings` | `POST /api/embed` | — |
 | Vision | multimodal `/v1/chat/completions` | `POST /api/chat` + images | — |
 
-Health reports llama.cpp, Ollama, and Grok separately. The active backend follows the order above. Do not bind 8642 or 8189 for llama.cpp. If embeddings or vision are missing, KB calls no-op with a warning and the judge stays heuristic-only.
+Health reports llama.cpp and Ollama reachability, and whether opt-in Grok credentials exist (read-only; health never refreshes tokens or writes `~/.hermes/auth.json`). The active backend follows the order above. Do not bind 8642 or 8189 for llama.cpp. If embeddings or vision are missing, KB calls no-op with a warning and the judge stays heuristic-only.
 
 ## Knowledge
 

@@ -93,7 +93,7 @@ LLM_PANEL=local
 PANEL_JUDGE=ollama
 ```
 
-`FORCE_LOADER=gguf` hides NVFP4 and bf16 from suggestions. It does not block a machine whose only transformer is bf16. `LLM_PROVIDER=auto` may fall through to Grok when both local servers are down.
+`FORCE_LOADER=gguf` hides NVFP4 and bf16 from suggestions. It does not block a machine whose only transformer is bf16. `LLM_PROVIDER=auto` stays local (llama.cpp, then Ollama); with both down, LLM calls fail instead of reaching Grok.
 
 LoRA A/B locks the text encoder. The proven LTX 2.3 family is `gemma_3_12B_it_fp8_scaled`. Do not swap it for a Heretic encoder mid-comparison. Only the LoRA name and strength change. Windows folder-prefixed names stay backslash style (`wan\file.safetensors`).
 

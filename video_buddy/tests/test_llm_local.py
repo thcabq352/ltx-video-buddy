@@ -55,7 +55,7 @@ class TestProviderAliases:
         assert normalize_provider_name("ollama") == "ollama"
 
     def test_auto_chain_order(self):
-        assert AUTO_CHAIN == ("llamacpp", "ollama", "grok")
+        assert AUTO_CHAIN == ("llamacpp", "ollama")
 
 
 class TestChatBaseUrl:
@@ -132,7 +132,7 @@ class TestAutoDiscovery:
         assert "llama.cpp binary not found" in err
         assert "Falling through to Ollama" in err
 
-    def test_auto_uses_grok_last(self):
+    def test_auto_never_falls_through_to_grok(self):
         from master_agent.llamacpp_server import reset_state
 
         reset_state()
@@ -141,8 +141,13 @@ class TestAutoDiscovery:
         ), patch("master_agent.llm.has_valid_api_key", return_value=True), patch(
             "master_agent.llm._grok_llm", return_value="GROK_CLIENT"
         ) as build:
-            got = get_llm(provider="auto")
-        assert got == "GROK_CLIENT"
+            with pytest.raises(RuntimeError, match="LLM_PROVIDER=grok"):
+                get_llm(provider="auto")
+        build.assert_not_called()
+
+    def test_explicit_grok_still_works(self):
+        with patch("master_agent.llm._grok_llm", return_value="GROK_CLIENT") as build:
+            assert get_llm(provider="grok") == "GROK_CLIENT"
         build.assert_called_once()
 
     def test_pin_ollama_does_not_start_llamacpp(self):
@@ -204,7 +209,7 @@ class TestHealth:
         assert detail["active"] == "ollama"
         assert detail["grok"]["url"] == "cloud"
 
-    def test_active_is_grok_when_both_local_are_down(self):
+    def test_active_is_none_when_both_local_are_down(self):
         with patch("master_agent.llm.endpoint_up", side_effect=_up_only()), patch(
             "master_agent.llm.has_valid_api_key", return_value=True
         ):
@@ -213,9 +218,9 @@ class TestHealth:
         assert detail["ollama"]["up"] is False
         assert detail["grok"]["up"] is True
         assert detail["preferred"] is None
-        assert detail["active"] == "grok"
+        assert detail["active"] is None
         text = format_local_llm_health(detail)
-        assert "active   grok" in text
+        assert "active   none" in text
 
 
 class TestEmbeddingsPath:

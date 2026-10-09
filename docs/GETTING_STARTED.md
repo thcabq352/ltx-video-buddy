@@ -23,7 +23,7 @@ python -m master_agent health
 
 `setup` is `doctor`. `setup --fix` installs missing deps (ffmpeg via winget, brew, or apt-get when that tool exists). Ollama pulls only models missing from `ollama list`, and only after `y` or `--yes`. Ollama itself is installed from https://ollama.com/download.
 
-Local LLM order for `LLM_PROVIDER=auto` (the default when unset): llama.cpp, then Ollama, then Grok. llama.cpp is preferred. Buddy starts `llama-server` against `MODELS_DIR` when `LLAMACPP_BIN` or `llama-server` is available, and stops it on shutdown. If that binary is missing, Buddy warns and uses Ollama. Pin `LLM_PROVIDER=llamacpp` or `LLM_PROVIDER=ollama` to force one backend. See [Architecture](ARCHITECTURE.md#local-model).
+Local LLM order for `LLM_PROVIDER=auto` (the default when unset): llama.cpp, then Ollama. `auto` never calls a cloud model; Grok is opt-in with `LLM_PROVIDER=grok`. llama.cpp is preferred. Buddy starts `llama-server` against `MODELS_DIR` when `LLAMACPP_BIN` or `llama-server` is available, and stops it on shutdown. If that binary is missing, Buddy warns and uses Ollama. Pin `LLM_PROVIDER=llamacpp` or `LLM_PROVIDER=ollama` to force one backend. See [Architecture](ARCHITECTURE.md#local-model).
 
 Windows portable Comfy: `ComfyUI_windows_portable\run_api_8188.bat`. Elsewhere start Comfy with `--port 8188`, or set `COMFYUI_URL`.
 

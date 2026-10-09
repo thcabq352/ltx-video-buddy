@@ -57,7 +57,7 @@ def _quiet(fn, *args, **kwargs):
 
 @mcp.tool()
 def health() -> dict:
-    """ComfyUI reachability + GPU VRAM, local LLM (llama.cpp, Ollama, Grok), KB counts."""
+    """ComfyUI reachability + GPU VRAM, local LLM (llama.cpp, Ollama), opt-in Grok credentials (read-only), KB counts."""
     from master_agent.comfy.client import ComfyClient
     from master_agent.kb.store import (
         COLLECTION_KNOWLEDGE,

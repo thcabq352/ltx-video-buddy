@@ -72,6 +72,14 @@ def hermes_chat(
     return {"ok": bool(text), "text": text, "model": model}
 
 
+_NO_TOKEN = frozenset({"", "local"})
+
+
+def _real_token(token: str | None) -> bool:
+    """``""`` and the facade placeholder ``"local"`` mean: stay local, no xAI call."""
+    return str(token or "").strip().lower() not in _NO_TOKEN
+
+
 def hermes_pitch(
     payload: dict[str, Any],
     *,
@@ -86,7 +94,7 @@ def hermes_pitch(
         return {"ok": False, "error": "brief is required"}
     if make_video is None:
         make_video = bool(payload.get("make_video", True))
-    if not token and request is None:
+    if not _real_token(token) and request is None:
         chat = {"ok": False, "text": ""}
     else:
         chat = hermes_chat(

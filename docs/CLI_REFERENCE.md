@@ -39,7 +39,7 @@ python -m master_agent power-tune "neon rain" --variant base --json
 
 ## LLM provider
 
-`LLM_PROVIDER` defaults to `auto` when unset. Order: llama.cpp, then Ollama, then Grok. llama.cpp is the preferred local backend. `ollama` or `llamacpp` pins that backend and does not hop.
+`LLM_PROVIDER` defaults to `auto` when unset. Order: llama.cpp, then Ollama. `auto` never calls a cloud model; Grok runs only with `LLM_PROVIDER=grok` or a panel that names it. llama.cpp is the preferred local backend. `ollama` or `llamacpp` pins that backend and does not hop.
 
 | Env | Default |
 |---|---|

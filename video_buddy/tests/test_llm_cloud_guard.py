@@ -63,3 +63,26 @@ def test_save_store_is_atomic(hermes_home):
     assert json.loads(hermes_home.read_text(encoding="utf-8")) == {"providers": {}}
     leftovers = [p.name for p in hermes_home.parent.iterdir() if p.name.endswith(".tmp")]
     assert leftovers == []
+
+
+@pytest.mark.parametrize("token", ["", "local", "LOCAL", None])
+def test_pitch_placeholder_token_never_calls_xai(token):
+    from master_agent.hermes.pitch import hermes_pitch
+
+    with patch("httpx.Client") as client:
+        out = hermes_pitch({"brief": "a quiet pier at dawn"}, token=token, make_video=False)
+    client.assert_not_called()
+    assert out.get("shots")
+
+
+def test_hermes_facade_pitch_stays_local():
+    from master_agent.a2a.protocol import TaskStore
+    from master_agent.hermes.adapter import hermes_complete
+
+    with patch("httpx.Client") as client:
+        hermes_complete(
+            {"messages": [{"role": "user", "content": "pitch me a 3-shot coffee ad"}]},
+            store=TaskStore(),
+            submit=lambda *_a, **_k: None,
+        )
+    client.assert_not_called()

@@ -92,8 +92,8 @@ llama.cpp is the preferred local backend. Buddy starts `llama-server` (`LLAMACPP
 | Embeddings | `/v1/embeddings` (KB no-ops if missing) | `/api/embed` |
 | Vision judge | multimodal `/v1/chat/completions`; heuristic-only if the GGUF is text-only | `/api/chat` + images |
 
-`auto` order: llamacpp → ollama → grok. Panels accept `llamacpp[:model]`.
-`health` reports llama.cpp, Ollama, and Grok separately.
+`auto` order: llamacpp → ollama. It never calls a cloud model; Grok is opt-in (`LLM_PROVIDER=grok` or a panel naming it). Panels accept `llamacpp[:model]`.
+`health` reports llama.cpp and Ollama, and whether opt-in Grok credentials exist (read-only).
 
 ## MCP tools ↔ CLI
 

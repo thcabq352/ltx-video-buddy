@@ -120,9 +120,9 @@ LLAMACPP_MODEL = (os.getenv("LLAMACPP_MODEL") or OLLAMA_MODEL).strip()
 LLAMACPP_BIN = (os.getenv("LLAMACPP_BIN") or "").strip()
 
 # LLM provider selection:
-#   auto (default; llamacpp -> ollama -> grok)
+#   auto (default; llamacpp -> ollama, local only)
 #   ollama[:model] | llamacpp[:model] (aliases: llama.cpp, llama-cpp)
-#   grok
+#   grok (cloud, opt-in only)
 LLM_PROVIDER = (os.getenv("LLM_PROVIDER", "auto") or "auto").strip().lower()
 
 # Storyboard LLM panel: preset (default|local | grok | grok+local|both |
