@@ -84,6 +84,7 @@ def agent_card(*, host: str = "127.0.0.1", port: int = STUDIO_PORT) -> dict[str,
                 "name": "Generate LTX video",
                 "description": (
                     "A2A message/send with a video brief, or MCP create_video. "
+                    "A real render needs metadata.confirm=true; metadata.dry_run=true plans only. "
                     "Photo + voice defaults to ltx25_a2v. "
                     "H3 speaks your line in the voice of your 2-12 s sample and animates the mouth to it (coarse sync). "
                     "For tight lip-sync to an exact recording, use ltx25_a2v."
@@ -262,6 +263,12 @@ def handle_rpc(
         fenced = _fence_media(body)
         if fenced:
             return err(-32602, fenced)
+        confirmed = bool(meta.get("confirm") or (isinstance(params, dict) and params.get("confirm")))
+        if not body["dry_run"] and not confirmed:
+            return err(
+                -32602,
+                "a real render needs metadata.confirm=true (or metadata.dry_run=true to plan only)",
+            )
         task_id = store.create(text)
         submit(task_id, body)
         result: dict[str, Any] = {

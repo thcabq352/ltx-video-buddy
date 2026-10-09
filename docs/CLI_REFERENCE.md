@@ -93,7 +93,7 @@ mcp_servers:
       - "<VIDEO_BUDDY>/master_agent/mcp_server.py"
 ```
 
-Prefer `hermes -p ltx` or `hermes mcp add` / `hermes mcp test master-agent`. A2A on `:8189` (`GET /.well-known/agent.json`, `POST /a2a`) is the fallback.
+Prefer `hermes -p ltx` or `hermes mcp add` / `hermes mcp test master-agent`. A2A on `:8189` (`GET /.well-known/agent.json`, `POST /a2a`) is the fallback. A2A `message/send` queues a render only with `metadata.confirm=true`; use `metadata.dry_run=true` to plan.
 
 ## Feature commands
 

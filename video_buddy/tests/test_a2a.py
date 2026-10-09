@@ -40,7 +40,10 @@ def test_message_send_and_tasks_get_async_lifecycle():
             "jsonrpc": "2.0",
             "id": 1,
             "method": "message/send",
-            "params": {"message": {"parts": [{"type": "text", "text": "rain on a window"}]}},
+            "params": {
+                "message": {"parts": [{"type": "text", "text": "rain on a window"}]},
+                "metadata": {"confirm": True},
+            },
         },
         store=store,
         submit=submit,
@@ -81,7 +84,10 @@ def test_message_send_defaults_quality_draft_and_duration():
             "jsonrpc": "2.0",
             "id": 5,
             "method": "message/send",
-            "params": {"message": {"parts": [{"type": "text", "text": "neon rain"}]}},
+            "params": {
+                "message": {"parts": [{"type": "text", "text": "neon rain"}]},
+                "metadata": {"confirm": True},
+            },
         },
         store=store,
         submit=submit,
@@ -135,7 +141,8 @@ def test_message_send_h3_photo_voice_includes_warning(tmp_path, monkeypatch):
                         {"type": "file", "file": {"uri": str(image), "mimeType": "image/png"}},
                         {"type": "file", "file": {"uri": str(audio), "mimeType": "audio/wav"}},
                     ]
-                }
+                },
+                "metadata": {"confirm": True},
             },
         },
         store=store,
@@ -212,7 +219,8 @@ def test_message_send_forwards_photo_and_audio(tmp_path, monkeypatch):
                         {"type": "file", "file": {"uri": str(image), "mimeType": "image/png"}},
                         {"type": "file", "file": {"uri": str(audio), "mimeType": "audio/wav"}},
                     ]
-                }
+                },
+                "metadata": {"confirm": True},
             },
         },
         store=store,

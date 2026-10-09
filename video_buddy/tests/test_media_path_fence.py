@@ -89,10 +89,27 @@ def test_a2a_bare_comfy_input_name_passes_through(monkeypatch):
             "jsonrpc": "2.0",
             "id": 1,
             "method": "message/send",
-            "params": {"message": {"text": "animate"}, "metadata": {"image_path": "face.png"}},
+            "params": {
+                "message": {"text": "animate"},
+                "metadata": {"image_path": "face.png", "confirm": True},
+            },
         },
         store=store,
         submit=lambda tid, body: submitted.append(body),
     )
     assert "result" in resp
     assert submitted[0]["image_path"] == "face.png"
+
+
+def test_a2a_real_render_needs_confirm():
+    store = TaskStore()
+    submitted = []
+    payload = {"jsonrpc": "2.0", "id": 1, "method": "message/send", "params": {"message": {"text": "rain"}}}
+    resp = handle_rpc(payload, store=store, submit=lambda tid, body: submitted.append(body))
+    assert "confirm" in resp["error"]["message"]
+    assert submitted == []
+    payload["params"]["metadata"] = {"dry_run": True}
+    assert "result" in handle_rpc(payload, store=store, submit=lambda tid, body: submitted.append(body))
+    payload["params"]["metadata"] = {"confirm": True}
+    assert "result" in handle_rpc(payload, store=store, submit=lambda tid, body: submitted.append(body))
+    assert len(submitted) == 2

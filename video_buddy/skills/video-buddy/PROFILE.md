@@ -25,6 +25,9 @@ equals the stock `LTX_RESEARCH_SYSTEM` text or you pass `--force`.
    (`source=buddy-adapter`). Studio must be up (`python -m master_agent ui`).
 3. A2A fallback: `GET /.well-known/agent.json` (also `agent-card.json`) and
    `POST /a2a` (`message/send`, `tasks/get`).
+   A real render needs `metadata.confirm=true`; `metadata.dry_run=true` plans only.
+   Media paths must sit under `outputs/`, `state/uploads/` or the ComfyUI
+   input/output folders.
 
 Buddy **never binds 8642**. That port belongs to the default Hermes API server.
 
