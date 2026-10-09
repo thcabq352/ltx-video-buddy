@@ -28,8 +28,41 @@ def main(argv: list[str] | None = None) -> int:
         except Exception:
             pass
     ensure_dirs()
+    argv = list(sys.argv[1:] if argv is None else argv)
+    # Hidden alias. Kept out of the subcommand list so help only says automatic-install.
+    if argv and argv[0] == "install-all":
+        argv[0] = "automatic-install"
     parser = argparse.ArgumentParser(prog="python -m master_agent", description="VIDEO BUDDY")
     sub = parser.add_subparsers(dest="command", required=True)
+
+    p = sub.add_parser(
+        "automatic-install",
+        help="automatic install: pre-flight, then ComfyUI (own folder), LTX 2.3 weights, llama.cpp (--yes to apply)",
+        description=(
+            "Automatic install. One command takes an empty machine to a working LTX 2.3 generate. "
+            "It first runs a plain-English pre-flight (disk space, Hugging Face access, GPU, llama.cpp, "
+            "ComfyUI folder) and stops on the first blocking failure. Without --yes it only prints the "
+            "plan. With --yes it installs ffmpeg, comfy-cli (pinned), ComfyUI in its own folder "
+            "(MANAGED_COMFY_ROOT or ./ComfyUI) with the LTX 2.3 custom nodes, optional Triton + "
+            "SageAttention inside the Comfy venv, the LTX 2.3 weights into MODELS_DIR, and optional "
+            "llama.cpp (built from the pinned LLAMACPP_REF into LLAMACPP_ROOT, else the official prebuilt). "
+            "Local LLM models with no public GGUF source are skipped and the install continues. "
+            "LTX 2.3 is the only video model it installs."
+        ),
+    )
+    p.add_argument("--yes", action="store_true", help="consent: install and download everything in the plan")
+    p.add_argument("--preflight-only", action="store_true", help="run only the pre-flight check; change nothing")
+    p.add_argument("--dry-run", action="store_true", help="print the plan only (the default without --yes)")
+    p.add_argument(
+        "--gpu",
+        choices=["auto", "nvidia", "amd", "m-series", "cpu"],
+        default="auto",
+        help="ComfyUI PyTorch build (default: auto-detect; no GPU → cpu)",
+    )
+    p.add_argument("--skip-weights", action="store_true", help="install everything except the LTX 2.3 weights")
+    p.add_argument("--skip-sage", action="store_true", help="do not install Triton / SageAttention")
+    p.add_argument("--skip-llm", action="store_true", help="do not install llama.cpp or look for local LLM models")
+    p.set_defaults(func=cmd_automatic_install)
 
     p = sub.add_parser(
         "curriculum",
@@ -494,6 +527,11 @@ def main(argv: list[str] | None = None) -> int:
         help="scan 16GB-class packs (LTX 2.5 / H3 / Wan / VACE / Krea / Flux / Qwen); download missing only with --yes",
     )
     p.add_argument("--ltx25", action="store_true", default=True, help="LTX 2.5 distilled split pack (default)")
+    p.add_argument(
+        "--ltx23",
+        action="store_true",
+        help="LTX 2.3 16GB pack (all-in-one, GGUF Q4, Gemma fp4 TE, distilled LoRA, video + tiny VAE)",
+    )
     p.add_argument("--h3", action="store_true", help="MiniMax H3 GGUF + Comfy TE/VAE pack")
     p.add_argument(
         "--heartmula",
@@ -507,7 +545,7 @@ def main(argv: list[str] | None = None) -> int:
     p.add_argument("--flux-pack", dest="flux_pack", action="store_true", help="Flux.1-dev GGUF/fp8")
     p.add_argument(
         "--bundle",
-        help="weight bundle id (ltx25_*|h3_*|wan22|vace|krea2|flux|qwen_edit)",
+        help="weight bundle id (ltx25_*|ltx23_core|h3_*|wan22|vace|krea2|flux|qwen_edit)",
     )
     p.add_argument("--yes", action="store_true", help="consent: download the missing mandatory set")
     p.add_argument("--optional", action="store_true", help="also fetch optional Hub files (distilled LoRA 450, temporal upscaler)")
@@ -891,10 +929,15 @@ def main(argv: list[str] | None = None) -> int:
     p.set_defaults(func=cmd_capabilities)
 
     args = parser.parse_args(argv)
-    from master_agent.control.versioned_config import announce_config
+    if args.command != "automatic-install":
+        from master_agent.control.versioned_config import announce_config
 
-    # `agent` reserves stdout for its JSON result.
-    banner_stream = sys.stderr if args.command == "agent" else sys.stdout
-    print(announce_config(), file=banner_stream, flush=True)
+        print(announce_config(), flush=True)
     return args.func(args)
+
+
+def cmd_automatic_install(args: argparse.Namespace) -> int:
+    from master_agent.automatic_install import cmd_automatic_install as _run
+
+    return _run(args)
 

@@ -54,6 +54,8 @@ def cmd_download_models(args: argparse.Namespace) -> int:
         bundle = "qwen_edit"
     elif getattr(args, "flux_pack", False):
         bundle = "flux"
+    elif getattr(args, "ltx23", False):
+        bundle = "ltx23_core"
     elif args.h3:
         bundle = "h3_all"
     elif args.ltx25:

@@ -4,9 +4,79 @@ From `video_buddy/`. Python 3.10+. ComfyUI listens on `:8188`.
 
 Weights, consent, and the loader order have one home: [Weights](WEIGHTS.md#loader-policy). This page does not restate them.
 
+## Automatic install
+
+New to all of this? Use automatic install. It is one command. It takes an empty machine to a working LTX 2.3 video generate. You only need Python 3.10+ and an internet connection.
+
+| OS | Command (from the `video_buddy` folder) |
+|---|---|
+| Windows | `install.bat --automatic-install --yes` |
+| macOS / Linux | `./install.sh --automatic-install --yes` |
+
+Already have `.venv`? `python -m master_agent automatic-install --yes` does the same thing.
+
+What it installs:
+
+- ffmpeg
+- comfy-cli at the pin in `requirements.txt` (`comfy-cli==1.20.0`)
+- ComfyUI in its own folder (`MANAGED_COMFY_ROOT`, default `video_buddy/ComfyUI`), with the PyTorch build for your GPU. Buddy only ever uses this ComfyUI.
+- The two custom node packs the LTX 2.3 graphs need: `ComfyUI-LTXVideo` and `ComfyUI-GGUF`
+- Triton and SageAttention inside ComfyUI's own venv (optional; see [Comfy](COMFY.md#triton-and-sageattention))
+- The LTX 2.3 weights, about 76.5 GB, into `MODELS_DIR` only (never into the ComfyUI folder)
+- llama.cpp for the local LLM (optional; see [llama.cpp](#llamacpp) below)
+
+LTX 2.3 is the only video model automatic install sets up. Other packs stay opt-in through `download-models`. Automatic install never installs Ollama or pulls anything through it.
+
+### Pre-flight
+
+The pre-flight runs first, before anything is downloaded or installed. It prints one PASS, FAIL, or INFO line per check in plain English. It stops at the first FAIL, says how to fix it, and changes nothing.
+
+| Check | Kind | What it looks at |
+|---|---|---|
+| Disk space | stops on FAIL | Free space on each drive that will hold the LTX 2.3 weights (`MODELS_DIR`), the ComfyUI folder, and llama.cpp (`LLAMACPP_ROOT`). Uses the real file sizes of what is still missing, plus 5 GB headroom. On an empty machine that is about 97–99 GB (llama.cpp takes 0.3–5 GB depending on build or prebuilt, CPU or CUDA). Prints free vs needed, and how to free space or move a folder to a bigger drive. |
+| Hugging Face access | stops on FAIL | The LTX 2.3 files are public, so no token is needed. If `HF_TOKEN` is set, it is checked with a lightweight sign-in call, because a bad token breaks even public downloads. The token is never printed. |
+| GPU / VRAM | information only | Reads `nvidia-smi`. Under 14 GB VRAM, the GGUF Q4 loader is used. No GPU means CPU mode: it works, but is very slow. |
+| llama.cpp | information only | One of: found (`LLAMACPP_BIN`, `PATH`, or Buddy's own copy), will build from source, will use the official prebuilt release (and which build tool is missing), or unavailable (with the command that installs the build tools). Also lists each local LLM model that will be skipped. |
+| ComfyUI folder | stops on FAIL | The folder must be writable and either empty, a ComfyUI, or missing. Notes an existing install (that step is then skipped). Refuses when `COMFY_MODE=external`. |
+
+```bash
+python -m master_agent automatic-install --preflight-only   # pre-flight only, changes nothing
+python -m master_agent automatic-install                    # pre-flight + the plan, changes nothing
+python -m master_agent automatic-install --yes              # pre-flight, then install
+```
+
+Other flags: `--gpu auto|nvidia|amd|m-series|cpu` picks the ComfyUI PyTorch build (default: detect). `--skip-weights` installs everything but the weights. `--skip-sage` skips Triton and SageAttention. `--skip-llm` skips llama.cpp and the local LLM models.
+
+### If something fails
+
+- A pre-flight FAIL stops the run before any change. Fix the item and run the same command again.
+- Running it again is safe. Finished steps are skipped. A half-finished ComfyUI is repaired with `comfy install --restore`.
+- Buddy never uses `sudo` silently. On Linux, when ffmpeg needs administrator rights and `sudo` would ask for a password, the step shows `NEEDS-YOU` with the exact command to run yourself. The same goes for the llama.cpp build tools.
+- Optional steps (Playwright, Triton, SageAttention, llama.cpp, LLM models) never stop the install. When they fail they show `FAILED-NONFATAL` (or `NEEDS-YOU` with a command) and video generation still works.
+- The summary ends with doctor's own read-only scan, then either "Ready for generate (LTX 2.3)" or the list of items that still need you (exit 1).
+
+When it says ready:
+
+```bash
+python -m master_agent comfy start
+python -m master_agent comfy run --mode generate --variant base --prompt "a test shot"
+```
+
+### llama.cpp
+
+The local LLM (brief, director, judge, knowledge-base embeddings) runs on llama.cpp. Automatic install puts it in `LLAMACPP_ROOT` (default `video_buddy/llama.cpp`), pinned to the official ggml-org/llama.cpp release tag `LLAMACPP_REF` (default `b11389`):
+
+1. With git, cmake, and a C++ compiler, it builds `llama-server` from that tag: CUDA with an NVIDIA GPU and the CUDA toolkit, Metal on Apple Silicon, CPU otherwise.
+2. If a tool is missing or the build fails, it downloads the official prebuilt release for your platform instead.
+3. If neither works, it says which tools are missing and the command that installs them, and carries on.
+
+Running it again is safe: a finished copy at the pinned tag is skipped, and a half-done checkout or download is resumed. Buddy finds that `llama-server` by itself; `LLAMACPP_BIN` and `PATH` still win.
+
+The LLM models are GGUF files llama-server serves from `MODELS_DIR`: `LLAMACPP_MODEL` (`qwen3-vl-heretic`) and `KB_EMBED_MODEL` (`nomic-embed-text`). Buddy has no public download source for them, so automatic install skips each one with a line like "Skipped qwen3-vl-heretic: no public GGUF source is defined; continuing." It does not stop or ask, and the run can still end "Ready for generate (LTX 2.3)". The summary lists them on a "Skipped" line. To use them, put the GGUF files in `MODELS_DIR`.
+
 ## Install
 
-`install.py` creates `.venv`, installs pip deps, Playwright Chromium, copies `.env`, and tries ffmpeg plus the Ollama models `qwen3-vl-heretic` and `nomic-embed-text`. It does not download video weights.
+`install.py` without `--automatic-install` is the lighter install. It creates `.venv`, installs pip deps, Playwright Chromium, copies `.env`, and tries ffmpeg plus the Ollama models `qwen3-vl-heretic` and `nomic-embed-text`. It does not install ComfyUI or download video weights.
 
 | OS | Command |
 |---|---|

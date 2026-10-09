@@ -43,14 +43,21 @@ def reset_state() -> None:
 
 
 def resolve_binary() -> str | None:
-    """``LLAMACPP_BIN`` if it exists, else ``llama-server`` on ``PATH``."""
+    """``LLAMACPP_BIN`` if it exists, else ``llama-server`` on ``PATH``, else the
+    one automatic install put under ``LLAMACPP_ROOT``."""
     explicit = (cfg.LLAMACPP_BIN or "").strip().strip('"')
     if explicit:
         path = Path(explicit)
         if path.is_file():
             return str(path)
         return shutil.which(explicit)
-    return shutil.which("llama-server")
+    on_path = shutil.which("llama-server")
+    if on_path:
+        return on_path
+    from master_agent.llamacpp_install import buddy_binary
+
+    mine = buddy_binary(getattr(cfg, "LLAMACPP_ROOT", None))
+    return str(mine) if mine else None
 
 
 def endpoint_parts(url: str | None = None) -> tuple[str, int, str]:
@@ -121,7 +128,7 @@ def _fall_through(flag: bool | None) -> bool:
 def _missing_message(fall_through: bool) -> str:
     base = (
         "llama.cpp binary not found "
-        "(set LLAMACPP_BIN or install llama-server on PATH). "
+        "(set LLAMACPP_BIN, install llama-server on PATH, or run automatic install). "
     )
     if fall_through:
         return base + "Falling through to Ollama."
