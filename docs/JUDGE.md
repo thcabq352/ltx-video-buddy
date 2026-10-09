@@ -20,6 +20,8 @@ Below threshold the judge may rewrite the prompt or retune a whitelist: `steps`,
 
 `--no-judge` is one render: no judge and no quality-bar revise.
 
+An opt-in Rainey1 rubric (`PANEL_JUDGE_RUBRIC=rainey1`) adds look dimensions and hard-fail gates on the same payload: [Rainey1](RAINEY1.md#rubric).
+
 ## Quality bar
 
 Cheap rules. No GPU. No invented face scores. A fail always produces a `RevisePlan` even when the LLM is silent.
