@@ -46,6 +46,12 @@ class _Popen:
         self.pid = 424242
 
 
+@pytest.fixture(autouse=True)
+def _gpu_launch(monkeypatch: pytest.MonkeyPatch):
+    """Launch argv must not depend on whether the test machine has a GPU."""
+    monkeypatch.setenv("COMFY_CPU", "0")
+
+
 @pytest.fixture
 def isolated(tmp_path: Path, monkeypatch: pytest.MonkeyPatch):
     state_dir = tmp_path / "state"
@@ -394,6 +400,115 @@ def test_launch_args_omit_sage_attention_when_missing(monkeypatch: pytest.Monkey
     assert "--use-sage-attention" not in args
     assert args[-1] == "127.0.0.1"
     assert any("sageattention" in item for item in warnings)
+
+
+# --- CPU mode (--cpu) ------------------------------------------------------------
+
+
+def _fake_env(**kw):
+    from master_agent.comfy.comfy_venv import ComfyEnv
+
+    base = dict(python_path="/ws/.venv/bin/python", source="workspace-venv", python="3.12.3",
+                system="Linux", machine="x86_64")
+    base.update(kw)
+    return ComfyEnv(**base)
+
+
+def _detect(monkeypatch, *, env, vendor, system="Linux", machine="x86_64"):
+    from master_agent.comfy import comfy_venv, hardware
+
+    monkeypatch.delenv("COMFY_CPU", raising=False)
+    monkeypatch.setattr(comfy_venv, "probe_comfy_env", lambda workspace, **k: env)
+    monkeypatch.setattr(hardware, "scan_hardware", lambda: {"vendor": vendor})
+    monkeypatch.setattr("platform.system", lambda: system)
+    monkeypatch.setattr("platform.machine", lambda: machine)
+
+
+def test_cpu_torch_launches_with_cpu_flag(monkeypatch: pytest.MonkeyPatch):
+    _detect(monkeypatch, env=_fake_env(torch="2.9.1+cpu"), vendor="none")
+    monkeypatch.setattr(tower, "comfy_sageattention_available", lambda ws: False)
+    args = ManagedComfyTower()._launch_args(None)
+    tail = _launch_tail(args)
+    assert tail == ["--disable-auto-launch", "--port", "8188", "--listen", "127.0.0.1", "--cpu"]
+
+
+def test_cpu_flag_sits_before_extra_model_paths(monkeypatch: pytest.MonkeyPatch, tmp_path: Path):
+    _detect(monkeypatch, env=_fake_env(torch="2.9.1+cpu"), vendor="none")
+    monkeypatch.setattr(tower, "comfy_sageattention_available", lambda ws: False)
+    yaml_path = tmp_path / "extra.yaml"
+    yaml_path.write_text("comfyui:\n", encoding="utf-8")
+    tail = _launch_tail(ManagedComfyTower()._launch_args(yaml_path))
+    assert tail[-3:] == ["--cpu", "--extra-model-paths-config", str(yaml_path)]
+
+
+def test_cuda_torch_with_nvidia_gpu_has_no_cpu_flag(monkeypatch: pytest.MonkeyPatch):
+    _detect(monkeypatch, env=_fake_env(torch="2.9.1+cu128", cuda="12.8", cuda_available=True), vendor="nvidia")
+    monkeypatch.setattr(tower, "comfy_sageattention_available", lambda ws: True)
+    args = ManagedComfyTower()._launch_args(None)
+    assert "--cpu" not in args
+    assert args[-1] == "--use-sage-attention"
+
+
+def test_cuda_torch_with_gpu_but_driver_down_still_no_cpu_flag(monkeypatch: pytest.MonkeyPatch):
+    _detect(monkeypatch, env=_fake_env(torch="2.9.1+cu128", cuda="12.8", cuda_available=False), vendor="nvidia")
+    assert tower.comfy_cpu_mode("/ws")[0] is False
+
+
+def test_cuda_torch_without_any_gpu_uses_cpu(monkeypatch: pytest.MonkeyPatch):
+    _detect(monkeypatch, env=_fake_env(torch="2.9.1+cu128", cuda="12.8", cuda_available=False), vendor="none")
+    assert tower.comfy_cpu_mode("/ws")[0] is True
+
+
+def test_rocm_and_apple_mps_have_no_cpu_flag(monkeypatch: pytest.MonkeyPatch):
+    _detect(monkeypatch, env=_fake_env(torch="2.9.1+rocm6.4", hip="6.4", cuda_available=True), vendor="amd")
+    assert tower.comfy_cpu_mode("/ws")[0] is False
+    _detect(monkeypatch, env=_fake_env(torch="2.9.1", mps_available=True, system="Darwin", machine="arm64"),
+            vendor="none", system="Darwin", machine="arm64")
+    assert tower.comfy_cpu_mode("/ws")[0] is False
+
+
+def test_no_comfy_venv_falls_back_to_hardware_scan(monkeypatch: pytest.MonkeyPatch):
+    from master_agent.comfy.comfy_venv import ComfyEnv
+
+    _detect(monkeypatch, env=ComfyEnv(), vendor="none")
+    assert tower.comfy_cpu_mode("/ws")[0] is True
+    _detect(monkeypatch, env=ComfyEnv(), vendor="nvidia")
+    assert tower.comfy_cpu_mode("/ws")[0] is False
+    _detect(monkeypatch, env=ComfyEnv(), vendor="none", system="Darwin", machine="arm64")
+    assert tower.comfy_cpu_mode("/ws")[0] is False
+
+
+@pytest.mark.parametrize("value", ["1", "true", "YES", "on"])
+def test_comfy_cpu_override_forces_cpu_flag(monkeypatch: pytest.MonkeyPatch, value: str):
+    from master_agent.comfy import comfy_venv
+
+    monkeypatch.setattr(comfy_venv, "probe_comfy_env", lambda *a, **k: pytest.fail("override must skip the probe"))
+    monkeypatch.setenv("COMFY_CPU", value)
+    monkeypatch.setattr(tower, "comfy_sageattention_available", lambda ws: False)
+    args = ManagedComfyTower()._launch_args(None)
+    assert args[-1] == "--cpu"
+
+
+def test_comfy_cpu_zero_never_adds_cpu_flag(monkeypatch: pytest.MonkeyPatch):
+    _detect(monkeypatch, env=_fake_env(torch="2.9.1+cpu"), vendor="none")
+    monkeypatch.setenv("COMFY_CPU", "0")
+    monkeypatch.setattr(tower, "comfy_sageattention_available", lambda ws: False)
+    assert "--cpu" not in ManagedComfyTower()._launch_args(None)
+
+
+def test_cpu_flag_without_sage_when_sage_not_importable(monkeypatch: pytest.MonkeyPatch):
+    monkeypatch.setenv("COMFY_CPU", "1")
+    monkeypatch.setattr(tower, "comfy_sageattention_available", lambda ws: False)
+    args = ManagedComfyTower()._launch_args(None)
+    assert "--cpu" in args and "--use-sage-attention" not in args
+
+
+def test_external_mode_still_refuses_start_in_cpu_mode(isolated, monkeypatch: pytest.MonkeyPatch):
+    monkeypatch.setenv("COMFY_CPU", "1")
+    monkeypatch.setenv("COMFY_MODE", "external")
+    with pytest.raises(TowerError, match="comfy_mode=external"):
+        ManagedComfyTower().start()
+    assert isolated["calls"] == []
 
 
 def test_sageattention_available_follows_find_spec(monkeypatch: pytest.MonkeyPatch):

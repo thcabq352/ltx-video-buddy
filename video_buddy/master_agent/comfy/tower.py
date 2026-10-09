@@ -11,6 +11,8 @@ refuses start, stop, and restart so a user-owned server is left alone.
 Managed start writes a Buddy-owned ``extra_model_paths.yaml`` under state
 and passes it with ``--extra-model-paths-config``. That file is not
 ``comfy attach`` (WorkflowPatchPlan). See ``comfy/model_paths.py``.
+On a machine without a usable GPU, managed start also passes ``--cpu``
+(``COMFY_CPU`` overrides the detection; see :func:`comfy_cpu_mode`).
 
 ``comfy attach`` in the CLI is still WorkflowPatchPlan. It is not this module.
 """
@@ -53,6 +55,7 @@ __all__ = [
     "TowerState",
     "cmd_tower",
     "comfy_cli_present",
+    "comfy_cpu_mode",
     "effective_mode",
     "http_ready",
     "load_state",
@@ -181,6 +184,42 @@ def comfy_sageattention_available(workspace: Path | str | None) -> bool:
     if py is None:
         return sageattention_available()
     return module_importable(py, "sageattention")
+
+
+_TRUE = frozenset({"1", "true", "yes", "on"})
+_FALSE = frozenset({"0", "false", "no", "off"})
+
+
+def comfy_cpu_mode(workspace: Path | str | None) -> tuple[bool, str]:
+    """Whether managed Comfy launches with ``--cpu``. Returns ``(cpu, reason)``.
+
+    ``COMFY_CPU=1`` forces it, ``COMFY_CPU=0`` never adds it, unset or ``auto``
+    asks the Comfy venv's torch, then the hardware scan.
+    """
+    raw = (os.getenv("COMFY_CPU") or "").strip().lower()
+    if raw in _TRUE:
+        return True, "COMFY_CPU is set"
+    if raw in _FALSE:
+        return False, "COMFY_CPU=0"
+    if raw and raw != "auto":
+        log.warning("COMFY_CPU=%r is not 1, 0, or auto; detecting instead", raw)
+    import platform
+
+    from master_agent.comfy.comfy_venv import needs_cpu_flag, probe_comfy_env
+    from master_agent.comfy.hardware import scan_hardware
+
+    env = probe_comfy_env(workspace)
+    try:
+        vendor = str(scan_hardware().get("vendor") or "")
+    except Exception as exc:
+        log.warning("hardware scan failed (%s); treating as no GPU", exc)
+        vendor = "unknown"
+    return needs_cpu_flag(
+        env,
+        gpu_vendor=vendor,
+        host_system=platform.system(),
+        host_machine=platform.machine(),
+    )
 
 
 def comfy_cli_present() -> bool:
@@ -444,6 +483,10 @@ class ManagedComfyTower:
             "--listen",
             LISTEN_HOST,
         ]
+        cpu, why = comfy_cpu_mode(self.workspace)
+        if cpu:
+            log.info("CPU mode (%s): launching ComfyUI with --cpu. Generation will be very slow.", why)
+            args.append("--cpu")
         if extra_model_paths is not None:
             emp = Path(extra_model_paths)
             if not emp.is_file():

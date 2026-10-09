@@ -61,6 +61,7 @@ def env(tmp_path: Path, monkeypatch: pytest.MonkeyPatch):
 
     monkeypatch.setattr(ai, "_run", fake_run)
     monkeypatch.setattr(ai, "_which", lambda name: which.get(name))
+    monkeypatch.setattr(ai, "git_path", lambda: "/usr/bin/git")
     monkeypatch.setattr(ai, "disk_free", lambda path: 500 * GB)
     monkeypatch.setattr(ai, "_volume_id", lambda path: 1)
     monkeypatch.setattr(ai, "_is_root", lambda: False)
@@ -175,6 +176,7 @@ def test_preflight_order_and_happy_path(env):
     pf = ai.run_preflight()
     assert [c.name for c in pf.checks] == [
         "Disk space",
+        "git",
         "Hugging Face access",
         "GPU / VRAM",
         "llama.cpp",
@@ -183,6 +185,7 @@ def test_preflight_order_and_happy_path(env):
     assert pf.ok
     by = {c.name: c for c in pf.checks}
     assert by["Disk space"].status == ai.PASS
+    assert by["git"].status == ai.PASS
     assert by["GPU / VRAM"].status == ai.INFO and not by["GPU / VRAM"].blocking
     llama = by["llama.cpp"]
     assert llama.status == ai.INFO and not llama.blocking
@@ -229,6 +232,30 @@ def test_preflight_disk_grouped_per_volume(env, monkeypatch):
     text = "\n".join(check.lines)
     assert text.count("space on the drive holding") == 3
     assert "NOT enough" in text and "MANAGED_COMFY_ROOT=" in text
+
+
+def test_preflight_missing_git_fails_closed_with_install_hint(env, monkeypatch, capsys):
+    monkeypatch.setattr(ai, "git_path", lambda: None)
+    rc = ai.cmd_automatic_install(_args(yes=True))
+    out = capsys.readouterr().out
+    assert rc == 1
+    assert "STOPPED at 'git'" in out
+    assert "git is not installed" in out and "Install it with:" in out
+    assert env.calls == []
+    assert not env.workspace.exists()
+
+
+def test_git_hint_per_platform(monkeypatch):
+    for plat, needle in (("win32", "winget install --id Git.Git"), ("darwin", "xcode-select --install"),
+                         ("linux", "apt-get install -y git")):
+        monkeypatch.setattr(ai.sys, "platform", plat)
+        assert needle in ai.git_install_hint()
+
+
+def test_git_not_needed_once_comfy_and_nodes_are_installed(monkeypatch):
+    monkeypatch.setattr(ai, "git_path", lambda: None)
+    check = ai.check_git(needed=False)
+    assert check.status == ai.INFO and not check.failed
 
 
 def test_preflight_missing_token_not_needed_passes(env):

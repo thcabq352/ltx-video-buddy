@@ -52,7 +52,7 @@ out = {
     "system": platform.system(),
     "machine": platform.machine(),
     "torch": None, "cuda": None, "cuda_available": False, "hip": None,
-    "torch_triton_requirement": None,
+    "mps_available": False, "torch_triton_requirement": None,
     "triton": None, "sageattention": None, "errors": {},
 }
 try:
@@ -64,6 +64,10 @@ try:
         out["cuda_available"] = bool(torch.cuda.is_available())
     except Exception as exc:
         out["errors"]["cuda_available"] = str(exc)[:200]
+    try:
+        out["mps_available"] = bool(torch.backends.mps.is_available())
+    except Exception:
+        pass
 except Exception as exc:
     out["errors"]["torch"] = str(exc)[:200]
 try:
@@ -133,6 +137,7 @@ class ComfyEnv:
     cuda: str | None = None
     hip: str | None = None
     cuda_available: bool = False
+    mps_available: bool = False
     torch_triton_requirement: str | None = None
     triton: str | None = None
     sageattention: str | None = None
@@ -195,6 +200,7 @@ def probe_comfy_env(
         "cuda",
         "hip",
         "cuda_available",
+        "mps_available",
         "torch_triton_requirement",
         "triton",
         "sageattention",
@@ -218,6 +224,33 @@ def module_importable(python: Path | str, module: str, *, runner: Runner = subpr
     except (OSError, subprocess.TimeoutExpired):
         return False
     return proc.returncode == 0
+
+
+def needs_cpu_flag(
+    env: ComfyEnv, *, gpu_vendor: str, host_system: str, host_machine: str
+) -> tuple[bool, str]:
+    """Whether ComfyUI must be launched with ``--cpu``. Returns ``(cpu, reason)``.
+
+    ComfyUI calls ``torch.cuda.current_device()`` at startup unless it finds
+    MPS or is told ``--cpu``, so a CPU-only PyTorch crashes without the flag.
+    The Comfy venv's torch decides when the probe answered; otherwise the
+    hardware scan does. A CUDA build on a machine that does have a GPU is left
+    alone, so a broken driver fails loudly instead of silently running on CPU.
+    """
+    vendor = (gpu_vendor or "").strip().lower()
+    no_gpu = vendor in {"", "none", "unknown"}
+    if env.python_path and not env.probe_error and env.torch:
+        if env.cuda or env.hip:
+            if env.cuda_available or not no_gpu:
+                return False, f"PyTorch {env.torch} has GPU support"
+            return True, f"PyTorch {env.torch} has GPU support but no GPU was found"
+        if env.mps_available:
+            return False, f"PyTorch {env.torch} uses Apple MPS"
+        return True, f"the Comfy venv has a CPU-only PyTorch ({env.torch})"
+    apple_silicon = host_system == "Darwin" and host_machine.lower() in {"arm64", "aarch64"}
+    if no_gpu and not apple_silicon:
+        return True, "no GPU detected"
+    return False, f"GPU detected ({vendor or 'Apple Silicon'})"
 
 
 # --- Triton / SageAttention plan --------------------------------------------

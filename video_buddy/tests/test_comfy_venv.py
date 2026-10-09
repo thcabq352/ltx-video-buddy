@@ -252,6 +252,7 @@ def test_unknown_comfy_interpreter_never_pip_installs(tmp_path):
 
 def test_launch_flag_probes_comfy_venv(tmp_path, monkeypatch):
     ws, py = _workspace(tmp_path)
+    monkeypatch.setenv("COMFY_CPU", "0")
     monkeypatch.setattr(tower, "sageattention_available", lambda: pytest.fail("must probe the Comfy venv"))
     seen: list[list[str]] = []
 

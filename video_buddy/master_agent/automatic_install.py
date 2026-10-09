@@ -40,7 +40,8 @@ LTX23_BUNDLE = "ltx23_core"
 REQUIRED_NODES = ("ComfyUI-LTXVideo", "ComfyUI-GGUF")
 
 GB = 1_000_000_000
-# ComfyUI checkout + its own venv with CUDA PyTorch + custom nodes + Triton.
+# ComfyUI checkout + its own venv with the PyTorch build for the detected GPU
+# (NVIDIA CUDA, AMD ROCm, Apple Silicon, or CPU) + custom nodes + Triton.
 COMFY_OVERHEAD_BYTES = 15 * GB
 DISK_HEADROOM_BYTES = 5 * GB
 
@@ -60,6 +61,10 @@ OK, SKIPPED, FAILED, NONFATAL, PLANNED, NEEDS_YOU = (
 
 def _which(name: str) -> str | None:
     return shutil.which(name)
+
+
+def git_path() -> str | None:
+    return shutil.which("git")
 
 
 def _run(cmd: list[str], *, timeout: float = 600.0, env: dict[str, str] | None = None) -> tuple[int, str]:
@@ -407,6 +412,37 @@ def check_hf(missing_weights: list[Any], *, env_file: Path) -> Check:
     return Check("Hugging Face access", PASS, lines, blocking=True)
 
 
+def git_install_hint() -> str:
+    if sys.platform == "win32":
+        return "winget install --id Git.Git -e   (or download it from https://git-scm.com/download/win)"
+    if sys.platform == "darwin":
+        return "xcode-select --install   (or: brew install git)"
+    return "sudo apt-get install -y git   (or your distribution's package manager, e.g. sudo dnf install git)"
+
+
+def check_git(*, needed: bool) -> Check:
+    """comfy-cli runs ``git clone`` for ComfyUI and the custom node packs."""
+    found = git_path()
+    if found:
+        return Check("git", PASS, [f"git found: {found}"], blocking=True)
+    if not needed:
+        return Check(
+            "git",
+            INFO,
+            ["git is not on PATH. ComfyUI and its node packs are already installed, so it is not needed now."],
+        )
+    return Check(
+        "git",
+        FAIL,
+        [
+            "git is not installed (or not on PATH). ComfyUI is downloaded with git, so the install cannot work without it.",
+            f"  Install it with: {git_install_hint()}",
+            "  Then open a new terminal and run automatic install again.",
+        ],
+        blocking=True,
+    )
+
+
 def check_gpu(gpu: dict[str, Any]) -> Check:
     from master_agent.models.vram_policy import NVFP4_MIN_VRAM_GB
 
@@ -416,8 +452,8 @@ def check_gpu(gpu: dict[str, Any]) -> Check:
     if vendor in {"unknown", "none", ""}:
         lines.append("No GPU detected.")
         lines.append(
-            "CPU mode: ComfyUI will be installed for CPU. Video generation will work but is very slow "
-            "(expect hours per clip)."
+            "CPU mode: ComfyUI will be installed for CPU and started with --cpu. Video generation will "
+            "work but is very slow (expect hours per clip)."
         )
     else:
         shown = f"{float(vram):.0f} GB VRAM" if vram is not None else "VRAM unknown"
@@ -534,8 +570,10 @@ def run_preflight(*, skip_weights: bool = False, skip_llm: bool = False) -> Pref
     missing_weights = [] if skip_weights else list(weights.missing_mandatory)
     gpu = detect_gpu()
     llama = None if skip_llm else plan_llamacpp(gpu)
+    git_needed = state != "installed" or bool(missing_nodes(workspace))
     checks = [
         check_workspace(workspace, state=state, mode=mode),
+        check_git(needed=git_needed),
         check_disk(
             weights_bytes=sum(int(w.size_bytes) for w in missing_weights),
             comfy_bytes=0 if state == "installed" else COMFY_OVERHEAD_BYTES,
@@ -548,7 +586,14 @@ def run_preflight(*, skip_weights: bool = False, skip_llm: bool = False) -> Pref
         check_gpu(gpu),
         check_llamacpp(llama, skip=skip_llm),
     ]
-    order = {"Disk space": 0, "Hugging Face access": 1, "GPU / VRAM": 2, "llama.cpp": 3, "ComfyUI folder": 4}
+    order = {
+        "Disk space": 0,
+        "git": 1,
+        "Hugging Face access": 2,
+        "GPU / VRAM": 3,
+        "llama.cpp": 4,
+        "ComfyUI folder": 5,
+    }
     checks.sort(key=lambda c: order.get(c.name, 9))
     return Preflight(checks=checks, weights=weights, gpu=gpu, workspace_state=state, llama=llama)
 
