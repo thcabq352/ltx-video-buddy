@@ -103,10 +103,21 @@ def cmd_ui(args: argparse.Namespace) -> int:
         print("FAIL  uvicorn not installed (pip install uvicorn fastapi)")
         return 1
     from master_agent.web.app import app
+    from master_agent.web.local_guard import LocalOnlyGuard, is_loopback_host
 
+    allow_remote = bool(getattr(args, "allow_remote", False))
+    if not allow_remote and not is_loopback_host(args.host):
+        print(
+            f"FAIL  --host {args.host} is not loopback. The studio has no auth; "
+            "pass --allow-remote to expose it anyway."
+        )
+        return 2
+    serve = app if allow_remote else LocalOnlyGuard(app)
+    if allow_remote:
+        print("WARN  --allow-remote: no auth, no Host/Origin check. Anyone who can reach this port can queue renders.")
     print(f"VIDEO BUDDY studio: http://{args.host}:{args.port}")
     print("  Voice chat: open in Chrome/Edge → Voice tab (mic + spoken replies)")
-    uvicorn.run(app, host=args.host, port=args.port, log_level="warning")
+    uvicorn.run(serve, host=args.host, port=args.port, log_level="warning")
     return 0
 
 

@@ -108,6 +108,11 @@ def main(argv: list[str] | None = None) -> int:
     p = sub.add_parser("ui", help="web dashboard (FastAPI) on 127.0.0.1:8189")
     p.add_argument("--host", default="127.0.0.1")
     p.add_argument("--port", type=int, default=8189)
+    p.add_argument(
+        "--allow-remote",
+        action="store_true",
+        help="allow a non-loopback --host and skip the Host/Origin check (no auth!)",
+    )
     p.set_defaults(func=cmd_ui)
 
     p = sub.add_parser("run", help="orchestrated generation: patch -> validate -> submit -> judge")

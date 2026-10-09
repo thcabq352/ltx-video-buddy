@@ -69,7 +69,7 @@ Also `--vace`, `--krea`, `--qwen`, `--flux-pack`, `--bundle`, `--optional`, `--s
 
 | Command | Role |
 |---|---|
-| `ui --port 8189` | Create, Comfy, Voice, Fractal, Music, Jobs, Runs, Knowledge, Models, About. Localhost, no auth |
+| `ui --port 8189` | Create, Comfy, Voice, Fractal, Music, Jobs, Runs, Knowledge, Models, About. Loopback only, no auth. Refuses a non-loopback `--host` and foreign Host/Origin headers unless `--allow-remote` |
 | `persona list\|show\|set` | Interview voice |
 | `soul list\|show\|set` | Standing values |
 | `kb ingest\|search\|stats` | Local Chroma. `--knowledge` searches the git folder. `--workflows` searches digests |
