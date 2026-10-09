@@ -8,7 +8,7 @@ from __future__ import annotations
 
 import re
 
-from master_agent.config import DEFAULT_FPS, DOWNSCALE_LADDER, MAX_RETRIES
+from master_agent.config import DOWNSCALE_LADDER, MAX_RETRIES, get_variant_gen
 from master_agent.orchestrator.state import RunState
 
 _OOM_PATTERN = re.compile(
@@ -35,7 +35,7 @@ def apply_oom_downscale(st: RunState, ladder: list[tuple[int, int, int]]) -> boo
     st.width = int(width)
     st.height = int(height)
     st.frames = int(frames)
-    st.duration_s = float(st.frames) / float(DEFAULT_FPS)
+    st.duration_s = float(st.frames) / float(get_variant_gen(st.variant)["fps"])
     return True
 
 
