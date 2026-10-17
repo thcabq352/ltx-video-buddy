@@ -250,7 +250,9 @@ def test_doctor_reports_stale_pins_without_updating(monkeypatch, capsys):
     assert "--yes" in row["fix"]
     assert "pack-pins" in {item["name"] for item in snapshot()}
     assert print_report([row]) == 0
-    assert "NEED" in capsys.readouterr().out
+    out = capsys.readouterr().out
+    assert "INFO  pack-pins" in out
+    assert "-> python -m master_agent comfy update --yes" in out
 
 
 def test_start_prints_the_report_and_does_not_update(tmp_path: Path, monkeypatch, capsys):
