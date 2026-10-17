@@ -743,6 +743,19 @@ def step_comfyui(apply: bool, *, workspace: Path, state: str, gpu_flag: str) -> 
     return StepResult("ComfyUI", OK, f"installed in {workspace} ({gpu_flag})", lines=lines)
 
 
+def step_model_folders(apply: bool) -> StepResult:
+    from master_agent.models.layout import CREATED, WOULD_CREATE, ensure_model_folders
+
+    actions = ensure_model_folders(models_dir(), dry_run=not apply)
+    todo = [a for a in actions if a.action in {CREATED, WOULD_CREATE}]
+    if not todo:
+        return StepResult("model folders", SKIPPED, f"all {len(actions)} already exist in {models_dir()}")
+    lines = [f"mkdir {a.path}" for a in todo]
+    if not apply:
+        return StepResult("model folders", PLANNED, f"create {len(todo)} folder(s) in {models_dir()}", lines=lines)
+    return StepResult("model folders", OK, f"created {len(todo)} folder(s) in {models_dir()}", lines=lines)
+
+
 def step_model_paths(apply: bool) -> StepResult:
     from master_agent.comfy.model_paths import write_extra_model_paths
     from master_agent.comfy.tower import state_path
@@ -835,12 +848,30 @@ def verify_rows() -> list[dict[str, Any]]:
 # --- command -------------------------------------------------------------------
 
 
+def classify_step(r: StepResult) -> str:
+    """OK | INFO | FAILED-NONFATAL | FAIL for the end-of-install summary."""
+    from master_agent.install_report import FAIL as R_FAIL, INFO as R_INFO, NONFATAL as R_NONFATAL, OK as R_OK
+
+    if r.failed_required:
+        return R_FAIL
+    if r.status in {NONFATAL, NEEDS_YOU, FAILED}:
+        return R_NONFATAL
+    if r.name == "LLM models" and "skipped" in r.detail:
+        return R_INFO
+    return R_OK
+
+
 def _print_steps(results: list[StepResult]) -> None:
+    from master_agent.install_report import FAIL as R_FAIL, OK as R_OK, STEP_REASONS, safe_to_ignore
+
     for r in results:
         tag = "" if r.required else " (optional)"
         print(f"  {r.status:<16} {r.name}{tag}: {r.detail}")
         for line in r.lines:
             print(f"                   {line}")
+        level = classify_step(r)
+        if level not in {R_OK, R_FAIL} and r.name in STEP_REASONS:
+            print(f"                   {safe_to_ignore(STEP_REASONS[r.name])}")
 
 
 def cmd_automatic_install(args: Any) -> int:
@@ -871,6 +902,7 @@ def cmd_automatic_install(args: Any) -> int:
         ("ComfyUI", True, lambda: step_comfyui(
             apply, workspace=workspace, state=comfy_install_state(workspace), gpu_flag=flag
         )),
+        ("model folders", True, lambda: step_model_folders(apply)),
         ("model paths", True, lambda: step_model_paths(apply)),
         ("custom nodes", True, lambda: step_nodes(apply, workspace=workspace)),
         ("Triton + SageAttention", False, lambda: step_accel(apply, workspace=workspace, gpu=pf.gpu, skip=skip_sage)),
@@ -899,10 +931,29 @@ def cmd_automatic_install(args: Any) -> int:
     print("AUTOMATIC INSTALL — summary")
     _print_steps(results)
     print()
+    from master_agent.install_report import (
+        FAIL as R_FAIL,
+        OK as R_OK,
+        STEP_REASONS,
+        safe_to_ignore,
+        summary_line,
+    )
+
     print("Check (doctor scan, read-only):")
     for row in verify_rows():
-        print(f"  {'OK  ' if row['ok'] else 'NEED'}  {row['name']:<14} {row['detail']}")
+        if row["ok"]:
+            mark = "OK  "
+        elif row["name"] == "llama.cpp":
+            mark = "INFO"
+        else:
+            mark = "NEED"
+        print(f"  {mark}  {row['name']:<14} {row['detail']}")
+        if mark == "INFO":
+            print(f"        {safe_to_ignore(STEP_REASONS['llama.cpp'])}")
     failed = [r for r in results if r.failed_required]
+    levels = [classify_step(r) for r in results]
+    ok_count = sum(1 for lv in levels if lv == R_OK)
+    note_count = sum(1 for lv in levels if lv not in {R_OK, R_FAIL})
     print()
     skipped_models = [
         line.split(":", 1)[0].removeprefix("Skipped ")
@@ -920,7 +971,10 @@ def cmd_automatic_install(args: Any) -> int:
         print("Not ready for generate yet. Still needs you:")
         for r in failed:
             print(f"  - {r.name}: {r.detail}")
+        print()
+        print(summary_line(ok=ok_count, notes=note_count, failed=[r.name for r in failed]))
         return 1
+    print(summary_line(ok=ok_count, notes=note_count, failed=[]))
     print("Ready for generate (LTX 2.3). Next:")
     print("  python -m master_agent comfy start")
     print('  python -m master_agent comfy run --mode generate --variant base --prompt "a test shot"')

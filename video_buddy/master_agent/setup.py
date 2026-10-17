@@ -1,6 +1,7 @@
 """VIDEO BUDDY setup — check and install local dependencies.
 
-Pip packages, Playwright Chromium, .env, and ffmpeg. The local LLM GGUFs
+Pip packages, Playwright Chromium, .env, ffmpeg, and the empty Comfy-style
+model folders under ``MODELS_DIR`` (``--fix`` only). The local LLM GGUFs
 (``LLAMACPP_MODEL``, ``KB_EMBED_MODEL``) have no public download source, so
 they are reported and skipped, the same way automatic install skips them.
 Setup never installs Ollama or pulls Ollama models.
@@ -120,8 +121,9 @@ def check_playwright() -> dict[str, Any]:
     code, out = _run([_py(), "-m", "playwright", "install", "--dry-run", "chromium"], timeout=60)
     # dry-run may not exist on older playwright; treat import success as soft-ok
     detail = "python package present"
-    if code == 0 and out:
-        detail = out.splitlines()[-1][:160]
+    locations = [line.split(":", 1)[1].strip() for line in out.splitlines() if "Install location:" in line]
+    if code == 0 and locations:
+        detail = f"python package present; chromium at {locations[0]}"[:160]
     return _row("playwright", True, detail, fix=f"{_py()} -m playwright install chromium")
 
 
@@ -176,6 +178,32 @@ def check_llm_models() -> dict[str, Any]:
     return _row("llm-models", not skipped, "; ".join(parts) or "none configured", fix=fix)
 
 
+def check_model_folders() -> dict[str, Any]:
+    """Comfy-style subfolders under MODELS_DIR. Scan only; ``setup --fix`` creates them."""
+    from master_agent.config import MODELS_DIR
+    from master_agent.models.layout import SUBFOLDER_NAMES, missing_model_folders
+
+    missing = missing_model_folders(MODELS_DIR)
+    if not missing:
+        return _row("model-folders", True, f"all {len(SUBFOLDER_NAMES)} folders exist in {MODELS_DIR}")
+    return _row(
+        "model-folders",
+        False,
+        f"{len(missing)} missing in {MODELS_DIR}: " + ", ".join(p.name for p in missing),
+        fix="python -m master_agent setup --fix   # makes the empty folders; downloads nothing",
+    )
+
+
+def _managed_comfy_state() -> tuple[str, Path | None]:
+    try:
+        from master_agent.automatic_install import comfy_install_state, managed_workspace
+
+        workspace = managed_workspace()
+        return comfy_install_state(workspace), workspace
+    except Exception:
+        return "unknown", None
+
+
 def check_comfy() -> dict[str, Any]:
     url = os.getenv("COMFYUI_URL", "http://127.0.0.1:8188")
     try:
@@ -187,8 +215,33 @@ def check_comfy() -> dict[str, Any]:
     except Exception:
         pass
     portable = ROOT / "ComfyUI_windows_portable" / "run_api_8188.bat"
-    hint = str(portable) if portable.is_file() else "start ComfyUI with --port 8188 (or set COMFYUI_URL)"
+    state, workspace = _managed_comfy_state()
+    if portable.is_file():
+        hint = str(portable)
+    elif state == "installed":
+        hint = f"ComfyUI is installed in {workspace}. Start it: python -m master_agent comfy start"
+    elif state in {"absent", "partial"}:
+        from master_agent.install_report import FULL_INSTALL_CMD
+
+        hint = (
+            f"ComfyUI is not installed yet. Install it with LTX 2.3: {FULL_INSTALL_CMD} "
+            "(or start your own ComfyUI with --port 8188 and set COMFYUI_URL)"
+        )
+    else:
+        hint = "start ComfyUI with --port 8188 (or set COMFYUI_URL)"
     return _row("comfyui", False, f"not reachable at {url}", fix=hint)
+
+
+def dest_dir(role: str) -> str:
+    from master_agent.models.weights import dest_dir as _dest_dir
+
+    return _dest_dir(role)
+
+
+def _into(weights: list[Any]) -> str:
+    """`` (into <MODELS_DIR>/<folder>/, ...)`` for the folders the missing files go in."""
+    dirs = dict.fromkeys(dest_dir(w.dest_folder) for w in weights)
+    return f" (into {', '.join(dirs)})" if dirs else ""
 
 
 def check_ltx25_weights() -> dict[str, Any]:
@@ -214,7 +267,7 @@ def check_ltx25_weights() -> dict[str, Any]:
     hint = "python -m master_agent download-models --ltx25   # review confirmed-missing only, then --yes"
     if len(status.missing_mandatory) == 1 and status.missing_mandatory[0].key == "duration_head":
         hint = "duration-head is missing or zero-byte — " + hint
-    detail = f"missing {names}{more}"
+    detail = f"missing {names}{more}{_into(status.missing_mandatory)}"
     if status.found_paths.get("transformer"):
         detail = f"{pick}; {detail}"
     return _row(
@@ -260,8 +313,9 @@ def check_ltx23_weights() -> dict[str, Any]:
         "ltx23-weights",
         False,
         "no compatible LTX 2.3 GGUF after inventory "
-        "(sulphur_dev-Q3_K_S.gguf and other LTX 2.3 Q3/Q4/Q5 GGUF count)",
-        fix="python -m master_agent inventory   # doctor does not download this",
+        "(sulphur_dev-Q3_K_S.gguf and other LTX 2.3 Q3/Q4/Q5 GGUF count). "
+        f"It goes in {dest_dir('diffusion_models')}",
+        fix="python -m master_agent download-models --ltx23   # lists the LTX 2.3 pack; --yes fetches. Doctor does not download",
     )
 
 
@@ -289,7 +343,7 @@ def check_h3_weights() -> dict[str, Any]:
     names = ", ".join(w.filename for w in status.missing_mandatory[:4])
     more = f" (+{len(status.missing_mandatory) - 4} more)" if len(status.missing_mandatory) > 4 else ""
     hint = "python -m master_agent download-models --h3   # review confirmed-missing only, then --yes"
-    detail = f"missing {names}{more}"
+    detail = f"missing {names}{more}{_into(status.missing_mandatory)}"
     if status.found_paths.get("h3_fl2va"):
         detail = f"{pick}; {detail}"
     return _row("h3-weights", False, _with_h3_us(detail), fix=hint)
@@ -463,6 +517,7 @@ def snapshot() -> list[dict[str, Any]]:
         check_playwright(),
         check_env(),
         check_ffmpeg(),
+        check_model_folders(),
         check_llm_models(),
         check_comfy(),
         check_vram_policy(),
@@ -504,8 +559,13 @@ _OPTIONAL_INFO_ROWS = frozenset(
         "heartmula-comfy",
         "hardware",
         "pack-pins",
+        "model-folders",
     }
 )
+
+# Rows ``setup --fix`` can actually repair. Everything else needs automatic
+# install, download-models, or the user.
+_FIXED_BY_SETUP_FIX = frozenset({"venv", "pip", "playwright", "env", "ffmpeg", "model-folders"})
 
 
 def heartmula_rows() -> list[dict[str, Any]]:
@@ -514,27 +574,82 @@ def heartmula_rows() -> list[dict[str, Any]]:
     return heartmula_doctor_rows()
 
 
-def print_report(rows: list[dict[str, Any]], *, weight_optional: bool = False) -> int:
+def classify_row(row: dict[str, Any], *, light: bool = False, weight_optional: bool = False) -> str:
+    """OK | INFO | FAIL for one doctor row. ``light`` is the plain install.py / setup --fix view."""
+    from master_agent.install_report import FAIL, INFO, LIGHT_INSTALL_NOT_INCLUDED, OK
+
+    name = row["name"]
+    if row["ok"]:
+        return OK
+    if name in _OPTIONAL_INFO_ROWS:
+        return INFO
+    if weight_optional and name in _WEIGHT_ROWS:
+        return INFO
+    if light and name in LIGHT_INSTALL_NOT_INCLUDED:
+        return INFO
+    return FAIL
+
+
+def _row_reason(name: str, *, light: bool) -> str:
+    from master_agent.install_report import INFO_ROW_REASONS, LIGHT_INSTALL_NOT_INCLUDED
+
+    if name in INFO_ROW_REASONS:
+        return INFO_ROW_REASONS[name]
+    if light and name in LIGHT_INSTALL_NOT_INCLUDED:
+        return LIGHT_INSTALL_NOT_INCLUDED[name]
+    return ""
+
+
+def print_report(rows: list[dict[str, Any]], *, weight_optional: bool = False, light: bool = False) -> int:
+    """Print doctor rows. Only FAIL rows count toward the exit code.
+
+    ``light`` (setup --fix, i.e. plain install.py) downgrades the rows the
+    light install never provides (ComfyUI, weight packs) to INFO, and ends
+    with the ``Install OK`` / ``Install FAILED`` summary line.
+    """
+    from master_agent.install_report import FAIL, INFO, OK, safe_to_ignore, summary_line
+
     print("VIDEO BUDDY setup")
-    failed = 0
+    failed: list[str] = []
+    counts = {OK: 0, INFO: 0}
     for row in rows:
-        mark = "OK  " if row["ok"] else "NEED"
-        info_only = row["name"] in _OPTIONAL_INFO_ROWS
-        optional = weight_optional and not row["ok"] and row["name"] in _WEIGHT_ROWS
-        if not row["ok"] and not optional and not info_only:
-            failed += 1
+        level = classify_row(row, light=light, weight_optional=weight_optional)
+        name = row["name"]
         detail = row["detail"]
-        if optional:
+        if weight_optional and not row["ok"] and name in _WEIGHT_ROWS:
             detail = f"{detail} (--use-existing: not downloading)"
-        print(f"  {mark}  {row['name']:<18} {detail}")
-        if not row["ok"] and row.get("fix") and (info_only or not optional):
-            print(f"        → {row['fix']}")
+        if level == FAIL:
+            failed.append(name)
+            mark = "NEED"
+        else:
+            counts[level] += 1
+            mark = "OK  " if level == OK else "INFO"
+        print(f"  {mark}  {name:<18} {detail}")
+        if level == INFO:
+            why = _row_reason(name, light=light)
+            if why:
+                print(f"        {safe_to_ignore(why)}")
+        use_existing = weight_optional and name in _WEIGHT_ROWS
+        if level != OK and row.get("fix") and not use_existing:
+            print(f"        -> {row['fix']}")
     print()
-    if failed:
-        print(f"{failed} check(s) need work. Re-run: python -m master_agent setup --fix")
+    if light:
+        print(summary_line(ok=counts[OK], notes=counts[INFO], failed=failed))
+    elif failed:
+        fixable = [n for n in failed if n in _FIXED_BY_SETUP_FIX]
+        rest = [n for n in failed if n not in _FIXED_BY_SETUP_FIX]
+        print(f"{len(failed)} check(s) need work.")
+        if fixable:
+            print(f"  setup --fix handles: {', '.join(fixable)}. Run: python -m master_agent setup --fix")
+        if rest:
+            from master_agent.install_report import FULL_INSTALL_CMD
+
+            print(f"  setup --fix does not handle: {', '.join(rest)}. Each row's -> line says what does.")
+            if "comfyui" in rest or "ltx23-weights" in rest:
+                print(f"  ComfyUI + LTX 2.3 for a new machine: {FULL_INSTALL_CMD}")
     else:
         print("All checked dependencies are ready.")
-    return 0 if failed == 0 else 1
+    return 0 if not failed else 1
 
 
 def ensure_venv() -> None:
@@ -546,23 +661,54 @@ def ensure_venv() -> None:
         raise RuntimeError(f"venv failed: {out}")
 
 
+def _nonfatal(what: str, why: str, tail: str = "") -> None:
+    from master_agent.install_report import NONFATAL, safe_to_ignore
+
+    print(f"{NONFATAL}  {what}")
+    if tail:
+        print(f"        {tail.strip().splitlines()[-1][:300]}")
+    print(f"        {safe_to_ignore(why)}")
+
+
 def install_pip() -> None:
     py = _py()
-    print("installing Python packages…")
+    print("installing Python packages...")
     code, out = _run([py, "-m", "pip", "install", "--upgrade", "pip"], timeout=180)
     if code != 0:
-        print(out[-400:])
+        _nonfatal("pip self-upgrade", "the pip already in .venv still installs requirements.txt", out)
     code, out = _run([py, "-m", "pip", "install", "-r", str(REQ)], timeout=900)
     if code != 0:
         raise RuntimeError(f"pip install failed:\n{out[-800:]}")
 
 
+def install_model_folders() -> None:
+    """Empty Comfy-style subfolders under MODELS_DIR. Never downloads."""
+    from master_agent.config import MODELS_DIR
+    from master_agent.models.layout import CREATED, ensure_model_folders
+
+    try:
+        made = [a.path for a in ensure_model_folders(MODELS_DIR) if a.action == CREATED]
+    except OSError as exc:
+        from master_agent.install_report import INFO_ROW_REASONS
+
+        _nonfatal(f"could not create model folders in {MODELS_DIR} ({exc})", INFO_ROW_REASONS["model-folders"])
+        return
+    if made:
+        print(f"created {len(made)} model folder(s) in {MODELS_DIR}: " + ", ".join(p.name for p in made))
+
+
 def install_playwright() -> None:
     py = _py()
-    print("installing Playwright Chromium…")
+    print("installing Playwright Chromium...")
     code, out = _run([py, "-m", "playwright", "install", "chromium"], timeout=600)
     if code != 0:
-        print(f"WARN  playwright chromium: {out[-400:]}")
+        from master_agent.install_report import STEP_REASONS
+
+        _nonfatal(
+            f"playwright chromium (retry: {py} -m playwright install chromium)",
+            STEP_REASONS["Playwright Chromium"],
+            out,
+        )
 
 
 def install_env() -> None:
@@ -597,7 +743,7 @@ def install_ffmpeg() -> None:
             if code == 0:
                 return
         print(out[-300:])
-    print("WARN  could not auto-install ffmpeg — " + check_ffmpeg()["fix"])
+    print("FAIL  could not auto-install ffmpeg (Buddy needs it to write and check video). " + check_ffmpeg()["fix"])
 
 
 def install_llm_models() -> None:
@@ -607,7 +753,10 @@ def install_llm_models() -> None:
 
         result = step_llm_models(True, skip=False)
     except Exception as exc:
-        print(f"WARN  LLM model check skipped ({exc}); continuing.")
+        from master_agent.install_report import INFO, STEP_REASONS, safe_to_ignore
+
+        print(f"{INFO}  LLM model check skipped ({exc}); continuing.")
+        print(f"        {safe_to_ignore(STEP_REASONS['LLM models'])}")
         return
     for line in result.lines:
         if not line.startswith("Skipped "):
@@ -615,7 +764,7 @@ def install_llm_models() -> None:
 
 
 def fix() -> int:
-    """Install local tooling. Does not run ``comfy install`` or ``comfy update``."""
+    """The light install. Does not run ``comfy install`` or ``comfy update`` or fetch weights."""
     print("VIDEO BUDDY setup --fix")
     if sys.version_info[:2] < MIN_PY:
         print(f"FAIL  Python {MIN_PY[0]}.{MIN_PY[1]}+ required")
@@ -626,12 +775,13 @@ def fix() -> int:
         install_playwright()
         install_env()
         install_ffmpeg()
+        install_model_folders()
         install_llm_models()
     except RuntimeError as exc:
         print(f"FAIL  {exc}")
         return 1
     print()
-    return print_report(snapshot())
+    return print_report(snapshot(), light=True)
 
 
 def print_inventory_preamble() -> None:
