@@ -13,6 +13,8 @@ Buddy scans, in order:
 
 A file in `MODELS_DIR` wins over the same name elsewhere. Zero-byte files count as missing. Weights are not in git.
 
+Inside `MODELS_DIR` weights go in Comfy-style subfolders: `checkpoints`, `diffusion_models` (and its older name `unet`), `text_encoders` (and `clip`), `vae`, `loras`, `latent_upscale_models`, `upscale_models`, `model_patches`, `clip_vision`, `controlnet`. `setup --fix` (plain `install.py`) and automatic install create them empty; `automatic-install --dry-run` prints the `mkdir` plan and creates nothing. What goes in each: [`video_buddy/models/README.md`](../video_buddy/models/README.md). Doctor's `model-folders` row reports any that are missing, and NEED lines name the exact folder a missing file goes in.
+
 ```bash
 cd video_buddy
 python -m master_agent inventory
@@ -31,7 +33,7 @@ python -m master_agent workflows --vram
 | *(none)* | Scan and print `OK` / `NEED` |
 | `--scan-only` | Report only. Does not install or fetch weights |
 | `--use-existing` | Keep files already on disk. Does not download |
-| `--fix` | Venv, pip, Playwright, `.env`, ffmpeg. LLM GGUFs not in `MODELS_DIR` are skipped ("no public GGUF source is defined; continuing"). Never pulls Ollama. Still no video weights |
+| `--fix` | The light install: venv, pip, Playwright, `.env`, ffmpeg, the empty model folders. LLM GGUFs not in `MODELS_DIR` are skipped ("no public GGUF source is defined; continuing"). Never pulls Ollama. Still no video weights |
 | `--fix-models` | After the scan, fetch confirmed-missing LTX 2.5 weights. Explicit consent |
 | `download-models` | List confirmed-missing slots. Exit 2 if something is missing. Nothing downloaded |
 | `download-models --yes` | Fetch that missing set only |
@@ -53,13 +55,17 @@ Gated Hub packs need `HF_TOKEN` or `huggingface-cli login`. LTX 2.5 is the LTX-2
 | `playwright` | package importable |
 | `env` | `.env` exists |
 | `ffmpeg` | on PATH |
-| `ollama` | on PATH and `qwen3-vl-heretic` + `nomic-embed-text` listed (optional if llama.cpp is the local LLM) |
-| `comfyui` | `COMFYUI_URL` `/system_stats` answers |
+| `model-folders` | every subfolder above exists in `MODELS_DIR`. Informational; `setup --fix` creates them |
+| `llm-models` | `qwen3-vl-heretic` / `nomic-embed-text` GGUFs are in `MODELS_DIR`. Informational; never fails doctor |
+| `comfyui` | `COMFYUI_URL` `/system_stats` answers. With no ComfyUI installed the fix line says to run automatic install |
 | `hardware` | One routing sentence. Does not block install |
 | `vram-policy` | The loader order below |
 | `ltx25-weights` | `ltx25_core` scan plus the loader pick |
+| `ltx23-weights` | a compatible LTX 2.3 GGUF is on disk |
 | `h3-weights` | `h3_fl2va` scan plus the loader pick |
-| `heartlib` / `heartmula-weights` / `heartmula-comfy` | Reported. A NEED here does not fail doctor and does not fetch |
+| `heartlib` / `heartmula-weights` / `heartmula-comfy` | Reported. An INFO here does not fail doctor and does not fetch |
+
+After `setup --fix` (and so after plain `install.py`), the rows the light install never provides (`comfyui` and the weight rows) print as `INFO` with a "safe to ignore because ..." line instead of failing, and the report ends with `Install OK: N ok, M non-fatal note(s)` or `Install FAILED: ...` (exit 1). Plain `doctor` still counts them.
 
 A ready transformer line names the file the default loader will wire. A zero-byte duration head is optional: no shipped LTX 2.5 graph loads it, so it does not fail `ltx25-weights`.
 
@@ -117,7 +123,7 @@ Any one transformer name fills the slot. Official bf16 Gemma is not required whe
 
 H3 CFG stays 1.0. On a 16GB-class card the sweet spot is 0.6–0.8 MP, at most 12 seconds, 4 steps. Frame grid is 17k+5 (124 ≈ 5s at 24 fps). Do not use LTX `8n+1` lengths on H3 graphs.
 
-`download-models` bundles: `ltx25_core`, `ltx25_two_stage`, `ltx25_iclora`, `ltx25_msr`, `ltx25_all`, `h3_fl2va`, `h3_ref2va`, `h3_all`. `--optional` also lists the distilled LoRA 450 and the temporal upscaler. Family scans that only list missing files until `--yes`: `--wan`, `--vace`, `--krea`, `--qwen`, `--flux-pack`, `--heartmula`.
+`download-models` bundles: `ltx25_core`, `ltx25_two_stage`, `ltx25_iclora`, `ltx25_msr`, `ltx25_all`, `h3_fl2va`, `h3_ref2va`, `h3_all`. `--optional` also lists the distilled LoRA 450 and the temporal upscaler. Family scans that only list missing files until `--yes`: `--ltx23` (`ltx23_core`, the pack automatic install fetches), `--wan`, `--vace`, `--krea`, `--qwen`, `--flux-pack`, `--heartmula`.
 
 Legacy Mickmumpitz / LTX 2.3 filenames still used by older graphs are installed with `python state/download_models.py` from `video_buddy/`. That script is not LTX 2.5 and is not part of `install.py`. On-disk layout notes from before this slim live in [`docs/archive/video_buddy/models/README.md`](archive/video_buddy/models/README.md).
 
@@ -138,7 +144,7 @@ Legacy Mickmumpitz / LTX 2.3 filenames still used by older graphs are installed 
 | Qwen Edit | `vb_qwen_edit_360` | Q5_0 + Lightning | ~12GB |
 | HeartMuLa | `heartmula` | heartlib 3B | ~12GB, class tight, about 8–16GB by dtype. Run it before or after LTX, not beside it |
 
-Attested Hub ids (fetch only after the ask): Wan QuantStack HighNoise/LowNoise Q4_K_S or Comfy-Org fp8; VACE `mickmumpitz/VACE_Skyreels_V3_R2V_Merge-GGUF`; Krea `Comfy-Org/Krea-2`; Flux `city96/FLUX.1-dev-gguf` or `Comfy-Org/flux1-dev`; Qwen `QuantStack/Qwen-Image-Edit-2509-GGUF`; H3 [`unsloth/MiniMax-H3-GGUF`](https://huggingface.co/unsloth/MiniMax-H3-GGUF) and [`Comfy-Org/MiniMax-H3`](https://huggingface.co/Comfy-Org/MiniMax-H3). QuantStack LTX-2.3 GGUF is not a download pack.
+Attested Hub ids (fetch only after the ask): Wan QuantStack HighNoise/LowNoise Q4_K_S or Comfy-Org fp8; VACE `mickmumpitz/VACE_Skyreels_V3_R2V_Merge-GGUF`; Krea `Comfy-Org/Krea-2`; Flux `city96/FLUX.1-dev-gguf` or `Comfy-Org/flux1-dev`; Qwen `QuantStack/Qwen-Image-Edit-2509-GGUF`; H3 [`unsloth/MiniMax-H3-GGUF`](https://huggingface.co/unsloth/MiniMax-H3-GGUF) and [`Comfy-Org/MiniMax-H3`](https://huggingface.co/Comfy-Org/MiniMax-H3). LTX 2.3 (`ltx23_core`, fetched by automatic install or `download-models --ltx23 --yes`): `Lightricks/LTX-2.3` distilled 1.1 checkpoint, QuantStack `LTX-2.3-22B-distilled-1.1-Q4_K_S.gguf` from `QuantStack/LTX-2.3-GGUF`, `Comfy-Org/ltx-2` Gemma 3 12B fp4 text encoder, and the `Kijai/LTX2.3_comfy` distilled LoRA plus full and tiny VAEs. File-by-folder list: [`video_buddy/models/README.md`](../video_buddy/models/README.md#the-ltx-23-pack).
 
 Lightx2v / turbo LoRAs apply when the file is present. LTX TeaCache is inject-when-registered and soft-bypasses when the pack is missing. See [Agents](AGENTS.md).
 

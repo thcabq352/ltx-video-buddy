@@ -53,7 +53,7 @@ Other flags: `--gpu auto|nvidia|amd|m-series|cpu` picks the ComfyUI PyTorch buil
 - Running it again is safe. Finished steps are skipped. A half-finished ComfyUI is repaired with `comfy install --restore`.
 - Buddy never uses `sudo` silently. On Linux, when ffmpeg needs administrator rights and `sudo` would ask for a password, the step shows `NEEDS-YOU` with the exact command to run yourself. The same goes for the llama.cpp build tools.
 - Optional steps (Playwright, Triton, SageAttention, llama.cpp, LLM models) never stop the install. When they fail they show `FAILED-NONFATAL` (or `NEEDS-YOU` with a command) and video generation still works.
-- The summary ends with doctor's own read-only scan, then either "Ready for generate (LTX 2.3)" or the list of items that still need you (exit 1).
+- The summary ends with doctor's own read-only scan, then `Install OK: N ok, M non-fatal note(s)` and "Ready for generate (LTX 2.3)", or the list of items that still need you and `Install FAILED: ...` (exit 1). Every `INFO` or `FAILED-NONFATAL` line carries a "safe to ignore because ..." note.
 
 When it says ready:
 
@@ -76,7 +76,7 @@ The LLM models are GGUF files llama-server serves from `MODELS_DIR`: `LLAMACPP_M
 
 ## Install
 
-`install.py` without `--automatic-install` is the lighter install. It creates `.venv`, installs pip deps, Playwright Chromium, copies `.env`, and tries ffmpeg. It does not install ComfyUI or download video weights. It handles the LLM models the same way automatic install does: each one not already in `MODELS_DIR` is skipped with "Skipped qwen3-vl-heretic: no public GGUF source is defined; continuing." and the install carries on. It never installs Ollama or runs `ollama pull`.
+`install.py` without `--automatic-install` is the **light** install. It creates `.venv`, installs pip deps, Playwright Chromium, copies `.env`, tries ffmpeg, and creates the empty model folders under `MODELS_DIR`. It does not install ComfyUI or download video weights, so nothing renders and nothing answers on `:8188` afterwards. A `THIS IS THE LIGHT INSTALL` banner at the start and the end says so and gives the full-setup command. Its report marks ComfyUI and the weight rows `INFO` ("safe to ignore because ...") and ends with `Install OK: N ok, M non-fatal note(s)`; only real failures (venv, pip, ffmpeg, ...) end `Install FAILED` with exit 1. It handles the LLM models the same way automatic install does: each one not already in `MODELS_DIR` is skipped with "Skipped qwen3-vl-heretic: no public GGUF source is defined; continuing." and the install carries on. It never installs Ollama or runs `ollama pull`.
 
 `python install.py --check` only reports: it runs `setup` (the doctor) with the existing `.venv` and creates, installs, and downloads nothing. With no `.venv` yet it says so and exits 1.
 
@@ -87,9 +87,10 @@ The LLM models are GGUF files llama-server serves from `MODELS_DIR`: `LLAMACPP_M
 
 ```bash
 cd video_buddy
-python install.py
+python install.py                                   # light install only
+python install.py --automatic-install --yes         # then the full setup: ComfyUI + LTX 2.3
 python -m master_agent doctor
-python -m master_agent workflows
+python -m master_agent comfy start
 python -m master_agent health
 ```
 
