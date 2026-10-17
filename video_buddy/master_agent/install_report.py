@@ -25,14 +25,8 @@ FULL_INSTALL_CMD_WINDOWS = "install.bat --automatic-install --yes"
 # Doctor rows that the light install (plain install.py / setup --fix) never
 # provides, by design. After a light install they are INFO, not failures.
 LIGHT_INSTALL_NOT_INCLUDED: dict[str, str] = {
-    "comfyui": (
-        "the light install does not install or start ComfyUI. "
-        f"Full setup: {FULL_INSTALL_CMD}"
-    ),
-    "ltx23-weights": (
-        "the light install downloads no weights. "
-        f"LTX 2.3 comes with the full setup: {FULL_INSTALL_CMD}"
-    ),
+    "comfyui": "the light install does not install or start ComfyUI (the full setup does)",
+    "ltx23-weights": f"the light install downloads no weights; {FULL_INSTALL_CMD} fetches LTX 2.3",
     "ltx25-weights": "LTX 2.5 is an optional gated pack; only the ltx25_* workflows need it",
     "ltx25-ic-lora": "only ltx25_msr and ltx25_v2v_ic_lora need this LoRA",
     "ltx23-inoutpaint-lora": "only ltx23_inoutpaint and ltx25_inoutpaint need this LoRA",
@@ -89,7 +83,8 @@ def light_install_banner(*, where: str) -> str:
             bar,
             f"#  THIS IS THE LIGHT INSTALL {state}",
             "#",
-            "#  It sets up .venv, Python packages, Playwright, .env and ffmpeg only.",
+            "#  It sets up .venv, Python packages, Playwright, .env, ffmpeg and the",
+            "#  empty model folders only.",
             skipped,
             "#  so nothing can render and ComfyUI will not answer on :8188.",
             "#",

@@ -121,8 +121,9 @@ def check_playwright() -> dict[str, Any]:
     code, out = _run([_py(), "-m", "playwright", "install", "--dry-run", "chromium"], timeout=60)
     # dry-run may not exist on older playwright; treat import success as soft-ok
     detail = "python package present"
-    if code == 0 and out:
-        detail = out.splitlines()[-1][:160]
+    locations = [line.split(":", 1)[1].strip() for line in out.splitlines() if "Install location:" in line]
+    if code == 0 and locations:
+        detail = f"python package present; chromium at {locations[0]}"[:160]
     return _row("playwright", True, detail, fix=f"{_py()} -m playwright install chromium")
 
 
