@@ -1409,6 +1409,13 @@ def _copies_in_role(copies: Iterable[Path], role: str) -> list[Path]:
     return [path for path in copies if role in path.parts]
 
 
+def dest_dir(role: str) -> str:
+    """The exact folder (``MODELS_DIR/<role>/``) a NEED line tells the user to use."""
+    from master_agent.models.layout import model_folder
+
+    return str(model_folder(role)) + os.sep
+
+
 def ic_ingredients_placement(roots: Iterable[Path] | None = None) -> dict[str, Any]:
     """Exact Ingredients LoRA for ltx25_msr / ltx25_v2v_ic_lora.
 
@@ -1416,6 +1423,7 @@ def ic_ingredients_placement(roots: Iterable[Path] | None = None) -> dict[str, A
     ``models/loras/``.
     """
     name = WEIGHT_FILES["ic_lora"].filename
+    loras_dir = dest_dir("loras")
     copies = find_weight_copies(name, roots)
     in_role = _copies_in_role(copies, "loras")
     elsewhere = [path for path in copies if path not in in_role]
@@ -1449,15 +1457,15 @@ def ic_ingredients_placement(roots: Iterable[Path] | None = None) -> dict[str, A
                 f"{name} is at {src}, outside models/loras/. "
                 "LTXICLoRALoaderModelOnly will not list it. "
                 "Move it (Buddy will not move files): "
-                f'mv "{src}" "<ComfyUI>/models/loras/{name}"'
+                f'mv "{src}" "{loras_dir}{name}"'
             ),
-            "fix": f'mv "{src}" "<ComfyUI>/models/loras/{name}"',
+            "fix": f'mv "{src}" "{loras_dir}{name}"',
         }
     return {
         "ok": False,
         "path": "",
         "detail": (
-            f"missing {name} → models/loras/ (~1.31 GB, {HF_ICLORA}). "
+            f"missing {name} → {loras_dir} (~1.31 GB, {HF_ICLORA}). "
             "Required by ltx25_msr and ltx25_v2v_ic_lora. "
             "python -m master_agent download-models --ltx25 lists it; "
             "--yes fetches after you agree."
@@ -1470,6 +1478,7 @@ def ltx23_latent_upscaler_placement(roots: Iterable[Path] | None = None) -> dict
     """LatentUpscaleModelLoader reads models/latent_upscale_models/ only."""
     name = LTX23_LATENT_UPSCALER
     role = "latent_upscale_models"
+    role_dir = dest_dir(role)
     copies = find_weight_copies(name, roots)
     in_role = _copies_in_role(copies, role)
     elsewhere = [path for path in copies if path not in in_role]
@@ -1493,18 +1502,18 @@ def ltx23_latent_upscaler_placement(roots: Iterable[Path] | None = None) -> dict
                 f"{name} is at {src}, not in models/{role}/. "
                 "LatentUpscaleModelLoader (lipsync, ltx23_i2v, vb_movie_builder) "
                 "will not list it. Move it (Buddy will not move files): "
-                f'mv "{src}" "<ComfyUI>/models/{role}/{name}"'
+                f'mv "{src}" "{role_dir}{name}"'
             ),
-            "fix": f'mv "{src}" "<ComfyUI>/models/{role}/{name}"',
+            "fix": f'mv "{src}" "{role_dir}{name}"',
         }
     return {
         "ok": False,
         "path": "",
         "detail": (
-            f"missing {name} → models/{role}/. "
+            f"missing {name} → {role_dir}. "
             "lipsync, ltx23_i2v, and vb_movie_builder load it with LatentUpscaleModelLoader."
         ),
-        "fix": f"Place {name} in ComfyUI/models/{role}/",
+        "fix": f"Place {name} in {role_dir}",
     }
 
 
@@ -1519,6 +1528,7 @@ def ltx23_inoutpaint_lora_placement(roots: Iterable[Path] | None = None) -> dict
     The loader combo is ``models/loras/``. The tower file is about 1.31 GB.
     """
     name = LTX23_INOUTPAINT_LORA
+    loras_dir = dest_dir("loras")
     copies = find_weight_copies(name, roots)
     in_role = _copies_in_role(copies, "loras")
     elsewhere = [path for path in copies if path not in in_role]
@@ -1535,7 +1545,7 @@ def ltx23_inoutpaint_lora_placement(roots: Iterable[Path] | None = None) -> dict
                     f"({HF_INOUTPAINT_LORA}). Re-download into models/loras/. "
                     "Doctor does not fetch it."
                 ),
-                "fix": f"Place {name} in ComfyUI/models/loras/",
+                "fix": f"Place {name} in {loras_dir}",
             }
         return {
             "ok": True,
@@ -1552,19 +1562,19 @@ def ltx23_inoutpaint_lora_placement(roots: Iterable[Path] | None = None) -> dict
                 f"{name} is at {src}, outside models/loras/. "
                 "LTXICLoRALoaderModelOnly will not list it. "
                 "Move it (Buddy will not move files): "
-                f'mv "{src}" "<ComfyUI>/models/loras/{name}"'
+                f'mv "{src}" "{loras_dir}{name}"'
             ),
-            "fix": f'mv "{src}" "<ComfyUI>/models/loras/{name}"',
+            "fix": f'mv "{src}" "{loras_dir}{name}"',
         }
     return {
         "ok": False,
         "path": "",
         "detail": (
-            f"missing {name} → models/loras/ (~1.31 GB, {HF_INOUTPAINT_LORA}). "
+            f"missing {name} → {loras_dir} (~1.31 GB, {HF_INOUTPAINT_LORA}). "
             "Required by ltx23_inoutpaint and ltx25_inoutpaint. "
             "Doctor does not download weights."
         ),
-        "fix": f"Place {name} in ComfyUI/models/loras/",
+        "fix": f"Place {name} in {loras_dir}",
     }
 
 

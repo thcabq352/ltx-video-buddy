@@ -487,7 +487,7 @@ def install_accel(
         try:
             wheel = pick_windows_sage_wheel(sage_assets(), torch_version=env.torch, cuda=env.cuda)
         except (urllib.error.URLError, OSError, ValueError) as exc:
-            progress(f"WARN  could not list prebuilt SageAttention wheels ({exc}); trying PyPI")
+            progress(f"INFO  could not list prebuilt SageAttention wheels ({exc}); trying PyPI")
         if wheel:
             candidates.append((wheel, "prebuilt Windows wheel"))
     candidates.append(("sageattention", "PyPI package"))
@@ -504,7 +504,7 @@ def install_accel(
             report.steps.append(AccelStep("sageattention", "OK", f"installed {label}", cmd))
             return report
         last_tail = tail
-        progress(f"WARN  sageattention via {label} did not import; {'trying next option' if spec != candidates[-1][0] else 'giving up'}")
+        progress(f"INFO  sageattention via {label} did not import; {'trying next option' if spec != candidates[-1][0] else 'giving up (non-fatal, see summary)'}")
     report.steps.append(
         AccelStep(
             "sageattention",

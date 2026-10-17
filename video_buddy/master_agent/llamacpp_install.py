@@ -435,7 +435,7 @@ def install_llamacpp(
         if binary is None:
             errors.append(err)
             if method == "build" and len(attempts) > 1:
-                progress(f"WARN  llama.cpp build failed ({err}); trying the official prebuilt release")
+                progress(f"INFO  llama.cpp build failed ({err}); trying the official prebuilt release")
             continue
         ok, version = _runs(binary, runner)
         if not ok:
@@ -444,7 +444,7 @@ def install_llamacpp(
         try:
             _write_marker(root, ref=plan.ref, method=method, backend=plan.backend, binary=binary)
         except OSError as exc:
-            progress(f"WARN  could not record {root / MARKER} ({exc})")
+            progress(f"FAILED-NONFATAL  could not record {root / MARKER} ({exc}); safe to ignore because this llama-server works now; at worst the next automatic install fetches it again")
         how = "built from source" if method == "build" else "official prebuilt"
         return LlamaResult("OK", f"{how} {plan.ref} ({plan.backend}): {binary}", [*lines, version], str(binary))
     return LlamaResult(
