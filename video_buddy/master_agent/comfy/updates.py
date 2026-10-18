@@ -175,15 +175,9 @@ def read_comfyui_version(workspace: Path) -> str | None:
 
 
 def _workspace(explicit: Path | None = None) -> Path:
-    if explicit is not None:
-        return Path(explicit).expanduser().resolve()
-    from master_agent.comfy import tower as tower_mod
+    from master_agent.comfy.root import managed_comfy_root
 
-    st = tower_mod.load_state()
-    raw = (st.workspace or "").strip()
-    if raw:
-        return Path(raw).expanduser().resolve()
-    return tower_mod._default_workspace()
+    return managed_comfy_root(explicit)
 
 
 def _matches(installed: str | None, expected: str | None, style: str) -> bool:

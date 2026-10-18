@@ -43,6 +43,26 @@ def about() -> dict:
     return studio_about()
 
 
+def _managed_comfy_summary() -> dict:
+    """Where Buddy's own ComfyUI lives and why the last ``comfy start`` failed, if it did."""
+    try:
+        from master_agent.comfy.root import resolve_managed_comfy_root
+        from master_agent.comfy.tower import load_state
+
+        root = resolve_managed_comfy_root()
+        st = load_state()
+    except Exception:
+        return {}
+    out: dict = {"workspace": str(root.path), "workspace_source": root.source}
+    if st.last_error:
+        failure = (st.extra or {}).get("last_launch_failure") or {}
+        out["last_error"] = st.last_error[:2000]
+        for key in ("exit_code", "command", "cwd", "python", "log", "log_tail"):
+            if key in failure:
+                out[key] = failure[key]
+    return out
+
+
 def health() -> dict:
     """ComfyUI reachability + GPU VRAM, local LLM (llama.cpp, Ollama), opt-in Grok credentials (read-only), KB counts."""
     from master_agent.comfy.client import ComfyClient
@@ -79,6 +99,9 @@ def health() -> dict:
         }
     except Exception as e:
         out["comfyui"] = {"up": False, "error": str(e)[:200]}
+        managed = _managed_comfy_summary()
+        if managed:
+            out["comfyui"]["managed"] = managed
     out["kb"] = {
         "workflows": collection_count(COLLECTION_WORKFLOWS),
         "runs": collection_count(COLLECTION_RUNS),

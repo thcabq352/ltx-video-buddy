@@ -122,10 +122,15 @@ def detect_gpu() -> dict[str, Any]:
 
 
 def managed_workspace() -> Path:
-    from master_agent.comfy.tower import _default_workspace, load_state
+    from master_agent.comfy.root import managed_comfy_root
 
-    st = load_state()
-    return Path(st.workspace or _default_workspace()).expanduser().resolve()
+    return managed_comfy_root()
+
+
+def managed_workspace_source() -> str:
+    from master_agent.comfy.root import resolve_managed_comfy_root
+
+    return resolve_managed_comfy_root().source
 
 
 def models_dir() -> Path:
@@ -472,7 +477,7 @@ def check_workspace(workspace: Path, *, state: str, mode: str) -> Check:
             ],
             blocking=True,
         )
-    lines = [f"Buddy's own ComfyUI folder: {workspace}"]
+    lines = [f"Buddy's own ComfyUI folder: {workspace} (from {managed_workspace_source()})"]
     if state == "foreign":
         return Check(
             "ComfyUI folder",

@@ -40,10 +40,28 @@ class _Proc:
 
 
 class _Popen:
+    exit_code: int | None = None
+    output = ""
+
     def __init__(self, cmd, **kwargs):
         self.cmd = cmd
         self.kwargs = kwargs
         self.pid = 424242
+        stdout = kwargs.get("stdout")
+        if self.output and hasattr(stdout, "write"):
+            stdout.write(self.output)
+            stdout.flush()
+
+    def poll(self):
+        return self.exit_code
+
+
+def _comfy_popens(isolated) -> list[_Popen]:
+    return [p for p in isolated["popens"] if "main.py" in p.cmd]
+
+
+def _watchdog_popens(isolated) -> list[_Popen]:
+    return [p for p in isolated["popens"] if p.cmd == watchdog_command()]
 
 
 @pytest.fixture
@@ -51,6 +69,8 @@ def isolated(tmp_path: Path, monkeypatch: pytest.MonkeyPatch):
     state_dir = tmp_path / "state"
     state_dir.mkdir()
     workspace = tmp_path / "ComfyUI"
+    workspace.mkdir()
+    (workspace / "main.py").write_text("", encoding="utf-8")
     monkeypatch.setattr(tower, "STATE_DIR", state_dir)
     monkeypatch.setattr(tower, "PROJECT_ROOT", tmp_path)
     monkeypatch.setenv("MANAGED_COMFY_ROOT", str(workspace))
@@ -74,9 +94,13 @@ def isolated(tmp_path: Path, monkeypatch: pytest.MonkeyPatch):
     def fake_kill(pid, sig):
         kills.append((int(pid), int(sig)))
 
+    monkeypatch.setattr(_Popen, "exit_code", None)
+    monkeypatch.setattr(_Popen, "output", "")
     monkeypatch.setattr(tower.subprocess, "run", fake_run)
     monkeypatch.setattr(tower.subprocess, "Popen", fake_popen)
     monkeypatch.setattr(tower.os, "kill", fake_kill)
+    monkeypatch.setattr(tower.os, "killpg", fake_kill, raising=False)
+    monkeypatch.setattr(tower.time, "sleep", lambda _s: None)
     probes = {"n": 0, "script": [(False, "down"), (True, "/system_stats ok")]}
 
     def fake_ready(url, timeout=5.0):
@@ -99,8 +123,8 @@ def isolated(tmp_path: Path, monkeypatch: pytest.MonkeyPatch):
 
 
 def _launch_tail(cmd: list[str]) -> list[str]:
-    assert "--" in cmd
-    return cmd[cmd.index("--") + 1 :]
+    assert "main.py" in cmd
+    return cmd[cmd.index("main.py") + 1 :]
 
 
 def test_launch_argv_is_local_loopback_and_hides_browser(isolated):
@@ -108,14 +132,17 @@ def test_launch_argv_is_local_loopback_and_hides_browser(isolated):
     result = tower_obj.start(watch=True)
     assert result["status"] == "started"
     assert result["ready"] is True
-    assert isolated["calls"], "expected comfy launch"
-    cmd = isolated["calls"][0]
-    assert cmd[cmd.index("--where") + 1] == "local"
-    assert any(part.startswith("--workspace=") for part in cmd)
-    assert str(isolated["workspace"]) in " ".join(cmd)
-    assert "--skip-prompt" in cmd
-    assert "launch" in cmd
-    assert "--background" in cmd
+    assert isolated["calls"] == [], "start launches ComfyUI itself, not comfy-cli"
+    launched = _comfy_popens(isolated)
+    assert len(launched) == 1
+    proc = launched[0]
+    cmd = proc.cmd
+    assert cmd[0] == tower.sys.executable  # no workspace .venv in this fixture
+    assert proc.kwargs["cwd"] == str(isolated["workspace"])
+    assert proc.kwargs.get("start_new_session") is True
+    assert proc.kwargs["stderr"] is tower.subprocess.STDOUT
+    assert proc.kwargs["env"]["COMFY_WHERE"] == "local"
+    assert proc.kwargs["env"]["PYTHONUNBUFFERED"] == "1"
     tail = _launch_tail(cmd)
     assert tail[:5] == [
         "--disable-auto-launch",
@@ -135,13 +162,15 @@ def test_launch_argv_is_local_loopback_and_hides_browser(isolated):
     assert "is_default: true" in yaml_path.read_text(encoding="utf-8")
     assert "0.0.0.0" not in cmd
     assert "cloud" not in cmd
-    assert isolated["popens"], "start should spawn a detached watchdog"
-    assert isolated["popens"][0].cmd == watchdog_command()
-    assert isolated["popens"][0].kwargs.get("start_new_session") is True
+    watchdogs = _watchdog_popens(isolated)
+    assert watchdogs, "start should spawn a detached watchdog"
+    assert watchdogs[0].kwargs.get("start_new_session") is True
     saved = json.loads((isolated["state_dir"] / "managed_comfy.json").read_text(encoding="utf-8"))
     assert saved["want_running"] is True
     assert saved["comfy_mode"] == "managed"
     assert saved["watchdog_pid"] == 424242
+    assert saved["extra"]["comfy_pid"] == 424242
+    assert saved["workspace"] == "", "an env/default workspace is not pinned into state"
 
 
 def test_refuses_to_adopt_foreign_server(isolated):
@@ -238,9 +267,8 @@ def test_restart_increments_count(isolated):
     result = ManagedComfyTower(ready_timeout_s=1).restart()
     assert result["status"] == "restarted"
     assert result["restart_count"] == 1
-    verbs = [cmd[cmd.index("stop")] if "stop" in cmd else "launch" for cmd in isolated["calls"]]
-    assert "stop" in verbs
-    assert any("launch" in cmd for cmd in isolated["calls"])
+    assert any(cmd[-1] == "stop" for cmd in isolated["calls"])
+    assert len(_comfy_popens(isolated)) == 1
 
 
 def test_watchdog_restarts_after_grace(isolated):
@@ -253,7 +281,7 @@ def test_watchdog_restarts_after_grace(isolated):
     tower_obj = ManagedComfyTower(ready_timeout_s=5)
     assert watchdog_tick(tower_obj) == "restarted"
     assert load_state().restart_count == 1
-    assert any("launch" in cmd for cmd in isolated["calls"])
+    assert len(_comfy_popens(isolated)) == 1
 
 
 def test_watchdog_waits_out_startup_grace(isolated):
@@ -335,7 +363,19 @@ def test_missing_cli_is_a_tower_error(isolated, monkeypatch):
     monkeypatch.setattr(tower.subprocess, "run", missing)
     isolated["probes"]["script"] = [(False, "down")]
     with pytest.raises(TowerError, match="comfy-cli not found"):
+        ManagedComfyTower().stop()
+
+
+def test_start_without_comfyui_installed_names_the_folder(isolated):
+    (isolated["workspace"] / "main.py").unlink()
+    isolated["probes"]["script"] = [(False, "down")]
+    with pytest.raises(TowerError) as exc:
         ManagedComfyTower().start(watch=False)
+    text = str(exc.value)
+    assert str(isolated["workspace"]) in text
+    assert "from MANAGED_COMFY_ROOT" in text
+    assert "no main.py" in text
+    assert _comfy_popens(isolated) == []
     assert load_state().want_running is False
 
 
@@ -356,32 +396,28 @@ def test_extra_model_paths_after_double_dash(isolated, tmp_path: Path):
     yaml_path = tmp_path / "extra.yaml"
     yaml_path.write_text("comfyui:\n", encoding="utf-8")
     ManagedComfyTower(ready_timeout_s=1).start(extra_model_paths=yaml_path, watch=False)
-    tail = _launch_tail(isolated["calls"][0])
+    tail = _launch_tail(_comfy_popens(isolated)[0].cmd)
     assert tail[-3:] == [
         "--extra-model-paths-config",
         str(yaml_path),
         "--use-sage-attention",
     ]
-    assert isolated["popens"] == []
+    assert _watchdog_popens(isolated) == []
 
 
 def test_launch_args_always_use_sage_attention(tmp_path: Path, monkeypatch: pytest.MonkeyPatch):
     monkeypatch.setattr(tower, "sageattention_available", lambda: True)
     tower_obj = ManagedComfyTower()
     without = tower_obj._launch_args(None)
-    assert "--use-sage-attention" in without
-    assert without.index("--use-sage-attention") > without.index("--")
+    assert without[0] == "--disable-auto-launch"
     assert without[-1] == "--use-sage-attention"
     assert "--extra-model-paths-config" not in without
 
     yaml_path = tmp_path / "extra.yaml"
     yaml_path.write_text("comfyui:\n", encoding="utf-8")
     with_yaml = tower_obj._launch_args(yaml_path)
-    assert "--use-sage-attention" in with_yaml
-    assert with_yaml.index("--use-sage-attention") > with_yaml.index("--")
     assert with_yaml[-1] == "--use-sage-attention"
     config_at = with_yaml.index("--extra-model-paths-config")
-    assert config_at > with_yaml.index("--")
     assert with_yaml[config_at + 1] == str(yaml_path)
     assert with_yaml.index("--use-sage-attention") > config_at
 
@@ -520,3 +556,129 @@ def test_cli_start_prints_ok(isolated, capsys):
     out = capsys.readouterr().out
     assert "comfy start: started" in out
     assert "127.0.0.1:8188" in out
+
+
+TRACEBACK = (
+    "Traceback (most recent call last):\n"
+    '  File "main.py", line 1, in <module>\n'
+    "ModuleNotFoundError: No module named 'torch'\n"
+)
+
+
+def test_launch_failure_surfaces_exit_code_command_and_output(isolated, monkeypatch):
+    monkeypatch.setattr(_Popen, "exit_code", 1)
+    monkeypatch.setattr(_Popen, "output", TRACEBACK)
+    isolated["probes"]["script"] = [(False, "down")]
+    with pytest.raises(tower.ComfyLaunchError) as exc:
+        ManagedComfyTower(ready_timeout_s=30).start(watch=False)
+    text = str(exc.value)
+    assert "exited with code 1" in text
+    assert "ModuleNotFoundError: No module named 'torch'" in text
+    assert f"cwd:     {isolated['workspace']}" in text
+    assert f"python:  {tower.sys.executable}" in text
+    assert "main.py --disable-auto-launch --port 8188" in text
+    assert "(from MANAGED_COMFY_ROOT)" in text
+    details = exc.value.details
+    assert details["exit_code"] == 1
+    assert details["log"] == str(tower.comfy_log_path(8188))
+    assert any("No module named 'torch'" in line for line in details["log_tail"])
+    st = load_state()
+    assert st.want_running is False
+    assert "No module named 'torch'" in st.last_error
+    assert st.extra["last_launch_failure"]["exit_code"] == 1
+
+
+def test_launch_failure_with_no_output_says_so(isolated, monkeypatch):
+    monkeypatch.setattr(_Popen, "exit_code", 3)
+    isolated["probes"]["script"] = [(False, "down")]
+    with pytest.raises(tower.ComfyLaunchError, match="ComfyUI printed nothing"):
+        ManagedComfyTower().start(watch=False)
+
+
+def test_no_wait_still_reports_an_instant_crash(isolated, monkeypatch):
+    monkeypatch.setattr(_Popen, "exit_code", 2)
+    monkeypatch.setattr(_Popen, "output", "error: unrecognized arguments: --use-sage-attention\n")
+    isolated["probes"]["script"] = [(False, "down")]
+    with pytest.raises(tower.ComfyLaunchError, match="unrecognized arguments"):
+        ManagedComfyTower().start(wait=False, watch=False)
+
+
+def test_no_wait_returns_while_comfy_is_still_loading(isolated, monkeypatch):
+    monkeypatch.setattr(tower, "EARLY_EXIT_GRACE_S", 0.0)
+    isolated["probes"]["script"] = [(False, "down")]
+    result = ManagedComfyTower().start(wait=False, watch=False)
+    assert result["status"] == "started"
+    assert result["ready"] is False
+    assert result["detail"] == "launched pid 424242"
+
+
+def test_ready_timeout_reports_still_running_and_keeps_process(isolated, monkeypatch):
+    monkeypatch.setattr(_Popen, "output", "Loading custom nodes...\n")
+    isolated["probes"]["script"] = [(False, "down")]
+    with pytest.raises(tower.ComfyLaunchError, match="still running") as exc:
+        ManagedComfyTower(ready_timeout_s=0).start(watch=False)
+    assert "Loading custom nodes" in str(exc.value)
+    assert isolated["kills"] == []
+    assert load_state().want_running is True
+
+
+def test_cli_start_failure_prints_the_comfy_output(isolated, monkeypatch, capsys):
+    monkeypatch.setattr(_Popen, "exit_code", 1)
+    monkeypatch.setattr(_Popen, "output", TRACEBACK)
+    isolated["probes"]["script"] = [(False, "down")]
+    args = dict(
+        comfy_command="start", workspace=None, port=None, base_url=None,
+        no_wait=False, no_watch=True, extra_model_paths=None,
+    )
+    assert cmd_tower(Namespace(**args, as_json=False)) == 1
+    out = capsys.readouterr().out
+    assert out.startswith("FAIL  comfy start: ComfyUI exited with code 1")
+    assert "No module named 'torch'" in out
+    assert "Execution error" not in out
+
+    assert cmd_tower(Namespace(**args, as_json=True)) == 1
+    payload = json.loads(capsys.readouterr().out)
+    assert payload["status"] == "error"
+    assert payload["launch"]["exit_code"] == 1
+    assert payload["launch"]["cwd"] == str(isolated["workspace"])
+    assert any("No module named 'torch'" in line for line in payload["launch"]["log_tail"])
+
+
+def test_agent_health_summary_carries_the_last_launch_failure(isolated, monkeypatch):
+    from master_agent import agent_api
+
+    monkeypatch.setattr(_Popen, "exit_code", 1)
+    monkeypatch.setattr(_Popen, "output", TRACEBACK)
+    isolated["probes"]["script"] = [(False, "down")]
+    with pytest.raises(tower.ComfyLaunchError):
+        ManagedComfyTower().start(watch=False)
+    summary = agent_api._managed_comfy_summary()
+    assert summary["workspace"] == str(isolated["workspace"])
+    assert summary["workspace_source"] == "MANAGED_COMFY_ROOT"
+    assert summary["exit_code"] == 1
+    assert "No module named 'torch'" in summary["last_error"]
+    assert any("No module named 'torch'" in line for line in summary["log_tail"])
+
+
+def test_start_uses_the_workspace_venv_python(isolated, monkeypatch):
+    monkeypatch.setattr(tower, "comfy_sageattention_available", lambda _ws: False)
+    venv_py = isolated["workspace"] / ".venv" / ("Scripts/python.exe" if tower.os.name == "nt" else "bin/python")
+    venv_py.parent.mkdir(parents=True)
+    venv_py.write_text("", encoding="utf-8")
+    ManagedComfyTower(ready_timeout_s=1).start(watch=False)
+    proc = _comfy_popens(isolated)[0]
+    assert proc.cmd[0] == str(venv_py)
+    assert "VIRTUAL_ENV" not in proc.kwargs["env"]
+
+
+def test_stop_kills_the_launched_pid_not_comfy_cli(isolated, monkeypatch):
+    monkeypatch.setattr(tower, "_pid_alive", lambda pid: bool(pid))
+    ManagedComfyTower(ready_timeout_s=1).start(watch=False)
+    isolated["probes"]["script"] = [(False, "down")]
+    isolated["probes"]["n"] = 0
+    result = ManagedComfyTower().stop()
+    assert result["status"] == "stopped"
+    assert result["cli_detail"] == "stopped ComfyUI pid 424242"
+    assert isolated["calls"] == []
+    assert (424242, int(tower.signal.SIGTERM)) in isolated["kills"]
+    assert "comfy_pid" not in (load_state().extra or {})

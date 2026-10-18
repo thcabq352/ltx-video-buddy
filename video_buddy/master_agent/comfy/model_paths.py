@@ -88,11 +88,10 @@ def _is_under(path: Path, parent: Path) -> bool:
 
 
 def managed_workspace() -> Path:
-    """Buddy-owned Comfy workspace (``MANAGED_COMFY_ROOT`` or ``PROJECT_ROOT/ComfyUI``)."""
-    raw = (os.getenv("MANAGED_COMFY_ROOT") or "").strip()
-    if raw:
-        return _resolve(raw)
-    return _resolve(Path(cfg.PROJECT_ROOT) / "ComfyUI")
+    """Buddy-owned Comfy workspace. Resolved by ``comfy/root.py``."""
+    from master_agent.comfy.root import managed_comfy_root
+
+    return managed_comfy_root()
 
 
 def external_comfy_root() -> Path | None:

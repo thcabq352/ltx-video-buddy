@@ -216,20 +216,47 @@ def check_comfy() -> dict[str, Any]:
         pass
     portable = ROOT / "ComfyUI_windows_portable" / "run_api_8188.bat"
     state, workspace = _managed_comfy_state()
+    detail = f"not reachable at {url}"
+    if workspace is not None:
+        detail += f"; Buddy's ComfyUI folder {workspace} (from {_managed_comfy_source()}) is {state}"
     if portable.is_file():
         hint = str(portable)
     elif state == "installed":
         hint = f"ComfyUI is installed in {workspace}. Start it: python -m master_agent comfy start"
+        failed_log = _last_launch_log()
+        if failed_log:
+            hint += f". The last start failed; its output is in {failed_log}"
     elif state in {"absent", "partial"}:
         from master_agent.install_report import FULL_INSTALL_CMD
 
         hint = (
             f"ComfyUI is not installed yet. Install it with LTX 2.3: {FULL_INSTALL_CMD} "
-            "(or start your own ComfyUI with --port 8188 and set COMFYUI_URL)"
+            "(already installed elsewhere? set MANAGED_COMFY_ROOT to that folder in .env; "
+            "or start your own ComfyUI with --port 8188 and set COMFYUI_URL)"
         )
     else:
         hint = "start ComfyUI with --port 8188 (or set COMFYUI_URL)"
-    return _row("comfyui", False, f"not reachable at {url}", fix=hint)
+    return _row("comfyui", False, detail, fix=hint)
+
+
+def _managed_comfy_source() -> str:
+    try:
+        from master_agent.comfy.root import resolve_managed_comfy_root
+
+        return resolve_managed_comfy_root().source
+    except Exception:
+        return "unknown"
+
+
+def _last_launch_log() -> str:
+    try:
+        from master_agent.comfy.tower import load_state
+
+        st = load_state()
+    except Exception:
+        return ""
+    failure = (st.extra or {}).get("last_launch_failure") or {}
+    return str(failure.get("log") or "") if st.last_error else ""
 
 
 def dest_dir(role: str) -> str:

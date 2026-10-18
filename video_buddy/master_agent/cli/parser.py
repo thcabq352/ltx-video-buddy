@@ -738,8 +738,8 @@ def main(argv: list[str] | None = None) -> int:
     p.add_argument(
         "--workspace",
         default=None,
-        help="managed Comfy workspace (start/stop/status/restart); "
-        "default MANAGED_COMFY_ROOT or PROJECT_ROOT/ComfyUI",
+        help="managed Comfy workspace (start/stop/status/restart); remembered for later runs. "
+        "Without it: MANAGED_COMFY_ROOT, then the remembered --workspace, then PROJECT_ROOT/ComfyUI",
     )
     p.add_argument(
         "--port",
@@ -772,7 +772,8 @@ def main(argv: list[str] | None = None) -> int:
     p.add_argument(
         "--no-wait",
         action="store_true",
-        help="start/restart: return after comfy launch, before /system_stats is ready",
+        help="start/restart: return a few seconds after launch (an instant crash is still "
+        "reported), before /system_stats is ready",
     )
     p.add_argument(
         "--no-watch",
