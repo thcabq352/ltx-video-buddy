@@ -14,7 +14,7 @@ from master_agent.cli.comfy import cmd_fetch_object_info, cmd_capabilities, cmd_
 from master_agent.cli.run import cmd_run, cmd_brief
 from master_agent.cli.rainey1 import cmd_rainey1_batch
 from master_agent.rainey1.recipes import recipe_choices
-from master_agent.cli.models import cmd_download_flux, cmd_download_models, cmd_workflows, cmd_models_manifest, cmd_models_select
+from master_agent.cli.models import cmd_download_flux, cmd_download_models, cmd_workflows, cmd_models_manifest, cmd_models_register, cmd_models_select
 from master_agent.cli.fractal import cmd_fractal
 from master_agent.cli.music import cmd_mv, cmd_music, cmd_heartmula
 from master_agent.cli.persona import cmd_persona, cmd_soul, cmd_character, cmd_lora
@@ -59,7 +59,14 @@ def main(argv: list[str] | None = None) -> int:
         default="auto",
         help="ComfyUI PyTorch build (default: auto-detect; no GPU → cpu)",
     )
-    p.add_argument("--skip-weights", action="store_true", help="install everything except the LTX 2.3 weights")
+    p.add_argument(
+        "--skip-weights",
+        action="store_true",
+        help=(
+            "install everything except the LTX 2.3 weights; saves a 'deferred' marker so doctor reports "
+            "them as INFO. Add them later with `models register` or `download-models --ltx23 --yes`"
+        ),
+    )
     p.add_argument("--skip-sage", action="store_true", help="do not install Triton / SageAttention")
     p.add_argument("--skip-llm", action="store_true", help="do not install llama.cpp or look for local LLM models")
     p.set_defaults(func=cmd_automatic_install)
@@ -564,7 +571,7 @@ def main(argv: list[str] | None = None) -> int:
 
     p = sub.add_parser(
         "models",
-        help="model selector: manifest | select (LTX 2.3|2.5 checklist; no comfy install)",
+        help="model selector: manifest | select | register (LTX 2.3|2.5 checklist; no comfy install)",
     )
     models_sub = p.add_subparsers(dest="models_command", required=True)
     manifest_p = models_sub.add_parser("manifest", help="print the capability-grouped catalog JSON")
@@ -582,6 +589,21 @@ def main(argv: list[str] | None = None) -> int:
         help="print the checklist only; do not download or write selector state",
     )
     select_p.set_defaults(func=cmd_models_select)
+    register_p = models_sub.add_parser(
+        "register",
+        help="adopt LTX 2.3 weights you already have: check name + size, link or copy into MODELS_DIR",
+    )
+    register_p.add_argument("paths", nargs="+", help="weight files, or folders to scan for LTX 2.3 pack names")
+    register_p.add_argument(
+        "--mode",
+        choices=["auto", "hardlink", "symlink", "copy"],
+        default="auto",
+        help="auto = hard link when on the same drive, else copy (default)",
+    )
+    register_p.add_argument("--force", action="store_true", help="accept a size mismatch / replace an existing file")
+    register_p.add_argument("--dry-run", action="store_true", help="show what would be registered; change nothing")
+    register_p.add_argument("--json", action="store_true")
+    register_p.set_defaults(func=cmd_models_register)
 
     p = sub.add_parser("character", help="CCC stage: create | list")
     p.add_argument("character_command", choices=["create", "list"])

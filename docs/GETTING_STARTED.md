@@ -45,7 +45,7 @@ python -m master_agent automatic-install                    # pre-flight + the p
 python -m master_agent automatic-install --yes              # pre-flight, then install
 ```
 
-Other flags: `--gpu auto|nvidia|amd|m-series|cpu` picks the ComfyUI PyTorch build (default: detect). `--skip-weights` installs everything but the weights. `--skip-sage` skips Triton and SageAttention. `--skip-llm` skips llama.cpp and the local LLM models.
+Other flags: `--gpu auto|nvidia|amd|m-series|cpu` picks the ComfyUI PyTorch build (default: detect). `--skip-weights` installs everything but the weights; the install and later `doctor` runs report them as INFO, and `models register <file-or-folder>` adopts files you already have ([Weights](WEIGHTS.md#skipping-or-registering-the-ltx-23-pack)). `--skip-sage` skips Triton and SageAttention. `--skip-llm` skips llama.cpp and the local LLM models.
 
 ### If something fails
 

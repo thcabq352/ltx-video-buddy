@@ -811,17 +811,31 @@ def step_accel(apply: bool, *, workspace: Path, gpu: dict[str, Any], skip: bool)
     return StepResult("Triton + SageAttention", report.status, detail, required=False, lines=report.lines())
 
 
+WEIGHTS_DEFERRED = "DEFERRED"
+
+
 def step_weights(apply: bool, *, skip: bool) -> StepResult:
+    from master_agent.models.deferred import DOWNLOAD_CMD, REGISTER_CMD, clear_deferred, mark_deferred
     from master_agent.models.weights import download_missing_bundle, scan_bundle
 
     status = scan_bundle(LTX23_BUNDLE)
     if status.ok:
+        if apply:
+            clear_deferred()
         return StepResult("LTX 2.3 weights", SKIPPED, "all present in the model folders")
     missing = status.missing_mandatory
     total = sum(int(w.size_bytes) for w in missing)
     lines = [f"{w.filename} → {models_dir() / w.dest_folder} ({w.size_label})  [{w.repo_id}]" for w in missing]
     if skip:
-        return StepResult("LTX 2.3 weights", NEEDS_YOU, f"--skip-weights: {fmt_gb(total)} still missing", lines=lines)
+        detail = f"--skip-weights: {fmt_gb(total)} not downloaded"
+        if apply:
+            marker = mark_deferred([w.filename for w in missing])
+            detail += f" (saved {marker})"
+        lines += [
+            f"Already have them? {REGISTER_CMD}",
+            f"Download later:    {DOWNLOAD_CMD}",
+        ]
+        return StepResult("LTX 2.3 weights", WEIGHTS_DEFERRED, detail, lines=lines)
     if not apply:
         return StepResult("LTX 2.3 weights", PLANNED, f"download {len(missing)} file(s), {fmt_gb(total)}", lines=lines)
     models_dir().mkdir(parents=True, exist_ok=True)
@@ -833,6 +847,7 @@ def step_weights(apply: bool, *, skip: bool) -> StepResult:
     if not after.ok:
         names = ", ".join(w.filename for w in after.missing_mandatory)
         return StepResult("LTX 2.3 weights", FAILED, f"still missing: {names}", lines=lines)
+    clear_deferred()
     return StepResult("LTX 2.3 weights", OK, f"{len(paths)} file(s) ready in {models_dir()}", lines=lines)
 
 
@@ -859,6 +874,8 @@ def classify_step(r: StepResult) -> str:
 
     if r.failed_required:
         return R_FAIL
+    if r.status == WEIGHTS_DEFERRED:
+        return R_INFO
     if r.status in {NONFATAL, NEEDS_YOU, FAILED}:
         return R_NONFATAL
     if r.name == "LLM models" and "skipped" in r.detail:
@@ -944,17 +961,20 @@ def cmd_automatic_install(args: Any) -> int:
         summary_line,
     )
 
+    from master_agent.models.deferred import REASON as DEFERRED_REASON
+
     print("Check (doctor scan, read-only):")
     for row in verify_rows():
         if row["ok"]:
             mark = "OK  "
-        elif row["name"] == "llama.cpp":
+        elif row["name"] == "llama.cpp" or row.get("deferred"):
             mark = "INFO"
         else:
             mark = "NEED"
         print(f"  {mark}  {row['name']:<14} {row['detail']}")
         if mark == "INFO":
-            print(f"        {safe_to_ignore(STEP_REASONS['llama.cpp'])}")
+            why = DEFERRED_REASON if row.get("deferred") else STEP_REASONS["llama.cpp"]
+            print(f"        {safe_to_ignore(why)}")
     failed = [r for r in results if r.failed_required]
     levels = [classify_step(r) for r in results]
     ok_count = sum(1 for lv in levels if lv == R_OK)
@@ -980,6 +1000,15 @@ def cmd_automatic_install(args: Any) -> int:
         print(summary_line(ok=ok_count, notes=note_count, failed=[r.name for r in failed]))
         return 1
     print(summary_line(ok=ok_count, notes=note_count, failed=[]))
+    weights = next((r for r in results if r.name == "LTX 2.3 weights"), None)
+    if weights is not None and weights.status == WEIGHTS_DEFERRED:
+        from master_agent.models.deferred import DOWNLOAD_CMD, REGISTER_CMD
+
+        print("Installed without the LTX 2.3 weights (--skip-weights). Before generate, either:")
+        print(f"  {REGISTER_CMD}   # files you already downloaded")
+        print(f"  {DOWNLOAD_CMD}")
+        print("Then: python -m master_agent comfy start")
+        return 0
     print("Ready for generate (LTX 2.3). Next:")
     print("  python -m master_agent comfy start")
     print('  python -m master_agent comfy run --mode generate --variant base --prompt "a test shot"')

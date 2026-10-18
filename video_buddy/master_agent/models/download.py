@@ -27,6 +27,7 @@ Usage:
 
 from __future__ import annotations
 
+import os
 import shutil
 from pathlib import Path
 from typing import Callable
@@ -146,6 +147,37 @@ def _find_existing_local(repo_filename: str, dest: Path) -> Path | None:
     return None
 
 
+_XET_ERROR_MARKERS = ("xet", "cas service", "cas client", "cas error", "cas::", "reconstruction")
+
+
+def is_xet_error(exc: BaseException) -> bool:
+    """True when ``exc`` (or its cause chain) looks like an hf_xet / CAS failure."""
+    seen: set[int] = set()
+    cur: BaseException | None = exc
+    while cur is not None and id(cur) not in seen:
+        seen.add(id(cur))
+        text = f"{type(cur).__module__}.{type(cur).__name__} {cur}".lower()
+        if any(marker in text for marker in _XET_ERROR_MARKERS):
+            return True
+        cur = cur.__cause__ or cur.__context__
+    return False
+
+
+def xet_disabled() -> bool:
+    return os.environ.get("HF_HUB_DISABLE_XET", "").strip().lower() in {"1", "true", "yes", "on"}
+
+
+def disable_xet() -> None:
+    """Turn Xet off for this process; huggingface_hub reads the flag at import."""
+    os.environ["HF_HUB_DISABLE_XET"] = "1"
+    try:
+        from huggingface_hub import constants
+
+        constants.HF_HUB_DISABLE_XET = True
+    except Exception:
+        pass
+
+
 def download_hub_file(
     *,
     repo_id: str,
@@ -202,7 +234,19 @@ def download_hub_file(
 
     progress(f"Downloading {repo_id}/{repo_filename} ...")
     try:
-        cached = hf_hub_download(repo_id=repo_id, filename=repo_filename)
+        try:
+            cached = hf_hub_download(repo_id=repo_id, filename=repo_filename)
+        except GatedRepoError:
+            raise
+        except Exception as exc:
+            if not is_xet_error(exc) or xet_disabled():
+                raise
+            progress(
+                f"WARN Xet/CAS download of {repo_filename} failed ({exc}); "
+                "retrying with HF_HUB_DISABLE_XET=1 (plain HTTPS)"
+            )
+            disable_xet()
+            cached = hf_hub_download(repo_id=repo_id, filename=repo_filename)
     except GatedRepoError as exc:
         raise RuntimeError(
             f"Gated repo {repo_id} — accept the license on Hugging Face and set "

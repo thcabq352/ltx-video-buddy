@@ -65,6 +65,7 @@ python -m master_agent download-models --heartmula
 python -m master_agent download-models --wan
 python -m master_agent models manifest
 python -m master_agent models select --version 2.5 --scan-only
+python -m master_agent models register <file-or-folder> [--dry-run] [--mode auto|hardlink|symlink|copy] [--force] [--json]
 python -m master_agent download-flux
 ```
 

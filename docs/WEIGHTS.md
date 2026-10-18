@@ -61,7 +61,7 @@ Gated Hub packs need `HF_TOKEN` or `huggingface-cli login`. LTX 2.5 is the LTX-2
 | `hardware` | One routing sentence. Does not block install |
 | `vram-policy` | The loader order below |
 | `ltx25-weights` | `ltx25_core` scan plus the loader pick |
-| `ltx23-weights` | a compatible LTX 2.3 GGUF is on disk |
+| `ltx23-weights` | a compatible LTX 2.3 GGUF is on disk. After `automatic-install --skip-weights` it prints `INFO ... deferred` and does not fail doctor until you add them ([below](#skipping-or-registering-the-ltx-23-pack)) |
 | `h3-weights` | `h3_fl2va` scan plus the loader pick |
 | `heartlib` / `heartmula-weights` / `heartmula-comfy` | Reported. An INFO here does not fail doctor and does not fetch |
 
@@ -145,6 +145,35 @@ Legacy Mickmumpitz / LTX 2.3 filenames still used by older graphs are installed 
 | HeartMuLa | `heartmula` | heartlib 3B | ~12GB, class tight, about 8–16GB by dtype. Run it before or after LTX, not beside it |
 
 Attested Hub ids (fetch only after the ask): Wan QuantStack HighNoise/LowNoise Q4_K_S or Comfy-Org fp8; VACE `mickmumpitz/VACE_Skyreels_V3_R2V_Merge-GGUF`; Krea `Comfy-Org/Krea-2`; Flux `city96/FLUX.1-dev-gguf` or `Comfy-Org/flux1-dev`; Qwen `QuantStack/Qwen-Image-Edit-2509-GGUF`; H3 [`unsloth/MiniMax-H3-GGUF`](https://huggingface.co/unsloth/MiniMax-H3-GGUF) and [`Comfy-Org/MiniMax-H3`](https://huggingface.co/Comfy-Org/MiniMax-H3). LTX 2.3 (`ltx23_core`, fetched by automatic install or `download-models --ltx23 --yes`): `Lightricks/LTX-2.3` distilled 1.1 checkpoint, QuantStack `LTX-2.3-22B-distilled-1.1-Q4_K_S.gguf` from `QuantStack/LTX-2.3-GGUF`, `Comfy-Org/ltx-2` Gemma 3 12B fp4 text encoder, and the `Kijai/LTX2.3_comfy` distilled LoRA plus full and tiny VAEs. File-by-folder list: [`video_buddy/models/README.md`](../video_buddy/models/README.md#the-ltx-23-pack).
+
+### Skipping or registering the LTX 2.3 pack
+
+The pack is about 76 GB. To install everything else now and add the weights later:
+
+```bash
+python -m master_agent automatic-install --yes --skip-weights
+```
+
+This saves `state/weights_deferred.json`. Automatic install then reports `DEFERRED` for the weights step and `INFO` for the `ltx23-weights` check, and exits 0. Later runs of `doctor` keep reporting `ltx23-weights` as `INFO ... deferred` instead of `NEED`. Generate still needs the files.
+
+Already downloaded the files (browser, another machine, an old Comfy install)? Register them instead of downloading again:
+
+```bash
+python -m master_agent models register D:\Downloads\ltx23          # a folder: picks out the pack files by name
+python -m master_agent models register path/to/taeltx2_3.safetensors
+python -m master_agent models register D:\Downloads\ltx23 --dry-run  # show the plan, change nothing
+```
+
+- Each file is matched by name against `ltx23_core`: the official name, or an accepted alternate such as `sulphur_dev-Q3_K_S.gguf` or `gemma_3_12B_it_fp8_scaled.safetensors`. A folder scan skips files that are not LTX 2.3 pack names.
+- A file with the official name must have the exact size of the Hub file. A smaller file is usually an unfinished download and is refused. Use `--force` to register it anyway.
+- Each match goes into the right subfolder of `MODELS_DIR` (for example `diffusion_models/` for the GGUF and `vae/` for both VAEs). `--mode auto` (the default) makes a hard link when the file is on the same drive, so nothing is copied, and copies otherwise. You can also choose `--mode hardlink`, `symlink` or `copy`.
+- Files already in `MODELS_DIR/<folder>/` or in the managed ComfyUI's `models/<folder>/` are left where they are. That ComfyUI folder is the one `comfy status` reports (`--workspace`, then `MANAGED_COMFY_ROOT`, then the saved choice, then `video_buddy/ComfyUI`).
+- Like pack downloads, register never writes into an attached or managed ComfyUI tree.
+- When the pack is complete, register removes the deferred marker. A finished `download-models --ltx23 --yes` or automatic install does the same. `--json` prints the result for scripts.
+
+### Xet download errors
+
+New Hugging Face repos serve large files through Xet. On some networks the Xet/CAS transfer fails partway through (errors mention `xet`, `CAS service` or `reconstruction`). Buddy then retries that file once over plain HTTPS with `HF_HUB_DISABLE_XET=1` and prints a `WARN` line. To skip Xet from the start, set `HF_HUB_DISABLE_XET=1` in `.env` or the shell.
 
 Lightx2v / turbo LoRAs apply when the file is present. LTX TeaCache is inject-when-registered and soft-bypasses when the pack is missing. See [Agents](AGENTS.md).
 
