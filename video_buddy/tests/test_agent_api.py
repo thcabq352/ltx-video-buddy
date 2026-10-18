@@ -26,6 +26,9 @@ def test_tool_registry_covers_every_capability():
     expected = {
         "about",
         "health",
+        "comfy_status",
+        "comfy_start",
+        "comfy_restart",
         "create_video",
         "plan_storyboard",
         "judge_asset",

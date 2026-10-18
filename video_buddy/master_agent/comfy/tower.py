@@ -1023,6 +1023,76 @@ def _wants_json(args: Any) -> bool:
     return flag is True
 
 
+TOWER_COMMANDS = ("start", "stop", "status", "restart")
+
+
+def run_tower_command(
+    command: str,
+    *,
+    workspace: Path | None = None,
+    port: int | None = None,
+    base_url: str | None = None,
+    wait: bool = True,
+    watch: bool = True,
+    ready_timeout_s: float | None = None,
+    extra_model_paths: Path | None = None,
+    write_yaml_into_external: bool = False,
+) -> dict[str, Any]:
+    """Body of ``comfy start|stop|status|restart``, shared by the CLI and the agent tools.
+
+    Raises ``TowerError`` (``ComfyLaunchError`` carries the launch details) or
+    ``ModelPathsError``; :func:`tower_error_payload` turns those into JSON.
+    """
+    if command not in TOWER_COMMANDS:
+        raise TowerError(f"unknown comfy tower command: {command!r}")
+    kwargs: dict[str, Any] = {"workspace": workspace, "port": port, "base_url": base_url}
+    if ready_timeout_s is not None:
+        kwargs["ready_timeout_s"] = ready_timeout_s
+    tower = ManagedComfyTower(**kwargs)
+    if command == "status":
+        from master_agent.comfy.model_paths import write_external_yaml_copy, write_extra_model_paths
+
+        buddy_yaml = write_extra_model_paths(directory=state_path().parent)
+        result = tower.status()
+        result["extra_model_paths"] = str(buddy_yaml)
+        if write_yaml_into_external:
+            result["external_yaml"] = str(write_external_yaml_copy(buddy_yaml))
+    elif command == "start":
+        result = tower.start(
+            extra_model_paths=extra_model_paths,
+            wait=wait,
+            watch=watch,
+            write_yaml_into_external=write_yaml_into_external,
+        )
+    elif command == "stop":
+        return tower.stop()
+    else:
+        result = tower.restart(
+            extra_model_paths=extra_model_paths,
+            wait=wait,
+            watch=watch,
+            write_yaml_into_external=write_yaml_into_external,
+        )
+    try:
+        from master_agent.comfy.updates import startup_report
+
+        result["startup"] = startup_report(tower.workspace)
+    except Exception as exc:
+        result["startup"] = {
+            "updated": False,
+            "blocks_install": False,
+            "lines": [f"Startup check failed ({exc}). No update ran."],
+        }
+    return result
+
+
+def tower_error_payload(command: str, exc: BaseException) -> dict[str, Any]:
+    payload: dict[str, Any] = {"status": "error", "command": command, "error": str(exc)}
+    if isinstance(exc, ComfyLaunchError):
+        payload["launch"] = exc.details
+    return payload
+
+
 def cmd_tower(args: Any) -> int:
     """CLI handler for ``python -m master_agent comfy {start,stop,status,restart}``."""
     command = getattr(args, "comfy_command", None) or getattr(args, "tower_command", None)
@@ -1043,69 +1113,32 @@ def cmd_tower(args: Any) -> int:
         print(f"FAIL  invalid --port {chosen_port}")
         return 2
 
-    tower = ManagedComfyTower(
-        workspace=Path(workspace).expanduser().resolve() if workspace else None,
-        port=chosen_port,
-        base_url=base_url,
-    )
+    if command not in TOWER_COMMANDS:
+        print(f"FAIL  unknown comfy tower command: {command!r}")
+        return 2
+    if write_into_external and command not in {"status", "start", "restart"}:
+        print("FAIL  --write-yaml-into-external is only valid with status, start, or restart")
+        return 2
 
     from master_agent.comfy.model_paths import ModelPathsError
 
     try:
-        if write_into_external and command not in {"status", "start", "restart"}:
-            print("FAIL  --write-yaml-into-external is only valid with status, start, or restart")
-            return 2
-        if command == "status":
-            from master_agent.comfy.model_paths import (
-                write_external_yaml_copy,
-                write_extra_model_paths,
-            )
-
-            buddy_yaml = write_extra_model_paths(directory=state_path().parent)
-            result = tower.status()
-            result["extra_model_paths"] = str(buddy_yaml)
-            if write_into_external:
-                result["external_yaml"] = str(write_external_yaml_copy(buddy_yaml))
-        elif command == "start":
-            result = tower.start(
-                extra_model_paths=Path(extra) if extra else None,
-                wait=not no_wait,
-                watch=not no_watch,
-                write_yaml_into_external=write_into_external,
-            )
-        elif command == "stop":
-            result = tower.stop()
-        elif command == "restart":
-            result = tower.restart(
-                extra_model_paths=Path(extra) if extra else None,
-                wait=not no_wait,
-                watch=not no_watch,
-                write_yaml_into_external=write_into_external,
-            )
-        else:
-            print(f"FAIL  unknown comfy tower command: {command!r}")
-            return 2
+        result = run_tower_command(
+            command,
+            workspace=Path(workspace).expanduser().resolve() if workspace else None,
+            port=chosen_port,
+            base_url=base_url,
+            wait=not no_wait,
+            watch=not no_watch,
+            extra_model_paths=Path(extra) if extra else None,
+            write_yaml_into_external=write_into_external,
+        )
     except (TowerError, ModelPathsError) as exc:
         if _wants_json(args):
-            payload: dict[str, Any] = {"status": "error", "command": command, "error": str(exc)}
-            if isinstance(exc, ComfyLaunchError):
-                payload["launch"] = exc.details
-            print(json.dumps(payload, indent=2, default=str))
+            print(json.dumps(tower_error_payload(command, exc), indent=2, default=str))
         else:
             print(f"FAIL  comfy {command}: {exc}")
         return 1
-
-    if command in {"start", "status", "restart"}:
-        try:
-            from master_agent.comfy.updates import startup_report
-
-            result["startup"] = startup_report(tower.workspace)
-        except Exception as exc:
-            result["startup"] = {
-                "updated": False,
-                "blocks_install": False,
-                "lines": [f"Startup check failed ({exc}). No update ran."],
-            }
 
     if _wants_json(args):
         print(json.dumps(result, indent=2, default=str))

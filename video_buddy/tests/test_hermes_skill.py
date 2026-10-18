@@ -175,3 +175,78 @@ def test_install_hermes_skill_writes_skill_only(tmp_path: Path):
     assert (home / "skills" / "video-buddy" / "SKILL.md").is_file()
     assert (home / "skills" / "video-buddy" / "PROFILE.md").is_file()
     assert not (home / "profiles").exists()
+
+
+def test_install_hermes_skill_into_profile(tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys):
+    from install_hermes_skill import hermes_profile_skill_dir, main
+
+    monkeypatch.setenv("HERMES_HOME", str(tmp_path / "hh"))
+    expected = tmp_path / "hh" / "profiles" / "ltx" / "skills" / "media" / "video-buddy"
+    assert hermes_profile_skill_dir("ltx") == expected
+    assert main(["--profile", "ltx"]) == 0
+    assert str(expected) in capsys.readouterr().out
+    for name in ("SKILL.md", "TOOLS.md", "PROFILE.md", "references/local-only.md"):
+        assert (expected / name).read_text(encoding="utf-8") == (SKILL_DIR / name).read_text(encoding="utf-8")
+    assert not (tmp_path / "hh" / "skills").exists()
+    assert sorted(p.name for p in (tmp_path / "hh" / "profiles" / "ltx").iterdir()) == ["skills"]
+
+
+def test_install_hermes_skill_profile_defaults_to_home_dot_hermes(tmp_path: Path, monkeypatch: pytest.MonkeyPatch):
+    from install_hermes_skill import hermes_profile_skill_dir
+
+    monkeypatch.delenv("HERMES_HOME", raising=False)
+    monkeypatch.setattr(Path, "home", classmethod(lambda cls: tmp_path))
+    assert hermes_profile_skill_dir("ltx") == tmp_path / ".hermes" / "profiles" / "ltx" / "skills" / "media" / "video-buddy"
+
+
+def test_install_hermes_skill_dest_flag(tmp_path: Path):
+    from install_hermes_skill import main
+
+    dest = tmp_path / "custom" / "video-buddy"
+    assert main(["--dest", str(dest)]) == 0
+    assert (dest / "SKILL.md").is_file() and (dest / "TOOLS.md").is_file() and (dest / "PROFILE.md").is_file()
+
+
+@pytest.mark.parametrize("bad", ["../evil", "a/b", "", ".."])
+def test_install_hermes_skill_rejects_bad_profile_names(tmp_path: Path, bad: str):
+    from install_hermes_skill import main
+
+    assert main(["--hermes-home", str(tmp_path), "--profile", bad]) == 1
+    assert not (tmp_path / "profiles").exists() or not any((tmp_path / "profiles").rglob("SKILL.md"))
+
+
+def test_install_hermes_skill_dest_and_profile_are_exclusive(tmp_path: Path):
+    from install_hermes_skill import main
+
+    with pytest.raises(SystemExit) as exc:
+        main(["--dest", str(tmp_path / "d"), "--profile", "ltx"])
+    assert exc.value.code == 2
+
+
+def test_skill_package_says_how_to_start_comfy():
+    files = [SKILL_MD, TOOLS_MD, SKILL_DIR / "PROFILE.md", VIDEO_BUDDY.parent / "skills" / "video-buddy" / "SKILL.md"]
+    for path in files:
+        text = path.read_text(encoding="utf-8")
+        assert "comfy_start" in text, path
+    skill = SKILL_MD.read_text(encoding="utf-8")
+    for needle in (
+        "python -m master_agent comfy start",
+        "python -m master_agent agent comfy_start",
+        "NEVER run ComfyUI `main.py`",
+        "background=true",
+        "/system_stats",
+        "do not retry the identical command",
+        "--profile ltx",
+    ):
+        assert needle in skill, needle
+    agents = (VIDEO_BUDDY.parent / "docs" / "AGENTS.md").read_text(encoding="utf-8")
+    assert "NEVER run ComfyUI `main.py`" in agents and "background=true" in agents
+
+
+def test_skill_package_drops_removed_surfaces():
+    files = [SKILL_MD, TOOLS_MD, SKILL_DIR / "PROFILE.md", VIDEO_BUDDY.parent / "skills" / "video-buddy" / "SKILL.md",
+             VIDEO_BUDDY.parent / "skills" / "README.md"]
+    for path in files:
+        text = path.read_text(encoding="utf-8")
+        for gone in ("8189", "MCP", "mcp_server", "A2A", "/a2a"):
+            assert gone not in text, (path.name, gone)

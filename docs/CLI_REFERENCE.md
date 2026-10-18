@@ -84,14 +84,16 @@ Also `--vace`, `--krea`, `--qwen`, `--flux-pack`, `--bundle`, `--optional`, `--s
 
 ```bash
 cd video_buddy
-python install_hermes_skill.py      # skill only → ~/.hermes/skills/video-buddy/
+python install_hermes_skill.py --profile ltx   # → ~/.hermes/profiles/ltx/skills/media/video-buddy/
+python install_hermes_skill.py                 # → ~/.hermes/skills/video-buddy/   (--dest DIR for any other folder)
 python -m master_agent agent list
+python -m master_agent agent comfy_start       # detached; never run ComfyUI main.py in a foreground terminal
 python -m master_agent agent create_video --args '{"request": "neon rain", "dry_run": true}'
 ```
 
-Skill source: `video_buddy/skills/video-buddy/`. Agent tools (`master_agent/agent_api.py`): `about`, `health`, `create_video`, `plan_storyboard`, `judge_asset`, `search_workflows`, `search_runs`, `search_knowledge`, `kb_ingest`, `list_runs`, `list_models`, `validate_workflow`, `create_character`, `train_lora`, `control_get`, `control_set`, `budget_status`, `budget_reset_shift`. Diagnose, curriculum, `comfy run`, doctor and ingest/promote are CLI commands.
+The installer copies `SKILL.md`, `TOOLS.md`, `PROFILE.md` and `references/` only. Skill source: `video_buddy/skills/video-buddy/`. Agent tools (`master_agent/agent_api.py`): `about`, `health`, `comfy_status`, `comfy_start`, `comfy_restart`, `create_video`, `plan_storyboard`, `judge_asset`, `search_workflows`, `search_runs`, `search_knowledge`, `kb_ingest`, `list_runs`, `list_models`, `validate_workflow`, `create_character`, `train_lora`, `control_get`, `control_set`, `budget_status`, `budget_reset_shift`. Diagnose, curriculum, `comfy run`, doctor and ingest/promote are CLI commands.
 
-There is no MCP server, A2A endpoint or studio port. An older install's `~/.hermes/profiles/ltx/config.yaml` may still list `mcp_servers.master-agent`; delete that entry before deploying. See `video_buddy/skills/video-buddy/PROFILE.md`.
+`comfy_start` runs the same code as `comfy start --as-json` and returns within `timeout_s` (default 180 s): `started`, `starting` (poll `comfy_status`), or `error` with the launch log tail. Gateway setup and old-config cleanup: `video_buddy/skills/video-buddy/PROFILE.md`.
 
 ## Feature commands
 

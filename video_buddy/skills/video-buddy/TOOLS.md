@@ -16,7 +16,10 @@ unknown tool or bad `--args`. Python callers: `from master_agent import agent_ap
 | Tool | Arguments | What it does |
 |---|---|---|
 | `about` | *(none)* | Studio identity card. |
-| `health` | *(none)* | ComfyUI reachability + GPU VRAM, Ollama up, llama.cpp up (`local_llm`), opt-in Grok credentials (read-only), KB counts, config hash + values. |
+| `health` | *(none)* | ComfyUI reachability + GPU VRAM, Ollama up, llama.cpp up (`local_llm`), opt-in Grok credentials (read-only), KB counts, config hash + values. Comfy down: `comfyui.managed` has the last launch error + log tail. |
+| `comfy_status` | *(none)* | Buddy's managed ComfyUI: `status` `up`\|`down`, `ok`, URL, folder + why that folder (`workspace_source`), pid, log path. Down: `managed` has the last launch error, exit code, command and `log_tail`. Same code as `comfy status --as-json`. |
+| `comfy_start` | `wait: bool=True`, `timeout_s: float=180` (max 360) | **The only way an agent starts ComfyUI.** Detached launch, then waits for `:8188`. `status`: `started` / `already_up`; `starting` (still loading: poll `comfy_status`, do not start again); `error` + `launch` {exit_code, command, cwd, python, log, log_tail} and `next`. Same code as `comfy start --as-json`. |
+| `comfy_restart` | `wait: bool=True`, `timeout_s: float=180` | Stop the ComfyUI Buddy launched, start it again detached. Same results as `comfy_start`. Refused for a ComfyUI Buddy did not start. |
 | `create_video` | `request: str`, `duration_s: float\|None=None` (5 s, or follows the audio for photo + voice), `quality: str="draft"`, `variant: str\|None=None`, `llm_panel: str\|None=None`, `dry_run: bool=False`, `image_path`, `audio_path`, `video_path`, `line: str\|None=None`, `seed: int\|None=None`, `storyboard: str\|None=None` (smart\|always\|multi_only\|off), `upscale: str\|None=None` (rtx\|seedvr2) | Full director pipeline (route, storyboard, per-segment judge, stitch, full judge). `dry_run=True` plans + validates, no GPU. `status="busy"` when another render holds the GPU (`state/gpu.lock`); `status="paused"` when the render budget held it. |
 | `plan_storyboard` | `request: str`, `duration_s: float=8.0`, `quality: str="draft"`, `llm_panel: str\|None=None` | Segment split + LLM-panel storyboard with KB recall. **No GPU, no validation.** |
 | `judge_asset` | `video_path: str`, `request: str=""`, `full_video: bool=False` | Grade an existing file (heuristics + text LLM + vision). `full_video=True` uses the full-video judge. |
@@ -34,7 +37,12 @@ unknown tool or bad `--args`. Python callers: `from master_agent import agent_ap
 | `budget_status` | *(none)* | Shift budget snapshot: used, cap, paused, shift id, pending, ledger. |
 | `budget_reset_shift` | *(none)* | Archive the shift ledger, zero used, resume budget-paused generates. |
 
-Latency: `health` / `search_*` / `validate_workflow` / `kb_ingest` ~seconds.
+Never start ComfyUI with `main.py` or `run_*.bat` in a foreground terminal; it
+blocks until the tool limit kills it. After a failed `comfy_start`, read
+`launch.log_tail` and do not repeat the identical call.
+
+Latency: `health` / `search_*` / `validate_workflow` / `kb_ingest` / `comfy_status` ~seconds.
+`comfy_start` / `comfy_restart` at most `timeout_s`.
 `judge_asset` and `create_video` can take minutes (cold local LLM). `train_lora`
 is hours. Allow ~900s per call.
 
@@ -48,6 +56,7 @@ is hours. Allow ~900s per call.
 | `inventory` | List discovered weights (path + role) before doctor. `--json` optional. Consent rules: repo `docs/WEIGHTS.md`. |
 | `setup` / `doctor` | Deps + LTX 2.5 / H3 / LTX 2.3 scan. Flags and the loader order: repo `docs/WEIGHTS.md`. `--fix` installs deps; LLM GGUFs with no public source are skipped and it never pulls Ollama. |
 | `health` | Comfy `:8188` + GPU stats. |
+| `comfy start\|status\|stop\|restart` | Buddy's managed ComfyUI. `start` is detached and waits for `:8188` (180 s); a failed launch prints exit code, command, folder, python and the log tail. `--as-json` for scripts. `--workspace` / `MANAGED_COMFY_ROOT` pick the folder. |
 | `workflows` | Default catalog (includes `ltx25_*` and `h3_*`). `--vram` prints 16GB pack table. |
 | `capabilities` | Comfy pack vs Buddy wiring. `--offline` uses cache. |
 | `diagnose` | 9-frame hull fire; prints `sec/step`; no shift-budget spend. `--prepare` lints only. |

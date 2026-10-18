@@ -682,3 +682,106 @@ def test_stop_kills_the_launched_pid_not_comfy_cli(isolated, monkeypatch):
     assert isolated["calls"] == []
     assert (424242, int(tower.signal.SIGTERM)) in isolated["kills"]
     assert "comfy_pid" not in (load_state().extra or {})
+
+
+# --- agent tools: comfy_status / comfy_start / comfy_restart -----------------------
+
+
+@pytest.fixture
+def agent_comfy(isolated, monkeypatch):
+    from master_agent import agent_api
+    from master_agent.comfy import updates
+
+    monkeypatch.setattr(updates, "startup_report", lambda ws=None: {"updated": False, "lines": []})
+    return agent_api
+
+
+def test_agent_comfy_tools_are_registered_with_docs(agent_comfy):
+    for name in ("comfy_status", "comfy_start", "comfy_restart"):
+        assert name in agent_comfy.TOOLS
+        assert (agent_comfy.TOOLS[name].__doc__ or "").strip()
+
+
+def test_agent_comfy_start_runs_the_cli_code_detached(agent_comfy, isolated, monkeypatch):
+    seen: list[tuple[str, dict]] = []
+    real = tower.run_tower_command
+
+    def spy(command, **kw):
+        seen.append((command, kw))
+        return real(command, **kw)
+
+    monkeypatch.setattr(tower, "run_tower_command", spy)
+    result = agent_comfy.call("comfy_start", {"timeout_s": 30})
+    assert result["status"] == "started" and result["ready"] is True
+    assert result["base_url"] == "http://127.0.0.1:8188"
+    assert result["workspace_source"] == "MANAGED_COMFY_ROOT"
+    assert seen == [("start", {"wait": True, "ready_timeout_s": 30.0})]
+    (proc,) = _comfy_popens(isolated)
+    assert proc.kwargs.get("start_new_session") is True or proc.kwargs.get("creationflags")
+    assert load_state().want_running is True
+
+
+def test_agent_comfy_start_failure_returns_the_log_tail(agent_comfy, isolated, monkeypatch):
+    monkeypatch.setattr(_Popen, "exit_code", 1)
+    monkeypatch.setattr(_Popen, "output", TRACEBACK)
+    isolated["probes"]["script"] = [(False, "down")]
+    result = agent_comfy.comfy_start()
+    assert result["status"] == "error" and result["command"] == "start"
+    assert "exited with code 1" in result["error"]
+    launch = result["launch"]
+    assert launch["exit_code"] == 1
+    assert launch["cwd"] == str(isolated["workspace"])
+    assert any("No module named 'torch'" in line for line in launch["log_tail"])
+    assert "Do not repeat the same call" in result["next"]
+
+
+def test_agent_comfy_start_still_loading_is_starting_not_error(agent_comfy, isolated, monkeypatch):
+    import itertools
+
+    ticks = itertools.count(0, 50)
+    monkeypatch.setattr(tower.time, "monotonic", lambda: float(next(ticks)))
+    isolated["probes"]["script"] = [(False, "down")]
+    result = agent_comfy.comfy_start(timeout_s=5)
+    assert result["status"] == "starting"
+    assert result["launch"]["exit_code"] is None
+    assert "Poll comfy_status" in result["next"] and "Do not call comfy_start again" in result["next"]
+    assert isolated["kills"] == []
+
+
+def test_agent_comfy_status_down_carries_last_failure(agent_comfy, isolated, monkeypatch):
+    monkeypatch.setattr(_Popen, "exit_code", 1)
+    monkeypatch.setattr(_Popen, "output", TRACEBACK)
+    isolated["probes"]["script"] = [(False, "down")]
+    agent_comfy.comfy_start()
+    result = agent_comfy.comfy_status()
+    assert result["status"] == "down" and result["ok"] is False
+    assert result["managed"]["exit_code"] == 1
+    assert any("No module named 'torch'" in line for line in result["managed"]["log_tail"])
+    assert "comfy_start" in result["next"]
+
+
+def test_agent_comfy_status_up(agent_comfy, isolated):
+    isolated["probes"]["script"] = [(True, "/system_stats ok")]
+    result = agent_comfy.comfy_status()
+    assert result["status"] == "up" and result["ok"] is True
+    assert "next" not in result
+
+
+def test_agent_comfy_restart_external_mode_is_refused(agent_comfy, monkeypatch):
+    monkeypatch.setenv("COMFY_MODE", "external")
+    result = agent_comfy.comfy_restart()
+    assert result["status"] == "error"
+    assert "refusing to restart" in result["error"]
+
+
+def test_agent_cli_comfy_start_prints_one_json_document(agent_comfy, isolated, monkeypatch, capsys):
+    from master_agent.__main__ import main
+
+    monkeypatch.setattr(_Popen, "exit_code", 1)
+    monkeypatch.setattr(_Popen, "output", TRACEBACK)
+    isolated["probes"]["script"] = [(False, "down")]
+    rc = main(["agent", "comfy_start", "--args", '{"timeout_s": 20}'])
+    payload = json.loads(capsys.readouterr().out)
+    assert rc == 1
+    assert payload["status"] == "error"
+    assert payload["launch"]["exit_code"] == 1
