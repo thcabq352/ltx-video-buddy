@@ -43,6 +43,97 @@ def about() -> dict:
     return studio_about()
 
 
+def _managed_comfy_summary() -> dict:
+    """Where Buddy's own ComfyUI lives and why the last ``comfy start`` failed, if it did."""
+    try:
+        from master_agent.comfy.root import resolve_managed_comfy_root
+        from master_agent.comfy.tower import load_state
+
+        root = resolve_managed_comfy_root()
+        st = load_state()
+    except Exception:
+        return {}
+    out: dict = {"workspace": str(root.path), "workspace_source": root.source}
+    if st.last_error:
+        failure = (st.extra or {}).get("last_launch_failure") or {}
+        out["last_error"] = st.last_error[:2000]
+        for key in ("exit_code", "command", "cwd", "python", "log", "log_tail"):
+            if key in failure:
+                out[key] = failure[key]
+    return out
+
+
+COMFY_READY_TIMEOUT_S = 180.0
+_COMFY_ERROR_NEXT = (
+    "Read `error` and `launch.log_tail`, fix the cause they name, then call comfy_start once more. "
+    "Do not repeat the same call unchanged, and never run ComfyUI main.py or run_*.bat in a foreground terminal."
+)
+_COMFY_STARTING_NEXT = (
+    "ComfyUI is still loading. Poll comfy_status every 10-15 s until `ok` is true. Do not call comfy_start again."
+)
+
+
+def _comfy_tool(command: str, *, wait: bool = True, timeout_s: float | None = None) -> dict:
+    from master_agent.comfy.model_paths import ModelPathsError
+    from master_agent.comfy.tower import (
+        ComfyLaunchError,
+        TowerError,
+        run_tower_command,
+        tower_error_payload,
+    )
+
+    timeout = COMFY_READY_TIMEOUT_S if timeout_s is None else max(5.0, min(float(timeout_s), 360.0))
+    try:
+        result = run_tower_command(command, wait=wait, ready_timeout_s=timeout)
+    except (TowerError, ModelPathsError) as exc:
+        payload = tower_error_payload(command, exc)
+        launch = payload.get("launch") or {}
+        if isinstance(exc, ComfyLaunchError) and launch.get("exit_code") is None and launch.get("pid"):
+            payload["status"] = "starting"
+            payload["next"] = _COMFY_STARTING_NEXT
+        else:
+            payload["next"] = _COMFY_ERROR_NEXT
+        return payload
+    if command == "status":
+        result["status"] = "up" if result.get("ok") else "down"
+        if not result.get("ok"):
+            result["managed"] = _managed_comfy_summary()
+            result["next"] = "Start it with comfy_start (detached; returns when it answers or fails)."
+    elif not result.get("ready"):
+        result["next"] = _COMFY_STARTING_NEXT
+    return result
+
+
+def comfy_status() -> dict:
+    """Is Buddy's managed ComfyUI up? Folder (and why that folder), URL, pid, log, last launch error + log tail.
+
+    Same code as ``python -m master_agent comfy status --json``. Read-only apart
+    from refreshing ``state/extra_model_paths.yaml``. ``status`` is ``up`` or ``down``.
+    """
+    return _comfy_tool("status")
+
+
+def comfy_start(wait: bool = True, timeout_s: float = COMFY_READY_TIMEOUT_S) -> dict:
+    """Start Buddy's managed ComfyUI detached in the background and wait until :8188 answers.
+
+    Same code as ``python -m master_agent comfy start --json``. The ONLY sanctioned
+    way for an agent to start ComfyUI. Returns within ``timeout_s`` (default 180,
+    max 360): ``started`` / ``already_up``; ``starting`` (still loading: poll
+    comfy_status, do not start again); or ``error`` with ``launch`` (exit code,
+    command, cwd, python, log, log_tail). ``wait=false`` returns after a 3 s crash check.
+    """
+    return _comfy_tool("start", wait=wait, timeout_s=timeout_s)
+
+
+def comfy_restart(wait: bool = True, timeout_s: float = COMFY_READY_TIMEOUT_S) -> dict:
+    """Stop the ComfyUI Buddy launched, then start it again (detached). Same results as comfy_start.
+
+    Same code as ``python -m master_agent comfy restart --json``. Never kills a
+    ComfyUI Buddy did not start (``COMFY_MODE=external`` is refused).
+    """
+    return _comfy_tool("restart", wait=wait, timeout_s=timeout_s)
+
+
 def health() -> dict:
     """ComfyUI reachability + GPU VRAM, local LLM (llama.cpp, Ollama), opt-in Grok credentials (read-only), KB counts."""
     from master_agent.comfy.client import ComfyClient
@@ -78,7 +169,14 @@ def health() -> dict:
             ],
         }
     except Exception as e:
-        out["comfyui"] = {"up": False, "error": str(e)[:200]}
+        out["comfyui"] = {
+            "up": False,
+            "error": str(e)[:200],
+            "next": "Start it with the comfy_start tool (detached). Never run ComfyUI main.py in a foreground terminal.",
+        }
+        managed = _managed_comfy_summary()
+        if managed:
+            out["comfyui"]["managed"] = managed
     out["kb"] = {
         "workflows": collection_count(COLLECTION_WORKFLOWS),
         "runs": collection_count(COLLECTION_RUNS),
@@ -632,6 +730,9 @@ TOOLS: dict[str, Callable[..., Any]] = {
     for fn in (
         about,
         health,
+        comfy_status,
+        comfy_start,
+        comfy_restart,
         create_video,
         plan_storyboard,
         judge_asset,

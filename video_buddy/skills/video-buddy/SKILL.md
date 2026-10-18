@@ -1,13 +1,44 @@
 ---
 name: video-buddy
-description: "Use when generating or judging local ComfyUI video on this machine with Video Buddy (LTX 2.5, MiniMax H3, WAN, lipsync, music video, fractal, storyboard) through the LTX bot gateway and `python -m master_agent agent`. Use when an agent is about to treat Grok Imagine / cloud-only video as the local studio, or reaches for a Buddy MCP server, A2A endpoint, or studio port that no longer exists."
+description: "Use when generating or judging local ComfyUI video on this machine with Video Buddy (LTX 2.5, MiniMax H3, WAN, lipsync, music video, fractal, storyboard) through the LTX bot gateway and `python -m master_agent agent`. Use when ComfyUI needs starting, checking or restarting (always `agent comfy_start`, never a foreground main.py). Use when an agent is about to treat Grok Imagine / cloud-only video as the local studio."
 ---
 
 # Video Buddy
 
 Local ComfyUI video studio in this repo (`video_buddy/`). Package is `master_agent`. Not cloud Imagine.
 
-**One gateway.** The LTX bot gateway is the only way in. It loads this skill and runs `python -m master_agent agent <tool> --args '<json>'` from `video_buddy/` with the project venv. Buddy runs no server of its own: no MCP server, no A2A endpoint, no studio port, no Hermes seat registration.
+**One gateway.** The LTX bot gateway is the only way in. It loads this skill and runs `python -m master_agent agent <tool> --args '<json>'` from `video_buddy/` with the project venv. Buddy runs no server of its own.
+
+## Starting ComfyUI (read before any render)
+
+ComfyUI is a long-running server. Started in a foreground terminal it never returns: the tool call blocks until the gateway's time limit kills it, and ComfyUI dies with it.
+
+**The only sanctioned ways to start it:**
+
+```bash
+# cwd = video_buddy/, project venv
+python -m master_agent agent comfy_status            # up / down, folder, last error
+python -m master_agent agent comfy_start             # detached; returns when :8188 answers or the launch fails
+python -m master_agent agent comfy_restart
+# same code, CLI form:
+python -m master_agent comfy start
+python -m master_agent comfy status
+```
+
+`comfy_start` launches ComfyUI detached in the background, writes its output to `state/logs/comfyui_8188.log`, and returns in at most `timeout_s` (default 180 s, so it fits inside a 420 s tool limit):
+
+| `status` | Meaning | Do next |
+|---|---|---|
+| `started` / `already_up` | `:8188` answers | Render. |
+| `starting` | Still loading (big first start) | Poll `comfy_status` every 10-15 s until `ok` is true. Do **not** call `comfy_start` again. |
+| `error` | Launch failed | Read `error` and `launch.log_tail` (exit code, command, cwd, python, last log lines). Fix that cause first. |
+
+Hard rules:
+
+- **NEVER run ComfyUI `main.py`, `python_embeded/python.exe ... main.py`, or `run_*.bat` in a foreground terminal.** Not with `--windows-standalone-build`, not "just to test".
+- If a raw launch is truly unavoidable (the comfy tools are broken), run it with `background=true`, then poll `python -m master_agent agent comfy_status` or `GET http://127.0.0.1:8188/system_stats`. Never wait on the launch command itself.
+- **After a failed start, do not retry the identical command.** The answer is in `launch.log_tail`. The same call with the same inputs fails the same way. Report the tail to the human if you cannot fix the cause.
+- A server already on `:8188` that Buddy did not start is left alone (`error`: refusing to adopt). Do not kill it; it may be mid-render.
 
 ## When to use
 
@@ -33,6 +64,7 @@ Local ComfyUI video studio in this repo (`video_buddy/`). Package is `master_age
 # cwd = video_buddy/, project venv
 python -m master_agent agent list
 python -m master_agent agent health
+python -m master_agent agent comfy_start --args '{"timeout_s": 180}'
 python -m master_agent agent create_video --args '{"request": "rain on a pier at dawn", "dry_run": true}'
 python -m master_agent agent create_video --args @job.json
 ```
@@ -42,7 +74,7 @@ python -m master_agent agent create_video --args @job.json
 - `busy` means another render holds the GPU (`state/gpu.lock`). Nothing was queued; retry when it finishes.
 - `paused` means the render budget held the run. `control_set` with `reset_budget: true` (or `budget_reset_shift`) resumes it.
 - Media paths must sit under `outputs/`, `state/uploads/`, the ComfyUI input/output folders, or `MEDIA_EXTRA_ROOTS`.
-- Allow ~900s per call. `create_video` / `judge_asset` / `train_lora` are long.
+- Allow ~900s per call. `create_video` / `judge_asset` / `train_lora` are long. `comfy_start` / `comfy_restart` return within `timeout_s`.
 
 Python callers can `from master_agent import agent_api` and call the same functions.
 
@@ -56,7 +88,7 @@ Do L0→L5 in order. Print the card: `python -m master_agent curriculum`. Part 2
 |---|---|
 | L0 tree | This tree: `video_buddy` / `master_agent`. |
 | L1 about | `python -m master_agent about` — studio card before any GPU claim. |
-| L2 health | `python -m master_agent health` — Comfy **:8188** up. A gateway reply is not proof. |
+| L2 health | `python -m master_agent health` — Comfy **:8188** up. A gateway reply is not proof. Down: `agent comfy_start` (see [Starting ComfyUI](#starting-comfyui-read-before-any-render)). |
 | L3 dry-run | `python -m master_agent run "BRIEF" --dry-run` — plan/lint only. No queue, no shift-budget spend. |
 | L4 diagnose | `python -m master_agent diagnose --variant base --prompt "garden proof"` — 9-frame hull, print `sec/step`. |
 | L5 proof | Real file in `outputs/`. `ffprobe` frames + size. **Junk <100KB or <3 frames = FAIL.** |
@@ -100,6 +132,7 @@ Full signatures: [TOOLS.md](TOOLS.md).
 | Agent tool | CLI equivalent |
 |---|---|
 | `health` | `python -m master_agent health` (Comfy only) |
+| `comfy_status` / `comfy_start` / `comfy_restart` | `python -m master_agent comfy status\|start\|restart --as-json` (same code) |
 | `about` | `python -m master_agent about --json` |
 | `create_video` | `python -m master_agent run "BRIEF" [--duration N --quality draft --variant SLUG --seed N --storyboard MODE --upscale rtx --dry-run --no-interview]` |
 | `plan_storyboard` | No GPU plan preview. Closest: `run "BRIEF" --dry-run` (also lints). |
@@ -114,7 +147,7 @@ Full signatures: [TOOLS.md](TOOLS.md).
 | `control_get` / `control_set` | `persona set` / `soul set` cover two knobs; judge, VRAM and budget-cap knobs are agent tools only. |
 | `budget_status` / `budget_reset_shift` | `python -m master_agent budget status --json` / `budget reset-shift` |
 
-CLI-only: `curriculum`, `inventory`, `doctor`/`setup`, `workflows`, `capabilities`, `download-models`, `download-flux`, `models select`, `comfy run|ingest|learn|dry-run|promote|attach|start|stop|status|restart|update`, `diagnose`, `rainey1-batch`, `fetch-object-info`, `power-tune`, `persona`, `soul`, `brief`, `fractal`, `music`, `mv plan`/`mv render`, `heartmula generate`/`heartmula transcribe`, `lora setup`/`validate`, `character list`.
+CLI-only: `curriculum`, `inventory`, `doctor`/`setup`, `workflows`, `capabilities`, `download-models`, `download-flux`, `models select`, `comfy run|ingest|learn|dry-run|promote|attach|stop|update`, `diagnose`, `rainey1-batch`, `fetch-object-info`, `power-tune`, `persona`, `soul`, `brief`, `fractal`, `music`, `mv plan`/`mv render`, `heartmula generate`/`heartmula transcribe`, `lora setup`/`validate`, `character list`.
 
 Drive graphs with CLI first: `comfy run`. Director pipeline: `run` or `agent create_video`. Unattended: `--no-interview`.
 
@@ -133,19 +166,24 @@ Source of truth in this repo: `video_buddy/skills/video-buddy/`.
 
 ```bash
 # from video_buddy/
+python install_hermes_skill.py --profile ltx
+# → ~/.hermes/profiles/ltx/skills/media/video-buddy/  (the LTX bot's profile)
 python install_hermes_skill.py
-# copies skill → ~/.hermes/skills/video-buddy/  (skill only: no profile, no gateway config, no .env)
+# → ~/.hermes/skills/video-buddy/  (shared Hermes skills)
+python install_hermes_skill.py --dest DIR
+# → exactly DIR
 ```
 
-Windows / macOS / Linux all use `~/.hermes/skills/video-buddy/` (`HERMES_HOME` overrides `~/.hermes`). Confirm `SKILL.md` is in that folder. The LTX bot gateway's terminal must run from `video_buddy/` with the project venv. See [PROFILE.md](PROFILE.md) for the gateway setup and the one-time cleanup of the old MCP entry.
+It copies `SKILL.md`, `TOOLS.md`, `PROFILE.md` and `references/` and nothing else: no profile config, no gateway config, no `.env`. `HERMES_HOME` (or `--hermes-home`) overrides `~/.hermes` on Windows, macOS and Linux. Confirm `SKILL.md` is in the folder it prints. The LTX bot gateway's terminal must run from `video_buddy/` with the project venv. See [PROFILE.md](PROFILE.md) for the gateway setup.
 
 ## Common mistakes
 
 | Excuse | Reality |
 |---|---|
-| "I'll call the master-agent MCP tools" | Removed. Use `python -m master_agent agent <tool>`. |
+| "I'll start ComfyUI with `python main.py` / `run_nvidia_gpu.bat`" | Foreground server: blocks until the tool limit kills it. Use `agent comfy_start`. |
+| "comfy_start failed, I'll run it again" | Same input, same failure. Read `launch.log_tail` and fix the cause. |
+| "Still loading, I'll start it again" | `starting` means poll `comfy_status`. A second start does not help. |
 | "I'll use Imagine / Grok video" | Wrong box for this local studio. |
-| "I'll post to the studio on 8189 / A2A" | Removed. One gateway, one CLI entry. |
 | "Queue length 8" | Illegal. LTX wants `8n+1`, min 9. |
 | "Skip to overnight" | L0→L5 + human OK first. Diagnose before scale. |
 | "Tracker says DONE" | Junk `<100KB` / `<3` frames is FAIL. |

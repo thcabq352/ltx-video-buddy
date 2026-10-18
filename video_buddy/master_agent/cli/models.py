@@ -189,6 +189,26 @@ def cmd_models_manifest(args: argparse.Namespace) -> int:
     return _manifest(args)
 
 
+def cmd_models_register(args: argparse.Namespace) -> int:
+    from master_agent.models.register import format_report, register_weights
+
+    try:
+        report = register_weights(
+            args.paths,
+            mode=args.mode,
+            force=bool(args.force),
+            dry_run=bool(args.dry_run),
+        )
+    except Exception as exc:
+        if args.json:
+            print(json.dumps({"ok": False, "error": str(exc)}, indent=1))
+        else:
+            print(f"FAIL  models register: {exc}")
+        return 1
+    print(json.dumps(report.to_dict(), indent=1) if args.json else format_report(report))
+    return 0 if report.ok else 1
+
+
 def cmd_models_select(args: argparse.Namespace) -> int:
     from master_agent.models.selector import cmd_models_select as _select
 

@@ -6,6 +6,10 @@ Install, Hermes seating, the L0→L5 curriculum, and the run cookbook live in [R
 
 Authoritative framing: **Briefing for LTX Video Buddy (`master_agent`) — fleet curriculum & field notes** (2026-09-10). The stop-lines below are implemented first-class.
 
+## Starting ComfyUI
+
+Only `python -m master_agent agent comfy_start` or `python -m master_agent comfy start` (detached, health-checked, returns the launch log tail on failure). NEVER run ComfyUI `main.py` or `run_*.bat` in a foreground terminal; if a raw launch is unavoidable use `background=true` and poll `agent comfy_status` or `GET /system_stats`. After a failed start, read the log tail and do not retry the identical command. Details: [`docs/AGENTS.md`](../docs/AGENTS.md#starting-comfyui).
+
 ## Field lessons
 
 - **`length=8` is junk.** LTX wants `8n+1` (min 9). Length 8 collapses to a 1-frame file. Never queue 8; snap to 9.

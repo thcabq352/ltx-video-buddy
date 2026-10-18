@@ -1130,6 +1130,12 @@ def model_search_roots() -> list[Path]:
     _add(Path(MODELS_DIR))
     _add(Path(COMFYUI_ROOT) / "models")
     _add(Path(PROJECT_ROOT) / "models")
+    try:
+        from master_agent.comfy.root import managed_comfy_root
+
+        _add(managed_comfy_root() / "models")
+    except Exception:
+        pass
     _add(Path(PROJECT_ROOT) / "ComfyUI" / "models")
     _add(Path(PROJECT_ROOT) / "ComfyUI_windows_portable" / "ComfyUI" / "models")
     parent = Path(PROJECT_ROOT).parent

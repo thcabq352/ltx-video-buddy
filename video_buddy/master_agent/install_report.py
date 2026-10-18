@@ -53,6 +53,7 @@ STEP_REASONS: dict[str, str] = {
     "Triton + SageAttention": "ComfyUI runs without them, just slower",
     "llama.cpp": "Buddy renders video without a local LLM; the brief / judge LLM stays off",
     "LLM models": "no public GGUF source is defined; video generation does not need them",
+    "LTX 2.3 weights": "you deferred them with --skip-weights; only generate needs them",
 }
 
 

@@ -4,6 +4,13 @@ Stop-lines and field lessons for anyone driving `master_agent`. Install, Hermes,
 
 Authoritative framing: **Briefing for LTX Video Buddy (`master_agent`) — fleet curriculum & field notes** (2026-09-10). The stop-lines below are implemented.
 
+## Starting ComfyUI
+
+- **Only `python -m master_agent agent comfy_start` or `python -m master_agent comfy start`.** Both run ComfyUI detached, log to `video_buddy/state/logs/comfyui_8188.log`, and return when `:8188` answers or the launch fails (180 s default). `comfy_status` / `comfy status` checks; `comfy_restart` restarts.
+- **NEVER run ComfyUI `main.py` (`python_embeded/python.exe -s ComfyUI/main.py ...`) or `run_*.bat` in a foreground terminal.** ComfyUI never exits, so the call blocks until the tool time limit (Hermes: 420 s) kills it, and ComfyUI dies with it. Field note: the LTX bot did this five times in a row before Hermes halted it for repeating the same call.
+- If a raw launch is truly unavoidable, run it with `background=true`, then poll `agent comfy_status` or `GET http://127.0.0.1:8188/system_stats`.
+- **After a failed start, do not retry the identical command.** The result carries `error` and `launch.log_tail` (exit code, command, cwd, python). Fix that cause or report it. `starting` means still loading: poll `comfy_status`, do not start again.
+
 ## Field lessons
 
 - **`length=8` is junk.** LTX wants `8n+1` (minimum 9). Length 8 collapses to a 1-frame file. Never queue 8. Snap to 9.

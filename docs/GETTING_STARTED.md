@@ -45,7 +45,7 @@ python -m master_agent automatic-install                    # pre-flight + the p
 python -m master_agent automatic-install --yes              # pre-flight, then install
 ```
 
-Other flags: `--gpu auto|nvidia|amd|m-series|cpu` picks the ComfyUI PyTorch build (default: detect). `--skip-weights` installs everything but the weights. `--skip-sage` skips Triton and SageAttention. `--skip-llm` skips llama.cpp and the local LLM models.
+Other flags: `--gpu auto|nvidia|amd|m-series|cpu` picks the ComfyUI PyTorch build (default: detect). `--skip-weights` installs everything but the weights; the install and later `doctor` runs report them as INFO, and `models register <file-or-folder>` adopts files you already have ([Weights](WEIGHTS.md#skipping-or-registering-the-ltx-23-pack)). `--skip-sage` skips Triton and SageAttention. `--skip-llm` skips llama.cpp and the local LLM models.
 
 ### If something fails
 
@@ -105,7 +105,7 @@ python -m master_agent comfy run --mode generate --variant ltx25_t2v_i2v --promp
 python -m master_agent agent health
 ```
 
-Hermes: `python install_hermes_skill.py` copies `skills/video-buddy/` to `~/.hermes/skills/video-buddy/`. Nothing else is written. The LTX bot gateway calls `python -m master_agent agent <tool>`. Buddy binds no gateway port and never 8642. See [CLI reference](CLI_REFERENCE.md#hermes).
+Hermes: `python install_hermes_skill.py --profile ltx` copies `skills/video-buddy/` (SKILL.md, TOOLS.md, PROFILE.md, references/) to `~/.hermes/profiles/ltx/skills/media/video-buddy/`; without `--profile` it goes to `~/.hermes/skills/video-buddy/`, and `--dest DIR` picks any folder. Nothing else is written. Agents start ComfyUI only with `python -m master_agent agent comfy_start` (detached), never a foreground `main.py`. The LTX bot gateway calls `python -m master_agent agent <tool>`. Buddy binds no gateway port and never 8642. See [CLI reference](CLI_REFERENCE.md#hermes).
 
 ## Curriculum
 

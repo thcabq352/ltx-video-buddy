@@ -11,7 +11,7 @@ Generate still uses HTTP. `ComfyClient` talks to `COMFYUI_URL` (default `http://
 
 | | Managed (`COMFY_MODE=managed`, the default) | External (`COMFY_MODE=external`) |
 |---|---|---|
-| Who runs Comfy | Buddy, via comfy-cli. Workspace `MANAGED_COMFY_ROOT` or `PROJECT_ROOT/ComfyUI` | You. Buddy never deletes processes or files in that tree. |
+| Who runs Comfy | Buddy. Installed with comfy-cli, started by Buddy itself. Workspace: see [Which folder](#which-folder) | You. Buddy never deletes processes or files in that tree. |
 | `comfy start` / `stop` / `restart` | Launch, stop, or crash-restart the Buddy-owned server | **refuses start, stop, and restart** |
 | `comfy status` | Health check | Health check only. Does not launch or stop |
 | Weights | Downloads go only to Buddy `MODELS_DIR` | Same. Buddy never writes weights into the attached tree |
@@ -45,18 +45,32 @@ If you start Comfy yourself:
 --extra-model-paths-config /path/to/video_buddy/state/extra_model_paths.yaml
 ```
 
+## Which folder
+
+Every command (automatic install, doctor, `comfy start` / `stop` / `status` / `restart` / `update`, model search, `download-models`) asks `master_agent/comfy/root.py` where Buddy's ComfyUI lives. First match wins:
+
+1. `comfy start --workspace <dir>` (remembered in `state/managed_comfy.json` for later runs)
+2. `MANAGED_COMFY_ROOT` in the environment or `.env`
+3. the remembered `--workspace`
+4. `video_buddy/ComfyUI`
+
+`comfy status`, the automatic-install pre-flight, and doctor's `comfyui` row print the folder and where it came from, for example `E:\VideoBuddy\ComfyUI (from MANAGED_COMFY_ROOT)`. `MANAGED_COMFY_ROOT` is Buddy's own install. `COMFYUI_ROOT` / `EXTERNAL_COMFY_ROOT` name a ComfyUI you own, which Buddy only reads.
+
 ## Managed launch
 
-`comfy start` asks comfy-cli for a local loopback server:
+`comfy start` runs `<workspace>/.venv` python (`venv` also works; with neither, the interpreter running Buddy) as `main.py` in the workspace folder, detached, with a local loopback server:
 
-- `--where local` (no Comfy Cloud routing)
-- after `--`: `--disable-auto-launch`, `--port 8188`, `--listen 127.0.0.1`
+- `--disable-auto-launch`, `--port 8188`, `--listen 127.0.0.1`
 - `--extra-model-paths-config` pointing at the Buddy YAML, unless `--extra-model-paths` names an existing file
 - `--use-sage-attention` is last, after `--listen` and after the extra-model-paths pair when that pair is present, when `sageattention` imports in the interpreter Comfy runs in. Buddy checks that with a subprocess `import sageattention` in `<workspace>/.venv` (or `<workspace>/venv`). Only when the workspace has no venv does it fall back to the interpreter running Buddy. If the import fails, Buddy logs a warning naming that interpreter and omits the flag so Comfy does not crash.
 
-Once the workspace venv exists, comfy-cli calls run with `VIRTUAL_ENV` and `CONDA_PREFIX` removed. comfy-cli 1.20.0 would otherwise pick Buddy's activated venv over the workspace one.
+ComfyUI's output goes to `video_buddy/state/logs/comfyui_8188.log` (new file each start). `comfy start` then polls `/system_stats` until it answers (180 s). If ComfyUI exits first, `comfy start` fails with its exit code, the command, the folder, the python, and the last 40 lines of that log. `--as-json` puts the same fields under `launch`, and `health` (agent API) repeats them under `comfyui.managed`. `stop` ends the process Buddy started; a server an older Buddy started through `comfy launch --background` is still stopped with `comfy stop`.
 
-Start, stop, status, and restart do not run `comfy install` or `comfy update`. Installing is the job of [automatic install](GETTING_STARTED.md#automatic-install), which runs `comfy --workspace=<root> --where local --skip-prompt install <gpu flag>` (`--nvidia`, `--amd`, `--m-series`, or `--cpu`; `--restore` added to repair a half-finished install), then `comfy … node install ComfyUI-LTXVideo ComfyUI-GGUF`. It refuses `COMFY_MODE=external`. `--no-watch` skips the crash-restart watchdog. `--no-wait` returns before `/system_stats` is ready. If `:8188` is already bound, do not kill a running render. Attach or wait.
+Agents use the agent tools `comfy_status`, `comfy_start` and `comfy_restart` (`python -m master_agent agent comfy_start`). They run the same code and return the same JSON, plus `next`. `comfy_start` returns `starting` instead of an error when ComfyUI is still loading at `timeout_s`. An agent must never start ComfyUI by running `main.py` or `run_*.bat` in a foreground terminal: it never returns, so the tool time limit kills it. See [Agents](AGENTS.md#starting-comfyui).
+
+Once the workspace venv exists, ComfyUI and comfy-cli run with `VIRTUAL_ENV` and `CONDA_PREFIX` removed, so Buddy's activated venv is not used for Comfy.
+
+Start, stop, status, and restart do not run `comfy install` or `comfy update`. Installing is the job of [automatic install](GETTING_STARTED.md#automatic-install), which runs `comfy --workspace=<root> --where local --skip-prompt install <gpu flag>` (`--nvidia`, `--amd`, `--m-series`, or `--cpu`; `--restore` added to repair a half-finished install), then `comfy … node install ComfyUI-LTXVideo ComfyUI-GGUF`. It refuses `COMFY_MODE=external`. `--no-watch` skips the crash-restart watchdog. `--no-wait` returns about 3 s after launch, before `/system_stats` is ready (a crash in those seconds is still reported). If `:8188` is already bound, do not kill a running render. Attach or wait.
 
 `comfy update` only reports stale packs until `--yes`. `COMFY_MODE=external` refuses core and node updates. `--cli --yes` pip-installs the pin in `requirements.txt` (`comfy-cli==1.20.0`). It does not float to latest. Before a core or node update, Buddy saves `state/comfy_snapshots/pre-update-….json` via `comfy node save-snapshot`. That snapshot is not a weight rollback. Keep/wipe of LTX packs is `models select`, not this snapshot.
 

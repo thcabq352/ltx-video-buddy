@@ -1,8 +1,16 @@
-"""Managed ComfyUI lifecycle via comfy-cli (start / stop / status / restart).
+"""Managed ComfyUI lifecycle (start / stop / status / restart).
 
-Buddy can own a local ComfyUI process under ``MANAGED_COMFY_ROOT`` (default
-``PROJECT_ROOT/ComfyUI``). The HTTP client, graph ops, linter, and generate
-path are unchanged: they keep talking to whatever answers on ``COMFYUI_URL``.
+Buddy can own a local ComfyUI process in the folder ``comfy/root.py``
+resolves (``MANAGED_COMFY_ROOT``, default ``PROJECT_ROOT/ComfyUI``). The HTTP
+client, graph ops, linter, and generate path are unchanged: they keep talking
+to whatever answers on ``COMFYUI_URL``.
+
+``start`` runs ``<comfy python> main.py ...`` itself, detached, with stdout and
+stderr in ``state/logs/comfyui_<port>.log``, then polls the HTTP port. It does
+not use ``comfy launch --background``: that path re-runs ``comfy`` from PATH
+and drops any output printed before ComfyUI's banner, so a failed start showed
+an empty error box. When the process exits before the port answers, the
+``TowerError`` carries the exit code, command, cwd, python, and log tail.
 
 ``start``, ``stop``, ``status``, and ``restart`` never run ``comfy install``
 or ``comfy update`` and never download models. Opt-in updates live in
@@ -34,6 +42,7 @@ from dataclasses import asdict, dataclass, field, fields
 from pathlib import Path
 from typing import Any, Callable
 
+from master_agent.comfy.root import SAVED_SOURCES, resolve_managed_comfy_root
 from master_agent.config import COMFYUI_PORT, COMFYUI_URL, PROJECT_ROOT, STATE_DIR
 
 log = logging.getLogger(__name__)
@@ -43,16 +52,22 @@ DEFAULT_PORT = 8188
 DEFAULT_READY_TIMEOUT_S = 180.0
 DEFAULT_POLL_S = 2.0
 DEFAULT_WATCH_INTERVAL_S = 15.0
+# --no-wait still watches this long so an instant crash is reported, not hidden.
+EARLY_EXIT_GRACE_S = 3.0
+STOP_WAIT_S = 10.0
+LOG_TAIL_LINES = 40
 STATE_FILENAME = "managed_comfy.json"
 LISTEN_HOST = "127.0.0.1"
 _MODES = frozenset({"managed", "external"})
 
 __all__ = [
+    "ComfyLaunchError",
     "ManagedComfyTower",
     "TowerError",
     "TowerState",
     "cmd_tower",
     "comfy_cli_present",
+    "comfy_log_path",
     "effective_mode",
     "http_ready",
     "load_state",
@@ -67,6 +82,14 @@ __all__ = [
 
 class TowerError(RuntimeError):
     """Managed Comfy lifecycle failed or was refused."""
+
+
+class ComfyLaunchError(TowerError):
+    """ComfyUI did not come up. ``details`` names what ran and what it printed."""
+
+    def __init__(self, message: str, details: dict[str, Any]) -> None:
+        super().__init__(message)
+        self.details = details
 
 
 @dataclass
@@ -126,13 +149,6 @@ class TowerState:
             except (TypeError, ValueError):
                 st.watchdog_pid = None
         return st
-
-
-def _default_workspace() -> Path:
-    raw = (os.getenv("MANAGED_COMFY_ROOT") or "").strip()
-    if raw:
-        return Path(raw).expanduser().resolve()
-    return (Path(PROJECT_ROOT) / "ComfyUI").resolve()
 
 
 def _default_base_url(port: int | None = None) -> str:
@@ -200,10 +216,11 @@ def state_path() -> Path:
 
 
 def load_state() -> TowerState:
+    """Saved bookkeeping. ``workspace`` is only an explicit ``--workspace`` choice;
+    resolve the folder with ``comfy/root.py``, not from this field."""
     path = state_path()
     if not path.is_file():
         return TowerState(
-            workspace=str(_default_workspace()),
             base_url=_default_base_url(),
             port=int(COMFYUI_PORT or DEFAULT_PORT),
         )
@@ -211,13 +228,8 @@ def load_state() -> TowerState:
         data = json.loads(path.read_text(encoding="utf-8"))
     except (OSError, json.JSONDecodeError) as exc:
         log.warning("managed_comfy state unreadable (%s); using defaults", exc)
-        return TowerState(
-            workspace=str(_default_workspace()),
-            base_url=_default_base_url(),
-        )
+        return TowerState(base_url=_default_base_url())
     st = TowerState.from_dict(data)
-    if not st.workspace:
-        st.workspace = str(_default_workspace())
     if not st.base_url:
         st.base_url = _default_base_url(st.port)
     return st
@@ -295,10 +307,7 @@ def _run_comfy(
         raise TowerError(f"comfy-cli timed out after {timeout}s: {' '.join(cmd)}") from exc
     if check and proc.returncode != 0:
         err = (proc.stderr or proc.stdout or "").strip() or f"exit {proc.returncode}"
-        hint = ""
-        if "launch" in args:
-            hint = " Managed start does not install or update ComfyUI."
-        raise TowerError(f"comfy-cli failed ({proc.returncode}): {err[:800]}.{hint}")
+        raise TowerError(f"comfy-cli failed ({proc.returncode}): {err[:800]}.")
     return proc
 
 
@@ -351,6 +360,21 @@ def wait_until_ready(
 def _pid_alive(pid: int | None) -> bool:
     if not pid or int(pid) <= 0:
         return False
+    if os.name == "nt":
+        # os.kill(pid, 0) on Windows sends CTRL_C_EVENT; ask the kernel instead.
+        import ctypes
+
+        kernel32 = ctypes.windll.kernel32  # type: ignore[attr-defined]
+        handle = kernel32.OpenProcess(0x1000, False, int(pid))  # PROCESS_QUERY_LIMITED_INFORMATION
+        if not handle:
+            return False
+        try:
+            code = ctypes.c_ulong()
+            if not kernel32.GetExitCodeProcess(handle, ctypes.byref(code)):
+                return False
+            return code.value == 259  # STILL_ACTIVE
+        finally:
+            kernel32.CloseHandle(handle)
     try:
         os.kill(int(pid), 0)
     except ProcessLookupError:
@@ -367,6 +391,71 @@ def watchdog_command() -> list[str]:
     return [sys.executable, "-m", "master_agent.comfy.tower"]
 
 
+def comfy_log_path(port: int) -> Path:
+    """ComfyUI's stdout + stderr for the managed server on ``port``. Truncated per launch."""
+    return Path(STATE_DIR) / "logs" / f"comfyui_{int(port)}.log"
+
+
+def read_log_tail(path: Path | str, lines: int = LOG_TAIL_LINES) -> list[str]:
+    try:
+        text = Path(path).read_text(encoding="utf-8", errors="replace")
+    except OSError:
+        return []
+    return text.splitlines()[-max(0, int(lines)):]
+
+
+def _detached_kwargs() -> dict[str, Any]:
+    if os.name == "nt":
+        flags = getattr(subprocess, "DETACHED_PROCESS", 0x00000008)
+        flags |= getattr(subprocess, "CREATE_NEW_PROCESS_GROUP", 0)
+        flags |= getattr(subprocess, "CREATE_NO_WINDOW", 0)
+        return {"creationflags": flags}
+    return {"start_new_session": True}
+
+
+def _terminate_tree(pid: int) -> None:
+    """Stop the ComfyUI process Buddy launched (and its children). Never a port owner."""
+    if os.name == "nt":
+        subprocess.run(
+            ["taskkill", "/PID", str(int(pid)), "/T", "/F"],
+            capture_output=True,
+            text=True,
+            timeout=30,
+            check=False,
+        )
+        return
+    try:
+        # start_new_session made the ComfyUI pid its own process-group leader.
+        os.killpg(int(pid), signal.SIGTERM)
+    except (OSError, AttributeError):
+        os.kill(int(pid), signal.SIGTERM)
+
+
+def _quote_cmd(cmd: list[Any]) -> str:
+    parts = [str(p) for p in cmd]
+    return subprocess.list2cmdline(parts) if os.name == "nt" else shlex.join(parts)
+
+
+def _format_launch_failure(headline: str, details: dict[str, Any]) -> str:
+    lines = [
+        headline,
+        f"  command: {_quote_cmd(details.get('command') or [])}",
+        f"  cwd:     {details.get('cwd')}",
+        f"  python:  {details.get('python')}",
+        f"  workspace: {details.get('workspace')} (from {details.get('workspace_source')})",
+        f"  log:     {details.get('log')}",
+    ]
+    if details.get("exit_code") is not None:
+        lines.insert(1, f"  exit code: {details['exit_code']}")
+    tail = details.get("log_tail") or []
+    if tail:
+        lines.append(f"  last {len(tail)} line(s) of ComfyUI output:")
+        lines.extend(f"    {line}" for line in tail)
+    else:
+        lines.append("  ComfyUI printed nothing before it stopped.")
+    return "\n".join(lines)
+
+
 class ManagedComfyTower:
     """Start, stop, and crash-restart one Buddy-owned local ComfyUI."""
 
@@ -380,7 +469,9 @@ class ManagedComfyTower:
         watch_interval_s: float = DEFAULT_WATCH_INTERVAL_S,
     ) -> None:
         st = load_state()
-        self.workspace = Path(workspace or st.workspace or _default_workspace()).resolve()
+        root = resolve_managed_comfy_root(workspace)
+        self.workspace = root.path
+        self.workspace_source = root.source
         self.port = int(port if port is not None else (st.port or COMFYUI_PORT or DEFAULT_PORT))
         if base_url:
             self.base_url = base_url.rstrip("/")
@@ -393,7 +484,8 @@ class ManagedComfyTower:
 
     def _sync_state(self, **updates: Any) -> TowerState:
         st = load_state()
-        st.workspace = str(self.workspace)
+        if self.workspace_source in SAVED_SOURCES:
+            st.workspace = str(self.workspace)
         st.base_url = self.base_url
         st.port = self.port
         for key, value in updates.items():
@@ -422,10 +514,13 @@ class ManagedComfyTower:
             "comfy_mode": mode,
             "want_running": bool(st.want_running),
             "workspace": str(self.workspace),
+            "workspace_source": self.workspace_source,
             "base_url": self.base_url,
             "port": self.port,
             "restart_count": int(st.restart_count),
             "last_error": st.last_error,
+            "comfy_pid": (st.extra or {}).get("comfy_pid"),
+            "log": str(comfy_log_path(self.port)),
             "watchdog_pid": pid,
             "watching": _pid_alive(pid),
             "comfy_cli": resolve_comfy_cli(),
@@ -433,11 +528,29 @@ class ManagedComfyTower:
             "extra_model_paths": str((st.extra or {}).get("extra_model_paths") or ""),
         }
 
+    def _comfy_python(self) -> Path:
+        """Interpreter ComfyUI runs in: ``<workspace>/.venv`` (or ``venv``), else this one."""
+        from master_agent.comfy.comfy_venv import workspace_venv_python
+
+        if not (self.workspace / "main.py").is_file():
+            from master_agent.install_report import FULL_INSTALL_CMD
+
+            raise TowerError(
+                f"ComfyUI is not installed in {self.workspace} (from {self.workspace_source}): "
+                "there is no main.py there. "
+                f"Install it with: {FULL_INSTALL_CMD}  "
+                "or set MANAGED_COMFY_ROOT to the folder that has ComfyUI's main.py. "
+                "comfy start does not install ComfyUI."
+            )
+        py = workspace_venv_python(self.workspace)
+        if py is None:
+            log.warning("no .venv in %s; launching ComfyUI with %s", self.workspace, sys.executable)
+            return Path(sys.executable)
+        return Path(py)
+
     def _launch_args(self, extra_model_paths: Path | None) -> list[str]:
+        """ComfyUI's own flags (what follows ``main.py``)."""
         args = [
-            "launch",
-            "--background",
-            "--",
             "--disable-auto-launch",
             "--port",
             str(self.port),
@@ -448,12 +561,10 @@ class ManagedComfyTower:
             emp = Path(extra_model_paths)
             if not emp.is_file():
                 raise TowerError(f"extra_model_paths not found: {emp}")
-            # ComfyUI flag, so it stays after `--`. This function only forwards the path.
             args.extend(["--extra-model-paths-config", str(emp)])
-        # ComfyUI flag, last, after `--` and after extra-model-paths when present.
-        # The check runs in the workspace venv Comfy launches with; without one
-        # it falls back to this interpreter. A miss omits the flag instead of
-        # crashing that launch.
+        # Last, after extra-model-paths when present. The check runs in the
+        # workspace venv Comfy launches with; without one it falls back to this
+        # interpreter. A miss omits the flag instead of crashing that launch.
         if comfy_sageattention_available(self.workspace):
             args.append("--use-sage-attention")
         else:
@@ -467,13 +578,108 @@ class ManagedComfyTower:
             )
         return args
 
-    def _launch(self, extra_model_paths: Path | None = None) -> subprocess.CompletedProcess[str]:
-        self.workspace.mkdir(parents=True, exist_ok=True)
-        return _run_comfy(
-            self._launch_args(extra_model_paths),
-            workspace=self.workspace,
-            timeout=300.0,
-        )
+    def _launch(self, extra_model_paths: Path | None = None) -> tuple[Any, dict[str, Any]]:
+        """Spawn ComfyUI detached. Returns ``(Popen, details)``; does not wait for it."""
+        python = self._comfy_python()
+        cmd = [str(python), "main.py", *self._launch_args(extra_model_paths)]
+        log_path = comfy_log_path(self.port)
+        details: dict[str, Any] = {
+            "command": cmd,
+            "cwd": str(self.workspace),
+            "python": str(python),
+            "workspace": str(self.workspace),
+            "workspace_source": self.workspace_source,
+            "log": str(log_path),
+            "exit_code": None,
+            "log_tail": [],
+        }
+        env = _child_env(self.workspace)
+        env["PYTHONUNBUFFERED"] = "1"
+        # A cp1252 console makes ComfyUI's first non-ASCII log line raise.
+        env["PYTHONIOENCODING"] = "utf-8"
+        try:
+            log_path.parent.mkdir(parents=True, exist_ok=True)
+            logfh = open(log_path, "w", encoding="utf-8", errors="replace")
+        except OSError as exc:
+            raise ComfyLaunchError(
+                _format_launch_failure(f"Could not open the ComfyUI log {log_path}: {exc}", details), details
+            ) from exc
+        log.info("launching ComfyUI: %s (cwd=%s)", " ".join(cmd), self.workspace)
+        try:
+            proc = subprocess.Popen(
+                cmd,
+                cwd=str(self.workspace),
+                stdin=subprocess.DEVNULL,
+                stdout=logfh,
+                stderr=subprocess.STDOUT,
+                env=env,
+                **_detached_kwargs(),
+            )
+        except OSError as exc:
+            raise ComfyLaunchError(
+                _format_launch_failure(f"Could not run ComfyUI's python ({exc}).", details), details
+            ) from exc
+        finally:
+            logfh.close()
+        details["pid"] = int(proc.pid)
+        extra = dict(load_state().extra or {})
+        extra.update({"comfy_pid": int(proc.pid), "comfy_log": str(log_path), "comfy_command": cmd})
+        self._sync_state(extra=extra)
+        return proc, details
+
+    def _await_ready(self, proc: Any, details: dict[str, Any], *, timeout_s: float) -> tuple[bool, str]:
+        """Poll the HTTP port until it answers, ComfyUI exits, or ``timeout_s`` passes.
+
+        Raises :class:`ComfyLaunchError` when the process is gone before the
+        port answers. Returns ``(False, probe)`` on timeout with ComfyUI still running.
+        """
+        deadline = time.monotonic() + max(0.0, float(timeout_s))
+        probe = "waiting"
+        while True:
+            ok, probe = http_ready(self.base_url)
+            if ok:
+                return True, probe
+            code = proc.poll() if hasattr(proc, "poll") else None
+            if code is not None:
+                details["exit_code"] = int(code)
+                details["log_tail"] = read_log_tail(details["log"])
+                raise ComfyLaunchError(
+                    _format_launch_failure(
+                        f"ComfyUI exited with code {code} before it answered on {self.base_url}.", details
+                    ),
+                    details,
+                )
+            if time.monotonic() >= deadline:
+                return False, probe
+            log.info("waiting for Comfy (%.0fs left): %s", deadline - time.monotonic(), probe)
+            time.sleep(DEFAULT_POLL_S)
+
+    def _launch_failed(self, exc: TowerError) -> None:
+        extra = dict(load_state().extra or {})
+        if isinstance(exc, ComfyLaunchError):
+            extra["last_launch_failure"] = exc.details
+        self._sync_state(want_running=False, last_error=str(exc)[:4000], extra=extra)
+
+    def _recorded_comfy_pid(self) -> int | None:
+        pid = (load_state().extra or {}).get("comfy_pid")
+        try:
+            return int(pid) if pid else None
+        except (TypeError, ValueError):
+            return None
+
+    def _kill_recorded_comfy(self) -> int | None:
+        """Terminate the ComfyUI pid this module launched. Returns it, or None."""
+        pid = self._recorded_comfy_pid()
+        if pid is None or pid == os.getpid() or not _pid_alive(pid):
+            return None
+        try:
+            _terminate_tree(pid)
+        except (OSError, subprocess.SubprocessError) as exc:
+            log.warning("ComfyUI pid %s did not stop: %s", pid, exc)
+        extra = dict(load_state().extra or {})
+        extra.pop("comfy_pid", None)
+        self._sync_state(extra=extra)
+        return pid
 
     def _remember_yaml(self, path: Path) -> None:
         st = load_state()
@@ -594,9 +800,9 @@ class ManagedComfyTower:
                 )
             else:
                 try:
-                    self._launch(yaml_path)
+                    proc, launch = self._launch(yaml_path)
                 except TowerError as exc:
-                    self._sync_state(want_running=False, last_error=str(exc))
+                    self._launch_failed(exc)
                     raise
                 self._sync_state(
                     mode="managed",
@@ -605,22 +811,28 @@ class ManagedComfyTower:
                     last_error="",
                 )
                 launched = True
-                detail = "launch issued"
+                detail = f"launched pid {launch['pid']}"
 
-        if launched and wait:
+        if launched:
             try:
-                wait_until_ready(
-                    self.base_url,
-                    timeout_s=self.ready_timeout_s,
-                    on_tick=lambda remaining, probe: log.info(
-                        "waiting for Comfy (%.0fs left): %s", remaining, probe
-                    ),
+                ready_now, probe = self._await_ready(
+                    proc, launch, timeout_s=self.ready_timeout_s if wait else EARLY_EXIT_GRACE_S
                 )
-            except TowerError as exc:
-                self._sync_state(last_error=str(exc))
+            except ComfyLaunchError as exc:
+                self._launch_failed(exc)
+                raise
+            if wait and not ready_now:
+                launch["log_tail"] = read_log_tail(launch["log"])
+                message = _format_launch_failure(
+                    f"ComfyUI is still running (pid {launch['pid']}) but did not answer on "
+                    f"{self.base_url} within {self.ready_timeout_s:.0f}s ({probe}). "
+                    "It may still be loading; check `python -m master_agent comfy status`.",
+                    launch,
+                )
+                self._sync_state(last_error=message[:4000])
                 if watch:
                     self.start_watchdog()
-                raise
+                raise ComfyLaunchError(message, launch)
 
         if watch:
             self.start_watchdog()
@@ -631,33 +843,48 @@ class ManagedComfyTower:
             "detail": probe if ready else detail,
             "base_url": self.base_url,
             "workspace": str(self.workspace),
+            "workspace_source": self.workspace_source,
             "ready": ready,
+            "log": str(comfy_log_path(self.port)),
             "extra_model_paths": str(yaml_path),
             "external_yaml": str(external_yaml or ""),
         }
 
     def stop(self) -> dict[str, Any]:
-        """Stop the comfy-cli background instance. Does not kill an arbitrary port owner."""
+        """Stop the ComfyUI pid Buddy launched. Does not kill an arbitrary port owner.
+
+        With no live recorded pid (a server an older Buddy started through
+        ``comfy launch --background``), falls back to ``comfy stop``.
+        """
         self._require_managed("stop")
         self._sync_state(want_running=False, last_stop_at=time.time())
         self.stop_watchdog()
-        try:
-            proc = _run_comfy(["stop"], workspace=self.workspace, timeout=60.0, check=False)
-        except TowerError as exc:
-            self._sync_state(last_error=str(exc))
-            raise
-        cli_detail = (proc.stderr or proc.stdout or "").strip()
+        killed = self._kill_recorded_comfy()
+        if killed is not None:
+            cli_detail = f"stopped ComfyUI pid {killed}"
+            returncode = 0
+            deadline = time.monotonic() + STOP_WAIT_S
+            while http_ready(self.base_url)[0] and time.monotonic() < deadline:
+                time.sleep(0.5)
+        else:
+            try:
+                proc = _run_comfy(["stop"], workspace=self.workspace, timeout=60.0, check=False)
+            except TowerError as exc:
+                self._sync_state(last_error=str(exc))
+                raise
+            cli_detail = (proc.stderr or proc.stdout or "").strip()
+            returncode = proc.returncode
         self._sync_state(
             want_running=False,
             last_stop_at=time.time(),
-            last_error="" if proc.returncode == 0 else cli_detail[:500],
+            last_error="" if returncode == 0 else cli_detail[:500],
         )
         ok, detail = http_ready(self.base_url)
         return {
             "status": "stopped" if not ok else "stop_issued_still_reachable",
             "detail": detail,
             "cli_detail": cli_detail,
-            "returncode": proc.returncode,
+            "returncode": returncode,
             "base_url": self.base_url,
             "workspace": str(self.workspace),
         }
@@ -702,15 +929,16 @@ class ManagedComfyTower:
             st = load_state()
             if effective_mode(st) != "managed" or not st.want_running:
                 raise TowerError("managed Comfy is no longer wanted; refusing crash restart")
-            try:
-                _run_comfy(["stop"], workspace=self.workspace, timeout=60.0, check=False)
-            except TowerError as exc:
-                log.warning("comfy stop before crash restart: %s", exc)
+            if self._kill_recorded_comfy() is None:
+                try:
+                    _run_comfy(["stop"], workspace=self.workspace, timeout=60.0, check=False)
+                except TowerError as exc:
+                    log.warning("comfy stop before crash restart: %s", exc)
             st = load_state()
             if not st.want_running or effective_mode(st) != "managed":
                 return {"status": "aborted", "base_url": self.base_url}
             try:
-                self._launch(self._yaml_for_launch(None))
+                proc, launch = self._launch(self._yaml_for_launch(None))
             except TowerError as exc:
                 self._sync_state(last_error=str(exc))
                 raise
@@ -722,7 +950,15 @@ class ManagedComfyTower:
                 last_error="",
                 restart_count=count,
             )
-        wait_until_ready(self.base_url, timeout_s=self.ready_timeout_s)
+        try:
+            ready, probe = self._await_ready(proc, launch, timeout_s=self.ready_timeout_s)
+        except ComfyLaunchError as exc:
+            self._sync_state(last_error=str(exc)[:4000])
+            raise
+        if not ready:
+            raise TowerError(
+                f"ComfyUI did not become ready at {self.base_url} within {self.ready_timeout_s:.0f}s ({probe})"
+            )
         return {
             "status": "restarted",
             "base_url": self.base_url,
@@ -787,6 +1023,76 @@ def _wants_json(args: Any) -> bool:
     return flag is True
 
 
+TOWER_COMMANDS = ("start", "stop", "status", "restart")
+
+
+def run_tower_command(
+    command: str,
+    *,
+    workspace: Path | None = None,
+    port: int | None = None,
+    base_url: str | None = None,
+    wait: bool = True,
+    watch: bool = True,
+    ready_timeout_s: float | None = None,
+    extra_model_paths: Path | None = None,
+    write_yaml_into_external: bool = False,
+) -> dict[str, Any]:
+    """Body of ``comfy start|stop|status|restart``, shared by the CLI and the agent tools.
+
+    Raises ``TowerError`` (``ComfyLaunchError`` carries the launch details) or
+    ``ModelPathsError``; :func:`tower_error_payload` turns those into JSON.
+    """
+    if command not in TOWER_COMMANDS:
+        raise TowerError(f"unknown comfy tower command: {command!r}")
+    kwargs: dict[str, Any] = {"workspace": workspace, "port": port, "base_url": base_url}
+    if ready_timeout_s is not None:
+        kwargs["ready_timeout_s"] = ready_timeout_s
+    tower = ManagedComfyTower(**kwargs)
+    if command == "status":
+        from master_agent.comfy.model_paths import write_external_yaml_copy, write_extra_model_paths
+
+        buddy_yaml = write_extra_model_paths(directory=state_path().parent)
+        result = tower.status()
+        result["extra_model_paths"] = str(buddy_yaml)
+        if write_yaml_into_external:
+            result["external_yaml"] = str(write_external_yaml_copy(buddy_yaml))
+    elif command == "start":
+        result = tower.start(
+            extra_model_paths=extra_model_paths,
+            wait=wait,
+            watch=watch,
+            write_yaml_into_external=write_yaml_into_external,
+        )
+    elif command == "stop":
+        return tower.stop()
+    else:
+        result = tower.restart(
+            extra_model_paths=extra_model_paths,
+            wait=wait,
+            watch=watch,
+            write_yaml_into_external=write_yaml_into_external,
+        )
+    try:
+        from master_agent.comfy.updates import startup_report
+
+        result["startup"] = startup_report(tower.workspace)
+    except Exception as exc:
+        result["startup"] = {
+            "updated": False,
+            "blocks_install": False,
+            "lines": [f"Startup check failed ({exc}). No update ran."],
+        }
+    return result
+
+
+def tower_error_payload(command: str, exc: BaseException) -> dict[str, Any]:
+    payload: dict[str, Any] = {"status": "error", "command": command, "error": str(exc)}
+    if isinstance(exc, ComfyLaunchError):
+        payload["launch"] = exc.details
+    return payload
+
+
 def cmd_tower(args: Any) -> int:
     """CLI handler for ``python -m master_agent comfy {start,stop,status,restart}``."""
     command = getattr(args, "comfy_command", None) or getattr(args, "tower_command", None)
@@ -807,63 +1113,32 @@ def cmd_tower(args: Any) -> int:
         print(f"FAIL  invalid --port {chosen_port}")
         return 2
 
-    tower = ManagedComfyTower(
-        workspace=Path(workspace).expanduser().resolve() if workspace else None,
-        port=chosen_port,
-        base_url=base_url,
-    )
+    if command not in TOWER_COMMANDS:
+        print(f"FAIL  unknown comfy tower command: {command!r}")
+        return 2
+    if write_into_external and command not in {"status", "start", "restart"}:
+        print("FAIL  --write-yaml-into-external is only valid with status, start, or restart")
+        return 2
 
     from master_agent.comfy.model_paths import ModelPathsError
 
     try:
-        if write_into_external and command not in {"status", "start", "restart"}:
-            print("FAIL  --write-yaml-into-external is only valid with status, start, or restart")
-            return 2
-        if command == "status":
-            from master_agent.comfy.model_paths import (
-                write_external_yaml_copy,
-                write_extra_model_paths,
-            )
-
-            buddy_yaml = write_extra_model_paths(directory=state_path().parent)
-            result = tower.status()
-            result["extra_model_paths"] = str(buddy_yaml)
-            if write_into_external:
-                result["external_yaml"] = str(write_external_yaml_copy(buddy_yaml))
-        elif command == "start":
-            result = tower.start(
-                extra_model_paths=Path(extra) if extra else None,
-                wait=not no_wait,
-                watch=not no_watch,
-                write_yaml_into_external=write_into_external,
-            )
-        elif command == "stop":
-            result = tower.stop()
-        elif command == "restart":
-            result = tower.restart(
-                extra_model_paths=Path(extra) if extra else None,
-                wait=not no_wait,
-                watch=not no_watch,
-                write_yaml_into_external=write_into_external,
-            )
-        else:
-            print(f"FAIL  unknown comfy tower command: {command!r}")
-            return 2
+        result = run_tower_command(
+            command,
+            workspace=Path(workspace).expanduser().resolve() if workspace else None,
+            port=chosen_port,
+            base_url=base_url,
+            wait=not no_wait,
+            watch=not no_watch,
+            extra_model_paths=Path(extra) if extra else None,
+            write_yaml_into_external=write_into_external,
+        )
     except (TowerError, ModelPathsError) as exc:
-        print(f"FAIL  {exc}")
+        if _wants_json(args):
+            print(json.dumps(tower_error_payload(command, exc), indent=2, default=str))
+        else:
+            print(f"FAIL  comfy {command}: {exc}")
         return 1
-
-    if command in {"start", "status", "restart"}:
-        try:
-            from master_agent.comfy.updates import startup_report
-
-            result["startup"] = startup_report(tower.workspace)
-        except Exception as exc:
-            result["startup"] = {
-                "updated": False,
-                "blocks_install": False,
-                "lines": [f"Startup check failed ({exc}). No update ran."],
-            }
 
     if _wants_json(args):
         print(json.dumps(result, indent=2, default=str))
@@ -882,7 +1157,10 @@ def cmd_tower(args: Any) -> int:
         if result.get("base_url"):
             print(f"      url={result['base_url']}")
         if result.get("workspace"):
-            print(f"      workspace={result['workspace']}")
+            source = f" (from {result['workspace_source']})" if result.get("workspace_source") else ""
+            print(f"      workspace={result['workspace']}{source}")
+        if result.get("log"):
+            print(f"      log={result['log']}")
         if result.get("mode") or result.get("comfy_mode"):
             print(f"      comfy_mode={result.get('comfy_mode') or result.get('mode')}")
         if result.get("extra_model_paths"):

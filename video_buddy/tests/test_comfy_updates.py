@@ -259,6 +259,8 @@ def test_start_prints_the_report_and_does_not_update(tmp_path: Path, monkeypatch
     state = tmp_path / "state"
     state.mkdir()
     workspace = tmp_path / "ComfyUI"
+    workspace.mkdir()
+    (workspace / "main.py").write_text("", encoding="utf-8")
     monkeypatch.setattr(tower, "STATE_DIR", state)
     monkeypatch.setattr(tower, "PROJECT_ROOT", tmp_path)
     monkeypatch.setenv("MANAGED_COMFY_ROOT", str(workspace))
@@ -270,6 +272,10 @@ def test_start_prints_the_report_and_does_not_update(tmp_path: Path, monkeypatch
         calls.append(list(cmd))
         return type("P", (), {"returncode": 0, "stdout": "", "stderr": "", "args": cmd})()
 
+    def fake_popen(cmd, **kwargs):
+        calls.append(list(cmd))
+        return type("Popen", (), {"pid": 4242, "poll": lambda self: None})()
+
     def fake_ready(*_a, **_k):
         probes["n"] += 1
         if probes["n"] == 1:
@@ -277,6 +283,8 @@ def test_start_prints_the_report_and_does_not_update(tmp_path: Path, monkeypatch
         return True, "/system_stats ok"
 
     monkeypatch.setattr(tower.subprocess, "run", fake_run)
+    monkeypatch.setattr(tower.subprocess, "Popen", fake_popen)
+    monkeypatch.setattr(tower, "sageattention_available", lambda: False)
     monkeypatch.setattr(tower, "http_ready", fake_ready)
     monkeypatch.setattr(updates, "installed_comfy_cli_version", lambda: "1.20.0")
     rc = cmd_tower(
