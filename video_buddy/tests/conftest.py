@@ -31,3 +31,22 @@ os.environ.setdefault("OUTPUTS_DIR", str(_root / "outputs"))
 
 def pytest_sessionfinish(session, exitstatus):  # noqa: ARG001
     shutil.rmtree(_root, ignore_errors=True)
+
+
+import pytest  # noqa: E402
+
+from master_agent.comfy import layout as _comfy_layout  # noqa: E402
+
+_REAL_PORTABLE_SEARCH_ROOTS = _comfy_layout.portable_search_roots
+
+
+@pytest.fixture(autouse=True)
+def _no_real_portable_discovery(monkeypatch):
+    """Never auto-detect the operator's real ComfyUI_windows_portable next to the repo."""
+    monkeypatch.setattr(_comfy_layout, "portable_search_roots", lambda: [])
+
+
+@pytest.fixture
+def real_portable_search(monkeypatch):
+    """Opt back in to the real search (config.PORTABLE_ROOT + PROJECT_ROOT glob)."""
+    monkeypatch.setattr(_comfy_layout, "portable_search_roots", _REAL_PORTABLE_SEARCH_ROOTS)

@@ -108,11 +108,14 @@ def workspace_venv_python(workspace: Path | str | None) -> Path | None:
 
 
 def strip_outer_venv(env: dict[str, str], workspace: Path | str | None) -> dict[str, str]:
-    """Drop ``VIRTUAL_ENV`` / ``CONDA_PREFIX`` once the workspace has its own venv.
+    """Drop ``VIRTUAL_ENV`` / ``CONDA_PREFIX`` once the workspace has its own python.
 
+    That is a ``.venv`` / ``venv`` or a portable build's ``python_embeded``.
     Without this, comfy-cli would run Comfy in Buddy's activated venv.
     """
-    if workspace_venv_python(workspace) is None:
+    from master_agent.comfy.layout import comfy_interpreter
+
+    if comfy_interpreter(workspace) is None:
         return env
     out = dict(env)
     out.pop("VIRTUAL_ENV", None)
@@ -125,7 +128,7 @@ class ComfyEnv:
     """What the Comfy interpreter reports. ``python_path`` is None when unknown."""
 
     python_path: str | None = None
-    source: str = "unknown"  # workspace-venv | unknown
+    source: str = "unknown"  # workspace-venv | portable-embedded | unknown
     python: str | None = None
     system: str = ""
     machine: str = ""
@@ -145,7 +148,7 @@ class ComfyEnv:
     def summary(self) -> str:
         if not self.python_path:
             return (
-                "Comfy interpreter not found (no .venv or venv in the ComfyUI folder). "
+                "Comfy interpreter not found (no .venv, venv, or portable python_embeded for the ComfyUI folder). "
                 "Comfy may be running in a non-venv interpreter."
             )
         if self.probe_error:
@@ -164,10 +167,19 @@ def probe_comfy_env(
     runner: Runner = subprocess.run,
 ) -> ComfyEnv:
     """Run a tiny script inside the Comfy interpreter. Never Buddy's interpreter."""
-    py = Path(python) if python else workspace_venv_python(workspace)
+    from master_agent.comfy.layout import PORTABLE, detect_layout
+
+    layout = None if python else detect_layout(workspace)
+    if python:
+        py: Path | None = Path(python)
+    elif layout is not None:
+        py = layout.python
+    else:
+        py = workspace_venv_python(workspace)
     if py is None:
         return ComfyEnv()
-    env = ComfyEnv(python_path=str(py), source="workspace-venv")
+    source = "portable-embedded" if layout is not None and layout.kind == PORTABLE else "workspace-venv"
+    env = ComfyEnv(python_path=str(py), source=source)
     try:
         proc = runner(
             [str(py), "-c", _PROBE_SCRIPT],

@@ -54,6 +54,8 @@ def _managed_comfy_summary() -> dict:
     except Exception:
         return {}
     out: dict = {"workspace": str(root.path), "workspace_source": root.source}
+    if root.notes:
+        out["notes"] = list(root.notes)
     if st.last_error:
         failure = (st.extra or {}).get("last_launch_failure") or {}
         out["last_error"] = st.last_error[:2000]
@@ -68,15 +70,26 @@ _COMFY_ERROR_NEXT = (
     "Read `error` and `launch.log_tail`, fix the cause they name, then call comfy_start once more. "
     "Do not repeat the same call unchanged, and never run ComfyUI main.py or run_*.bat in a foreground terminal."
 )
+_COMFY_FOREIGN_ADOPT_NEXT = (
+    "A ComfyUI that Buddy did not start already serves this workspace on the port; it works as-is. "
+    "To replace it with Buddy's managed one, call {tool} with {{\"adopt\": true}} once. Never kill it another way."
+)
+_COMFY_FOREIGN_STOP_NEXT = (
+    "A ComfyUI that Buddy did not start owns the port and Buddy will not stop it. Tell the user what `error` says "
+    "(stop it themselves, or set MANAGED_COMFY_ROOT / COMFY_MODE=external). Do not retry or kill it yourself."
+)
 _COMFY_STARTING_NEXT = (
     "ComfyUI is still loading. Poll comfy_status every 10-15 s until `ok` is true. Do not call comfy_start again."
 )
 
 
-def _comfy_tool(command: str, *, wait: bool = True, timeout_s: float | None = None) -> dict:
+def _comfy_tool(
+    command: str, *, wait: bool = True, timeout_s: float | None = None, adopt: bool = False
+) -> dict:
     from master_agent.comfy.model_paths import ModelPathsError
     from master_agent.comfy.tower import (
         ComfyLaunchError,
+        ForeignComfyError,
         TowerError,
         run_tower_command,
         tower_error_payload,
@@ -84,11 +97,18 @@ def _comfy_tool(command: str, *, wait: bool = True, timeout_s: float | None = No
 
     timeout = COMFY_READY_TIMEOUT_S if timeout_s is None else max(5.0, min(float(timeout_s), 360.0))
     try:
-        result = run_tower_command(command, wait=wait, ready_timeout_s=timeout)
+        result = run_tower_command(command, wait=wait, ready_timeout_s=timeout, adopt=bool(adopt))
     except (TowerError, ModelPathsError) as exc:
         payload = tower_error_payload(command, exc)
         launch = payload.get("launch") or {}
-        if isinstance(exc, ComfyLaunchError) and launch.get("exit_code") is None and launch.get("pid"):
+        if isinstance(exc, ForeignComfyError):
+            payload["status"] = "foreign"
+            owner = exc.details.get("owner") or {}
+            if owner.get("matches_workspace") and not adopt:
+                payload["next"] = _COMFY_FOREIGN_ADOPT_NEXT.format(tool=f"comfy_{command}")
+            else:
+                payload["next"] = _COMFY_FOREIGN_STOP_NEXT
+        elif isinstance(exc, ComfyLaunchError) and launch.get("exit_code") is None and launch.get("pid"):
             payload["status"] = "starting"
             payload["next"] = _COMFY_STARTING_NEXT
         else:
@@ -109,11 +129,13 @@ def comfy_status() -> dict:
 
     Same code as ``python -m master_agent comfy status --json``. Read-only apart
     from refreshing ``state/extra_model_paths.yaml``. ``status`` is ``up`` or ``down``.
+    A server Buddy did not start is ``up`` with ``foreign: true`` and ``owner``
+    (pid, command line, and whether it runs this workspace).
     """
     return _comfy_tool("status")
 
 
-def comfy_start(wait: bool = True, timeout_s: float = COMFY_READY_TIMEOUT_S) -> dict:
+def comfy_start(wait: bool = True, timeout_s: float = COMFY_READY_TIMEOUT_S, adopt: bool = False) -> dict:
     """Start Buddy's managed ComfyUI detached in the background and wait until :8188 answers.
 
     Same code as ``python -m master_agent comfy start --json``. The ONLY sanctioned
@@ -121,17 +143,20 @@ def comfy_start(wait: bool = True, timeout_s: float = COMFY_READY_TIMEOUT_S) -> 
     max 360): ``started`` / ``already_up``; ``starting`` (still loading: poll
     comfy_status, do not start again); or ``error`` with ``launch`` (exit code,
     command, cwd, python, log, log_tail). ``wait=false`` returns after a 3 s crash check.
+    ``foreign`` means a ComfyUI Buddy did not start owns the port; ``adopt=true``
+    replaces it only when it runs this workspace's main.py.
     """
-    return _comfy_tool("start", wait=wait, timeout_s=timeout_s)
+    return _comfy_tool("start", wait=wait, timeout_s=timeout_s, adopt=adopt)
 
 
-def comfy_restart(wait: bool = True, timeout_s: float = COMFY_READY_TIMEOUT_S) -> dict:
+def comfy_restart(wait: bool = True, timeout_s: float = COMFY_READY_TIMEOUT_S, adopt: bool = False) -> dict:
     """Stop the ComfyUI Buddy launched, then start it again (detached). Same results as comfy_start.
 
-    Same code as ``python -m master_agent comfy restart --json``. Never kills a
-    ComfyUI Buddy did not start (``COMFY_MODE=external`` is refused).
+    Same code as ``python -m master_agent comfy restart --json``. A ComfyUI Buddy
+    did not start is refused (``foreign``) unless ``adopt=true`` and it runs this
+    workspace's main.py; then it is stopped and replaced. ``COMFY_MODE=external`` is refused.
     """
-    return _comfy_tool("restart", wait=wait, timeout_s=timeout_s)
+    return _comfy_tool("restart", wait=wait, timeout_s=timeout_s, adopt=adopt)
 
 
 def health() -> dict:

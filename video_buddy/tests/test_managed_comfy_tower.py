@@ -111,7 +111,10 @@ def isolated(tmp_path: Path, monkeypatch: pytest.MonkeyPatch):
 
     monkeypatch.setattr(tower, "http_ready", fake_ready)
     monkeypatch.setattr(tower, "sageattention_available", lambda: True)
+    owner: dict = {"info": None}
+    monkeypatch.setattr(tower, "find_port_owner", lambda port: owner["info"])
     return {
+        "owner": owner,
         "root": tmp_path,
         "state_dir": state_dir,
         "workspace": workspace,
@@ -260,6 +263,7 @@ def test_stop_reports_still_reachable_without_adopting_kill(isolated):
 
 def test_restart_increments_count(isolated):
     isolated["probes"]["script"] = [
+        (False, "down"),
         (False, "down"),
         (False, "down"),
         (True, "/system_stats ok"),
@@ -715,7 +719,7 @@ def test_agent_comfy_start_runs_the_cli_code_detached(agent_comfy, isolated, mon
     assert result["status"] == "started" and result["ready"] is True
     assert result["base_url"] == "http://127.0.0.1:8188"
     assert result["workspace_source"] == "MANAGED_COMFY_ROOT"
-    assert seen == [("start", {"wait": True, "ready_timeout_s": 30.0})]
+    assert seen == [("start", {"wait": True, "ready_timeout_s": 30.0, "adopt": False})]
     (proc,) = _comfy_popens(isolated)
     assert proc.kwargs.get("start_new_session") is True or proc.kwargs.get("creationflags")
     assert load_state().want_running is True
@@ -785,3 +789,291 @@ def test_agent_cli_comfy_start_prints_one_json_document(agent_comfy, isolated, m
     assert rc == 1
     assert payload["status"] == "error"
     assert payload["launch"]["exit_code"] == 1
+
+
+# --- Windows portable builds, COMFY_EXTRA_ARGS, foreign servers ---------------------
+
+PORTABLE_CMDLINE = [
+    ".\\python_embeded\\python.exe",
+    "-s",
+    "ComfyUI\\main.py",
+    "--windows-standalone-build",
+    "--port",
+    "8188",
+    "--preview-method",
+    "auto",
+    "--use-sage-attention",
+]
+
+
+@pytest.fixture
+def portable(isolated, monkeypatch):
+    """``MANAGED_COMFY_ROOT`` = a ComfyUI_windows_portable top folder, like the tower."""
+    top = isolated["root"] / "ComfyUI_windows_portable"
+    (top / "python_embeded").mkdir(parents=True)
+    embedded = top / "python_embeded" / "python.exe"
+    embedded.write_text("", encoding="utf-8")
+    code = top / "ComfyUI"
+    code.mkdir()
+    (code / "main.py").write_text("", encoding="utf-8")
+    monkeypatch.setenv("MANAGED_COMFY_ROOT", str(top))
+    monkeypatch.setattr(tower, "comfy_sageattention_available", lambda ws: True)
+    monkeypatch.delenv("COMFY_EXTRA_ARGS", raising=False)
+    return {"top": top.resolve(), "code": code.resolve(), "python": embedded.resolve()}
+
+
+def _portable_popens(isolated) -> list:
+    return [p for p in isolated["popens"] if any(str(a).endswith("main.py") for a in p.cmd)]
+
+
+def test_portable_launches_like_its_bat(isolated, portable):
+    result = ManagedComfyTower(ready_timeout_s=1).start(watch=False)
+    assert result["status"] == "started"
+    assert result["workspace"] == str(portable["code"])
+    (proc,) = _portable_popens(isolated)
+    cmd = proc.cmd
+    assert cmd[:4] == [
+        str(portable["python"]),
+        "-s",
+        f"ComfyUI{tower.os.sep}main.py",
+        "--windows-standalone-build",
+    ]
+    assert cmd[4:9] == ["--disable-auto-launch", "--port", "8188", "--listen", "127.0.0.1"]
+    assert cmd[-1] == "--use-sage-attention"
+    assert proc.kwargs["cwd"] == str(portable["top"])
+    assert "VIRTUAL_ENV" not in proc.kwargs["env"]
+    failure_details = load_state().extra
+    assert failure_details["comfy_command"] == cmd
+    assert isolated["calls"] == [], "no comfy-cli and no install"
+
+
+def test_comfy_extra_args_apply_to_portable_and_dedupe(isolated, portable, monkeypatch):
+    monkeypatch.setenv("COMFY_EXTRA_ARGS", "--preview-method auto --use-sage-attention")
+    ManagedComfyTower(ready_timeout_s=1).start(watch=False)
+    (proc,) = _portable_popens(isolated)
+    assert proc.cmd[-3:] == ["--use-sage-attention", "--preview-method", "auto"]
+    assert proc.cmd.count("--use-sage-attention") == 1
+    assert proc.cmd.count("--windows-standalone-build") == 1
+
+
+def test_comfy_extra_args_apply_to_venv_layout(isolated, monkeypatch):
+    venv_py = isolated["workspace"] / ".venv" / ("Scripts/python.exe" if tower.os.name == "nt" else "bin/python")
+    venv_py.parent.mkdir(parents=True)
+    venv_py.write_text("", encoding="utf-8")
+    monkeypatch.setattr(tower, "comfy_sageattention_available", lambda ws: False)
+    monkeypatch.setenv("COMFY_EXTRA_ARGS", "--preview-method auto --use-sage-attention")
+    ManagedComfyTower(ready_timeout_s=1).start(watch=False)
+    (proc,) = _comfy_popens(isolated)
+    assert proc.cmd[:2] == [str(venv_py), "main.py"]
+    assert "-s" not in proc.cmd and "--windows-standalone-build" not in proc.cmd
+    assert proc.cmd[-3:] == ["--preview-method", "auto", "--use-sage-attention"]
+    assert proc.kwargs["cwd"] == str(isolated["workspace"])
+
+
+def test_bad_comfy_extra_args_fail_before_launch(isolated, portable, monkeypatch):
+    monkeypatch.setenv("COMFY_EXTRA_ARGS", '--output-directory "D:\\unterminated')
+    with pytest.raises(TowerError, match="COMFY_EXTRA_ARGS"):
+        ManagedComfyTower(ready_timeout_s=1).start(watch=False)
+    assert _portable_popens(isolated) == []
+
+
+def _foreign_owner(portable, cmdline=None, cwd=None) -> dict:
+    return {"pid": 7777, "cmdline": list(cmdline or PORTABLE_CMDLINE), "cwd": str(cwd or portable["top"])}
+
+
+def test_status_reports_a_foreign_server_as_up_with_its_owner(isolated, portable):
+    isolated["probes"]["script"] = [(True, "/system_stats ok")]
+    isolated["owner"]["info"] = _foreign_owner(portable)
+    st = ManagedComfyTower().status()
+    assert st["ok"] is True and st["foreign"] is True
+    assert st["owner"]["pid"] == 7777
+    assert st["owner"]["cmdline"] == PORTABLE_CMDLINE
+    assert st["owner"]["matches_workspace"] is True
+    assert st["owner"]["main_py"] == str(portable["code"] / "main.py")
+
+
+def test_agent_status_is_up_for_a_foreign_server(agent_comfy, isolated, portable):
+    isolated["probes"]["script"] = [(True, "/system_stats ok")]
+    isolated["owner"]["info"] = _foreign_owner(portable)
+    result = agent_comfy.call("comfy_status", {})
+    assert result["status"] == "up"
+    assert result["foreign"] is True and result["owner"]["pid"] == 7777
+
+
+def test_restart_refuses_foreign_without_adopt_and_says_how(isolated, portable):
+    isolated["probes"]["script"] = [(True, "/system_stats ok")]
+    isolated["owner"]["info"] = _foreign_owner(portable)
+    with pytest.raises(tower.ForeignComfyError) as err:
+        ManagedComfyTower().restart()
+    msg = str(err.value)
+    assert "pid 7777 runs this workspace's ComfyUI" in msg
+    assert "python -m master_agent comfy restart --adopt" in msg
+    assert 'comfy_restart with {"adopt": true}' in msg
+    assert "COMFY_MODE=external" in msg
+    assert isolated["kills"] == [] and isolated["calls"] == [] and isolated["popens"] == []
+    payload = tower.tower_error_payload("restart", err.value)
+    assert payload["foreign"]["owner"]["pid"] == 7777
+    assert payload["foreign"]["adopt_command"] == "python -m master_agent comfy restart --adopt"
+
+
+def test_restart_adopt_stops_the_matching_foreign_server_and_launches_ours(isolated, portable):
+    # restart probe: foreign up; after kill: down; stop; start: down; await: up.
+    isolated["probes"]["script"] = [
+        (True, "/system_stats ok"),
+        (False, "down"),
+        (False, "down"),
+        (False, "down"),
+        (True, "/system_stats ok"),
+    ]
+    isolated["owner"]["info"] = _foreign_owner(portable)
+    result = ManagedComfyTower(ready_timeout_s=1).restart(adopt=True, watch=False)
+    assert result["status"] == "restarted"
+    assert result["adopted"]["pid"] == 7777
+    assert (7777, int(tower.signal.SIGTERM)) in isolated["kills"]
+    (proc,) = _portable_popens(isolated)
+    assert proc.kwargs["cwd"] == str(portable["top"])
+    assert load_state().want_running is True
+
+
+def test_adopt_matches_an_absolute_main_py_too(isolated, portable):
+    isolated["probes"]["script"] = [(True, "ok"), (False, "down"), (False, "down"), (True, "ok")]
+    isolated["owner"]["info"] = _foreign_owner(
+        portable, cmdline=[str(portable["python"]), "-s", str(portable["code"] / "main.py")], cwd="/elsewhere"
+    )
+    result = ManagedComfyTower(ready_timeout_s=1).start(adopt=True, watch=False)
+    assert result["status"] == "started" and result["adopted"]["pid"] == 7777
+
+
+def test_adopt_refuses_a_different_comfyui(isolated, portable, tmp_path):
+    isolated["probes"]["script"] = [(True, "/system_stats ok")]
+    other = tmp_path / "OtherComfy"
+    isolated["owner"]["info"] = _foreign_owner(portable, cmdline=["python", "main.py", "--port", "8188"], cwd=other)
+    with pytest.raises(tower.ForeignComfyError) as err:
+        ManagedComfyTower().restart(adopt=True)
+    msg = str(err.value)
+    assert "runs a different ComfyUI" in msg and "even with --adopt" in msg
+    assert str(other / "main.py") in msg
+    assert "pid 7777" in msg and ("taskkill /PID 7777" in msg or "kill 7777" in msg)
+    assert isolated["kills"] == [] and isolated["popens"] == []
+
+
+def test_adopt_refuses_when_the_owner_is_unknown(isolated, portable):
+    isolated["probes"]["script"] = [(True, "/system_stats ok")]
+    with pytest.raises(tower.ForeignComfyError, match="could not tell which process owns port 8188"):
+        ManagedComfyTower().start(adopt=True)
+    assert isolated["kills"] == [] and isolated["popens"] == []
+
+
+def test_adopt_reports_a_server_that_will_not_die(isolated, portable, monkeypatch):
+    monkeypatch.setattr(tower, "STOP_WAIT_S", 0.0)
+    isolated["probes"]["script"] = [(True, "/system_stats ok")]
+    isolated["owner"]["info"] = _foreign_owner(portable)
+    with pytest.raises(tower.ForeignComfyError, match="still answers"):
+        ManagedComfyTower().start(adopt=True)
+    assert _portable_popens(isolated) == []
+
+
+def test_agent_restart_passes_adopt_and_explains_foreign(agent_comfy, isolated, portable, monkeypatch):
+    isolated["probes"]["script"] = [(True, "/system_stats ok")]
+    isolated["owner"]["info"] = _foreign_owner(portable)
+    seen: list[dict] = []
+    real = tower.run_tower_command
+
+    def spy(command, **kw):
+        seen.append(kw)
+        return real(command, **kw)
+
+    monkeypatch.setattr(tower, "run_tower_command", spy)
+    refused = agent_comfy.call("comfy_restart", {})
+    assert refused["status"] == "foreign"
+    assert 'comfy_restart with {"adopt": true}' in refused["next"]
+    assert refused["foreign"]["owner"]["matches_workspace"] is True
+
+    isolated["probes"]["n"] = 0
+    isolated["probes"]["script"] = [(True, "ok"), (False, "down"), (False, "down"), (False, "down"), (True, "ok")]
+    result = agent_comfy.call("comfy_restart", {"adopt": True, "timeout_s": 30})
+    assert seen[-1]["adopt"] is True
+    assert result["status"] == "restarted" and result["adopted"]["pid"] == 7777
+
+
+def test_agent_foreign_mismatch_says_do_not_retry(agent_comfy, isolated, portable, tmp_path):
+    isolated["probes"]["script"] = [(True, "/system_stats ok")]
+    isolated["owner"]["info"] = _foreign_owner(portable, cmdline=["python", "main.py"], cwd=tmp_path / "x")
+    result = agent_comfy.call("comfy_start", {"adopt": True})
+    assert result["status"] == "foreign"
+    assert "Do not retry" in result["next"]
+
+
+@pytest.mark.parametrize("flag", ["--adopt", "--force"])
+def test_cli_adopt_flag_reaches_the_tower(isolated, monkeypatch, flag, capsys):
+    from master_agent.cli.parser import main
+
+    seen: list[tuple[str, dict]] = []
+
+    def fake(command, **kw):
+        seen.append((command, kw))
+        return {"status": "restarted", "base_url": "http://127.0.0.1:8188"}
+
+    monkeypatch.setattr(tower, "run_tower_command", fake)
+    assert main(["comfy", "restart", flag, "--as-json"]) == 0
+    assert seen[-1][0] == "restart" and seen[-1][1]["adopt"] is True
+    assert main(["comfy", "start", "--as-json"]) == 0
+    assert seen[-1][1]["adopt"] is False
+
+
+def test_cli_text_shows_the_foreign_owner(isolated, portable, capsys):
+    isolated["probes"]["script"] = [(True, "/system_stats ok")]
+    isolated["owner"]["info"] = _foreign_owner(portable)
+    code = cmd_tower(Namespace(comfy_command="status", workspace=None, port=None, base_url=None))
+    out = capsys.readouterr().out
+    assert code == 0
+    assert "comfy status: up (not started by Buddy)" in out
+    assert "owner pid=7777" in out
+
+
+def test_find_port_owner_falls_back_to_a_cmdline_scan(monkeypatch):
+    import types
+
+    class _P:
+        def __init__(self, pid, cmd, cwd):
+            self.pid, self._cmd, self._cwd = pid, cmd, cwd
+
+        def cmdline(self):
+            return self._cmd
+
+        def cwd(self):
+            return self._cwd
+
+    def denied(kind="tcp"):
+        raise PermissionError("needs admin")
+
+    fake = types.SimpleNamespace(
+        CONN_LISTEN="LISTEN",
+        net_connections=denied,
+        process_iter=lambda: [
+            _P(1, ["python", "server.py"], "/a"),
+            _P(2, ["python", "main.py", "--port", "8190"], "/b"),
+            _P(3, PORTABLE_CMDLINE, "F:\\portable"),
+        ],
+        Process=lambda pid: None,
+    )
+    monkeypatch.setitem(tower.sys.modules, "psutil", fake)
+    got = tower.find_port_owner(8188)
+    assert got == {"pid": 3, "cmdline": PORTABLE_CMDLINE, "cwd": "F:\\portable"}
+    assert tower.find_port_owner(8190)["pid"] == 2
+    assert tower.find_port_owner(9999) is None
+
+
+def test_find_port_owner_prefers_the_listening_socket(monkeypatch):
+    import types
+
+    proc = types.SimpleNamespace(pid=55, cmdline=lambda: ["python", "main.py"], cwd=lambda: "/c")
+    conn = types.SimpleNamespace(pid=55, status="LISTEN", laddr=types.SimpleNamespace(port=8188))
+    fake = types.SimpleNamespace(
+        CONN_LISTEN="LISTEN",
+        net_connections=lambda kind="tcp": [conn],
+        process_iter=lambda: [],
+        Process=lambda pid: proc,
+    )
+    monkeypatch.setitem(tower.sys.modules, "psutil", fake)
+    assert tower.find_port_owner(8188) == {"pid": 55, "cmdline": ["python", "main.py"], "cwd": "/c"}

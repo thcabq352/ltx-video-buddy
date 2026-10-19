@@ -6,7 +6,11 @@ client, graph ops, linter, and generate path are unchanged: they keep talking
 to whatever answers on ``COMFYUI_URL``.
 
 ``start`` runs ``<comfy python> main.py ...`` itself, detached, with stdout and
-stderr in ``state/logs/comfyui_<port>.log``, then polls the HTTP port. It does
+stderr in ``state/logs/comfyui_<port>.log``, then polls the HTTP port. A Windows
+portable build launches the way its ``run_*.bat`` does: cwd is the portable top
+folder and the command is ``python_embeded\\python.exe -s ComfyUI\\main.py
+--windows-standalone-build ...`` (see ``comfy/layout.py``). ``COMFY_EXTRA_ARGS``
+is appended last. It does
 not use ``comfy launch --background``: that path re-runs ``comfy`` from PATH
 and drops any output printed before ComfyUI's banner, so a failed start showed
 an empty error box. When the process exits before the port answers, the
@@ -42,7 +46,8 @@ from dataclasses import asdict, dataclass, field, fields
 from pathlib import Path
 from typing import Any, Callable
 
-from master_agent.comfy.root import SAVED_SOURCES, resolve_managed_comfy_root
+from master_agent.comfy.layout import ComfyLayout, comfy_interpreter, detect_layout, discover_portable
+from master_agent.comfy.root import SAVED_SOURCES, SOURCE_PORTABLE, resolve_managed_comfy_root
 from master_agent.config import COMFYUI_PORT, COMFYUI_URL, PROJECT_ROOT, STATE_DIR
 
 log = logging.getLogger(__name__)
@@ -59,9 +64,13 @@ LOG_TAIL_LINES = 40
 STATE_FILENAME = "managed_comfy.json"
 LISTEN_HOST = "127.0.0.1"
 _MODES = frozenset({"managed", "external"})
+EXTRA_ARGS_ENV = "COMFY_EXTRA_ARGS"
+# ComfyUI flags that take no value; a repeat from COMFY_EXTRA_ARGS is dropped.
+_SWITCH_FLAGS = frozenset({"--use-sage-attention", "--windows-standalone-build", "--disable-auto-launch"})
 
 __all__ = [
     "ComfyLaunchError",
+    "ForeignComfyError",
     "ManagedComfyTower",
     "TowerError",
     "TowerState",
@@ -82,6 +91,14 @@ __all__ = [
 
 class TowerError(RuntimeError):
     """Managed Comfy lifecycle failed or was refused."""
+
+
+class ForeignComfyError(TowerError):
+    """A ComfyUI Buddy did not start owns the port. ``details`` names the owner and what to do."""
+
+    def __init__(self, message: str, details: dict[str, Any]) -> None:
+        super().__init__(message)
+        self.details = details
 
 
 class ComfyLaunchError(TowerError):
@@ -186,14 +203,14 @@ def sageattention_available() -> bool:
 
 
 def comfy_sageattention_available(workspace: Path | str | None) -> bool:
-    """Probe the interpreter Comfy runs in (``<workspace>/.venv``).
+    """Probe the interpreter Comfy runs in (workspace venv or portable ``python_embeded``).
 
     When that interpreter cannot be found, fall back to
     :func:`sageattention_available` on this interpreter.
     """
-    from master_agent.comfy.comfy_venv import module_importable, workspace_venv_python
+    from master_agent.comfy.comfy_venv import module_importable
 
-    py = workspace_venv_python(workspace)
+    py = comfy_interpreter(workspace)
     if py is None:
         return sageattention_available()
     return module_importable(py, "sageattention")
@@ -209,6 +226,36 @@ def comfy_cli_present() -> bool:
         return importlib.util.find_spec("comfy_cli") is not None
     except (ImportError, ValueError):
         return False
+
+
+def comfy_extra_args(raw: str | None = None) -> list[str]:
+    """ComfyUI flags from ``COMFY_EXTRA_ARGS`` (empty by default), split like a command line."""
+    text = os.getenv(EXTRA_ARGS_ENV, "") if raw is None else raw
+    text = (text or "").strip()
+    if not text:
+        return []
+    try:
+        parts = shlex.split(text, posix=False)
+    except ValueError as exc:
+        raise TowerError(f"{EXTRA_ARGS_ENV} is not a valid argument list ({exc}): {text!r}") from exc
+    out = []
+    for part in parts:
+        if len(part) >= 2 and part[0] == part[-1] and part[0] in "\"'":
+            part = part[1:-1]
+        out.append(part)
+    return out
+
+
+def _merge_args(base: list[str], extra: list[str]) -> list[str]:
+    seen = {a for a in base if a in _SWITCH_FLAGS}
+    out = list(base)
+    for arg in extra:
+        if arg in _SWITCH_FLAGS:
+            if arg in seen:
+                continue
+            seen.add(arg)
+        out.append(arg)
+    return out
 
 
 def state_path() -> Path:
@@ -431,6 +478,113 @@ def _terminate_tree(pid: int) -> None:
         os.kill(int(pid), signal.SIGTERM)
 
 
+def _arg_name(arg: str) -> str:
+    return str(arg).replace("\\", "/").rsplit("/", 1)[-1]
+
+
+def _cmdline_port(cmdline: list[str]) -> int | None:
+    for i, arg in enumerate(cmdline):
+        value = None
+        if arg == "--port" and i + 1 < len(cmdline):
+            value = cmdline[i + 1]
+        elif str(arg).startswith("--port="):
+            value = str(arg).split("=", 1)[1]
+        if value is not None:
+            try:
+                return int(value)
+            except ValueError:
+                return None
+    return None
+
+
+def _is_comfy_cmdline(cmdline: list[str], port: int) -> bool:
+    if not any(_arg_name(a).lower() == "main.py" for a in cmdline):
+        return False
+    return (_cmdline_port(cmdline) or DEFAULT_PORT) == int(port)
+
+
+def _process_info(proc: Any) -> dict[str, Any]:
+    info: dict[str, Any] = {"pid": int(proc.pid), "cmdline": [], "cwd": None}
+    try:
+        info["cmdline"] = list(proc.cmdline() or [])
+    except Exception:
+        pass
+    try:
+        info["cwd"] = proc.cwd()
+    except Exception:
+        pass
+    return info
+
+
+def find_port_owner(port: int) -> dict[str, Any] | None:
+    """Process listening on ``port`` (``pid``, ``cmdline``, ``cwd``), or None when unknown.
+
+    Uses psutil: the LISTEN socket first, then any ``main.py --port <port>``
+    process (socket owners can be hidden without admin rights).
+    """
+    try:
+        import psutil
+    except ImportError:
+        return None
+    try:
+        for conn in psutil.net_connections(kind="tcp"):
+            laddr = getattr(conn, "laddr", None)
+            if conn.pid and conn.status == psutil.CONN_LISTEN and laddr and laddr.port == int(port):
+                return _process_info(psutil.Process(conn.pid))
+    except Exception as exc:
+        log.debug("net_connections unavailable: %s", exc)
+    try:
+        for proc in psutil.process_iter():
+            info = _process_info(proc)
+            if _is_comfy_cmdline(info["cmdline"], port):
+                return info
+    except Exception as exc:
+        log.debug("process scan failed: %s", exc)
+    return None
+
+
+def comfy_main_of(info: dict[str, Any]) -> Path | None:
+    """Absolute ``main.py`` a process runs, from its cmdline and cwd."""
+    for arg in info.get("cmdline") or []:
+        if _arg_name(arg).lower() != "main.py":
+            continue
+        raw = str(arg) if os.name == "nt" else str(arg).replace("\\", "/")
+        path = Path(raw)
+        if not path.is_absolute():
+            cwd = info.get("cwd")
+            if not cwd:
+                return None
+            path = Path(cwd) / path
+        try:
+            return path.resolve()
+        except OSError:
+            return path
+    return None
+
+
+def _same_path(a: Path | str, b: Path | str) -> bool:
+    def norm(p: Path | str) -> str:
+        try:
+            p = Path(p).resolve()
+        except OSError:
+            p = Path(p)
+        return os.path.normcase(os.path.normpath(str(p)))
+
+    return norm(a) == norm(b)
+
+
+def owner_matches(layout: ComfyLayout | None, info: dict[str, Any] | None) -> bool:
+    """True when ``info`` runs this layout's ``main.py`` (cmdline path, relative to its cwd)."""
+    if layout is None or not info:
+        return False
+    main = comfy_main_of(info)
+    return main is not None and _same_path(main, layout.code_dir / "main.py")
+
+
+def _kill_hint(pid: int) -> str:
+    return f"taskkill /PID {pid} /T /F" if os.name == "nt" else f"kill {pid}"
+
+
 def _quote_cmd(cmd: list[Any]) -> str:
     parts = [str(p) for p in cmd]
     return subprocess.list2cmdline(parts) if os.name == "nt" else shlex.join(parts)
@@ -470,8 +624,10 @@ class ManagedComfyTower:
     ) -> None:
         st = load_state()
         root = resolve_managed_comfy_root(workspace)
+        self.root = root
         self.workspace = root.path
         self.workspace_source = root.source
+        self.notes = list(root.notes)
         self.port = int(port if port is not None else (st.port or COMFYUI_PORT or DEFAULT_PORT))
         if base_url:
             self.base_url = base_url.rstrip("/")
@@ -486,6 +642,12 @@ class ManagedComfyTower:
         st = load_state()
         if self.workspace_source in SAVED_SOURCES:
             st.workspace = str(self.workspace)
+        elif self.root.stale_saved is not None and st.workspace:
+            # A saved folder without main.py is dropped so it stops shadowing later defaults.
+            from master_agent.comfy.root import _resolve
+
+            if _resolve(st.workspace) == self.root.stale_saved:
+                st.workspace = ""
         st.base_url = self.base_url
         st.port = self.port
         for key, value in updates.items():
@@ -507,9 +669,16 @@ class ManagedComfyTower:
         mode = effective_mode(st)
         ok, detail = http_ready(self.base_url)
         pid = st.watchdog_pid
+        layout = detect_layout(self.workspace)
+        foreign = bool(ok and not st.want_running)
+        owner = self._owner_summary(layout) if foreign else None
         return {
             "ok": ok,
             "detail": detail,
+            "foreign": foreign,
+            "owner": owner,
+            "layout": layout.kind if layout is not None else None,
+            "notes": list(self.notes),
             "mode": mode,
             "comfy_mode": mode,
             "want_running": bool(st.want_running),
@@ -528,25 +697,111 @@ class ManagedComfyTower:
             "extra_model_paths": str((st.extra or {}).get("extra_model_paths") or ""),
         }
 
-    def _comfy_python(self) -> Path:
-        """Interpreter ComfyUI runs in: ``<workspace>/.venv`` (or ``venv``), else this one."""
-        from master_agent.comfy.comfy_venv import workspace_venv_python
+    def _owner_summary(self, layout: ComfyLayout | None) -> dict[str, Any] | None:
+        info = find_port_owner(self.port)
+        if info is None:
+            return None
+        main = comfy_main_of(info)
+        return {
+            "pid": info["pid"],
+            "cmdline": info.get("cmdline") or [],
+            "command": _quote_cmd(info.get("cmdline") or []),
+            "cwd": info.get("cwd"),
+            "main_py": str(main) if main is not None else None,
+            "matches_workspace": owner_matches(layout, info),
+        }
 
-        if not (self.workspace / "main.py").is_file():
-            from master_agent.install_report import FULL_INSTALL_CMD
+    def _take_over_foreign(self, detail: str, *, action: str, adopt: bool) -> dict[str, Any]:
+        """Stop a ComfyUI Buddy did not start, when ``adopt`` and it runs this workspace.
 
-            raise TowerError(
-                f"ComfyUI is not installed in {self.workspace} (from {self.workspace_source}): "
-                "there is no main.py there. "
-                f"Install it with: {FULL_INSTALL_CMD}  "
-                "or set MANAGED_COMFY_ROOT to the folder that has ComfyUI's main.py. "
-                "comfy start does not install ComfyUI."
+        Otherwise raise :class:`ForeignComfyError` saying exactly what to do.
+        """
+        layout = detect_layout(self.workspace)
+        owner = self._owner_summary(layout)
+        details: dict[str, Any] = {
+            "base_url": self.base_url,
+            "port": self.port,
+            "workspace": str(self.workspace),
+            "workspace_source": self.workspace_source,
+            "owner": owner,
+            "adopt": adopt,
+        }
+        head = (
+            f"Comfy is already reachable at {self.base_url} ({detail}), and Buddy did not start it "
+            "(a foreign server)."
+        )
+        external = "Or set COMFY_MODE=external to keep using it as a user-owned server."
+        if owner is None:
+            raise ForeignComfyError(
+                f"{head} Buddy could not tell which process owns port {self.port} "
+                "(psutil missing or access denied), so it will not stop it"
+                + (" even with --adopt" if adopt else "")
+                + ". Stop that ComfyUI yourself (close its window or the run_*.bat console), "
+                f"then run `python -m master_agent comfy {action}`. {external}",
+                details,
             )
-        py = workspace_venv_python(self.workspace)
-        if py is None:
+        pid = int(owner["pid"])
+        if not owner["matches_workspace"]:
+            raise ForeignComfyError(
+                f"{head} pid {pid} runs a different ComfyUI ({owner['main_py'] or owner['command']}); "
+                f"Buddy's workspace is {self.workspace} (from {self.workspace_source}). "
+                "Buddy will not stop it, even with --adopt. "
+                f"Stop it yourself ({_kill_hint(pid)}), or set MANAGED_COMFY_ROOT to that ComfyUI's "
+                f"folder. {external}",
+                details,
+            )
+        if not adopt:
+            details["adopt_command"] = f"python -m master_agent comfy {action} --adopt"
+            raise ForeignComfyError(
+                f"{head} pid {pid} runs this workspace's ComfyUI: {owner['command']}. "
+                f"To replace it with a Buddy-managed ComfyUI, run "
+                f"`python -m master_agent comfy {action} --adopt` "
+                f'(agent tool: comfy_{action} with {{"adopt": true}}). {external}',
+                details,
+            )
+        log.warning("adopting foreign ComfyUI pid %s on port %s: stopping it", pid, self.port)
+        try:
+            _terminate_tree(pid)
+        except (OSError, subprocess.SubprocessError) as exc:
+            raise ForeignComfyError(f"{head} Stopping pid {pid} failed: {exc}", details) from exc
+        deadline = time.monotonic() + STOP_WAIT_S
+        while http_ready(self.base_url)[0]:
+            if time.monotonic() >= deadline:
+                raise ForeignComfyError(
+                    f"{head} Sent stop to pid {pid}, but {self.base_url} still answers after "
+                    f"{STOP_WAIT_S:.0f}s. Stop it yourself ({_kill_hint(pid)}) and retry.",
+                    details,
+                )
+            time.sleep(0.5)
+        return owner
+
+    def _layout(self) -> ComfyLayout:
+        """How ComfyUI in the workspace launches (portable, venv, or plain)."""
+        layout = detect_layout(self.workspace)
+        if layout is not None:
+            return layout
+        from master_agent.install_report import FULL_INSTALL_CMD
+
+        portable = discover_portable()
+        hint = (
+            f"A portable build is at {portable.top}: set MANAGED_COMFY_ROOT={portable.top}  "
+            if portable is not None
+            else f"Install it with: {FULL_INSTALL_CMD}  or set MANAGED_COMFY_ROOT to the folder "
+            "that has ComfyUI's main.py (or to a ComfyUI_windows_portable folder). "
+        )
+        raise TowerError(
+            f"ComfyUI is not installed in {self.workspace} (from {self.workspace_source}): "
+            f"there is no main.py there. {hint}"
+            "comfy start does not install ComfyUI."
+        )
+
+    def _comfy_python(self) -> Path:
+        """Interpreter ComfyUI runs in: portable ``python_embeded``, workspace venv, else this one."""
+        layout = self._layout()
+        if layout.python is None:
             log.warning("no .venv in %s; launching ComfyUI with %s", self.workspace, sys.executable)
             return Path(sys.executable)
-        return Path(py)
+        return layout.python
 
     def _launch_args(self, extra_model_paths: Path | None) -> list[str]:
         """ComfyUI's own flags (what follows ``main.py``)."""
@@ -568,24 +823,26 @@ class ManagedComfyTower:
         if comfy_sageattention_available(self.workspace):
             args.append("--use-sage-attention")
         else:
-            from master_agent.comfy.comfy_venv import workspace_venv_python
-
             log.warning(
                 "sageattention is not importable in %s; omitting --use-sage-attention "
                 "so Comfy does not crash. Install sageattention in the Comfy "
                 "interpreter to enable it.",
-                workspace_venv_python(self.workspace) or sys.executable,
+                comfy_interpreter(self.workspace) or sys.executable,
             )
-        return args
+        return _merge_args(args, comfy_extra_args())
 
     def _launch(self, extra_model_paths: Path | None = None) -> tuple[Any, dict[str, Any]]:
         """Spawn ComfyUI detached. Returns ``(Popen, details)``; does not wait for it."""
+        layout = self._layout()
         python = self._comfy_python()
-        cmd = [str(python), "main.py", *self._launch_args(extra_model_paths)]
+        comfy_args = _merge_args(list(layout.comfy_flags), self._launch_args(extra_model_paths))
+        cmd = [str(python), *layout.python_flags, layout.main_script, *comfy_args]
+        cwd = layout.cwd
         log_path = comfy_log_path(self.port)
         details: dict[str, Any] = {
             "command": cmd,
-            "cwd": str(self.workspace),
+            "cwd": str(cwd),
+            "layout": layout.kind,
             "python": str(python),
             "workspace": str(self.workspace),
             "workspace_source": self.workspace_source,
@@ -604,11 +861,11 @@ class ManagedComfyTower:
             raise ComfyLaunchError(
                 _format_launch_failure(f"Could not open the ComfyUI log {log_path}: {exc}", details), details
             ) from exc
-        log.info("launching ComfyUI: %s (cwd=%s)", " ".join(cmd), self.workspace)
+        log.info("launching ComfyUI: %s (cwd=%s)", " ".join(cmd), cwd)
         try:
             proc = subprocess.Popen(
                 cmd,
-                cwd=str(self.workspace),
+                cwd=str(cwd),
                 stdin=subprocess.DEVNULL,
                 stdout=logfh,
                 stderr=subprocess.STDOUT,
@@ -767,11 +1024,15 @@ class ManagedComfyTower:
         wait: bool = True,
         watch: bool = True,
         write_yaml_into_external: bool = False,
+        adopt: bool = False,
+        _action: str = "start",
     ) -> dict[str, Any]:
         """Launch managed Comfy in the background and optionally wait until ready.
 
         A server that is already answering, and that this module did not mark
-        ``want_running``, is treated as foreign and left untouched.
+        ``want_running``, is foreign. It is left untouched unless ``adopt`` is
+        set and it runs this workspace's ``main.py``; then it is stopped and
+        replaced by a managed launch.
 
         The Buddy-owned model-paths YAML is written even when launch is then
         refused (external mode), so the operator still has a snippet. The
@@ -781,6 +1042,7 @@ class ManagedComfyTower:
         external_yaml = self._maybe_write_external_yaml(write_yaml_into_external, yaml_path)
         self._require_managed("start")
         launched = False
+        adopted: dict[str, Any] | None = None
         with _LOCK:
             ok, detail = http_ready(self.base_url)
             st = load_state()
@@ -791,14 +1053,9 @@ class ManagedComfyTower:
                     last_error="",
                     last_start_at=st.last_start_at or time.time(),
                 )
-            elif ok:
-                raise TowerError(
-                    f"Comfy is already reachable at {self.base_url} ({detail}). "
-                    "Refusing to adopt a foreign server. "
-                    "Set COMFY_MODE=external if this Comfy is user-owned, "
-                    "or stop it before `comfy start`."
-                )
             else:
+                if ok:
+                    adopted = self._take_over_foreign(detail, action=_action, adopt=adopt)
                 try:
                     proc, launch = self._launch(yaml_path)
                 except TowerError as exc:
@@ -848,6 +1105,8 @@ class ManagedComfyTower:
             "log": str(comfy_log_path(self.port)),
             "extra_model_paths": str(yaml_path),
             "external_yaml": str(external_yaml or ""),
+            "adopted": adopted,
+            "notes": list(self.notes),
         }
 
     def stop(self) -> dict[str, Any]:
@@ -896,11 +1155,20 @@ class ManagedComfyTower:
         wait: bool = True,
         watch: bool = True,
         write_yaml_into_external: bool = False,
+        adopt: bool = False,
     ) -> dict[str, Any]:
-        """Stop, then start. Increments ``restart_count`` after a successful start."""
+        """Stop, then start. Increments ``restart_count`` after a successful start.
+
+        A foreign ComfyUI on the port is refused before anything is stopped,
+        unless ``adopt`` is set and it runs this workspace (see :meth:`start`).
+        """
         yaml_path = self._yaml_for_launch(extra_model_paths)
         external_yaml = self._maybe_write_external_yaml(write_yaml_into_external, yaml_path)
         self._require_managed("restart")
+        adopted: dict[str, Any] | None = None
+        ok, detail = http_ready(self.base_url)
+        if ok and not load_state().want_running:
+            adopted = self._take_over_foreign(detail, action="restart", adopt=adopt)
         try:
             self.stop()
         except TowerError as exc:
@@ -910,7 +1178,11 @@ class ManagedComfyTower:
             wait=wait,
             watch=watch,
             write_yaml_into_external=False,
+            adopt=adopt,
+            _action="restart",
         )
+        if adopted is not None:
+            result["adopted"] = adopted
         if external_yaml is not None:
             result["external_yaml"] = str(external_yaml)
         st = load_state()
@@ -1037,6 +1309,7 @@ def run_tower_command(
     ready_timeout_s: float | None = None,
     extra_model_paths: Path | None = None,
     write_yaml_into_external: bool = False,
+    adopt: bool = False,
 ) -> dict[str, Any]:
     """Body of ``comfy start|stop|status|restart``, shared by the CLI and the agent tools.
 
@@ -1063,6 +1336,7 @@ def run_tower_command(
             wait=wait,
             watch=watch,
             write_yaml_into_external=write_yaml_into_external,
+            adopt=adopt,
         )
     elif command == "stop":
         return tower.stop()
@@ -1072,6 +1346,7 @@ def run_tower_command(
             wait=wait,
             watch=watch,
             write_yaml_into_external=write_yaml_into_external,
+            adopt=adopt,
         )
     try:
         from master_agent.comfy.updates import startup_report
@@ -1090,6 +1365,8 @@ def tower_error_payload(command: str, exc: BaseException) -> dict[str, Any]:
     payload: dict[str, Any] = {"status": "error", "command": command, "error": str(exc)}
     if isinstance(exc, ComfyLaunchError):
         payload["launch"] = exc.details
+    if isinstance(exc, ForeignComfyError):
+        payload["foreign"] = exc.details
     return payload
 
 
@@ -1103,6 +1380,9 @@ def cmd_tower(args: Any) -> int:
     no_watch = bool(getattr(args, "no_watch", False))
     extra = getattr(args, "extra_model_paths", None)
     write_into_external = bool(getattr(args, "write_yaml_into_external", False))
+    adopt = bool(getattr(args, "adopt", False)) or (
+        command in {"start", "restart"} and getattr(args, "force", False) is True
+    )
 
     try:
         chosen_port = int(port) if port else None
@@ -1132,6 +1412,7 @@ def cmd_tower(args: Any) -> int:
             watch=not no_watch,
             extra_model_paths=Path(extra) if extra else None,
             write_yaml_into_external=write_into_external,
+            adopt=adopt,
         )
     except (TowerError, ModelPathsError) as exc:
         if _wants_json(args):
@@ -1143,9 +1424,13 @@ def cmd_tower(args: Any) -> int:
     if _wants_json(args):
         print(json.dumps(result, indent=2, default=str))
     else:
+        for note in result.get("notes") or []:
+            print(f"INFO  {note}")
         if command == "status":
             mark = "OK" if result.get("ok") else "DOWN"
             label = "up" if result.get("ok") else "down"
+            if result.get("foreign"):
+                label = "up (not started by Buddy)"
         else:
             mark = "OK"
             label = str(result.get("status") or "done")
@@ -1157,7 +1442,11 @@ def cmd_tower(args: Any) -> int:
         if result.get("base_url"):
             print(f"      url={result['base_url']}")
         if result.get("workspace"):
-            source = f" (from {result['workspace_source']})" if result.get("workspace_source") else ""
+            src = result.get("workspace_source")
+            if src == SOURCE_PORTABLE:
+                source = f" ({src})"
+            else:
+                source = f" (from {src})" if src else ""
             print(f"      workspace={result['workspace']}{source}")
         if result.get("log"):
             print(f"      log={result['log']}")
@@ -1167,6 +1456,14 @@ def cmd_tower(args: Any) -> int:
             print(f"      extra_model_paths={result['extra_model_paths']}")
         if result.get("external_yaml"):
             print(f"      external_yaml={result['external_yaml']}")
+        owner = result.get("owner") if isinstance(result.get("owner"), dict) else None
+        if owner:
+            print(f"      owner pid={owner.get('pid')}: {owner.get('command')}")
+        elif result.get("foreign"):
+            print("      owner: unknown (psutil missing or access denied)")
+        adopted = result.get("adopted") if isinstance(result.get("adopted"), dict) else None
+        if adopted:
+            print(f"      adopted: stopped pid {adopted.get('pid')} ({adopted.get('command')})")
         if result.get("detail"):
             print(f"      {result['detail']}")
         if result.get("last_error"):
