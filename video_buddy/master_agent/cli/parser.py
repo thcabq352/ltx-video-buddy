@@ -679,7 +679,8 @@ def main(argv: list[str] | None = None) -> int:
     p.add_argument(
         "--force",
         action="store_true",
-        help="promote: write the draft even when readiness lists missing nodes or models, or overwrite an existing workflows/<variant>.json",
+        help="promote: write the draft even when readiness lists missing nodes or models, or overwrite an existing workflows/<variant>.json. "
+        "start/restart: same as --adopt",
     )
     p.add_argument(
         "--llm-assist",
@@ -761,7 +762,8 @@ def main(argv: list[str] | None = None) -> int:
         "--workspace",
         default=None,
         help="managed Comfy workspace (start/stop/status/restart); remembered for later runs. "
-        "Without it: MANAGED_COMFY_ROOT, then the remembered --workspace, then PROJECT_ROOT/ComfyUI",
+        "A ComfyUI folder or a ComfyUI_windows_portable folder. Without it: MANAGED_COMFY_ROOT, "
+        "then the remembered --workspace, then PROJECT_ROOT/ComfyUI, then an auto-detected portable build",
     )
     p.add_argument(
         "--port",
@@ -801,6 +803,12 @@ def main(argv: list[str] | None = None) -> int:
         "--no-watch",
         action="store_true",
         help="start/restart: do not spawn the crash-restart watchdog",
+    )
+    p.add_argument(
+        "--adopt",
+        action="store_true",
+        help="start/restart: when a ComfyUI Buddy did not start answers on the port and it runs "
+        "this workspace's main.py, stop it and launch the managed one. Without it Buddy refuses.",
     )
     p.add_argument(
         "--as-json",

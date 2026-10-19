@@ -216,7 +216,8 @@ def fmt_gb(n: int | float) -> str:
 
 def comfy_install_state(workspace: Path) -> str:
     """``absent`` | ``installed`` | ``partial`` | ``foreign``."""
-    from master_agent.comfy.comfy_venv import module_importable, workspace_venv_python
+    from master_agent.comfy.comfy_venv import module_importable
+    from master_agent.comfy.layout import comfy_interpreter
 
     if not workspace.exists():
         return "absent"
@@ -225,10 +226,37 @@ def comfy_install_state(workspace: Path) -> str:
     looks_comfy = (workspace / "main.py").is_file() and (workspace / "comfy").is_dir()
     if not looks_comfy:
         return "foreign"
-    py = workspace_venv_python(workspace)
+    py = comfy_interpreter(workspace)
     if py is None or not module_importable(py, "torch"):
         return "partial"
     return "installed"
+
+
+def portable_guard(workspace: Path, state: str) -> str | None:
+    """Why automatic install must not install ComfyUI here, or None.
+
+    Buddy never installs into, repairs, or installs beside a Windows portable build.
+    """
+    from master_agent.comfy.layout import PORTABLE, detect_layout, discover_portable
+
+    layout = detect_layout(workspace)
+    if layout is not None and layout.kind == PORTABLE:
+        if state == "installed":
+            return None
+        return (
+            f"{workspace} is a ComfyUI portable build ({layout.top}), but its python_embeded "
+            "cannot import torch. Buddy never installs over a portable build: repair it with the "
+            "portable's own update\\update_comfyui_and_python_dependencies.bat, then run again."
+        )
+    if state == "installed":
+        return None
+    portable = discover_portable()
+    if portable is not None and portable.code_dir != workspace:
+        return (
+            f"A ComfyUI portable build is already at {portable.top}. Buddy will not install a second "
+            f"ComfyUI in {workspace}: set MANAGED_COMFY_ROOT={portable.top} in .env, then run again."
+        )
+    return None
 
 
 def missing_nodes(workspace: Path, nodes: Iterable[str] = REQUIRED_NODES) -> list[str]:
@@ -489,6 +517,9 @@ def check_workspace(workspace: Path, *, state: str, mode: str) -> Check:
             ],
             blocking=True,
         )
+    guard = portable_guard(workspace, state)
+    if guard is not None:
+        return Check("ComfyUI folder", FAIL, [*lines, guard], blocking=True)
     anchor = existing_ancestor(workspace)
     writable = os.access(anchor, os.W_OK)
     if writable:
@@ -730,6 +761,9 @@ def step_comfyui(apply: bool, *, workspace: Path, state: str, gpu_flag: str) -> 
         return StepResult("ComfyUI", SKIPPED, f"already installed in {workspace}")
     if state == "foreign":
         return StepResult("ComfyUI", FAILED, f"{workspace} has files that are not ComfyUI")
+    guard = portable_guard(workspace, state)
+    if guard is not None:
+        return StepResult("ComfyUI", FAILED, guard)
     args = ["install", gpu_flag] + (["--restore"] if state == "partial" else [])
     argv = comfy_argv(workspace, *args)
     if not apply:

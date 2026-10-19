@@ -39,6 +39,9 @@ def paths(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> dict[str, Path]:
     monkeypatch.setattr(tower, "PROJECT_ROOT", project)
     monkeypatch.delenv("MANAGED_COMFY_ROOT", raising=False)
     monkeypatch.delenv("COMFY_MODE", raising=False)
+    for name in ("saved-comfy", "flag-comfy"):
+        (tmp_path / name).mkdir()
+        (tmp_path / name / "main.py").write_text("# comfy\n", encoding="utf-8")
     return {
         "project": project,
         "state": state,
