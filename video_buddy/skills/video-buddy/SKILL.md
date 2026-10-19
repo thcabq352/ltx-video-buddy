@@ -32,13 +32,14 @@ python -m master_agent comfy status
 | `started` / `already_up` | `:8188` answers | Render. |
 | `starting` | Still loading (big first start) | Poll `comfy_status` every 10-15 s until `ok` is true. Do **not** call `comfy_start` again. |
 | `error` | Launch failed | Read `error` and `launch.log_tail` (exit code, command, cwd, python, last log lines). Fix that cause first. |
+| `foreign` | A ComfyUI Buddy did not start owns `:8188` | Follow `next`. Same workspace: it already works; only to replace it call `comfy_restart` with `{"adopt": true}` once. Different ComfyUI: tell the human, do not kill it. |
 
 Hard rules:
 
 - **NEVER run ComfyUI `main.py`, `python_embeded/python.exe ... main.py`, or `run_*.bat` in a foreground terminal.** Not with `--windows-standalone-build`, not "just to test".
 - If a raw launch is truly unavoidable (the comfy tools are broken), run it with `background=true`, then poll `python -m master_agent agent comfy_status` or `GET http://127.0.0.1:8188/system_stats`. Never wait on the launch command itself.
 - **After a failed start, do not retry the identical command.** The answer is in `launch.log_tail`. The same call with the same inputs fails the same way. Report the tail to the human if you cannot fix the cause.
-- A server already on `:8188` that Buddy did not start is left alone (`error`: refusing to adopt). Do not kill it; it may be mid-render.
+- A server already on `:8188` that Buddy did not start is left alone (`foreign`). Do not kill it yourself; it may be mid-render. `adopt: true` is the only way to replace it, and Buddy only honors it when that server runs this workspace's `main.py`.
 
 ## When to use
 

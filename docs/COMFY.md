@@ -51,24 +51,56 @@ Every command (automatic install, doctor, `comfy start` / `stop` / `status` / `r
 
 1. `comfy start --workspace <dir>` (remembered in `state/managed_comfy.json` for later runs)
 2. `MANAGED_COMFY_ROOT` in the environment or `.env`
-3. the remembered `--workspace`
-4. `video_buddy/ComfyUI`
+3. the remembered `--workspace`, when it still has `main.py`. A remembered folder without `main.py` is stale: Buddy ignores it, prints `INFO  ignored stale state/managed_comfy.json workspace … (no main.py there)`, and clears it at the next `comfy start`.
+4. `video_buddy/ComfyUI`, when it has `main.py`
+5. a Windows portable build inside `video_buddy` (`ComfyUI_windows_portable*`, or `COMFYUI_PORTABLE_ROOT`), shown as `… (auto-detected portable)`
+6. `video_buddy/ComfyUI` anyway, so the "not installed" error names it
+
+Only `--workspace` is remembered. `MANAGED_COMFY_ROOT`, the default and an auto-detected portable are worked out again every run.
 
 `comfy status`, the automatic-install pre-flight, and doctor's `comfyui` row print the folder and where it came from, for example `E:\VideoBuddy\ComfyUI (from MANAGED_COMFY_ROOT)`. `MANAGED_COMFY_ROOT` is Buddy's own install. `COMFYUI_ROOT` / `EXTERNAL_COMFY_ROOT` name a ComfyUI you own, which Buddy only reads.
 
+### Windows portable build
+
+`MANAGED_COMFY_ROOT` (or `--workspace`) may name the portable top folder (`ComfyUI_windows_portable`, the one with `python_embeded\` and `run_*.bat`) or its inner `ComfyUI` folder. Both resolve to the inner folder, which is what custom nodes, models and comfy-cli use. When `python_embeded\python.exe` sits next to that folder (or inside it), `comfy start` launches the way the portable's own `.bat` does: cwd is the top folder and the command is
+
+```text
+python_embeded\python.exe -s ComfyUI\main.py --windows-standalone-build --disable-auto-launch --port 8188 --listen 127.0.0.1 …
+```
+
+`--disable-auto-launch` comes after `--windows-standalone-build`, so no browser opens. The sageattention check runs in `python_embeded`. Automatic install never runs `comfy install` over a portable build, and refuses to install a second ComfyUI while one is found: it tells you to set `MANAGED_COMFY_ROOT` to it instead. A portable whose `python_embeded` cannot import torch is reported, not repaired; use the portable's own `update\` scripts.
+
+The tower's `.env`:
+
+```ini
+MANAGED_COMFY_ROOT=F:\CircusMoved\ltx2.3_agent\video_buddy\ComfyUI_windows_portable
+COMFY_EXTRA_ARGS=--preview-method auto --use-sage-attention
+```
+
 ## Managed launch
 
-`comfy start` runs `<workspace>/.venv` python (`venv` also works; with neither, the interpreter running Buddy) as `main.py` in the workspace folder, detached, with a local loopback server:
+`comfy start` runs `<workspace>/.venv` python (`venv` also works; a portable build uses `python_embeded`, see [Windows portable build](#windows-portable-build); with none of them, the interpreter running Buddy) as `main.py` in the workspace folder, detached, with a local loopback server:
 
 - `--disable-auto-launch`, `--port 8188`, `--listen 127.0.0.1`
 - `--extra-model-paths-config` pointing at the Buddy YAML, unless `--extra-model-paths` names an existing file
-- `--use-sage-attention` is last, after `--listen` and after the extra-model-paths pair when that pair is present, when `sageattention` imports in the interpreter Comfy runs in. Buddy checks that with a subprocess `import sageattention` in `<workspace>/.venv` (or `<workspace>/venv`). Only when the workspace has no venv does it fall back to the interpreter running Buddy. If the import fails, Buddy logs a warning naming that interpreter and omits the flag so Comfy does not crash.
+- `--use-sage-attention`, after `--listen` and after the extra-model-paths pair when that pair is present, when `sageattention` imports in the interpreter Comfy runs in. Buddy checks that with a subprocess `import sageattention` in `<workspace>/.venv` (or `<workspace>/venv`, or a portable's `python_embeded`). Only when the workspace has no interpreter of its own does it fall back to the interpreter running Buddy. If the import fails, Buddy logs a warning naming that interpreter and omits the flag so Comfy does not crash.
+- `COMFY_EXTRA_ARGS`, last. Empty by default, so the command is unchanged. It is split like a command line (quote paths with spaces) and applies to venv and portable layouts alike. A repeated switch (`--use-sage-attention`, `--windows-standalone-build`, `--disable-auto-launch`) is dropped, so `COMFY_EXTRA_ARGS=--preview-method auto --use-sage-attention` is safe whether or not the sageattention check passed. A flag that needs sageattention still crashes Comfy when it is missing; the launch error shows the log tail.
+
+### A ComfyUI Buddy did not start
+
+When something already answers on the port and Buddy did not start it (for example `run_api_8188.bat`), `comfy status` reports it as up with `foreign: true` and `owner` (pid, command line, cwd, the `main.py` it runs, and `matches_workspace`). The text output says `up (not started by Buddy)` and `owner pid=…`.
+
+`comfy start` and `comfy restart` refuse it by default, before stopping anything, and say what to do:
+
+- It runs this workspace's `main.py` (cmdline path, resolved against its cwd): `python -m master_agent comfy restart --adopt` (`--force` is the same) stops that process tree and starts Buddy's managed ComfyUI. Agents call `comfy_restart` with `{"adopt": true}`. Or keep using it as is, or set `COMFY_MODE=external`.
+- It runs a different ComfyUI: Buddy will not stop it, even with `--adopt`. Stop it yourself (`taskkill /PID <pid> /T /F`), point `MANAGED_COMFY_ROOT` at that ComfyUI, or set `COMFY_MODE=external`.
+- Buddy cannot tell who owns the port (psutil missing, or access denied): stop it yourself, then `comfy start`.
 
 ComfyUI's output goes to `video_buddy/state/logs/comfyui_8188.log` (new file each start). `comfy start` then polls `/system_stats` until it answers (180 s). If ComfyUI exits first, `comfy start` fails with its exit code, the command, the folder, the python, and the last 40 lines of that log. `--as-json` puts the same fields under `launch`, and `health` (agent API) repeats them under `comfyui.managed`. `stop` ends the process Buddy started; a server an older Buddy started through `comfy launch --background` is still stopped with `comfy stop`.
 
 Agents use the agent tools `comfy_status`, `comfy_start` and `comfy_restart` (`python -m master_agent agent comfy_start`). They run the same code and return the same JSON, plus `next`. `comfy_start` returns `starting` instead of an error when ComfyUI is still loading at `timeout_s`. An agent must never start ComfyUI by running `main.py` or `run_*.bat` in a foreground terminal: it never returns, so the tool time limit kills it. See [Agents](AGENTS.md#starting-comfyui).
 
-Once the workspace venv exists, ComfyUI and comfy-cli run with `VIRTUAL_ENV` and `CONDA_PREFIX` removed, so Buddy's activated venv is not used for Comfy.
+Once the workspace venv (or a portable's `python_embeded`) exists, ComfyUI and comfy-cli run with `VIRTUAL_ENV` and `CONDA_PREFIX` removed, so Buddy's activated venv is not used for Comfy.
 
 Start, stop, status, and restart do not run `comfy install` or `comfy update`. Installing is the job of [automatic install](GETTING_STARTED.md#automatic-install), which runs `comfy --workspace=<root> --where local --skip-prompt install <gpu flag>` (`--nvidia`, `--amd`, `--m-series`, or `--cpu`; `--restore` added to repair a half-finished install), then `comfy … node install ComfyUI-LTXVideo ComfyUI-GGUF`. It refuses `COMFY_MODE=external`. `--no-watch` skips the crash-restart watchdog. `--no-wait` returns about 3 s after launch, before `/system_stats` is ready (a crash in those seconds is still reported). If `:8188` is already bound, do not kill a running render. Attach or wait.
 
