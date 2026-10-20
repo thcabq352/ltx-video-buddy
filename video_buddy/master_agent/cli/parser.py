@@ -954,6 +954,15 @@ def main(argv: list[str] | None = None) -> int:
     p.set_defaults(func=cmd_agent)
 
     p = sub.add_parser(
+        "fallback-mcp",
+        help=(
+            "TEMPORARY dormant MCP stdio fallback forwarding to the agent tools; "
+            "off unless BUDDY_FALLBACK_MCP=1 (docs/ARCHITECTURE.md)"
+        ),
+    )
+    p.set_defaults(func=cmd_fallback_mcp)
+
+    p = sub.add_parser(
         "capabilities",
         help="print Comfy capability gap matrix (object_info vs Buddy wiring)",
     )
@@ -965,8 +974,8 @@ def main(argv: list[str] | None = None) -> int:
     if args.command != "automatic-install":
         from master_agent.control.versioned_config import announce_config
 
-        # `agent` reserves stdout for its JSON result.
-        banner_stream = sys.stderr if args.command == "agent" else sys.stdout
+        # `agent` reserves stdout for its JSON result; `fallback-mcp` for the protocol.
+        banner_stream = sys.stderr if args.command in ("agent", "fallback-mcp") else sys.stdout
         print(announce_config(), file=banner_stream, flush=True)
     return args.func(args)
 
@@ -975,4 +984,10 @@ def cmd_automatic_install(args: argparse.Namespace) -> int:
     from master_agent.automatic_install import cmd_automatic_install as _run
 
     return _run(args)
+
+
+def cmd_fallback_mcp(args: argparse.Namespace) -> int:  # noqa: ARG001
+    from master_agent.fallback_mcp import main as _run
+
+    return _run()
 

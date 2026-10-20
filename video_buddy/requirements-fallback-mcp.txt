@@ -1,0 +1,4 @@
+# TEMPORARY. Only for `python -m master_agent fallback-mcp` (dormant MCP fallback).
+# Not part of the base install. Delete with master_agent/fallback_mcp.py
+# (see docs/ARCHITECTURE.md, "Revert / fallback path").
+mcp>=1.2,<2

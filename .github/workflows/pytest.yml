@@ -17,6 +17,8 @@ jobs:
           sudo apt-get update
           sudo apt-get install -y ffmpeg
           pip install -r video_buddy/requirements.txt
+          # TEMPORARY: lets tests/test_fallback_mcp.py check tool parity. Delete with the shim.
+          pip install -r video_buddy/requirements-fallback-mcp.txt
           # Whole suite. tests/conftest.py points STATE_DIR / CHROMA_DIR /
           # OUTPUTS_DIR at a temp dir so runs never touch real state/.
           PYTHONPATH=video_buddy pytest -q video_buddy/tests
