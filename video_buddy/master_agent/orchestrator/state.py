@@ -49,6 +49,9 @@ class RunState:
     stg_scale: Optional[float] = None
     stg_blocks: Optional[list[int]] = None
     sampler_name: Optional[str] = None
+    # LightX2V distill LoRA (Wan). None keeps the family default.
+    lightx2v: Optional[bool] = None
+    lightx2v_strength: Optional[float] = None
 
     # Input media (ComfyUI input-dir filenames, post-upload)
     video_name: Optional[str] = None

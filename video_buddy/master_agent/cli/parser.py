@@ -7,7 +7,7 @@ import sys
 from pathlib import Path
 
 from master_agent.config import LIPDUB_ANCHOR, LIPDUB_REFRAME, LIPDUB_SILENCE_MODE, ensure_dirs
-from master_agent.cli.common import _DurationSet, _DimSet, _add_selector_flags
+from master_agent.cli.common import _DurationSet, _DimSet, _add_lightx2v_flags, _add_selector_flags
 from master_agent.cli.studio import cmd_curriculum, cmd_about, cmd_kb, cmd_budget
 from master_agent.cli.doctor import cmd_setup, cmd_inventory, cmd_health, cmd_scan_models
 from master_agent.cli.comfy import cmd_fetch_object_info, cmd_capabilities, cmd_validate, cmd_power_tune, cmd_diagnose, cmd_comfy
@@ -345,6 +345,7 @@ def main(argv: list[str] | None = None) -> int:
                    help="disable power mode even if POWER_MODE=1")
     p.add_argument("--upscale", choices=["rtx", "seedvr2"], default=None,
                    help="post-stage upscale of the final video")
+    _add_lightx2v_flags(p)
     p.add_argument("--no-interview", action="store_true",
                    help="skip the persona intake interview")
     p.add_argument(
@@ -734,6 +735,7 @@ def main(argv: list[str] | None = None) -> int:
             "when the graph uses tiled decode."
         ),
     )
+    _add_lightx2v_flags(p)
     p.add_argument("--out", help="write prepared workflow JSON (still queues unless --prepare)")
     p.add_argument(
         "--prepare",

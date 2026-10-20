@@ -224,6 +224,8 @@ def create_video(
     seed: int | None = None,
     storyboard: str | None = None,
     upscale: str | None = None,
+    lightx2v: bool | None = None,
+    lightx2v_strength: float | None = None,
 ) -> dict:
     """Generate a video end-to-end (director routing, storyboard panel,
     per-segment judge, stitch, full judge). dry_run=True plans and validates
@@ -236,10 +238,28 @@ def create_video(
     when the route is h3_r2v. A missing line sets line_warning and does not fail.
     seed fixes the sampler seed; storyboard is smart|always|multi_only|off;
     upscale (rtx|seedvr2) post-processes the final video.
+    lightx2v (Wan graphs) toggles the LightX2V distill LoRA: None keeps the
+    default (on for wan22 when the file is registered), false turns it off.
+    lightx2v_strength defaults to 0.6, range (0, 2]. Turning it off does not
+    retune the 8-step / CFG 1 distill schedule.
     Returns paths, scores and judge notes. status="busy" means another
     render holds the GPU; nothing was queued."""
     if not (request or "").strip():
         return {"status": "error", "error": "request must not be empty"}
+    if lightx2v is not None and not isinstance(lightx2v, bool):
+        return {"status": "error", "error": "lightx2v must be true, false, or null"}
+    if lightx2v_strength is not None:
+        from master_agent.comfy.graph_ops import LIGHTX2V_MAX_STRENGTH
+
+        try:
+            strength_ok = 0.0 < float(lightx2v_strength) <= LIGHTX2V_MAX_STRENGTH
+        except (TypeError, ValueError):
+            strength_ok = False
+        if not strength_ok:
+            return {
+                "status": "error",
+                "error": f"lightx2v_strength must be in (0, {LIGHTX2V_MAX_STRENGTH}]",
+            }
     if quality not in QUALITIES:
         return {"status": "error", "error": "quality must be draft|balanced|quality"}
     if upscale not in UPSCALE_METHODS:
@@ -342,6 +362,8 @@ def create_video(
             audio_name=audio_name,
             video_name=video_name,
             spoken_line=spoken_line or None,
+            lightx2v=lightx2v,
+            lightx2v_strength=lightx2v_strength,
         )
         return {
             "dry_run": True,
@@ -379,6 +401,8 @@ def create_video(
             seed=seed,
             storyboard=storyboard,
             upscale=upscale,
+            lightx2v=lightx2v,
+            lightx2v_strength=lightx2v_strength,
             extra={
                 "audio_note": note,
                 "warning": voice_warn,
@@ -405,6 +429,8 @@ def _render(
     storyboard: str | None,
     upscale: str | None,
     extra: dict,
+    lightx2v: bool | None = None,
+    lightx2v_strength: float | None = None,
 ) -> dict:
     from master_agent.comfy.client import ComfyClient, ComfyClientError
     from master_agent.orchestrator.pipeline import run_pipeline
@@ -436,6 +462,8 @@ def _render(
         voice_sample=voice_sample,
         storyboard_mode=storyboard,
         client=client,
+        lightx2v=lightx2v,
+        lightx2v_strength=lightx2v_strength,
     )
     out = {
         "status": result.status,

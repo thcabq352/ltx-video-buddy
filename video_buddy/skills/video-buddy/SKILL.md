@@ -135,7 +135,7 @@ Full signatures: [TOOLS.md](TOOLS.md).
 | `health` | `python -m master_agent health` (Comfy only) |
 | `comfy_status` / `comfy_start` / `comfy_restart` | `python -m master_agent comfy status\|start\|restart --as-json` (same code) |
 | `about` | `python -m master_agent about --json` |
-| `create_video` | `python -m master_agent run "BRIEF" [--duration N --quality draft --variant SLUG --seed N --storyboard MODE --upscale rtx --dry-run --no-interview]` |
+| `create_video` | `python -m master_agent run "BRIEF" [--duration N --quality draft --variant SLUG --seed N --storyboard MODE --upscale rtx --lightx2v on\|off --lightx2v-strength 0.6 --dry-run --no-interview]` |
 | `plan_storyboard` | No GPU plan preview. Closest: `run "BRIEF" --dry-run` (also lints). |
 | `judge_asset` | Agent tool only. |
 | `search_workflows` / `search_runs` / `search_knowledge` | `python -m master_agent kb search "QUERY" [--workflows / --knowledge] -k 3` |

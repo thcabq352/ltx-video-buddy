@@ -303,6 +303,253 @@ def ensure_teacache(
     return new_id
 
 
+# Kijai Wan21_T2V_14B_lightx2v_cfg_step_distill_lora_rank32 (WEIGHT_FILES key
+# wan22_lightx2v). MODEL-only distill LoRA: CFG 1 and a short schedule. The
+# wan22 template authors it at 0.6 in Power Lora slot lora_2 (high and low)
+# with 8 steps split 0-3 / 3-end. Without it, native Wan 2.2 wants about 20
+# steps at CFG 3.5; the toggle does not retune the sampler.
+LIGHTX2V_WEIGHT_KEY = "wan22_lightx2v"
+LIGHTX2V_MARKER = "lightx2v"
+LIGHTX2V_DEFAULT_STRENGTH = 0.6
+LIGHTX2V_MAX_STRENGTH = 2.0
+LIGHTX2V_LOADER_CLASS = "LoraLoaderModelOnly"
+LIGHTX2V_POWER_LORA_CLASS = "Power Lora Loader (rgthree)"
+LIGHTX2V_UNDISTILLED_HINT: dict[str, Any] = {"steps": 20, "cfg": 3.5}
+_WAN_UNET_LOADER_CLASSES = ("UNETLoader", "UnetLoaderGGUF", "UnetLoaderGGUFAdvanced")
+_LIGHTX2V_CORE_LORA_CLASSES = ("LoraLoaderModelOnly", "LoraLoader")
+
+
+def _is_lightx2v_name(value: Any) -> bool:
+    return isinstance(value, str) and LIGHTX2V_MARKER in value.lower()
+
+
+def _wan_unet_loaders(workflow: dict[str, Any]) -> list[str]:
+    out: list[str] = []
+    for nid, node in workflow.items():
+        if not isinstance(node, dict) or node.get("class_type") not in _WAN_UNET_LOADER_CLASSES:
+            continue
+        inputs = node.get("inputs") or {}
+        name = str(inputs.get("unet_name") or inputs.get("gguf_name") or "").lower()
+        if "wan" in name:
+            out.append(str(nid))
+    return out
+
+
+def looks_like_wan_graph(workflow: dict[str, Any]) -> bool:
+    """True when a diffusion loader names a Wan UNET or a CLIPLoader is type wan."""
+    if _wan_unet_loaders(workflow):
+        return True
+    for node in workflow.values():
+        if not isinstance(node, dict) or node.get("class_type") != "CLIPLoader":
+            continue
+        if str((node.get("inputs") or {}).get("type") or "").lower() == "wan":
+            return True
+    return False
+
+
+def resolve_lightx2v_lora(object_info: dict[str, Any] | None = None) -> str | None:
+    """Loader name for the LightX2V LoRA, or None when it is not registered.
+
+    When ``object_info`` lists LoRA choices, Comfy is the source of truth.
+    Otherwise the local weight resolver decides (never downloads).
+    """
+    from master_agent.comfy.loader_names import (
+        basename_key,
+        combo_choices_for,
+        name_from_local_path,
+    )
+    from master_agent.models.weights import WEIGHT_FILES, resolve_weight
+
+    spec = WEIGHT_FILES.get(LIGHTX2V_WEIGHT_KEY)
+    if spec is None:
+        return None
+    wanted = spec.filename.lower()
+    for class_type in _LIGHTX2V_CORE_LORA_CLASSES:
+        choices = combo_choices_for(object_info, class_type, "lora_name")
+        if choices:
+            for choice in choices:
+                if isinstance(choice, str) and basename_key(choice).lower() == wanted:
+                    return choice
+            return None
+    try:
+        local = resolve_weight(spec)
+    except Exception:
+        local = None
+    return name_from_local_path(local) if local is not None else None
+
+
+def _lightx2v_refs(
+    workflow: dict[str, Any],
+) -> tuple[list[tuple[str, str]], list[str]]:
+    """([(power_lora_node_id, slot_key)], [core_lora_node_id]) naming LightX2V."""
+    slots: list[tuple[str, str]] = []
+    cores: list[str] = []
+    for nid, node in workflow.items():
+        if not isinstance(node, dict):
+            continue
+        ctype = node.get("class_type")
+        inputs = node.get("inputs") or {}
+        if ctype == LIGHTX2V_POWER_LORA_CLASS:
+            for key, value in inputs.items():
+                if isinstance(value, dict) and _is_lightx2v_name(value.get("lora")):
+                    slots.append((str(nid), str(key)))
+        elif ctype in _LIGHTX2V_CORE_LORA_CLASSES and _is_lightx2v_name(inputs.get("lora_name")):
+            cores.append(str(nid))
+    return slots, cores
+
+
+def _remove_passthrough_lora(workflow: dict[str, Any], nid: str) -> None:
+    """Drop a LoRA node; MODEL (slot 0) / CLIP (slot 1) consumers get its inputs."""
+    node = workflow.pop(nid)
+    inputs = node.get("inputs") or {}
+    sources = {
+        0: inputs.get("model") if _is_link(inputs.get("model")) else None,
+        1: inputs.get("clip") if _is_link(inputs.get("clip")) else None,
+    }
+    for other in workflow.values():
+        if not isinstance(other, dict):
+            continue
+        oin = other.get("inputs")
+        if not isinstance(oin, dict):
+            continue
+        for key, value in list(oin.items()):
+            if _is_link(value) and str(value[0]) == nid:
+                source = sources.get(int(value[1]))
+                if source is not None:
+                    oin[key] = [str(source[0]), int(source[1])]
+                else:
+                    del oin[key]
+
+
+def _check_strength(strength: float | None) -> float:
+    if strength is None:
+        return LIGHTX2V_DEFAULT_STRENGTH
+    value = float(strength)
+    if not (0.0 < value <= LIGHTX2V_MAX_STRENGTH):
+        raise ValueError(
+            f"lightx2v strength must be in (0, {LIGHTX2V_MAX_STRENGTH}], got {strength!r}"
+        )
+    return value
+
+
+def set_lightx2v(
+    workflow: dict[str, Any],
+    *,
+    enabled: bool,
+    lora_name: str | None,
+    strength: float | None = None,
+) -> dict[str, Any]:
+    """Enable or disable the LightX2V distill LoRA on a Wan graph, in place.
+
+    Enable: Power Lora slots naming LightX2V are switched on at ``strength``;
+    core LoRA nodes are refreshed; with neither, one ``LoraLoaderModelOnly``
+    is inserted after each Wan UNET loader. ``lora_name=None`` (not
+    registered) leaves the graph untouched.
+    Disable: Power Lora slots are switched off (other slots stay); core
+    LightX2V nodes are removed and their MODEL/CLIP consumers rewired.
+    Returns a report for ``meta["lightx2v"]`` / ClipProvenance.
+    """
+    value = _check_strength(strength)
+    report: dict[str, Any] = {
+        "requested": bool(enabled),
+        "enabled": False,
+        "strength": value,
+        "lora": lora_name,
+        "action": "noop",
+        "nodes": [],
+        "reason": "",
+    }
+    if not looks_like_wan_graph(workflow):
+        report["reason"] = "not a Wan graph; LightX2V left alone"
+        return report
+    slots, cores = _lightx2v_refs(workflow)
+
+    if not enabled:
+        for nid, key in slots:
+            workflow[nid]["inputs"][key]["on"] = False
+        for nid in cores:
+            _remove_passthrough_lora(workflow, nid)
+        report["nodes"] = sorted({nid for nid, _ in slots} | set(cores))
+        if not report["nodes"]:
+            report["reason"] = "no LightX2V LoRA in graph"
+            return report
+        report["action"] = "disabled"
+        report["reason"] = (
+            "native Wan 2.2 wants about "
+            f"{LIGHTX2V_UNDISTILLED_HINT['steps']} steps at CFG "
+            f"{LIGHTX2V_UNDISTILLED_HINT['cfg']}; sampler not retuned"
+        )
+        return report
+
+    if not lora_name:
+        report["reason"] = (
+            "LightX2V LoRA not registered "
+            "(Wan21_T2V_14B_lightx2v_cfg_step_distill_lora_rank32); graph left as authored"
+        )
+        return report
+
+    from master_agent.comfy.loader_names import slash_key
+
+    touched: list[str] = []
+    for nid, key in slots:
+        slot = workflow[nid]["inputs"][key]
+        if slash_key(str(slot.get("lora") or "")).lower() != slash_key(lora_name).lower():
+            slot["lora"] = lora_name
+        slot["on"] = True
+        slot["strength"] = value
+        touched.append(nid)
+    for nid in cores:
+        inputs = workflow[nid].setdefault("inputs", {})
+        inputs["lora_name"] = lora_name
+        inputs["strength_model"] = value
+        if "strength_clip" in inputs:
+            inputs["strength_clip"] = value
+        touched.append(nid)
+    if not touched:
+        for src_id in _wan_unet_loaders(workflow):
+            new_id = _next_node_id(workflow)
+            workflow[new_id] = {
+                "class_type": LIGHTX2V_LOADER_CLASS,
+                "inputs": {
+                    "model": [src_id, 0],
+                    "lora_name": lora_name,
+                    "strength_model": value,
+                },
+                "_meta": {"title": "LightX2V distill LoRA"},
+            }
+            _rewire_model_consumers(workflow, src_id, new_id, skip={new_id})
+            touched.append(new_id)
+    report["nodes"] = sorted(set(touched))
+    report["enabled"] = bool(touched)
+    report["action"] = "enabled" if touched else "noop"
+    report["reason"] = "" if touched else "no Wan UNET loader to attach LightX2V to"
+    return report
+
+
+def apply_lightx2v(
+    workflow: dict[str, Any],
+    *,
+    enabled: bool,
+    strength: float | None = None,
+    object_info: dict[str, Any] | None = None,
+) -> dict[str, Any]:
+    """Resolve the registered LightX2V file, then ``set_lightx2v``. Logs one INFO line."""
+    import logging
+
+    registry = object_info if object_info is not None else cached_object_info()
+    lora_name = resolve_lightx2v_lora(registry) if enabled else None
+    report = set_lightx2v(workflow, enabled=enabled, lora_name=lora_name, strength=strength)
+    if report["action"] == "enabled":
+        message = f"lightx2v on strength={report['strength']} nodes={report['nodes']}"
+    elif report["action"] == "disabled":
+        message = f"lightx2v off nodes={report['nodes']}; {report['reason']}"
+    else:
+        message = f"lightx2v no-op: {report['reason'] or 'nothing to toggle'}"
+    report["message"] = message
+    logging.getLogger(__name__).info(message)
+    return report
+
+
 def cached_object_info() -> dict[str, Any]:
     """Disk cache only — never downloads, never requires a live Comfy."""
     try:
@@ -660,6 +907,8 @@ def _op_delete_input(wf: dict[str, Any], op: dict[str, Any]) -> None:
 
 __all__ = [
     "ALLOWED_OPS",
+    "LIGHTX2V_DEFAULT_STRENGTH",
+    "LIGHTX2V_UNDISTILLED_HINT",
     "LTX_TEACACHE_VARIANTS",
     "OPTIONAL_ACCELERATOR_CLASS_TYPES",
     "OPTIONAL_COSMETIC_CLASS_TYPES",
@@ -669,14 +918,18 @@ __all__ = [
     "OPTIONAL_NODE_CLASS_TYPES",
     "OPTIONAL_TOWER_CLASS_TYPES",
     "OpResult",
+    "apply_lightx2v",
     "apply_ops",
     "bypass_optional_accelerators",
     "cached_object_info",
     "ensure_teacache",
     "is_optional_accelerator",
     "looks_like_ltx_graph",
+    "looks_like_wan_graph",
     "is_optional_node",
     "object_info_snippets",
+    "resolve_lightx2v_lora",
+    "set_lightx2v",
     "summarize_workflow",
     "teacache_defaults",
 ]

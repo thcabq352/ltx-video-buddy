@@ -1751,9 +1751,14 @@ def load_and_patch_workflow(
     inoutpaint: Optional[dict[str, Any]] = None,
     clamp_canvas: bool = True,
     vae: Optional[str] = None,
+    lightx2v: Optional[bool] = None,
+    lightx2v_strength: Optional[float] = None,
 ) -> tuple[dict[str, Any], dict[str, Any]]:
     """
     Returns (workflow_api_dict, meta) where meta has resolved generation params.
+
+    ``lightx2v`` None keeps the family default (on for wan22, untouched
+    elsewhere). True/False toggles the LightX2V distill LoRA on Wan graphs.
     """
     from master_agent.comfy.inoutpaint import (
         DEFAULT_FRAMES as INOUTPAINT_DEFAULT_FRAMES,
@@ -1975,9 +1980,23 @@ def load_and_patch_workflow(
         _apply_typed_loras(workflow, loras)
     if multi_ref:
         _apply_multi_ref(workflow, multi_ref)
-    if lora:
+    from master_agent.comfy.graph_ops import LIGHTX2V_MARKER, apply_lightx2v
+
+    # LightX2V has one writer (apply_lightx2v). _ensure_lora_node does not
+    # see rgthree Power Lora slots and would stack a second copy.
+    if lora and LIGHTX2V_MARKER not in lora.lower():
         _ensure_lora_node(workflow, lora)
     _bypass_missing_optional_loras(workflow)
+    lightx2v_report = None
+    from master_agent.models.vram_policy import family_for_slug
+
+    if lightx2v is not None or family_for_slug(resolved_id or variant) == "wan22":
+        lightx2v_report = apply_lightx2v(
+            workflow,
+            enabled=True if lightx2v is None else bool(lightx2v),
+            strength=lightx2v_strength,
+            object_info=object_info,
+        )
     _sanitize_ltx_nodes(workflow, object_info=object_info)
 
     extras = (manifests.get(variant) or {}).get("extras") or {}
@@ -2043,6 +2062,8 @@ def load_and_patch_workflow(
     }
     if ic_lora_info is not None:
         meta["ic_lora"] = ic_lora_info
+    if lightx2v_report is not None:
+        meta["lightx2v"] = lightx2v_report
     try:
         from master_agent.models.vram_policy import prepare_warning, workflow_row
 

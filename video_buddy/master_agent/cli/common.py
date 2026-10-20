@@ -69,6 +69,33 @@ def _reframe_flag(args: argparse.Namespace) -> bool:
     return str(value).strip().lower() == "on"
 
 
+def _add_lightx2v_flags(parser: argparse.ArgumentParser) -> None:
+    parser.add_argument(
+        "--lightx2v",
+        choices=["on", "off"],
+        default=None,
+        help=(
+            "Wan LightX2V distill LoRA. Default: on for wan22 when the file is "
+            "registered. off removes it; the 8-step / CFG 1 schedule is not retuned "
+            "(native Wan 2.2 wants about 20 steps at CFG 3.5)"
+        ),
+    )
+    parser.add_argument(
+        "--lightx2v-strength",
+        type=float,
+        default=None,
+        help="LightX2V LoRA strength (default 0.6, range (0, 2])",
+    )
+
+
+def _lightx2v_flag(args: argparse.Namespace) -> bool | None:
+    """True/False for ``--lightx2v on|off``; None keeps the family default."""
+    value = getattr(args, "lightx2v", None)
+    if value is None:
+        return None
+    return str(value).strip().lower() == "on"
+
+
 def _music_intent(request: str, audio_path: str, quality: str | None) -> bool:
     """Auto-routing rule: music keywords, or audio longer than one segment."""
     from master_agent.config import get_quality_profile

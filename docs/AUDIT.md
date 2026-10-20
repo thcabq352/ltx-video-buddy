@@ -21,9 +21,9 @@ The director allowlist is every on-disk `workflows/manifests.yaml` slug (`WORKFL
 | Flux stills | **wired** | director `flux` and the character sheet path |
 | CPU fractal zoom / inpaint / outpaint | **wired** | `python -m master_agent fractal` (no Comfy) |
 | LTX TeaCache | **wired** | inject-when-registered; missing class soft-bypasses |
+| LightX2V LoRAs | **wired** | `graph_ops.apply_lightx2v`; wan22 on by default at 0.6 when the file is registered; `create_video` `lightx2v` / `--lightx2v on\|off`; unregistered file is an INFO no-op; off does not retune steps/CFG |
 | SeedVR2 upscale | **wired** | post-stage only |
 | HeartMuLa | **wired** | `heartmula` CLI via heartlib, not Comfy nodes |
-| LightX2V LoRAs | **unwired** | baked into wan22 widgets when the file is present; patcher does not toggle them |
 | Wan TeaCache | **unwired** | bypass only; do not inject onto native wan22 |
 | WAN Fun Control | **unwired** | example graph is gitignored |
 | Warp (`GetWarpedNoiseFromVideo`) | **unwired** | soft-bypass if a graph names it; no Buddy graph |
