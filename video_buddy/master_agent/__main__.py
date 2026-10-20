@@ -37,6 +37,7 @@ Commands:
   rainey1-batch       Rainey1 seeds → junk filter → judge → top-K (.buddy.json)
   budget              status | reset-shift  (VRAM-min shift ledger)
   agent               <tool> --args JSON  (gateway entry; `agent list`)
+  fallback-mcp        TEMPORARY dormant MCP fallback over agent tools (BUDDY_FALLBACK_MCP=1)
   capabilities        Gap matrix: tower-ish Comfy nodes vs Buddy wiring
   curriculum          Print LESSON_BUDDY_WORKS_HERE (L0→L5) and Part 2 gate
   about               Print the studio identity card
