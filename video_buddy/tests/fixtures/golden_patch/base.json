@@ -1,0 +1,357 @@
+{
+ "args": {
+  "frames": 17,
+  "height": 384,
+  "prompt": "a red fox in snow",
+  "seed": 11,
+  "steps": 8,
+  "width": 640
+ },
+ "graph": {
+  "1": {
+   "_meta": {
+    "title": "Load Checkpoint"
+   },
+   "class_type": "CheckpointLoaderSimple",
+   "inputs": {
+    "ckpt_name": "<weight>"
+   }
+  },
+  "10": {
+   "_meta": {
+    "title": "CLIP Text Encode (Positive Prompt)"
+   },
+   "class_type": "CLIPTextEncode",
+   "inputs": {
+    "clip": [
+     "2",
+     0
+    ],
+    "text": "a red fox in snow"
+   }
+  },
+  "11": {
+   "_meta": {
+    "title": "CLIP Text Encode (Negative Prompt)"
+   },
+   "class_type": "CLIPTextEncode",
+   "inputs": {
+    "clip": [
+     "2",
+     0
+    ],
+    "text": "blurry, low quality, distorted face, watermark, text overlay"
+   }
+  },
+  "12": {
+   "_meta": {
+    "title": "LTXV Conditioning"
+   },
+   "class_type": "LTXVConditioning",
+   "inputs": {
+    "frame_rate": 24,
+    "negative": [
+     "11",
+     0
+    ],
+    "positive": [
+     "10",
+     0
+    ]
+   }
+  },
+  "2": {
+   "_meta": {
+    "title": "Load Gemma + Projection"
+   },
+   "class_type": "LTXAVTextEncoderLoader",
+   "inputs": {
+    "ckpt_name": "<weight>",
+    "device": "default",
+    "text_encoder": "<weight>"
+   }
+  },
+  "20": {
+   "_meta": {
+    "title": "Empty Video Latent"
+   },
+   "class_type": "EmptyLTXVLatentVideo",
+   "inputs": {
+    "batch_size": 1,
+    "height": 384,
+    "length": 17,
+    "width": 640
+   }
+  },
+  "21": {
+   "_meta": {
+    "title": "Empty Audio Latent"
+   },
+   "class_type": "LTXVEmptyLatentAudio",
+   "inputs": {
+    "audio_vae": [
+     "3",
+     0
+    ],
+    "batch_size": 1,
+    "frame_rate": 24,
+    "frames_number": 17
+   }
+  },
+  "22": {
+   "_meta": {
+    "title": "Concat AV Latent"
+   },
+   "class_type": "LTXVConcatAVLatent",
+   "inputs": {
+    "audio_latent": [
+     "21",
+     0
+    ],
+    "video_latent": [
+     "20",
+     0
+    ]
+   }
+  },
+  "3": {
+   "_meta": {
+    "title": "Load Audio VAE"
+   },
+   "class_type": "LTXVAudioVAELoader",
+   "inputs": {
+    "ckpt_name": "<weight>"
+   }
+  },
+  "30": {
+   "_meta": {
+    "title": "Guider AUDIO"
+   },
+   "class_type": "GuiderParameters",
+   "inputs": {
+    "cfg": 3.0,
+    "cross_attn": true,
+    "modality": "AUDIO",
+    "modality_scale": 1.0,
+    "perturb_attn": true,
+    "rescale": 0.7,
+    "skip_step": 0,
+    "stg": 0.0
+   }
+  },
+  "31": {
+   "_meta": {
+    "title": "Guider VIDEO"
+   },
+   "class_type": "GuiderParameters",
+   "inputs": {
+    "cfg": 1.0,
+    "cross_attn": true,
+    "modality": "VIDEO",
+    "modality_scale": 1.0,
+    "parameters": [
+     "30",
+     0
+    ],
+    "perturb_attn": true,
+    "rescale": 0.7,
+    "skip_step": 0,
+    "stg": 0.0
+   }
+  },
+  "32": {
+   "_meta": {
+    "title": "Multimodal Guider"
+   },
+   "class_type": "MultimodalGuider",
+   "inputs": {
+    "model": [
+     "4",
+     0
+    ],
+    "negative": [
+     "12",
+     1
+    ],
+    "parameters": [
+     "31",
+     0
+    ],
+    "positive": [
+     "12",
+     0
+    ],
+    "skip_blocks": ""
+   }
+  },
+  "4": {
+   "_meta": {
+    "title": "Distilled LoRA"
+   },
+   "class_type": "LoraLoaderModelOnly",
+   "inputs": {
+    "lora_name": "<weight>",
+    "model": [
+     "1",
+     0
+    ],
+    "strength_model": 0.6
+   }
+  },
+  "40": {
+   "_meta": {
+    "title": "LTXV Scheduler"
+   },
+   "class_type": "LTXVScheduler",
+   "inputs": {
+    "base_shift": 0.95,
+    "latent": [
+     "22",
+     0
+    ],
+    "max_shift": 2.05,
+    "steps": 8,
+    "stretch": true,
+    "terminal": 0.1
+   }
+  },
+  "41": {
+   "_meta": {
+    "title": "Sampler"
+   },
+   "class_type": "KSamplerSelect",
+   "inputs": {
+    "sampler_name": "euler"
+   }
+  },
+  "42": {
+   "_meta": {
+    "title": "Noise"
+   },
+   "class_type": "RandomNoise",
+   "inputs": {
+    "noise_seed": 11
+   }
+  },
+  "50": {
+   "_meta": {
+    "title": "Sample"
+   },
+   "class_type": "SamplerCustomAdvanced",
+   "inputs": {
+    "guider": [
+     "32",
+     0
+    ],
+    "latent_image": [
+     "22",
+     0
+    ],
+    "noise": [
+     "42",
+     0
+    ],
+    "sampler": [
+     "41",
+     0
+    ],
+    "sigmas": [
+     "40",
+     0
+    ]
+   }
+  },
+  "60": {
+   "_meta": {
+    "title": "Separate AV"
+   },
+   "class_type": "LTXVSeparateAVLatent",
+   "inputs": {
+    "av_latent": [
+     "50",
+     0
+    ]
+   }
+  },
+  "70": {
+   "_meta": {
+    "title": "VAE Decode Video"
+   },
+   "class_type": "LTXVTiledVAEDecode",
+   "inputs": {
+    "horizontal_tiles": 2,
+    "last_frame_fix": false,
+    "latents": [
+     "60",
+     0
+    ],
+    "overlap": 2,
+    "vae": [
+     "1",
+     2
+    ],
+    "vertical_tiles": 2,
+    "working_device": "auto",
+    "working_dtype": "auto"
+   }
+  },
+  "71": {
+   "_meta": {
+    "title": "VAE Decode Audio"
+   },
+   "class_type": "LTXVAudioVAEDecode",
+   "inputs": {
+    "audio_vae": [
+     "3",
+     0
+    ],
+    "samples": [
+     "60",
+     1
+    ]
+   }
+  },
+  "80": {
+   "_meta": {
+    "title": "Create Video"
+   },
+   "class_type": "CreateVideo",
+   "inputs": {
+    "audio": [
+     "71",
+     0
+    ],
+    "filename_prefix": "ltx_agent",
+    "fps": 24.0,
+    "images": [
+     "70",
+     0
+    ]
+   }
+  },
+  "90": {
+   "_meta": {
+    "title": "Save Video"
+   },
+   "class_type": "SaveVideo",
+   "inputs": {
+    "codec": "auto",
+    "filename_prefix": "ltx_agent",
+    "format": "auto",
+    "video": [
+     "80",
+     0
+    ]
+   }
+  }
+ },
+ "meta": {
+  "cfg": 1.0,
+  "frames": 17,
+  "height": 384,
+  "seed": 11,
+  "steps": 8,
+  "width": 640
+ },
+ "variant": "base"
+}

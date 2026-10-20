@@ -1,0 +1,347 @@
+{
+ "args": {
+  "duration_s": 2.0,
+  "prompt": "rainy street at dusk",
+  "seed": 33,
+  "steps": 6
+ },
+ "graph": {
+  "104": {
+   "_meta": {
+    "title": "Load Diffusion Model"
+   },
+   "class_type": "UNETLoader",
+   "inputs": {
+    "unet_name": "<weight>",
+    "weight_dtype": "default"
+   }
+  },
+  "106": {
+   "_meta": {
+    "title": "Load Diffusion Model"
+   },
+   "class_type": "UNETLoader",
+   "inputs": {
+    "unet_name": "<weight>",
+    "weight_dtype": "default"
+   }
+  },
+  "115": {
+   "_meta": {
+    "title": "WanVideoNAG"
+   },
+   "class_type": "WanVideoNAG",
+   "inputs": {
+    "conditioning": [
+     "4",
+     0
+    ],
+    "inplace": false,
+    "input_type": "default",
+    "model": [
+     "135",
+     0
+    ],
+    "nag_alpha": 0.25,
+    "nag_scale": 11,
+    "nag_tau": 2.5
+   }
+  },
+  "135": {
+   "_meta": {
+    "title": "Power Lora Loader (rgthree)"
+   },
+   "class_type": "Power Lora Loader (rgthree)",
+   "inputs": {
+    "PowerLoraLoaderHeaderWidget": {
+     "type": "PowerLoraLoaderHeaderWidget"
+    },
+    "clip": [
+     "22",
+     0
+    ],
+    "lora_1": {
+     "lora": "<weight>",
+     "on": false,
+     "strength": 1
+    },
+    "lora_2": {
+     "lora": "<weight>",
+     "on": true,
+     "strength": 0.6
+    },
+    "lora_3": {
+     "lora": "<weight>",
+     "on": true,
+     "strength": 0.6
+    },
+    "lora_4": {
+     "lora": "<weight>",
+     "on": true,
+     "strength": 0.7
+    },
+    "lora_5": {
+     "lora": "<weight>",
+     "on": true,
+     "strength": 0.45
+    },
+    "model": [
+     "104",
+     0
+    ],
+    "\u2795 Add Lora": ""
+   }
+  },
+  "136": {
+   "_meta": {
+    "title": "Power Lora Loader (rgthree)"
+   },
+   "class_type": "Power Lora Loader (rgthree)",
+   "inputs": {
+    "PowerLoraLoaderHeaderWidget": {
+     "type": "PowerLoraLoaderHeaderWidget"
+    },
+    "clip": [
+     "22",
+     0
+    ],
+    "lora_1": {
+     "lora": "<weight>",
+     "on": false,
+     "strength": 1
+    },
+    "lora_2": {
+     "lora": "<weight>",
+     "on": true,
+     "strength": 0.6
+    },
+    "lora_3": {
+     "lora": "<weight>",
+     "on": true,
+     "strength": 0.7
+    },
+    "lora_4": {
+     "lora": "<weight>",
+     "on": false,
+     "strength": 0.85
+    },
+    "model": [
+     "198",
+     0
+    ],
+    "\u2795 Add Lora": ""
+   }
+  },
+  "140": {
+   "_meta": {
+    "title": "Film Grain"
+   },
+   "class_type": "Film Grain",
+   "inputs": {
+    "density": 1,
+    "highlights": 1,
+    "image": [
+     "9",
+     0
+    ],
+    "intensity": 0.04,
+    "repeats": 1,
+    "supersample_factor": 5
+   }
+  },
+  "168": {
+   "_meta": {
+    "title": "KSampler (Advanced)"
+   },
+   "class_type": "KSamplerAdvanced",
+   "inputs": {
+    "add_noise": "enable",
+    "cfg": 1.0,
+    "end_at_step": 3,
+    "latent_image": [
+     "5",
+     0
+    ],
+    "model": [
+     "136",
+     0
+    ],
+    "negative": [
+     "4",
+     0
+    ],
+    "noise_seed": 33,
+    "positive": [
+     "3",
+     0
+    ],
+    "return_with_leftover_noise": "disable",
+    "sampler_name": "res_2s",
+    "scheduler": "beta57",
+    "start_at_step": 0,
+    "steps": 6
+   }
+  },
+  "169": {
+   "_meta": {
+    "title": "KSampler (Advanced)"
+   },
+   "class_type": "KSamplerAdvanced",
+   "inputs": {
+    "add_noise": "enable",
+    "cfg": 1.0,
+    "end_at_step": 999,
+    "latent_image": [
+     "168",
+     0
+    ],
+    "model": [
+     "115",
+     0
+    ],
+    "negative": [
+     "4",
+     0
+    ],
+    "noise_seed": 33,
+    "positive": [
+     "3",
+     0
+    ],
+    "return_with_leftover_noise": "disable",
+    "sampler_name": "res_2s",
+    "scheduler": "beta57",
+    "start_at_step": 3,
+    "steps": 6
+   }
+  },
+  "194": {
+   "_meta": {
+    "title": "Video Combine \ud83c\udfa5\ud83c\udd65\ud83c\udd57\ud83c\udd62"
+   },
+   "class_type": "VHS_VideoCombine",
+   "inputs": {
+    "crf": 8,
+    "filename_prefix": "ltx_agent",
+    "format": "video/h264-mp4",
+    "frame_rate": 16,
+    "images": [
+     "140",
+     0
+    ],
+    "loop_count": 0,
+    "pingpong": false,
+    "pix_fmt": "yuv420p",
+    "save_metadata": true,
+    "save_output": true,
+    "trim_to_audio": false
+   }
+  },
+  "197": {
+   "_meta": {
+    "title": "Int"
+   },
+   "class_type": "PrimitiveInt",
+   "inputs": {
+    "value": 33
+   }
+  },
+  "198": {
+   "_meta": {
+    "title": "LoRA"
+   },
+   "class_type": "LoraLoaderModelOnly",
+   "inputs": {
+    "lora_name": "<weight>",
+    "model": [
+     "106",
+     0
+    ],
+    "strength_model": 1.0
+   }
+  },
+  "22": {
+   "_meta": {
+    "title": "Load CLIP"
+   },
+   "class_type": "CLIPLoader",
+   "inputs": {
+    "clip_name": "<weight>",
+    "device": "default",
+    "type": "wan"
+   }
+  },
+  "3": {
+   "_meta": {
+    "title": "Positive Prompt"
+   },
+   "class_type": "CLIPTextEncode",
+   "inputs": {
+    "clip": [
+     "22",
+     0
+    ],
+    "text": "rainy street at dusk"
+   }
+  },
+  "4": {
+   "_meta": {
+    "title": "Negative Prompt"
+   },
+   "class_type": "CLIPTextEncode",
+   "inputs": {
+    "clip": [
+     "22",
+     0
+    ],
+    "text": "blurry, low quality, distorted face, watermark, text overlay"
+   }
+  },
+  "5": {
+   "_meta": {
+    "title": "Empty HunyuanVideo 1.0 Latent"
+   },
+   "class_type": "EmptyHunyuanLatentVideo",
+   "inputs": {
+    "batch_size": 1,
+    "height": 512,
+    "length": 33,
+    "width": 768
+   }
+  },
+  "8": {
+   "_meta": {
+    "title": "Load VAE"
+   },
+   "class_type": "VAELoader",
+   "inputs": {
+    "vae_name": "<weight>"
+   }
+  },
+  "9": {
+   "_meta": {
+    "title": "VAE Decode"
+   },
+   "class_type": "VAEDecode",
+   "inputs": {
+    "samples": [
+     "169",
+     0
+    ],
+    "vae": [
+     "8",
+     0
+    ]
+   }
+  }
+ },
+ "meta": {
+  "cfg": 1.0,
+  "frames": 33,
+  "height": 512,
+  "seed": 33,
+  "steps": 6,
+  "width": 768
+ },
+ "variant": "wan22"
+}
