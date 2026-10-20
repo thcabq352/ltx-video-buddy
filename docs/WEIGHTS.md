@@ -175,7 +175,7 @@ python -m master_agent models register D:\Downloads\ltx23 --dry-run  # show the 
 
 New Hugging Face repos serve large files through Xet. On some networks the Xet/CAS transfer fails partway through (errors mention `xet`, `CAS service` or `reconstruction`). Buddy then retries that file once over plain HTTPS with `HF_HUB_DISABLE_XET=1` and prints a `WARN` line. To skip Xet from the start, set `HF_HUB_DISABLE_XET=1` in `.env` or the shell.
 
-Lightx2v / turbo LoRAs apply when the file is present. LTX TeaCache is inject-when-registered and soft-bypasses when the pack is missing. See [Agents](AGENTS.md).
+Lightx2v / turbo LoRAs apply when the file is present. The wan22 Lightx2v LoRA can be toggled (`--lightx2v on|off`, agent `lightx2v`); see [Agents](AGENTS.md). LTX TeaCache is inject-when-registered and soft-bypasses when the pack is missing. See [Agents](AGENTS.md).
 
 ## HeartMuLa files
 
