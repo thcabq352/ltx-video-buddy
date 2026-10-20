@@ -16,7 +16,7 @@ unknown tool or bad `--args`. Python callers: `from master_agent import agent_ap
 | Tool | Arguments | What it does |
 |---|---|---|
 | `about` | *(none)* | Studio identity card. |
-| `health` | *(none)* | ComfyUI reachability + GPU VRAM, Ollama up, llama.cpp up (`local_llm`), opt-in Grok credentials (read-only), KB counts, config hash + values. Comfy down: `comfyui.managed` has the last launch error + log tail. |
+| `health` | *(none)* | ComfyUI reachability + GPU VRAM, Ollama up, llama.cpp up (`local_llm`), opt-in Grok credentials (read-only), KB counts, config hash + values, `budget` {used, cap, remaining, paused, paused_run_ids, shift_id, line} for the current shift (a HOLD is `paused`, not an error). Comfy down: `comfyui.managed` has the last launch error + log tail. |
 | `comfy_status` | *(none)* | Buddy's managed ComfyUI: `status` `up`\|`down`, `ok`, URL, folder + why that folder (`workspace_source`), pid, log path. Down: `managed` has the last launch error, exit code, command and `log_tail`. A ComfyUI Buddy did not start is `up` with `foreign: true` and `owner` {pid, cmdline, cwd, main_py, matches_workspace}. Same code as `comfy status --as-json`. |
 | `comfy_start` | `wait: bool=True`, `timeout_s: float=180` (max 360), `adopt: bool=False` | **The only way an agent starts ComfyUI.** Detached launch, then waits for `:8188`. `status`: `started` / `already_up`; `starting` (still loading: poll `comfy_status`, do not start again); `error` + `launch` {exit_code, command, cwd, python, log, log_tail} and `next`; `foreign` + `foreign.owner` when a ComfyUI Buddy did not start owns the port (follow `next`). Same code as `comfy start --as-json`. |
 | `comfy_restart` | `wait: bool=True`, `timeout_s: float=180`, `adopt: bool=False` | Stop the ComfyUI Buddy launched, start it again detached. Same results as `comfy_start`. A ComfyUI Buddy did not start is refused (`foreign`) unless `adopt=true` **and** it runs this workspace's `main.py`; then it is stopped and replaced. Same code as `comfy restart --adopt --as-json`. |
@@ -55,7 +55,7 @@ is hours. Allow ~900s per call.
 | `curriculum` | Print L0→L5 + Part 2 overnight gate (`--json` ok). |
 | `inventory` | List discovered weights (path + role) before doctor. `--json` optional. Consent rules: repo `docs/WEIGHTS.md`. |
 | `setup` / `doctor` | Deps + LTX 2.5 / H3 / LTX 2.3 scan. Flags and the loader order: repo `docs/WEIGHTS.md`. `--fix` installs deps; LLM GGUFs with no public source are skipped and it never pulls Ollama. |
-| `health` | Comfy `:8188` + GPU stats. |
+| `health` | Comfy `:8188` + GPU stats + one `budget:` line (used / cap VRAM-min, remaining, paused runs). |
 | `comfy start\|status\|stop\|restart` | Buddy's managed ComfyUI. `start` is detached and waits for `:8188` (180 s); a failed launch prints exit code, command, folder, python and the log tail. `--as-json` for scripts. `--workspace` / `MANAGED_COMFY_ROOT` pick the folder. |
 | `workflows` | Default catalog (includes `ltx25_*` and `h3_*`). `--vram` prints 16GB pack table. |
 | `capabilities` | Comfy pack vs Buddy wiring. `--offline` uses cache. |

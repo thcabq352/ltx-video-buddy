@@ -12,7 +12,7 @@ All commands are `python -m master_agent …` from `video_buddy/`. `python -m ma
 | `doctor` / `setup` | Deps + weight scan. `--fix` installs deps, skips LLM GGUFs with no public source, and never pulls Ollama. `python install.py` runs `setup --fix`; `python install.py --check` runs `setup` (report only, needs an existing `.venv`). See [Weights](WEIGHTS.md#consent) |
 | `inventory` | Discovered files and roles. `--json` |
 | `workflows` | Default catalog. `--vram` prints the pack table. `--json` |
-| `health` | Comfy `:8188` and GPU stats |
+| `health` | Comfy `:8188`, GPU stats, and a one-line shift budget (`budget: used / cap VRAM-min used, remaining; paused runs`). `doctor` shows the same line as its `budget` row. See [Architecture](ARCHITECTURE.md) |
 | `capabilities` | Pack vs wiring. `--offline` uses the cache. `--json` |
 | `diagnose` | 9-frame hull, then `sec/step`. `--prepare` lints only. Does not spend shift budget |
 | `budget status` / `budget reset-shift` | VRAM-minute ledger. Reset archives history |

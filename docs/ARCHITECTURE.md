@@ -98,6 +98,14 @@ ChromaDB at `video_buddy/state/chroma/` (gitignored) holds `workflows`, `runs`, 
 
 Shift budget is about 80 VRAM-minutes. Over cap, the queue HOLDs and the run reports `paused`, not `error`. Diagnose and dry-run do not increment `used`.
 
+`health`, `agent health` (`budget` key), and `doctor` (`budget` row) print one read-only line from the ledger (`state/control/budget.json`):
+
+```text
+budget: 34.2 / 80.0 VRAM-min used, 45.8 remaining; paused runs: 2 (run_ab12, run_cd34)
+```
+
+The current shift is the ledger's `shift_id`: `used` counts since `shift_started_at`, and `budget reset-shift` starts a new one. Paused runs are run ids whose newest `*_pipeline.json` is `paused`, the same set `reset-shift` continues. `(HOLD)` follows `remaining` while the queue is held. A missing or empty ledger reads as 0 used. The JSON has `used`, `cap`, `remaining`, `paused`, `paused_run_ids`, `shift_id`, `shift_started_at`, `ledger` (`ok` / `missing` / `empty` / `unreadable`), and `line`.
+
 ## One gateway
 
 The **LTX bot gateway** is the only agent entry point. It loads the
