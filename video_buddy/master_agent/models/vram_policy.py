@@ -18,7 +18,7 @@ preference in this module stays GGUF-first when a GGUF file is on disk.
 from __future__ import annotations
 
 from dataclasses import asdict, dataclass
-from typing import Iterable
+from typing import Callable, Iterable
 
 TARGET_GPU = "NVIDIA RTX 5060 Ti"
 TARGET_VRAM_GB = 16.0
@@ -1011,13 +1011,58 @@ def hardware_route(
     )
 
 
-def format_doctor_line() -> str:
+@dataclass(frozen=True)
+class CudaMemProbe:
+    free_gb: float
+    total_gb: float
+
+
+def probe_cuda_mem() -> CudaMemProbe | None:
+    """``torch.cuda.mem_get_info()`` on the current device, in GiB like ``VRAM_GB``.
+
+    None when torch is missing, CUDA is unavailable, or the call fails.
+    """
+    try:
+        import torch
+
+        if not torch.cuda.is_available():
+            return None
+        free, total = torch.cuda.mem_get_info()
+    except Exception:
+        return None
+    if total <= 0:
+        return None
+    return CudaMemProbe(free_gb=round(free / 2**30, 1), total_gb=round(total / 2**30, 1))
+
+
+def doctor_vram_gb(
+    declared_gb: float | None = None,
+    *,
+    probe: Callable[[], CudaMemProbe | None] | None = None,
+) -> tuple[float, CudaMemProbe | None]:
+    """VRAM doctor uses to decide whether NVFP4 / bf16 may be suggested.
+
+    Safety net only: the lower of the declared ``VRAM_GB`` and the free
+    memory CUDA reports right now. ``preference_order`` and the loaders keep
+    the declared value. No probe result means the declared value stands.
+    """
+    from master_agent.config import VRAM_GB
+
+    declared = float(VRAM_GB if declared_gb is None else declared_gb)
+    result = (probe or probe_cuda_mem)()
+    if result is None:
+        return declared, None
+    return min(declared, result.free_gb), result
+
+
+def format_doctor_line(*, probe: Callable[[], CudaMemProbe | None] | None = None) -> str:
     """Doctor row: detected VRAM, loader pick, and the 16GB policy card."""
     from master_agent.config import FORCE_LOADER, VRAM_GB, VRAM_SOURCE
 
     gb = float(VRAM_GB)
+    usable, mem = doctor_vram_gb(gb, probe=probe)
     force = (FORCE_LOADER or "").strip().lower()
-    avoid_heavy = force == "gguf" or gb < NVFP4_MIN_VRAM_GB
+    avoid_heavy = force == "gguf" or usable < NVFP4_MIN_VRAM_GB
     if avoid_heavy:
         ladder = "GGUF when a compatible file is on disk (NVFP4 and bf16 are not suggested"
         if force == "gguf":
@@ -1032,8 +1077,16 @@ def format_doctor_line() -> str:
     hint = ""
     if source == "default":
         hint = " Set VRAM_GB=12 and FORCE_LOADER=gguf on a 12GB card (RTX 4000 Ada)."
+    probe_note = ""
+    if mem is not None:
+        probe_note = f" CUDA probe: {mem.free_gb:.1f}GB free of {mem.total_gb:.1f}GB."
+        if gb >= NVFP4_MIN_VRAM_GB and usable < NVFP4_MIN_VRAM_GB and force != "gguf":
+            probe_note += (
+                f" Free VRAM is under {NVFP4_MIN_VRAM_GB:.0f}GB (shared or misreported card),"
+                " so doctor holds NVFP4/bf16 back."
+            )
     return (
-        f"VRAM {gb:.1f}GB via {source}. {ladder}. "
+        f"VRAM {gb:.1f}GB via {source}.{probe_note} {ladder}. "
         f"Policy card {TARGET_GPU} {TARGET_VRAM_GB:.0f}GB. "
         f"Peak headroom ~{PEAK_HEADROOM_GB[0]:.0f}–{PEAK_HEADROOM_GB[1]:.0f}GB."
         f"{hint} See `python -m master_agent workflows --vram`."

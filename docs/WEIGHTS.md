@@ -109,8 +109,10 @@ Any one transformer name fills the slot. Official bf16 Gemma is not required whe
 
 | Slot | Also counts |
 |---|---|
-| LTX 2.5 transformer | `ltx-2.5-22b-distilled-transformer-bf16-Q4_K_M.gguf`, NVFP4, `comfy-int8-convrot`, research stub `ltx-2.5-22b-distilled.safetensors`, official bf16 |
-| LTX 2.5 text encoder | `gemma4-12b-heretic-ltx25-int8convrot.safetensors`, Comfy int8, other `*heretic*` Gemma, official `gemma4-12b-with-proj-ltx-2.5-bf16.safetensors` |
+| LTX 2.5 transformer | `ltx-2.5-22b-distilled-transformer-bf16-Q4_K_M.gguf` (download target: `Abiray/LTX-2.5-Distilled-GGUF` `LTX-2.5-Distilled-Q4_K_M.gguf`, ~15.7 GB, public), NVFP4, `comfy-int8-convrot`, research stub `ltx-2.5-22b-distilled.safetensors`, official bf16 |
+| LTX 2.5 text encoder | `gemma4-12b-with-proj-ltx-2.5-Q4_K_M.gguf`, `gemma4-12b-with-proj-ltx-2.5-Q2_K.gguf` (download target: `elix3r/gemma4-12b-with-proj-ltx-2.5-GGUF`, ~6.0 GB, auto-approve gated), `gemma4-12b-heretic-ltx25-int8convrot.safetensors`, Comfy int8, other `*heretic*` Gemma, official `gemma4-12b-with-proj-ltx-2.5-bf16.safetensors` |
+
+A GGUF Gemma TE loads through `CLIPLoaderGGUF` (type `ltxv`). Stock ComfyUI-GGUF rejects `general.architecture=gemma4`. Apply the repo's `patches/ComfyUI-GGUF-ltx25-gemma4.patch` (sha256 `1c36aa38…958e`) and restart Comfy. Buddy does not patch custom nodes.
 | LTX 2.5 video VAE | `ltx-2.5-video-vae-bf16.safetensors`, `ltx-2.5-video-vae-conv-bf16.safetensors` |
 | LTX 2.5 audio VAE | `ltx-2.5-audio-vae-bf16.safetensors` |
 | Duration head | `ltx-2.5-duration-head-bf16.safetensors` (optional) |
