@@ -5,7 +5,9 @@ first, then prints the plan. Nothing changes without ``--yes``.
 
 With ``--yes`` it installs, in order: ffmpeg, comfy-cli at the
 requirements.txt pin, ComfyUI into its own folder (``MANAGED_COMFY_ROOT`` or
-``PROJECT_ROOT/ComfyUI``), the custom nodes the LTX 2.3 graphs need, Triton +
+``PROJECT_ROOT/ComfyUI``), the custom nodes the LTX 2.3 graphs need,
+``comfy-requirements.txt`` (gguf, colour) into the Comfy venv, ComfyUI-Manager's
+channel (``config.ini`` / ``channels.list``, see ``comfy/manager_config.py``), Triton +
 SageAttention inside the Comfy venv (optional), the LTX 2.3 weights into
 ``MODELS_DIR``, then llama.cpp into ``LLAMACPP_ROOT`` (optional). LTX 2.3 is
 the only video model this command installs. Weights are never written into
@@ -826,6 +828,52 @@ def step_nodes(apply: bool, *, workspace: Path) -> StepResult:
     return StepResult("custom nodes", OK, "installed " + ", ".join(missing))
 
 
+COMFY_REQUIREMENTS = Path(__file__).resolve().parent.parent / "comfy-requirements.txt"
+COMFY_PACKAGES = ("gguf", "colour")
+
+
+def step_comfy_packages(apply: bool, *, workspace: Path) -> StepResult:
+    """``pip install --upgrade`` comfy-requirements.txt (gguf, colour) into ComfyUI's own interpreter."""
+    from master_agent.comfy.layout import PORTABLE_PYTHON_FLAGS, PORTABLE, comfy_interpreter, detect_layout
+
+    name = "Comfy Python packages"
+    label = ", ".join(COMFY_PACKAGES)
+    if comfy_install_state(workspace) != "installed":
+        if not apply:
+            return StepResult(name, PLANNED, f"after ComfyUI: pip install --upgrade {label} into the Comfy venv", required=False)
+        return StepResult(name, NONFATAL, f"waits for ComfyUI ({label} not installed)", required=False)
+    py = comfy_interpreter(workspace)
+    if py is None:
+        return StepResult(name, NONFATAL, f"no Comfy interpreter found; {label} not installed", required=False)
+    layout = detect_layout(workspace)
+    flags = list(PORTABLE_PYTHON_FLAGS) if layout is not None and layout.kind == PORTABLE else []
+    cmd = [str(py), *flags, "-m", "pip", "install", "--upgrade", "-r", str(COMFY_REQUIREMENTS)]
+    if not apply:
+        return StepResult(name, PLANNED, " ".join(cmd), required=False)
+    print("$ " + " ".join(cmd))
+    code, out = _run(cmd, timeout=900)
+    if code != 0:
+        return StepResult(name, NONFATAL, f"pip failed: {out[-300:]}", required=False)
+    return StepResult(name, OK, f"{label} installed/upgraded in {py}", required=False)
+
+
+def step_manager_config(apply: bool, *, workspace: Path) -> StepResult:
+    """Point ComfyUI-Manager at the working channel; repair a config.ini that has the broken one."""
+    from master_agent.comfy.layout import code_dir_for
+    from master_agent.comfy.manager_config import CHANNEL_URL, ensure_manager_config
+
+    name = "ComfyUI-Manager channel"
+    if comfy_install_state(workspace) != "installed":
+        if not apply:
+            return StepResult(name, PLANNED, f"after ComfyUI: channel_url = {CHANNEL_URL}", required=False)
+        return StepResult(name, NONFATAL, "waits for ComfyUI", required=False)
+    report = ensure_manager_config(code_dir_for(workspace), apply=apply)
+    if not report.changed:
+        return StepResult(name, SKIPPED, f"already on {CHANNEL_URL}", required=False)
+    status = OK if apply else PLANNED
+    return StepResult(name, status, f"channel_url = {CHANNEL_URL}", required=False, lines=report.lines())
+
+
 def step_accel(apply: bool, *, workspace: Path, gpu: dict[str, Any], skip: bool) -> StepResult:
     from master_agent.comfy.comfy_venv import install_accel
 
@@ -961,6 +1009,8 @@ def cmd_automatic_install(args: Any) -> int:
         ("model folders", True, lambda: step_model_folders(apply)),
         ("model paths", True, lambda: step_model_paths(apply)),
         ("custom nodes", True, lambda: step_nodes(apply, workspace=workspace)),
+        ("Comfy Python packages", False, lambda: step_comfy_packages(apply, workspace=workspace)),
+        ("ComfyUI-Manager channel", False, lambda: step_manager_config(apply, workspace=workspace)),
         ("Triton + SageAttention", False, lambda: step_accel(apply, workspace=workspace, gpu=pf.gpu, skip=skip_sage)),
         ("LTX 2.3 weights", True, lambda: step_weights(apply, skip=skip_weights)),
         ("llama.cpp", False, lambda: step_llamacpp(apply, plan=pf.llama, skip=skip_llm)),

@@ -1,0 +1,6 @@
+# Installed into ComfyUI's own interpreter (its .venv, or a portable build's
+# python_embeded), not Buddy's .venv. automatic-install runs
+# `<comfy python> -m pip install --upgrade -r comfy-requirements.txt`.
+# gguf: ComfyUI-GGUF loaders (UnetLoaderGGUF / CLIPLoaderGGUF).
+gguf
+colour
