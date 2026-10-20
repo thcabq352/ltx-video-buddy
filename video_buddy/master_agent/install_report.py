@@ -51,6 +51,8 @@ STEP_REASONS: dict[str, str] = {
     ".env": "Buddy runs on its built-in defaults without .env",
     "Playwright Chromium": "only the web scraper uses Chromium; video generation does not",
     "Triton + SageAttention": "ComfyUI runs without them, just slower",
+    "Comfy Python packages": "ComfyUI-GGUF's own requirements also pull gguf; re-run automatic-install --yes to retry",
+    "ComfyUI-Manager channel": "only ComfyUI-Manager's node browser uses the channel; rendering does not",
     "llama.cpp": "Buddy renders video without a local LLM; the brief / judge LLM stays off",
     "LLM models": "no public GGUF source is defined; video generation does not need them",
     "LTX 2.3 weights": "you deferred them with --skip-weights; only generate needs them",

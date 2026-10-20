@@ -102,7 +102,7 @@ Agents use the agent tools `comfy_status`, `comfy_start` and `comfy_restart` (`p
 
 Once the workspace venv (or a portable's `python_embeded`) exists, ComfyUI and comfy-cli run with `VIRTUAL_ENV` and `CONDA_PREFIX` removed, so Buddy's activated venv is not used for Comfy.
 
-Start, stop, status, and restart do not run `comfy install` or `comfy update`. Installing is the job of [automatic install](GETTING_STARTED.md#automatic-install), which runs `comfy --workspace=<root> --where local --skip-prompt install <gpu flag>` (`--nvidia`, `--amd`, `--m-series`, or `--cpu`; `--restore` added to repair a half-finished install), then `comfy … node install ComfyUI-LTXVideo ComfyUI-GGUF`. It refuses `COMFY_MODE=external`. `--no-watch` skips the crash-restart watchdog. `--no-wait` returns about 3 s after launch, before `/system_stats` is ready (a crash in those seconds is still reported). If `:8188` is already bound, do not kill a running render. Attach or wait.
+Start, stop, status, and restart do not run `comfy install` or `comfy update`. Installing is the job of [automatic install](GETTING_STARTED.md#automatic-install), which runs `comfy --workspace=<root> --where local --skip-prompt install <gpu flag>` (`--nvidia`, `--amd`, `--m-series`, or `--cpu`; `--restore` added to repair a half-finished install), then `comfy … node install ComfyUI-LTXVideo ComfyUI-GGUF`, then the [Comfy Python packages](#comfy-python-packages) and the [ComfyUI-Manager channel](#comfyui-manager-channel). It refuses `COMFY_MODE=external`. `--no-watch` skips the crash-restart watchdog. `--no-wait` returns about 3 s after launch, before `/system_stats` is ready (a crash in those seconds is still reported). If `:8188` is already bound, do not kill a running render. Attach or wait.
 
 `comfy update` only reports stale packs until `--yes`. `COMFY_MODE=external` refuses core and node updates. `--cli --yes` pip-installs the pin in `requirements.txt` (`comfy-cli==1.20.0`). It does not float to latest. Before a core or node update, Buddy saves `state/comfy_snapshots/pre-update-….json` via `comfy node save-snapshot`. That snapshot is not a weight rollback. Keep/wipe of LTX packs is `models select`, not this snapshot.
 
@@ -117,6 +117,21 @@ Automatic install puts both into the Comfy venv, never Buddy's `.venv` or the sy
 | macOS, CPU-only, AMD, non-CUDA torch, other CPUs | skipped | skipped |
 
 After each install Buddy runs `import triton` / `import sageattention` in the Comfy Python. Every failure is `FAILED-NONFATAL` with a plain message, for example "No Triton build could be installed for Python 3.12 / CUDA 12.8 on this machine; continuing without Sage Attention. Comfy will run, just slower." A failed Triton skips SageAttention. Already-installed packages are skipped. `--skip-sage` skips the step.
+
+## Comfy Python packages
+
+Automatic install runs `<comfy-python> -m pip install --upgrade -r video_buddy/comfy-requirements.txt` (`gguf`, `colour`) in the Comfy venv, or in `python_embeded` with `-s` for a portable build. A pip failure is `FAILED-NONFATAL`; run `automatic-install --yes` again to retry.
+
+## ComfyUI-Manager channel
+
+`comfy install` adds ComfyUI-Manager, and Manager writes its own `config.ini` with `channel_url = https://raw.githubusercontent.com/ltdrdata/ComfyUI-Manager/main`. Current Manager builds reject that and log `[InvalidChannel]` on every start ([Comfy-Org/ComfyUI-Manager#2709](https://github.com/Comfy-Org/ComfyUI-Manager/issues/2709), [#2561](https://github.com/Comfy-Org/ComfyUI-Manager/issues/2561)).
+
+Automatic install points Manager at `https://raw.githubusercontent.com/Comfy-Org/ComfyUI-Manager/main` (note the hyphen: `ComfyOrg` without it is a 404). Manager only accepts a `channel_url` listed in its `channels.list`, so both files are written, in `ComfyUI/user/__manager/` (or `ComfyUI/user/default/ComfyUI-Manager/` on older ComfyUI):
+
+- `config.ini`: `[default] channel_url = <Comfy-Org URL>`. An existing file is edited in place: only an `ltdrdata` (or `ComfyOrg`) `channel_url` is replaced, or a missing one added. Every other key is kept, and a `channel_url` you set to another URL is left alone.
+- `channels.list`: `default::<Comfy-Org URL>`, so the UI shows the `default` channel selected. Other channels are kept.
+
+Manager has no `channel` or `auto-updates` key in `config.ini`, so Buddy writes neither. Running automatic install again changes nothing once the files are fixed; on an existing ComfyUI it repairs them without reinstalling.
 
 ## Attach contract
 
