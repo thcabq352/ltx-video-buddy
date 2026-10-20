@@ -1039,6 +1039,15 @@ def _latest_pipeline_records() -> dict[str, dict[str, Any]]:
     return {run_id: row for run_id, (_mtime, row) in newest.items()}
 
 
+def paused_run_ids() -> list[str]:
+    """Run ids whose newest pipeline record is still ``paused`` (lipdub included)."""
+    return sorted(
+        run_id
+        for run_id, record in _latest_pipeline_records().items()
+        if record.get("status") == "paused"
+    )
+
+
 def continue_budget_paused(
     record: dict[str, Any],
     client: Optional[ComfyClient] = None,

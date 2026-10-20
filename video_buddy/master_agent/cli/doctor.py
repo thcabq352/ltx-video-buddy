@@ -34,6 +34,12 @@ def cmd_inventory(args: argparse.Namespace) -> int:
     return 0
 
 
+def _print_budget_line() -> None:
+    from master_agent.control.budget import format_shift_summary, shift_summary
+
+    print(f"      {format_shift_summary(shift_summary())}")
+
+
 def cmd_health(args: argparse.Namespace) -> int:
     from master_agent.llm import format_local_llm_health
 
@@ -45,6 +51,7 @@ def cmd_health(args: argparse.Namespace) -> int:
         print(f"FAIL  {e}")
         rc = 1
         print(format_local_llm_health(), end="")
+        _print_budget_line()
         return rc
     system = stats.get("system") or {}
     devices = stats.get("devices") or []
@@ -56,6 +63,7 @@ def cmd_health(args: argparse.Namespace) -> int:
         vram_free = (dev.get("vram_free") or 0) / 1e9
         print(f"      gpu={name} vram={vram_free:.1f}G free / {vram_total:.1f}G")
     print(format_local_llm_health(), end="")
+    _print_budget_line()
     return rc
 
 

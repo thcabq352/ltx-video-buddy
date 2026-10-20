@@ -160,8 +160,14 @@ def comfy_restart(wait: bool = True, timeout_s: float = COMFY_READY_TIMEOUT_S, a
 
 
 def health() -> dict:
-    """ComfyUI reachability + GPU VRAM, local LLM (llama.cpp, Ollama), opt-in Grok credentials (read-only), KB counts."""
+    """ComfyUI reachability + GPU VRAM, local LLM (llama.cpp, Ollama), opt-in Grok credentials (read-only), KB counts.
+
+    ``budget`` is the current shift read from the ledger: ``used`` / ``cap`` /
+    ``remaining`` VRAM-min, ``paused`` (HOLD), ``paused_run_ids``, and ``line``
+    (the one-line text form). A HOLD is not an error.
+    """
     from master_agent.comfy.client import ComfyClient
+    from master_agent.control.budget import format_shift_summary, shift_summary
     from master_agent.control.versioned_config import get_versioned_config
     from master_agent.kb.store import (
         COLLECTION_KNOWLEDGE,
@@ -207,6 +213,8 @@ def health() -> dict:
         "runs": collection_count(COLLECTION_RUNS),
         "knowledge": collection_count(COLLECTION_KNOWLEDGE),
     }
+    budget = shift_summary()
+    out["budget"] = {**budget, "line": format_shift_summary(budget)}
     return out
 
 

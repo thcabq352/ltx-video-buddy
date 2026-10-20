@@ -550,6 +550,14 @@ def check_pack_pins() -> dict[str, Any]:
     )
 
 
+def check_budget() -> dict[str, Any]:
+    """Shift budget, read-only. A HOLD is ``paused``, never a doctor failure."""
+    from master_agent.control.budget import format_shift_summary, shift_summary
+
+    line = format_shift_summary(shift_summary())
+    return _row("budget", True, line.removeprefix("budget: "))
+
+
 def snapshot() -> list[dict[str, Any]]:
     return [
         check_python(),
@@ -573,6 +581,7 @@ def snapshot() -> list[dict[str, Any]]:
         check_dev_fp8_trailer(),
         check_h3_weights(),
         *heartmula_rows(),
+        check_budget(),
     ]
 
 

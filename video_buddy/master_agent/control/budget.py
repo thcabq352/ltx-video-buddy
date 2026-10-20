@@ -25,6 +25,12 @@ def _now() -> str:
     return datetime.now(timezone.utc).isoformat(timespec="seconds")
 
 
+def default_ledger_path() -> Path:
+    from master_agent.config import STATE_DIR
+
+    return STATE_DIR / "control" / "budget.json"
+
+
 class RenderBudget:
     """Track cap + running total. Holding a scene pauses the rest of the queue."""
 
@@ -39,10 +45,9 @@ class RenderBudget:
         from master_agent.config import (
             RENDER_BUDGET_CAP_VRAM_MIN,
             RENDER_BUDGET_USED_VRAM_MIN,
-            STATE_DIR,
         )
 
-        self.path = None if ephemeral else (Path(path) if path else STATE_DIR / "control" / "budget.json")
+        self.path = None if ephemeral else (Path(path) if path else default_ledger_path())
         self.cap = float(RENDER_BUDGET_CAP_VRAM_MIN)
         self.used = float(RENDER_BUDGET_USED_VRAM_MIN)
         self.paused = False
@@ -283,6 +288,77 @@ def get_project_budget(*, path: Path | None = None, reset: bool = False) -> Rend
     if reset or _BUDGET is None:
         _BUDGET = RenderBudget(path=path)
     return _BUDGET
+
+
+_SUMMARY_MAX_RUN_IDS = 5
+
+
+def shift_summary(path: Path | None = None) -> dict[str, Any]:
+    """Read-only budget view for health and doctor.
+
+    The current shift is the ledger's ``shift_id`` window: ``used`` is the
+    running total since ``shift_started_at`` and ``reset_shift`` / ``reset_used``
+    zero it. Paused runs are the run ids whose newest pipeline record is
+    ``paused`` (what ``budget reset-shift`` would continue). Never writes or
+    quarantines the ledger; a missing or empty file reads as nothing used.
+    """
+    from master_agent.config import RENDER_BUDGET_CAP_VRAM_MIN, RENDER_BUDGET_USED_VRAM_MIN
+
+    ledger_path = Path(path) if path else default_ledger_path()
+    data: dict[str, Any] = {}
+    ledger = "missing"
+    try:
+        text = ledger_path.read_text(encoding="utf-8") if ledger_path.is_file() else None
+    except OSError:
+        text, ledger = None, "unreadable"
+    if text is not None and not text.strip():
+        ledger = "empty"
+    elif text is not None:
+        try:
+            parsed = json.loads(text)
+        except ValueError:
+            parsed = None
+        if isinstance(parsed, dict):
+            data, ledger = parsed, "ok"
+        else:
+            ledger = "unreadable"
+    try:
+        cap = float(data.get("cap", RENDER_BUDGET_CAP_VRAM_MIN))
+        used = float(data.get("used", RENDER_BUDGET_USED_VRAM_MIN))
+    except (TypeError, ValueError):
+        cap, used, ledger = float(RENDER_BUDGET_CAP_VRAM_MIN), float(RENDER_BUDGET_USED_VRAM_MIN), "unreadable"
+    try:
+        from master_agent.orchestrator.pipeline import paused_run_ids
+
+        run_ids = paused_run_ids()
+    except Exception:
+        run_ids = []
+    return {
+        "used": round(used, 4),
+        "cap": round(cap, 4),
+        "remaining": round(max(0.0, cap - used), 4),
+        # An unreadable ledger holds the queue (see RenderBudget._quarantine_unreadable).
+        "paused": bool(data.get("paused")) or ledger == "unreadable",
+        "paused_run_ids": run_ids,
+        "shift_id": data.get("shift_id"),
+        "shift_started_at": data.get("shift_started_at"),
+        "ledger": ledger,
+    }
+
+
+def format_shift_summary(summary: dict[str, Any]) -> str:
+    """One line: ``budget: 34.2 / 80.0 VRAM-min used, 45.8 remaining; paused runs: 2 (a, b)``."""
+    ids = list(summary.get("paused_run_ids") or [])
+    shown = ", ".join(ids[:_SUMMARY_MAX_RUN_IDS])
+    if len(ids) > _SUMMARY_MAX_RUN_IDS:
+        shown += f", +{len(ids) - _SUMMARY_MAX_RUN_IDS} more"
+    runs = f"paused runs: {len(ids)}" + (f" ({shown})" if ids else "")
+    hold = " (HOLD)" if summary.get("paused") else ""
+    note = "; ledger unreadable" if summary.get("ledger") == "unreadable" else ""
+    return (
+        f"budget: {summary['used']:.1f} / {summary['cap']:.1f} VRAM-min used, "
+        f"{summary['remaining']:.1f} remaining{hold}; {runs}{note}"
+    )
 
 
 def frames_for_scene(duration_s: float, variant: str | None = None) -> int:
