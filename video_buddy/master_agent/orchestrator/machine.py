@@ -109,10 +109,14 @@ class Orchestrator:
                 spoken_line=st.spoken_line or None,
                 frames=st.frames,
                 i2v_strength=st.i2v_strength,
+                lightx2v=st.lightx2v,
+                lightx2v_strength=st.lightx2v_strength,
             )
         except Exception as e:
             st.fail(f"patch failed: {e}")
             return False
+        if meta.get("lightx2v"):
+            st.log(meta["lightx2v"]["message"])
         if (st.variant or "") in ("ltx23_inoutpaint", "ltx25_inoutpaint"):
             st.width = int(meta.get("width") or st.width)
             st.height = int(meta.get("height") or st.height)
@@ -442,6 +446,8 @@ class Orchestrator:
         duration_cap_s: Optional[float] = None,
         max_piece_s: Optional[float] = None,
         downscale_level: int = 0,
+        lightx2v: Optional[bool] = None,
+        lightx2v_strength: Optional[float] = None,
     ) -> RunState:
         run_id = uuid.uuid4().hex[:12]
         st = RunState(
@@ -494,6 +500,10 @@ class Orchestrator:
                 float(duration_cap_s) if duration_cap_s is not None else None
             ),
             max_piece_s=float(max_piece_s) if max_piece_s is not None else None,
+            lightx2v=lightx2v,
+            lightx2v_strength=(
+                float(lightx2v_strength) if lightx2v_strength is not None else None
+            ),
         )
         st.downscale_level = max(0, int(downscale_level))
         from master_agent.comfy.partner_pointers import PartnerPointerError

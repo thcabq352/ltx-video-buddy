@@ -285,6 +285,16 @@ def build_clip_provenance(
             "method": sample.get("method"),
             "trimmed": bool(sample.get("trimmed")),
         }
+    lightx2v = (getattr(st, "workflow_meta", None) or {}).get("lightx2v")
+    if isinstance(lightx2v, dict):
+        payload["params"]["lightx2v"] = {
+            "enabled": bool(lightx2v.get("enabled")),
+            "requested": getattr(st, "lightx2v", None),
+            "strength": lightx2v.get("strength"),
+            "lora": lightx2v.get("lora"),
+            "action": lightx2v.get("action"),
+            "reason": lightx2v.get("reason") or "",
+        }
     heart = getattr(st, "heartmula", None) or {}
     if isinstance(heart, dict) and (
         heart.get("lyrics")
@@ -417,6 +427,11 @@ def apply_sidecar_to_state(st: Any, payload: dict[str, Any]) -> None:
             st.width = int(size["width"])
         if size.get("height"):
             st.height = int(size["height"])
+    lightx2v = params.get("lightx2v")
+    if isinstance(lightx2v, dict) and lightx2v.get("requested") is not None:
+        st.lightx2v = bool(lightx2v["requested"])
+        if lightx2v.get("strength") is not None:
+            st.lightx2v_strength = float(lightx2v["strength"])
     lineage = payload.get("lineage") if isinstance(payload.get("lineage"), dict) else {}
     st.parent_shot_id = lineage.get("shot_id") or getattr(st, "parent_shot_id", "") or ""
     st.parent_attempt_id = lineage.get("attempt_id") or getattr(st, "parent_attempt_id", "") or ""

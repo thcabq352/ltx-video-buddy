@@ -7,7 +7,7 @@ import json
 from pathlib import Path
 
 from master_agent.cli.runtime import comfy_client
-from master_agent.cli.common import _inoutpaint_plan, _reframe_flag, _music_intent, _maybe_interview
+from master_agent.cli.common import _inoutpaint_plan, _lightx2v_flag, _reframe_flag, _music_intent, _maybe_interview
 
 def cmd_run(args: argparse.Namespace) -> int:
     from master_agent.config import (
@@ -357,6 +357,8 @@ def cmd_run(args: argparse.Namespace) -> int:
             inoutpaint=inoutpaint,
             latent_frames=getattr(args, "frames", None),
             negative_prompt=getattr(args, "negative_prompt", None),
+            lightx2v=_lightx2v_flag(args),
+            lightx2v_strength=getattr(args, "lightx2v_strength", None),
         )
 
     if not client.is_up():
@@ -475,6 +477,8 @@ def cmd_run(args: argparse.Namespace) -> int:
         inoutpaint=inoutpaint,
         latent_frames=getattr(args, "frames", None),
         negative_prompt=getattr(args, "negative_prompt", None),
+        lightx2v=_lightx2v_flag(args),
+        lightx2v_strength=getattr(args, "lightx2v_strength", None),
     )
     print()
     if result.status in ("done", "done_with_warnings"):

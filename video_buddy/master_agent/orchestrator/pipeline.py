@@ -462,6 +462,8 @@ def run_pipeline(
     resume: Optional[dict[str, Any]] = None,
     latent_frames: Optional[int] = None,
     negative_prompt: Optional[str] = None,
+    lightx2v: Optional[bool] = None,
+    lightx2v_strength: Optional[float] = None,
 ) -> PipelineResult:
     stored_id = ""
     if isinstance(resume, dict):
@@ -667,6 +669,8 @@ def run_pipeline(
             "power_mode": power_mode,
             "dry_run": bool(dry_run),
             "kind": kind,
+            "lightx2v": lightx2v,
+            "lightx2v_strength": lightx2v_strength,
             "start_index": int(index),
             "segment_paths": list(result.segment_paths),
             "segment_scores": list(result.segment_scores),
@@ -727,6 +731,8 @@ def run_pipeline(
             music_bed_attached=music_bed_attached,
             shot_index=1,
             inoutpaint=inoutpaint,
+            lightx2v=lightx2v,
+            lightx2v_strength=lightx2v_strength,
         )
         result.messages.extend(st.messages)
         result.status = "done" if st.state == "DONE" else "error"
@@ -848,6 +854,8 @@ def run_pipeline(
             music_bed_attached=music_bed_attached,
             shot_index=i + 1,
             inoutpaint=inoutpaint,
+            lightx2v=lightx2v,
+            lightx2v_strength=lightx2v_strength,
         )
 
     # Per-segment generation (budget can pause the remaining queue)
@@ -990,6 +998,8 @@ _RESUME_KEYS = (
     "power_mode",
     "dry_run",
     "kind",
+    "lightx2v",
+    "lightx2v_strength",
 )
 
 
@@ -1169,6 +1179,8 @@ def dry_run_pipeline(
     heartmula: Optional[dict[str, Any]] = None,
     latent_frames: Optional[int] = None,
     negative_prompt: Optional[str] = None,
+    lightx2v: Optional[bool] = None,
+    lightx2v_strength: Optional[float] = None,
 ) -> int:
     """Storyboard + patch + validate every segment without queueing. CLI exit code."""
     if heartmula:
@@ -1396,11 +1408,15 @@ def dry_run_pipeline(
                 i2v_strength=clip_i2v,
                 frames=latent_frames,
                 inoutpaint=inoutpaint,
+                lightx2v=lightx2v,
+                lightx2v_strength=lightx2v_strength,
             )
         except Exception as e:
             print(f"FAIL  segment {i + 1} patch: {e}")
             failures += 1
             continue
+        if meta.get("lightx2v"):
+            print(f"INFO  segment {i + 1} {meta['lightx2v']['message']}")
         patched_frames = meta.get("frames")
         print(
             f"segment {i + 1}/{len(cards)} duration={segs[i]}s frames={patched_frames} "

@@ -9,7 +9,7 @@ from pathlib import Path
 from master_agent.cli.runtime import comfy_client
 from master_agent.comfy.validator import format_report, validate_workflow_file
 from master_agent.config import WORKFLOWS_DIR
-from master_agent.cli.common import _inoutpaint_plan, _parse_override_flags
+from master_agent.cli.common import _inoutpaint_plan, _lightx2v_flag, _parse_override_flags
 
 def cmd_fetch_object_info(args: argparse.Namespace) -> int:
     client = comfy_client()
@@ -414,6 +414,8 @@ def cmd_comfy(args: argparse.Namespace) -> int:
             prompt=args.prompt,
             overrides=overrides,
             vae=getattr(args, "vae", None),
+            lightx2v=_lightx2v_flag(args),
+            lightx2v_strength=getattr(args, "lightx2v_strength", None),
             **gen_extra,
         )
         if getattr(args, "mode", "generate") == "generate" and not getattr(args, "prepare", False):
