@@ -79,7 +79,7 @@ When several transformers for one slot are already on disk, any VRAM:
 2. Else **NVFP4**, only if `VRAM_GB` ≥ 14.
 3. Else **int8 / fp8**, then official bf16 or the EROS all-in-one.
 
-`VRAM_GB` comes from the environment, else `nvidia-smi`, else 16. Below 14GB, doctor does not suggest NVFP4 or bf16. A heavy file that is already on disk still counts as present, so Buddy does not download a second copy. Leave `FORCE_LOADER` empty when the only local transformer is bf16 or EROS. Those files still load.
+`VRAM_GB` comes from the environment, else `nvidia-smi`, else 16. Below 14GB, doctor does not suggest NVFP4 or bf16. Doctor also asks `torch.cuda.mem_get_info()` for free VRAM when torch and CUDA are available, and uses the lower of that and `VRAM_GB` for this check, so a shared or misreported card is not told to load bf16. If the probe fails, the declared value stands. The loader order itself never probes. A heavy file that is already on disk still counts as present, so Buddy does not download a second copy. Leave `FORCE_LOADER` empty when the only local transformer is bf16 or EROS. Those files still load.
 
 Research JSON may still say `ckpt_name: ltx-2.5-22b-distilled.safetensors` on `CheckpointLoaderSimple`. Buddy remaps that stub to `UNETLoader` / `UnetLoaderGGUF` and `LTXAVTextEncoderLoader`.
 

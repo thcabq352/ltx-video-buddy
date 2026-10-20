@@ -624,6 +624,40 @@ vb_aivfx_startimage:
       index: 0
       input: seed
 
+flux_ltx_i2v:
+  file: flux_ltx_i2v_api.json
+  format: api
+  description: Flux.1-dev GGUF still → LTX 2.5 i2v 25-frame motion pass with audio (one shared prompt)
+  vram_class: tight
+  vram_peak_gb: 13.5
+  safer_alternate: ltx25_t2v_i2v
+  requires: [ComfyUI-GGUF/gguf, ComfyUI-LTXVideo, VideoHelperSuite]
+  # Handoff: the Flux VAEDecode IMAGE (9108) feeds the ltx25_t2v_i2v resize
+  # node (5014:4990) in place of LoadImage 2004, and SaveImage (9109) writes
+  # the same still as output/flux_ltx_i2v_still_*.png. One Comfy prompt cannot
+  # LoadImage a file it saves itself, so the link is the handoff and the PNG is
+  # the record. Pass that PNG to ltx25_t2v_i2v with --image to rerun motion
+  # on the identical still. Use image (5014:5506) is forced on.
+  # Shared-prompt trick: 5508 is the one aesthetic line. Flux encodes it
+  # verbatim (9104). LTX gets the same line plus the motion line 9001 through
+  # StringConcatenate 9002. The first frame and the LTX conditioning describe
+  # the same look, which stops the first-frame morph. Put look, light, lens and
+  # subject in the prompt. Put motion only in 9001. Seed (9010) and
+  # width/height (9011/9012) are shared too, so the still is the LTX latent size.
+  # Duration 1.0 s at 24 fps → 1 + floor(24*1/8)*8 = 25 frames.
+  fields:
+    prompt: { node_id: "5508", input: value }
+    negative_prompt: { node_id: "5509", input: value }
+    seed: { node_id: "9010", input: value }
+    width: { node_id: "9011", input: value }
+    height: { node_id: "9012", input: value }
+    filename_prefix: { class_type: SaveVideo, index: 0, input: filename_prefix }
+    # Locked: the motion line, the Flux sampler steps and the still prefix are
+    # authored for this graph. The run prompt and the LTX step count stay off them.
+    motion_prompt: { node_id: "9001", input: value, overwrite: false }
+    flux_steps: { node_id: "9107", input: steps, overwrite: false }
+    still_prefix: { node_id: "9109", input: filename_prefix, overwrite: false }
+
 vb_aivfx_preprocess:
   file: 260330_VIDEO-BUDDY_AI-VFX_PREPROCESS_1-0_api.json
   format: api

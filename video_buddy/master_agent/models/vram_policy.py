@@ -335,6 +335,8 @@ def family_for_slug(slug: str) -> str:
         return "lipsync"
     if key in {"flux"}:
         return "flux"
+    if key == "flux_ltx_i2v":
+        return "ltx25"
     if key in {"krea2_img", "vb_krea2_img"}:
         return "krea2"
     if key in {"wan22", "vb_wan22_vid"}:
@@ -627,6 +629,20 @@ def _build_rows() -> dict[str, WorkflowVramRow]:
             expected_vram_gb=11.0,
             vram_class="safe",
             notes="city96 flux1-dev-Q4_K_S.gguf when present; Comfy-Org flux1-dev-fp8 is the download fallback.",
+        )
+    )
+    add(
+        WorkflowVramRow(
+            slug="flux_ltx_i2v",
+            family="ltx25",
+            default_pack=_LTX25[0],
+            expected_vram_gb=13.5,
+            vram_class="tight",
+            safer_alternate="ltx25_t2v_i2v",
+            notes=(
+                f"{_FLUX[0]} still, then the ltx25_t2v_i2v graph for 25 frames with audio. "
+                "Comfy loads the two models one after the other; the LTX pass is the peak. Unmeasured."
+            ),
         )
     )
 

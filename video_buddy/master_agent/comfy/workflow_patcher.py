@@ -38,6 +38,8 @@ from master_agent.comfy.vae_guard import is_tiny_preview_vae, vae_name_for_tiled
 # LTX latent widgets that must stay 8n+1 and paired with audio frames_number
 LTX_LENGTH_CLASSES = frozenset({"EmptyLTXVLatentVideo", "LTXVEmptyLatentVideo"})
 LTX_AUDIO_CLASSES = frozenset({"LTXVEmptyLatentAudio"})
+FLUX_LTX_VARIANT = "flux_ltx_i2v"
+FLUX_LTX_DEFAULT_FRAMES = 25
 
 # Preferred all-in-one checkpoint names (first that exists on disk wins as fallback)
 CHECKPOINT_FALLBACKS = [
@@ -868,6 +870,8 @@ def _apply_local_family_weights(workflow: dict[str, Any], variant: str) -> None:
     from master_agent.models.vram_policy import family_for_slug
 
     family = family_for_slug(variant)
+    if (variant or "").strip().lower() == FLUX_LTX_VARIANT:
+        family = "flux"
     loaders = ("UNETLoader", "UnetLoaderGGUF", "UnetLoader", "DiffusionModelLoader")
     gguf_loaders = ("UnetLoaderGGUF", "UnetLoaderGGUFAdvanced")
 
@@ -970,6 +974,10 @@ def _apply_local_ltx25_weights(workflow: dict[str, Any]) -> None:
         for _nid, node in _find_nodes_by_class(workflow, class_type):
             # Always pin 2.5 loaders to the local/official 2.5 transformer.
             # A 2.3 all-in-one must not remain on unet_name after patch.
+            # flux_ltx_i2v also carries the Flux still UNET; that one stays Flux.
+            current = str((node.get("inputs") or {}).get("unet_name") or "").lower()
+            if "flux" in current:
+                continue
             _set_transformer_loader(node, transformer_name)
     for _nid, node in _find_nodes_by_class(workflow, "LTXAVTextEncoderLoader"):
         if te_is_gguf:
@@ -1813,6 +1821,8 @@ def load_and_patch_workflow(
         # the latent grid. Do not apply the landscape 768×512 clamp.
         width = max(256, (int(width) // 32) * 32)
         height = max(256, (int(height) // 32) * 32)
+    if variant == FLUX_LTX_VARIANT and filename_prefix == "ltx_agent":
+        filename_prefix = FLUX_LTX_VARIANT
     gen = get_variant_gen(variant)
     defaulted_length = False
     if (
@@ -1821,6 +1831,10 @@ def load_and_patch_workflow(
         and abs(float(duration_s) - 5.0) < 1e-9
     ):
         frames = INOUTPAINT_DEFAULT_FRAMES
+        defaulted_length = True
+        duration_s = frames / float(gen["fps"])
+    elif variant == FLUX_LTX_VARIANT and frames is None and abs(float(duration_s) - 5.0) < 1e-9:
+        frames = FLUX_LTX_DEFAULT_FRAMES
         defaulted_length = True
         duration_s = frames / float(gen["fps"])
     if frames is None:
