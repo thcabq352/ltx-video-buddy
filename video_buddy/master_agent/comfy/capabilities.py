@@ -237,11 +237,13 @@ CAPABILITY_CATALOG: tuple[Capability, ...] = (
         "LightX2V distill LoRAs",
         class_types=(),
         name_contains=("lightx2v",),
-        surfaces=("template",),
+        surfaces=("director", "patcher", "template"),
         templates=("wan22",),
         notes=(
-            "Baked into wan22 Power Lora Loader widgets. 16GB path: "
-            "Wan21_T2V_14B_lightx2v_cfg_step_distill_lora_rank32 when present."
+            "Inject-when-registered via graph_ops.apply_lightx2v. wan22 default on "
+            "(Power Lora slot, strength 0.6). Toggle: create_video lightx2v / "
+            "--lightx2v on|off. Unregistered file is an INFO no-op. Off does not "
+            "retune the 8-step / CFG 1 distill schedule."
         ),
     ),
     Capability(

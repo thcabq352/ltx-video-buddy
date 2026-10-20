@@ -147,9 +147,12 @@ def prepare_run(
     mask_name: str | None = None,
     inoutpaint: dict[str, Any] | None = None,
     vae: str | None = None,
+    lightx2v: bool | None = None,
+    lightx2v_strength: float | None = None,
 ) -> dict[str, Any]:
     from master_agent.comfy.graph_ops import (
         LTX_TEACACHE_VARIANTS,
+        apply_lightx2v,
         ensure_teacache,
         looks_like_ltx_graph,
     )
@@ -213,10 +216,17 @@ def prepare_run(
             gen_kwargs["inoutpaint"] = inoutpaint
         if vae is not None:
             gen_kwargs["vae"] = vae
+        if lightx2v is not None:
+            gen_kwargs["lightx2v"] = lightx2v
+        if lightx2v_strength is not None:
+            gen_kwargs["lightx2v_strength"] = lightx2v_strength
         wf, meta = load_and_patch_workflow(variant or "base", **gen_kwargs)
         warn = (meta or {}).get("prepare_warning")
         if warn:
             print(warn)
+        lx = (meta or {}).get("lightx2v")
+        if lx:
+            print(f"INFO  {lx['message']}")
         ic_line = ""
         if (meta or {}).get("ic_lora"):
             from master_agent.comfy.inoutpaint import format_ic_lora_line
@@ -235,6 +245,11 @@ def prepare_run(
         wants_tea = False
     if wants_tea:
         ensure_teacache(wf, object_info)
+    if mode != "generate" and lightx2v is not None:
+        lx = apply_lightx2v(
+            wf, enabled=lightx2v, strength=lightx2v_strength, object_info=object_info
+        )
+        print(f"INFO  {lx['message']}")
     from master_agent.comfy.vae_guard import (
         TinyVAETiledDecodeError,
         explicit_tiny_request,

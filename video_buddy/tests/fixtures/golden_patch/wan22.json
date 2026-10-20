@@ -126,7 +126,7 @@
      "strength": 0.85
     },
     "model": [
-     "198",
+     "106",
      0
     ],
     "\u2795 Add Lora": ""
@@ -244,20 +244,6 @@
    "class_type": "PrimitiveInt",
    "inputs": {
     "value": 33
-   }
-  },
-  "198": {
-   "_meta": {
-    "title": "LoRA"
-   },
-   "class_type": "LoraLoaderModelOnly",
-   "inputs": {
-    "lora_name": "<weight>",
-    "model": [
-     "106",
-     0
-    ],
-    "strength_model": 1.0
    }
   },
   "22": {

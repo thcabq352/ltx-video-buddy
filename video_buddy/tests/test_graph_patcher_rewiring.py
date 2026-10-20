@@ -650,7 +650,7 @@ KNOWN_LINK_OVERWRITES = {
         ("3980", "frames_number"),
         ("3980", "frame_rate"),
     },
-    "wan22": {("168", "noise_seed"), ("169", "noise_seed"), ("136", "model")},
+    "wan22": {("168", "noise_seed"), ("169", "noise_seed")},
 }
 
 
