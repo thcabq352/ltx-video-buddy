@@ -76,6 +76,7 @@ Also `--vace`, `--krea`, `--qwen`, `--flux-pack`, `--bundle`, `--optional`, `--s
 | Command | Role |
 |---|---|
 | `agent <tool> --args JSON` | The gateway entry. One JSON document on stdout, logs on stderr. `agent list` prints the tools. Exit 1 on `status` error/busy, 2 on a bad call |
+| `fallback-mcp` | Temporary, dormant MCP stdio fallback forwarding to the `agent` tools. Off unless `BUDDY_FALLBACK_MCP=1` and `requirements-fallback-mcp.txt` is installed. Removal after 2026-11-02: [Revert / fallback path](ARCHITECTURE.md#revert--fallback-path) |
 | `persona list\|show\|set` | Interview voice |
 | `soul list\|show\|set` | Standing values |
 | `kb ingest\|search\|stats` | Local Chroma. `--knowledge` searches the git folder. `--workflows` searches digests |

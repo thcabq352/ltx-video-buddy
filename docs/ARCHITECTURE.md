@@ -105,18 +105,111 @@ The **LTX bot gateway** is the only agent entry point. It loads the
 from `video_buddy/` (or imports `master_agent.agent_api`). Buddy listens on no
 port of its own.
 
-Assumption, pending confirmation: "LTX bot gateway" means the Hermes gateway
-that serves the LTX bot (formerly profile `ltx`, standalone or mux `/p/ltx/`
-on 8642), driving Buddy through its terminal. If a different surface was meant,
-the removal commits can be reverted one at a time.
+"LTX bot gateway" means the Hermes gateway that serves the LTX bot (profile
+`ltx`, standalone or mux `/p/ltx/` on 8642), driving Buddy through its
+terminal. Status 2026-10-19: confirmed in configuration, not yet in production.
+The tower's Hermes configs dropped the `master-agent` MCP entry on 2026-10-18,
+so the bot reaches Buddy only through `agent`. Until that path has run in
+production for two weeks, a dormant MCP fallback exists (see
+[Revert / fallback path](#revert--fallback-path)).
 
-Removed: the `master-agent` MCP server (`master_agent/mcp_server.py`), the
-Hermes `ltx` seat machinery and profile writers (`master_agent/hermes/`,
-`hermes status|register`), the studio on `:8189` (UI, Comfy-tab ingest drop
-zone, job manager, `ui`, `run_ui_8189.bat`), the Hermes chat facade and A2A
-(`master_agent/a2a/`).
+Removed in [PR #81](https://github.com/thcabq352/ltx-video-buddy/pull/81)
+(merge `2b03703`): the `master-agent` MCP server (`master_agent/mcp_server.py`,
+`1ada3a9`), the Hermes `ltx` seat machinery and profile writers
+(`master_agent/hermes/`, `hermes status|register`, `4b3628b`), the studio on
+`:8189` (UI, Comfy-tab ingest drop zone, job manager, `ui`, `run_ui_8189.bat`,
+`1cb01be`), the Hermes chat facade and A2A (`master_agent/a2a/`, `7997511`).
+Docs and skill followed in `c67e909`.
 
 Concurrency: `agent_api.create_video` holds `state/gpu.lock` for a render and
 returns `status=busy` when another render has it. A budget HOLD returns
 `status=paused`; `control_set(reset_budget=true)` or `budget_reset_shift`
 resumes paused runs in-process.
+
+## Revert / fallback path
+
+**Temporary.** `python -m master_agent fallback-mcp` (`master_agent/fallback_mcp.py`)
+is an MCP stdio server with id `master-agent` whose tools are exactly
+`agent_api.TOOLS`: same names, signatures, and docstrings, each call forwarded
+to the same function. It has no tool logic of its own. It is dormant: nothing
+starts or imports it, it needs the optional `mcp` package, and it refuses to
+serve unless `BUDDY_FALLBACK_MCP=1`. It binds no port; Hermes owns the process.
+The skill package does not mention it, so the bot keeps using `agent` unless an
+operator wires the fallback in.
+
+MCP stdio was chosen over an HTTP surface on `:8189` because it opens no
+network listener (no Host/Origin guard to rebuild for an API that can queue
+GPU renders), needs no web framework, and is the config Hermes used before
+PR #81, so the snippet below is the known-good shape.
+
+### Enable it
+
+From `video_buddy/`, with the project venv:
+
+```bash
+pip install -r requirements-fallback-mcp.txt
+BUDDY_FALLBACK_MCP=1 python -m master_agent fallback-mcp   # smoke: waits on stdin; Ctrl-C
+```
+
+Without the flag it prints why it is off and exits 2.
+
+### Point Hermes at it
+
+In `~/.hermes/profiles/ltx/config.yaml` (or `~/.hermes/config.yaml`), no
+secrets. `<VIDEO_BUDDY>` is this repo's `video_buddy/` directory, as an
+absolute path:
+
+```yaml
+mcp_servers:
+  master-agent:
+    command: "<VIDEO_BUDDY>/.venv/bin/python"   # Windows: <VIDEO_BUDDY>\.venv\Scripts\python.exe
+    args: ["-m", "master_agent", "fallback-mcp"]
+    env:
+      BUDDY_FALLBACK_MCP: "1"
+      PYTHONPATH: "<VIDEO_BUDDY>"
+      LLAMACPP_AUTOSTART: "0"   # reuse a running llama-server; do not spawn one per MCP child
+```
+
+Then restart that gateway and run `hermes mcp test master-agent`. Buddy reads
+its own settings from `video_buddy/.env`. An MCP child may not inherit the
+gateway's shell environment, so put anything Buddy needs in that file or in
+`env:` above. To turn the fallback off, delete the `master-agent` block and
+restart the gateway.
+
+### Full revert to the pre-PR #81 surfaces
+
+Use this only if the shim is not enough. Work on a branch. Revert the newest
+commit first:
+
+```bash
+git revert 1ada3a9            # MCP server only: applies cleanly on 133cfc7 and the suite passes
+git revert 1cb01be            # :8189 studio
+git revert 4b3628b            # Hermes ltx seat machinery: conflicts in install_hermes_skill.py and tests/test_hermes_skill.py
+git revert 7997511            # A2A + Hermes chat facade
+git revert c67e909            # docs and skill: conflicts across README, docs/, and the skill files
+pip install -r requirements.txt
+```
+
+The restored `mcp_server.py` exposes the 11 tools it had on 2026-10-09. It
+does not have `comfy_status`, `comfy_start`, `comfy_restart`, or later agent
+tools, which is one reason to prefer the shim. Remove the shim (below) when
+reverting `1ada3a9`, because both register as `master-agent`. Restore the
+pre-PR #81 Hermes config (script path
+`<VIDEO_BUDDY>/master_agent/mcp_server.py`, no flag).
+
+### Remove the shim
+
+Remove after **2026-11-02**, when both hold: the Hermes `ltx` bot has served
+real requests through `python -m master_agent agent` for 14 consecutive days,
+and no gateway config in that window enabled `BUDDY_FALLBACK_MCP`. If the
+fallback was turned on, the 14 days restart after it is turned off and the
+cause is fixed.
+
+Delete `video_buddy/master_agent/fallback_mcp.py`,
+`video_buddy/requirements-fallback-mcp.txt`, and
+`video_buddy/tests/test_fallback_mcp.py`, and the `requirements-fallback-mcp.txt`
+line in `.github/workflows/pytest.yml`. Drop `cmd_fallback_mcp` and the
+`fallback-mcp` parser entry (and its `banner_stream` case) from
+`master_agent/cli/parser.py`, and the line in the `master_agent/__main__.py`
+docstring. Drop this section and the fallback sentence under
+[One gateway](#one-gateway). `pip uninstall mcp` on the tower.
