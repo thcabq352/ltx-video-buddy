@@ -168,14 +168,16 @@
         },
         {
           "id": "ltx25.text_encoder",
-          "label": "gemma4-12b-with-proj-ltx-2.5-bf16.safetensors",
-          "filename": "gemma4-12b-with-proj-ltx-2.5-bf16.safetensors",
+          "label": "gemma4-12b-with-proj-ltx-2.5-Q2_K.gguf",
+          "filename": "gemma4-12b-with-proj-ltx-2.5-Q2_K.gguf",
           "accepts": [
+            "gemma4-12b-with-proj-ltx-2.5-Q4_K_M.gguf",
+            "gemma4-12b-with-proj-ltx-2.5-Q2_K.gguf",
             "gemma4-12b-heretic-ltx25-int8convrot.safetensors",
             "gemma4-12b-with-proj-ltx-2.5-comfy-int8-convrot.safetensors",
             "gemma4-12b-with-proj-ltx-2.5-bf16.safetensors"
           ],
-          "size_bytes": 26300000000,
+          "size_bytes": 5956930560,
           "required": true,
           "package": "ltx25_core",
           "version": "2.5",
@@ -183,8 +185,8 @@
           "downloadable": true,
           "weight_key": "text_encoder",
           "local_only": false,
-          "note": "Official Gemma 4 12B + LTX 2.5 projection (bf16, 26.3 GB). Comfy int8 or heretic int8 also count.",
-          "size_label": "26.3 GB",
+          "note": "elix3r Gemma 4 12B + LTX 2.5 projections GGUF Q2_K (~6.0 GB). Default download target for 16GB-class. Loads via CLIPLoaderGGUF (type ltxv) and needs the repo's ComfyUI-GGUF gemma4 patch. Q4_K_M (~8.4 GB), heretic int8convrot (13.2 GB), Comfy int8 and official bf16 (26.3 GB) also count.",
+          "size_label": "6.0 GB",
           "required_label": "required for generation",
           "locked": true
         },

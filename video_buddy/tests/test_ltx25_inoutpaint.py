@@ -233,11 +233,17 @@ def test_user_mask_name_is_not_replaced():
     assert ensure_inoutpaint_mask(wf, _upload) is None
 
 
-def test_template_and_patched_graph_validate_offline():
+def test_template_and_patched_graph_validate_offline(tmp_path, monkeypatch):
     info = json.loads(OBJECT_INFO_CACHE.read_text(encoding="utf-8"))
     raw = json.loads((WORKFLOWS_DIR / WORKFLOW_FILES[LTX25_VARIANT]).read_text(encoding="utf-8"))
     report = validate_workflow(raw, info, file_label="ltx25_inoutpaint_api.json")
     assert report.ok, [str(item) for item in report.errors]
+    # The cached tower inventory has the heretic TE, not the GGUF TE download target.
+    root = tmp_path / "models"
+    te = root / "text_encoders" / HERETIC_TE
+    te.parent.mkdir(parents=True)
+    te.write_bytes(b"te")
+    monkeypatch.setattr("master_agent.models.weights.model_search_roots", lambda: [root])
     wf, _meta = load_and_patch_workflow(LTX25_VARIANT, prompt="a wet street", seed=1, frames=17)
     patched = validate_workflow(wf, info, file_label="patched")
     assert patched.ok, [str(item) for item in patched.errors]

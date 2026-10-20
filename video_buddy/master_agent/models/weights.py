@@ -52,6 +52,8 @@ OPTIONAL_STUBS = frozenset({"style.safetensors", "camera-orbit.safetensors"}) | 
 
 HF_LTX25 = "Lightricks/LTX-2.5"
 HF_LTX25_GGUF = "Abiray/LTX-2.5-Distilled-GGUF"
+HF_LTX25_TE_GGUF = "elix3r/gemma4-12b-with-proj-ltx-2.5-GGUF"
+HF_LTX25_TE_GGUF_LICENSE = "https://huggingface.co/elix3r/gemma4-12b-with-proj-ltx-2.5-GGUF"
 HF_ICLORA = "Lightricks/LTX-2.5-22b-IC-LoRA-Ingredients"
 HF_LICENSE = "https://huggingface.co/Lightricks/LTX-2.5"
 HF_ICLORA_LICENSE = "https://huggingface.co/Lightricks/LTX-2.5-22b-IC-LoRA-Ingredients"
@@ -75,6 +77,8 @@ class WeightFile:
     # Local alternatives that satisfy this slot. First is preferred when several exist.
     # Official ``filename`` is the Hub download target (not the only accepted name).
     accepts: tuple[str, ...] = ()
+    # Hub LFS sha256 of ``repo_filename`` when the listing or model card publishes it.
+    sha256: str = ""
 
     @property
     def size_label(self) -> str:
@@ -108,7 +112,13 @@ TRANSFORMER_PREFERENCE: tuple[str, ...] = (
     "ltx-2.5-22b-distilled-transformer-comfy-int8-convrot.safetensors",
     "ltx-2.5-22b-distilled-transformer-bf16.safetensors",
 )
+# GGUF TEs load through CLIPLoaderGGUF (type ltxv) and need elix3r's
+# ComfyUI-GGUF gemma4 patch. Q4_K_M beats Q2_K when both are on disk.
+LTX25_TE_GGUF_Q2 = "gemma4-12b-with-proj-ltx-2.5-Q2_K.gguf"
+LTX25_TE_GGUF_Q4 = "gemma4-12b-with-proj-ltx-2.5-Q4_K_M.gguf"
 TE_PREFERENCE: tuple[str, ...] = (
+    LTX25_TE_GGUF_Q4,
+    LTX25_TE_GGUF_Q2,
     "gemma4-12b-heretic-ltx25-int8convrot.safetensors",
     "gemma4-12b-with-proj-ltx-2.5-comfy-int8-convrot.safetensors",
     "gemma4-12b-with-proj-ltx-2.5-bf16.safetensors",
@@ -166,18 +176,28 @@ WEIGHT_FILES: dict[str, WeightFile] = {
             "Official Lightricks bf16 safetensors (42 GB, gated) still counts if already on disk via accepts."
         ),
         accepts=TRANSFORMER_PREFERENCE,
+        sha256="0f51eb0d82b19bddbfb3b0371a65217844ea03750f27dd733528f22152e0e0d0",
     ),
+    # elix3r card + Hub listing 2026-10-20 (repo commit 2a18e83). The repo is
+    # auto-approve gated: an HF token and a license click are still required.
     "text_encoder": WeightFile(
         key="text_encoder",
-        filename="gemma4-12b-with-proj-ltx-2.5-bf16.safetensors",
+        filename=LTX25_TE_GGUF_Q2,
         dest_folder="text_encoders",
-        repo_id=HF_LTX25,
-        repo_filename="text_encoders/gemma4-12b-with-proj-ltx-2.5-bf16.safetensors",
-        size_bytes=26_300_000_000,
+        repo_id=HF_LTX25_TE_GGUF,
+        repo_filename=LTX25_TE_GGUF_Q2,
+        size_bytes=5_956_930_560,
         mandatory=True,
         gated=True,
-        note="Official Gemma 4 12B + LTX 2.5 projection (bf16, 26.3 GB). Comfy int8 or heretic int8 also count.",
+        license_url=HF_LTX25_TE_GGUF_LICENSE,
+        note=(
+            "elix3r Gemma 4 12B + LTX 2.5 projections GGUF Q2_K (~6.0 GB). Default download target "
+            "for 16GB-class. Loads via CLIPLoaderGGUF (type ltxv) and needs the repo's "
+            "ComfyUI-GGUF gemma4 patch. Q4_K_M (~8.4 GB), heretic int8convrot (13.2 GB), "
+            "Comfy int8 and official bf16 (26.3 GB) also count."
+        ),
         accepts=TE_PREFERENCE,
+        sha256="a70012eeea2fbee7c9c058fca5710842ec8cb9d9e94e630f2d1a0647a8d300f6",
     ),
     "video_vae": WeightFile(
         key="video_vae",
@@ -748,6 +768,7 @@ def _file_row(w: WeightFile) -> dict[str, Any]:
         "mandatory": w.mandatory,
         "license": w.license_url,
         "note": w.note,
+        "sha256": w.sha256,
     }
 
 
@@ -1756,6 +1777,8 @@ def format_ask(status: WeightStatus) -> str:
             f"  - {w.filename}  →  models/{w.dest_folder}/  ({w.size_label}){gated}"
         )
         lines.append(f"      {w.repo_id}  {w.repo_filename}")
+        if w.sha256:
+            lines.append(f"      sha256: {w.sha256}")
         if w.note:
             lines.append(f"      {w.note}")
         alts = [n for n in w.candidates if n != w.filename]

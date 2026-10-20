@@ -31,9 +31,19 @@ def test_official_filenames_and_stub_aliases():
     assert WEIGHT_FILES["transformer"].repo_filename == "LTX-2.5-Distilled-Q4_K_M.gguf"
     assert WEIGHT_FILES["transformer"].filename == TRANSFORMER_PREFERENCE[0]
     assert WEIGHT_FILES["transformer"].size_bytes == 15_687_639_488
-    assert WEIGHT_FILES["text_encoder"].repo_filename == (
-        "text_encoders/gemma4-12b-with-proj-ltx-2.5-bf16.safetensors"
+    assert WEIGHT_FILES["transformer"].sha256 == (
+        "0f51eb0d82b19bddbfb3b0371a65217844ea03750f27dd733528f22152e0e0d0"
     )
+    te = WEIGHT_FILES["text_encoder"]
+    assert te.repo_id == "elix3r/gemma4-12b-with-proj-ltx-2.5-GGUF"
+    assert te.repo_filename == te.filename == "gemma4-12b-with-proj-ltx-2.5-Q2_K.gguf"
+    assert te.size_bytes == 5_956_930_560
+    assert te.sha256 == "a70012eeea2fbee7c9c058fca5710842ec8cb9d9e94e630f2d1a0647a8d300f6"
+    assert te.gated is True
+    assert te.dest_folder == "text_encoders"
+    assert "gemma4-12b-with-proj-ltx-2.5-Q4_K_M.gguf" in te.candidates
+    assert "gemma4-12b-heretic-ltx25-int8convrot.safetensors" in te.candidates
+    assert "gemma4-12b-with-proj-ltx-2.5-bf16.safetensors" in te.candidates
     assert WEIGHT_FILES["duration_head"].repo_filename == (
         "model_patches/ltx-2.5-duration-head-bf16.safetensors"
     )
