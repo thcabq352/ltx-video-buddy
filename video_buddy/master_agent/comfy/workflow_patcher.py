@@ -607,19 +607,18 @@ def _bypass_missing_optional_loras(workflow: dict[str, Any]) -> list[str]:
         if find_weight_file(name) is not None:
             continue
         source = inputs.get("model")
+        clip_source = inputs.get("clip")
         sid = str(nid)
         for other in workflow.values():
             if not isinstance(other, dict) or other is node:
                 continue
             oin = other.get("inputs") or {}
             for key, value in list(oin.items()):
-                if (
-                    isinstance(value, list)
-                    and len(value) == 2
-                    and str(value[0]) == sid
-                    and source is not None
-                ):
-                    oin[key] = source
+                if not (isinstance(value, list) and len(value) == 2 and str(value[0]) == sid):
+                    continue
+                replacement = clip_source if value[1] == 1 else source
+                if replacement is not None:
+                    oin[key] = replacement
         workflow.pop(sid, None)
         dropped.append(sid)
     return dropped

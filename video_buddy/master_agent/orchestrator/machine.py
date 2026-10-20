@@ -213,6 +213,7 @@ class Orchestrator:
         if uploaded_io:
             st.log(f"ltx in/outpaint mask uploaded: {uploaded_io}")
 
+    @staticmethod
     def _resolve_h3_line(st: RunState) -> None:
         """Fill a missing H3 line from the brief or a local transcriber, else warn."""
         from master_agent.orchestrator.h3_voice import (
@@ -230,6 +231,7 @@ class Orchestrator:
         if not (st.spoken_line or "").strip():
             st.log(f"warn: {H3_MISSING_LINE_WARNING}")
 
+    @staticmethod
     def _inject_spoken_line(st: RunState) -> None:
         """Keep the H3 spoken line in the prompt across revise re-patches."""
         if not (st.spoken_line or "").strip():
@@ -500,6 +502,9 @@ class Orchestrator:
             st.variant = self._select_variant(st, variant)
         except PartnerPointerError as exc:
             st.fail(str(exc))
+            return self._finish(st)
+        except Exception as exc:
+            st.fail(f"variant selection failed: {exc}")
             return self._finish(st)
         try:
             from master_agent.orchestrator.talking import h3_r2v_audio_warning, media_route_error
