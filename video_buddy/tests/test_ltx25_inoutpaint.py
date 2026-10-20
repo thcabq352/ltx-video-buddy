@@ -144,9 +144,9 @@ def test_patch_writes_prompt_and_keeps_ic_lora():
     assert wf["40"]["class_type"] == "LTXVImgToVideoInplace"
     assert wf["40"]["inputs"]["strength"] == 0.7
     assert wf["79"]["inputs"]["filename_prefix"] == "ltx25_inoutpaint"
-    # No local 2.5 file in this checkout: the patcher falls back to official bf16.
-    assert wf["10"]["class_type"] == "UNETLoader"
-    assert wf["10"]["inputs"]["unet_name"] == "ltx-2.5-22b-distilled-transformer-bf16.safetensors"
+    # No local 2.5 file in this checkout: the patcher falls back to the GGUF download target.
+    assert wf["10"]["class_type"] == "UnetLoaderGGUF"
+    assert wf["10"]["inputs"]["unet_name"] == "ltx-2.5-22b-distilled-transformer-bf16-Q4_K_M.gguf"
     assert "ltx-2.3" not in wf["10"]["inputs"]["unet_name"]
 
 

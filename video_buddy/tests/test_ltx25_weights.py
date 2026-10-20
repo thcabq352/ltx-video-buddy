@@ -27,9 +27,10 @@ from master_agent.models.weights import (
 
 
 def test_official_filenames_and_stub_aliases():
-    assert WEIGHT_FILES["transformer"].repo_filename == (
-        "diffusion_models/ltx-2.5-22b-distilled-transformer-bf16.safetensors"
-    )
+    assert WEIGHT_FILES["transformer"].repo_id == "Abiray/LTX-2.5-Distilled-GGUF"
+    assert WEIGHT_FILES["transformer"].repo_filename == "LTX-2.5-Distilled-Q4_K_M.gguf"
+    assert WEIGHT_FILES["transformer"].filename == TRANSFORMER_PREFERENCE[0]
+    assert WEIGHT_FILES["transformer"].size_bytes == 15_687_639_488
     assert WEIGHT_FILES["text_encoder"].repo_filename == (
         "text_encoders/gemma4-12b-with-proj-ltx-2.5-bf16.safetensors"
     )
@@ -39,9 +40,10 @@ def test_official_filenames_and_stub_aliases():
     assert WEIGHT_FILES["spatial_upscaler"].repo_filename == (
         "latent_upscale_models/ltx-2.5-latent-spatial-upscaler-x2-bf16-1.0.safetensors"
     )
-    assert STUB_ALIASES["ltx-2.5-22b-distilled.safetensors"] == WEIGHT_FILES["transformer"].filename
+    assert STUB_ALIASES["ltx-2.5-22b-distilled.safetensors"] == TRANSFORMER_PREFERENCE[-1]
+    assert "ltx-2.5-22b-distilled.safetensors" in WEIGHT_FILES["transformer"].candidates
     assert STUB_ALIASES["ltx-2.5-ic-lora.safetensors"] == WEIGHT_FILES["ic_lora"].filename
-    assert WEIGHT_FILES["transformer"].gated is True
+    assert WEIGHT_FILES["transformer"].gated is False
     assert WEIGHT_FILES["transformer"].mandatory is True
     assert WEIGHT_FILES["duration_head"].mandatory is False
     assert WEIGHT_FILES["spatial_upscaler"].mandatory is True
@@ -71,7 +73,8 @@ def test_scan_missing_on_empty_roots(tmp_path: Path):
     assert "gated" in ask.lower()
     assert "Lightricks/LTX-2.5" in ask
     assert "models/diffusion_models/" in ask
-    assert "42.0 GB" in ask
+    assert "15.7 GB" in ask
+    assert "Abiray/LTX-2.5-Distilled-GGUF" in ask
     assert "also accepted locally" in ask
     assert "Q4_K_M.gguf" in ask
     assert "duration-head-bf16.safetensors" in ask
@@ -157,7 +160,7 @@ def test_transformer_prefers_gguf_over_nvfp4_and_int8(tmp_path: Path):
     root = tmp_path / "models"
     gguf = root / "diffusion_models" / "gguf" / TRANSFORMER_PREFERENCE[0]
     nvfp4 = root / "diffusion_models" / TRANSFORMER_PREFERENCE[1]
-    official = root / "diffusion_models" / WEIGHT_FILES["transformer"].filename
+    official = root / "diffusion_models" / TRANSFORMER_PREFERENCE[-1]
     gguf.parent.mkdir(parents=True)
     gguf.write_bytes(b"gguf")
     nvfp4.write_bytes(b"nvfp4")
@@ -184,7 +187,7 @@ def test_transformer_prefers_nvfp4_over_int8_when_no_gguf(tmp_path: Path):
 def test_transformer_prefers_gguf_over_int8(tmp_path: Path):
     root = tmp_path / "models"
     gguf = root / "diffusion_models" / "ltx-2.5-22b-distilled-transformer-bf16-Q4_K_M.gguf"
-    official = root / "diffusion_models" / WEIGHT_FILES["transformer"].filename
+    official = root / "diffusion_models" / TRANSFORMER_PREFERENCE[-1]
     gguf.parent.mkdir(parents=True)
     gguf.write_bytes(b"gguf")
     official.write_bytes(b"int8")
@@ -254,7 +257,7 @@ def test_class16_install_only_asks_for_zero_byte_duration_head(tmp_path: Path):
     assert core.found_paths["transformer"].endswith(".gguf")
     assert "text_encoder" in core.found_paths
     assert "heretic" in core.found_paths["text_encoder"]
-    assert WEIGHT_FILES["transformer"].filename not in {Path(p).name for p in core.found_paths.values()}
+    assert TRANSFORMER_PREFERENCE[-1] not in {Path(p).name for p in core.found_paths.values()}
 
     ic = scan_bundle("ltx25_iclora", roots=[root])
     assert "ic_lora" not in {w.key for w in ic.missing_mandatory}

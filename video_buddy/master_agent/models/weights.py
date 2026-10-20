@@ -51,6 +51,7 @@ H3_OPTIONAL_LORAS = frozenset({
 OPTIONAL_STUBS = frozenset({"style.safetensors", "camera-orbit.safetensors"}) | H3_OPTIONAL_LORAS
 
 HF_LTX25 = "Lightricks/LTX-2.5"
+HF_LTX25_GGUF = "Abiray/LTX-2.5-Distilled-GGUF"
 HF_ICLORA = "Lightricks/LTX-2.5-22b-IC-LoRA-Ingredients"
 HF_LICENSE = "https://huggingface.co/Lightricks/LTX-2.5"
 HF_ICLORA_LICENSE = "https://huggingface.co/Lightricks/LTX-2.5-22b-IC-LoRA-Ingredients"
@@ -91,8 +92,9 @@ class WeightFile:
         for name in (*self.accepts, self.filename):
             if name and name not in seen:
                 seen.append(name)
+        accepted = tuple(seen)
         for stub, official in STUB_ALIASES.items():
-            if official == self.filename and stub not in seen:
+            if official in accepted and stub not in seen:
                 seen.append(stub)
         return tuple(seen)
 
@@ -145,19 +147,24 @@ H3_TE_PREFERENCE: tuple[str, ...] = (
 H3_TRANSFORMER_KEYS = frozenset({"h3_fl2va", "h3_ref2va"})
 
 # Official distilled split pack on gated Lightricks/LTX-2.5 (Hub file listing).
-# The Hub download target stays bf16. The loader prefers a GGUF already on
+# The transformer download target is the public Abiray Q4_K_M GGUF (Hub
+# listing 2026-10-20, sha256 0f51eb0d…e0d0, commit d103d88). It is saved under
+# the TRANSFORMER_PREFERENCE[0] name. The loader still prefers a GGUF already on
 # disk, then NVFP4 / int8, and only then bf16 (see transformer_preference_order).
 WEIGHT_FILES: dict[str, WeightFile] = {
     "transformer": WeightFile(
         key="transformer",
-        filename="ltx-2.5-22b-distilled-transformer-bf16.safetensors",
+        filename="ltx-2.5-22b-distilled-transformer-bf16-Q4_K_M.gguf",
         dest_folder="diffusion_models",
-        repo_id=HF_LTX25,
-        repo_filename="diffusion_models/ltx-2.5-22b-distilled-transformer-bf16.safetensors",
-        size_bytes=42_000_000_000,
+        repo_id=HF_LTX25_GGUF,
+        repo_filename="LTX-2.5-Distilled-Q4_K_M.gguf",
+        size_bytes=15_687_639_488,
         mandatory=True,
-        gated=True,
-        note="Official distilled transformer (bf16, 42 GB). Loader prefers on-disk GGUF Q4, then NVFP4 / int8; bf16 is the fallback.",
+        gated=False,
+        note=(
+            "Abiray Q4_K_M GGUF (~15.7 GB). Default download target for 16GB-class. "
+            "Official Lightricks bf16 safetensors (42 GB, gated) still counts if already on disk via accepts."
+        ),
         accepts=TRANSFORMER_PREFERENCE,
     ),
     "text_encoder": WeightFile(

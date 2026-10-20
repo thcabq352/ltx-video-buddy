@@ -145,13 +145,13 @@ def test_stub_ckpt_remapped_to_official_transformer():
         seed=1,
         duration_s=2.0,
     )
-    official = "ltx-2.5-22b-distilled-transformer-bf16.safetensors"
+    official = "ltx-2.5-22b-distilled-transformer-bf16-Q4_K_M.gguf"
     stub = "ltx-2.5-22b-distilled.safetensors"
     dumped = str(wf)
     assert stub not in dumped
     assert official in dumped
-    unets = _find_nodes_by_class(wf, "UNETLoader")
-    assert unets, "CheckpointLoaderSimple should rewrite to UNETLoader"
+    unets = _find_nodes_by_class(wf, "UnetLoaderGGUF")
+    assert unets, "CheckpointLoaderSimple should rewrite to UnetLoaderGGUF"
     assert unets[0][1]["inputs"]["unet_name"] == official
     tes = _find_nodes_by_class(wf, "LTXAVTextEncoderLoader")
     clips = _find_nodes_by_class(wf, "CLIPLoader")
