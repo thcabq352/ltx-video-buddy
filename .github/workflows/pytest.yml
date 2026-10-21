@@ -22,3 +22,20 @@ jobs:
           # Whole suite. tests/conftest.py points STATE_DIR / CHROMA_DIR /
           # OUTPUTS_DIR at a temp dir so runs never touch real state/.
           PYTHONPATH=video_buddy pytest -q video_buddy/tests
+
+  comfy-pins:
+    # comfy-requirements.txt pins in a clean venv, then unrelated upgrades must not move them.
+    # The full check against a real ComfyUI venv is in fresh-install.yml.
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Pinned gguf / colour survive pip install --upgrade
+        run: |
+          python -m venv "$RUNNER_TEMP/comfy-pins"
+          py="$RUNNER_TEMP/comfy-pins/bin/python"
+          "$py" -m pip install --upgrade -r video_buddy/comfy-requirements.txt
+          python video_buddy/scripts/ci/fresh_install_check.py pins --python "$py" --stress

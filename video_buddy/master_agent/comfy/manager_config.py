@@ -11,9 +11,10 @@ Manager only accepts a ``channel_url`` that is listed in the user's
 both files are written: ``config.ini`` points at :data:`CHANNEL_URL` and
 ``channels.list`` maps the ``default`` channel to the same URL.
 
-Edits are line-based and idempotent. Other keys, sections and channels are
-kept. A ``channel_url`` or ``default::`` entry the user changed to some other
-URL is left alone.
+Edits are line-based and idempotent. Other keys and sections are kept, and
+``channels.list`` entries under the ltdrdata / ComfyOrg URLs move to
+:data:`CHANNEL_URL` with their path. A ``channel_url`` or channel the user
+pointed at some other URL is left alone.
 
 Manager keeps these files in ``<ComfyUI>/user/__manager`` on ComfyUI builds
 with the System User API (``folder_paths.get_system_user_directory``), and in
@@ -43,14 +44,14 @@ EXTRA_CHANNEL_NAME = "comfy-org"
 NEW_DIR = ("user", "__manager")
 LEGACY_DIR = ("user", "default", "ComfyUI-Manager")
 
-# Manager's channels.list.template, with ``default`` on the working URL.
+# Manager's channels.list.template, rebased onto the working URL.
 CHANNELS_TEMPLATE = (
     f"{DEFAULT_CHANNEL_NAME}::{CHANNEL_URL}\n"
-    "recent::https://raw.githubusercontent.com/ltdrdata/ComfyUI-Manager/main/node_db/new\n"
-    "legacy::https://raw.githubusercontent.com/ltdrdata/ComfyUI-Manager/main/node_db/legacy\n"
-    "forked::https://raw.githubusercontent.com/ltdrdata/ComfyUI-Manager/main/node_db/forked\n"
-    "dev::https://raw.githubusercontent.com/ltdrdata/ComfyUI-Manager/main/node_db/dev\n"
-    "tutorial::https://raw.githubusercontent.com/ltdrdata/ComfyUI-Manager/main/node_db/tutorial\n"
+    f"recent::{CHANNEL_URL}/node_db/new\n"
+    f"legacy::{CHANNEL_URL}/node_db/legacy\n"
+    f"forked::{CHANNEL_URL}/node_db/forked\n"
+    f"dev::{CHANNEL_URL}/node_db/dev\n"
+    f"tutorial::{CHANNEL_URL}/node_db/tutorial\n"
 )
 
 CREATED, FIXED, UNCHANGED = "created", "fixed", "unchanged"
@@ -65,6 +66,15 @@ def _norm(url: str) -> str:
 
 def _is_broken(url: str) -> bool:
     return _norm(url) in BROKEN_CHANNEL_URLS
+
+
+def _rebase(url: str) -> str | None:
+    """A broken channel URL or a path under one, moved onto :data:`CHANNEL_URL`; ``None`` otherwise."""
+    url = _norm(url)
+    for base in BROKEN_CHANNEL_URLS:
+        if url == base or url.startswith(base + "/"):
+            return CHANNEL_URL + url[len(base):]
+    return None
 
 
 @dataclass
@@ -134,22 +144,29 @@ def fix_config_text(text: str) -> tuple[str, str]:
 
 
 def fix_channels_text(text: str) -> tuple[str, str]:
-    """``(new_text, detail)``: make sure :data:`CHANNEL_URL` is a listed channel, as ``default`` when possible."""
+    """``(new_text, detail)``: move ltdrdata / ComfyOrg entries onto :data:`CHANNEL_URL` and make sure
+    :data:`CHANNEL_URL` is a listed channel, as ``default`` when possible."""
     lines = text.splitlines()
-    entries = [(i, *line.split("::", 1)) for i, line in enumerate(lines) if line.count("::") == 1]
-    if any(_norm(url) == CHANNEL_URL for _, _, url in entries):
+    details = []
+    for i, line in enumerate(lines):
+        if line.count("::") != 1:
+            continue
+        name, url = line.split("::", 1)
+        rebased = _rebase(url)
+        if rebased is not None:
+            lines[i] = f"{name}::{rebased}"
+            details.append(f"{name.strip()} {_norm(url)} -> {rebased}")
+    entries = [line.split("::", 1) for line in lines if line.count("::") == 1]
+    if not any(_norm(url) == CHANNEL_URL for _, url in entries):
+        if any(name.strip() == DEFAULT_CHANNEL_NAME for name, _ in entries):
+            lines.append(f"{EXTRA_CHANNEL_NAME}::{CHANNEL_URL}")
+            details.append(f"added {EXTRA_CHANNEL_NAME}::{CHANNEL_URL}")
+        else:
+            lines.insert(0, f"{DEFAULT_CHANNEL_NAME}::{CHANNEL_URL}")
+            details.append(f"added {DEFAULT_CHANNEL_NAME}::{CHANNEL_URL}")
+    if not details:
         return text, ""
-    default = next(((i, url) for i, name, url in entries if name.strip() == DEFAULT_CHANNEL_NAME), None)
-    if default is None:
-        lines.insert(0, f"{DEFAULT_CHANNEL_NAME}::{CHANNEL_URL}")
-        detail = f"added {DEFAULT_CHANNEL_NAME}::{CHANNEL_URL}"
-    elif _is_broken(default[1]):
-        lines[default[0]] = f"{DEFAULT_CHANNEL_NAME}::{CHANNEL_URL}"
-        detail = f"{DEFAULT_CHANNEL_NAME} {_norm(default[1])} -> {CHANNEL_URL}"
-    else:
-        lines.append(f"{EXTRA_CHANNEL_NAME}::{CHANNEL_URL}")
-        detail = f"added {EXTRA_CHANNEL_NAME}::{CHANNEL_URL}"
-    return "\n".join(lines) + "\n", detail
+    return "\n".join(lines) + "\n", "; ".join(details)
 
 
 def _apply(path: Path, fixer, seed: str, *, create: bool, apply: bool) -> FileAction | None:

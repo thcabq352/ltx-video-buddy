@@ -83,8 +83,25 @@ def test_broken_config_is_repaired_and_other_keys_kept(tmp_path):
     assert {a.action for a in report.actions} == {mc.FIXED}
     text = (d / "config.ini").read_text()
     assert text == original.replace(f"channel_url = {LTDRDATA}", f"channel_url = {GOOD}")
-    assert (d / "channels.list").read_text() == f"default::{GOOD}\nrecent::{LTDRDATA}/node_db/new\n"
+    assert (d / "channels.list").read_text() == f"default::{GOOD}\nrecent::{GOOD}/node_db/new\n"
     assert _manager_accepts(d)
+
+
+def test_seeded_channels_list_has_no_ltdrdata_or_comfyorg():
+    assert "ltdrdata" not in mc.CHANNELS_TEMPLATE.lower()
+    assert "comfyorg" not in mc.CHANNELS_TEMPLATE.lower()
+    urls = [line.split("::", 1)[1] for line in mc.CHANNELS_TEMPLATE.splitlines()]
+    assert urls[0] == GOOD and all(u == GOOD or u.startswith(GOOD + "/node_db/") for u in urls)
+
+
+def test_stale_secondary_channels_move_to_comfy_org_and_custom_ones_stay():
+    comfyorg = "https://raw.githubusercontent.com/ComfyOrg/ComfyUI-Manager/main"
+    text, detail = mc.fix_channels_text(
+        f"default::{GOOD}\nlegacy::{LTDRDATA}/node_db/legacy/\ndev::{comfyorg}/node_db/dev\nmine::https://example.com/x\n"
+    )
+    assert text == f"default::{GOOD}\nlegacy::{GOOD}/node_db/legacy\ndev::{GOOD}/node_db/dev\nmine::https://example.com/x\n"
+    assert "legacy" in detail and "dev" in detail
+    assert mc.fix_channels_text(text) == (text, "")
 
 
 def test_idempotent_second_run_changes_nothing(tmp_path):
@@ -134,6 +151,94 @@ def test_legacy_config_is_repaired_without_creating_a_second_config(tmp_path):
     assert (new / "channels.list").read_text().startswith(f"default::{GOOD}\n")
 
 
+# Trimmed from what ComfyUI-Manager 4.2.2 (pip comfyui-manager, --enable-manager)
+# writes on first launch after config.ini was deleted.
+MANAGER_FIRST_LAUNCH_CONFIG = (
+    "[default]\n"
+    "git_exe = \n"
+    "use_uv = True\n"
+    "use_unified_resolver = False\n"
+    f"channel_url = {LTDRDATA}\n"
+    "share_option = all\n"
+    "bypass_ssl = False\n"
+    "file_logging = True\n"
+    "update_policy = stable-comfyui\n"
+    "security_level = normal\n"
+    "network_mode = public\n"
+    "db_mode = cache\n"
+    "\n"
+)
+
+
+def _manager_dir(code: Path, api: bool) -> Path:
+    return code.joinpath(*(mc.NEW_DIR if api else mc.LEGACY_DIR))
+
+
+def _channel_url(cfg: Path) -> str:
+    cp = configparser.ConfigParser(strict=False, interpolation=None)
+    cp.read(cfg)
+    return cp["default"]["channel_url"]
+
+
+@pytest.mark.parametrize("api", [True, False])
+def test_manager_reset_delete_then_first_launch_then_repair(tmp_path, installed, api):
+    """Delete config.ini, Manager's first launch writes ltdrdata, re-running the install repairs it."""
+    code = _comfy(tmp_path / "ComfyUI", system_user_api=api)
+    d = _manager_dir(code, api)
+    assert ai.step_manager_config(True, workspace=code).status == ai.OK
+    (d / "config.ini").unlink()
+    (d / "config.ini").write_text(MANAGER_FIRST_LAUNCH_CONFIG)
+
+    fixed = ai.step_manager_config(True, workspace=code)
+
+    assert fixed.status == ai.OK
+    text = (d / "config.ini").read_text()
+    assert _channel_url(d / "config.ini") == GOOD and "ltdrdata" not in text
+    assert text == MANAGER_FIRST_LAUNCH_CONFIG.replace(LTDRDATA, GOOD)
+    assert _manager_accepts(d)
+    before = {p.name: p.read_bytes() for p in d.iterdir()}
+    again = ai.step_manager_config(True, workspace=code)
+    assert again.status == ai.SKIPPED and again.lines == []
+    assert {p.name: p.read_bytes() for p in d.iterdir()} == before
+
+
+@pytest.mark.parametrize("api", [True, False])
+def test_manager_reset_delete_then_repair_before_any_launch(tmp_path, installed, api):
+    code = _comfy(tmp_path / "ComfyUI", system_user_api=api)
+    d = _manager_dir(code, api)
+    mc.ensure_manager_config(code)
+    channels = (d / "channels.list").read_bytes()
+    (d / "config.ini").unlink()
+
+    report = mc.ensure_manager_config(code)
+
+    assert [(a.path.name, a.action) for a in report.changed] == [("config.ini", mc.CREATED)]
+    assert _channel_url(d / "config.ini") == GOOD
+    assert (d / "channels.list").read_bytes() == channels
+    assert _manager_accepts(d)
+    assert mc.ensure_manager_config(code).changed == []
+
+
+def test_stale_ltdrdata_files_from_manager_are_repaired(tmp_path):
+    """A Manager-written config.ini and an ltdrdata channels.list, no Buddy seed at all."""
+    code = _comfy(tmp_path / "ComfyUI", system_user_api=True)
+    d = _manager_dir(code, True)
+    d.mkdir(parents=True)
+    (d / "config.ini").write_text(MANAGER_FIRST_LAUNCH_CONFIG)
+    (d / "channels.list").write_text(f"default::{LTDRDATA}\nrecent::{LTDRDATA}/node_db/new\n")
+
+    report = mc.ensure_manager_config(code)
+
+    assert {(a.path.name, a.action) for a in report.actions} == {("config.ini", mc.FIXED), ("channels.list", mc.FIXED)}
+    assert _channel_url(d / "config.ini") == GOOD
+    assert "ltdrdata" not in (d / "config.ini").read_text()
+    assert (d / "channels.list").read_text() == f"default::{GOOD}\nrecent::{GOOD}/node_db/new\n"
+    assert _manager_accepts(d)
+    before = {p.name: p.read_bytes() for p in d.iterdir()}
+    assert mc.ensure_manager_config(code).changed == []
+    assert {p.name: p.read_bytes() for p in d.iterdir()} == before
+
+
 def test_dry_run_writes_nothing(tmp_path):
     code = _comfy(tmp_path / "ComfyUI", system_user_api=True)
     report = mc.ensure_manager_config(code, apply=False)
@@ -172,12 +277,13 @@ def test_step_manager_config_waits_for_comfy(tmp_path):
     assert res.status == ai.NONFATAL and not res.required
 
 
-def test_comfy_requirements_file_lists_gguf_and_colour():
+def test_comfy_requirements_file_pins_gguf_and_colour():
     reqs = [
         line.strip() for line in ai.COMFY_REQUIREMENTS.read_text().splitlines()
         if line.strip() and not line.startswith("#")
     ]
-    assert reqs == ["gguf", "colour"]
+    assert reqs == ["gguf==0.19.0", "colour==0.1.5"]
+    assert [r.split("==")[0] for r in reqs] == list(ai.COMFY_PACKAGES)
 
 
 def test_step_comfy_packages_upgrades_into_comfy_venv(tmp_path, installed):

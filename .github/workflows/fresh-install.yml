@@ -1,0 +1,184 @@
+name: fresh-install
+
+# Real install from a clean checkout: install.py --automatic-install on CPU with
+# the weights, SageAttention and llama.cpp skipped, then ComfyUI --cpu on :8188.
+# Linux runs on pushes to main and PRs that touch the install path, nightly, and
+# on demand. Windows runs nightly and on demand only.
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - .github/workflows/fresh-install.yml
+      - video_buddy/install.py
+      - video_buddy/requirements.txt
+      - video_buddy/comfy-requirements.txt
+      - video_buddy/master_agent/automatic_install.py
+      - video_buddy/master_agent/install_report.py
+      - video_buddy/master_agent/comfy/**
+      - video_buddy/scripts/ci/**
+      - video_buddy/workflows/260615_VIDEO-BUDDY_FLUX_KLEIN_9B_V01_api.json
+  pull_request:
+    paths:
+      - .github/workflows/fresh-install.yml
+      - video_buddy/install.py
+      - video_buddy/requirements.txt
+      - video_buddy/comfy-requirements.txt
+      - video_buddy/master_agent/automatic_install.py
+      - video_buddy/master_agent/install_report.py
+      - video_buddy/master_agent/comfy/**
+      - video_buddy/scripts/ci/**
+      - video_buddy/workflows/260615_VIDEO-BUDDY_FLUX_KLEIN_9B_V01_api.json
+  schedule:
+    - cron: "17 6 * * *"
+  workflow_dispatch:
+    inputs:
+      windows:
+        description: "Also run the Windows job"
+        type: boolean
+        default: true
+
+concurrency:
+  group: fresh-install-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  plan:
+    runs-on: ubuntu-latest
+    outputs:
+      os: ${{ steps.os.outputs.os }}
+    steps:
+      - id: os
+        env:
+          WINDOWS: ${{ github.event_name == 'schedule' || (github.event_name == 'workflow_dispatch' && inputs.windows) }}
+        run: |
+          if [ "$WINDOWS" = true ]; then
+            echo 'os=["ubuntu-latest","windows-latest"]' >> "$GITHUB_OUTPUT"
+          else
+            echo 'os=["ubuntu-latest"]' >> "$GITHUB_OUTPUT"
+          fi
+
+  fresh-install:
+    name: fresh install (${{ matrix.os }})
+    needs: plan
+    strategy:
+      fail-fast: false
+      matrix:
+        os: ${{ fromJSON(needs.plan.outputs.os) }}
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 45
+    defaults:
+      run:
+        shell: bash
+        working-directory: video_buddy
+    env:
+      COMFY_EXTRA_ARGS: --cpu --enable-manager
+      PYTHONUTF8: "1"
+      INSTALL_FLAGS: --yes --skip-weights --skip-sage --skip-llm --gpu cpu
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+          cache-dependency-path: |
+            video_buddy/requirements.txt
+            video_buddy/comfy-requirements.txt
+
+      - name: Download caches (pip, uv, Playwright)
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.cache/uv
+            ~/.cache/ms-playwright
+            ~/AppData/Local/uv/cache
+            ~/AppData/Local/ms-playwright
+          key: fresh-install-${{ runner.os }}-${{ hashFiles('video_buddy/requirements.txt', 'video_buddy/comfy-requirements.txt') }}
+          restore-keys: fresh-install-${{ runner.os }}-
+
+      - name: Free disk space (Linux)
+        if: runner.os == 'Linux'
+        run: |
+          # Pre-flight wants 20 GB free for ComfyUI + its venv.
+          sudo rm -rf /usr/share/dotnet /usr/local/lib/android /opt/ghc /opt/hostedtoolcache/CodeQL
+          df -h .
+
+      - name: ffmpeg + paths
+        run: |
+          if [ "$RUNNER_OS" = Windows ]; then
+            choco install ffmpeg -y --no-progress
+            # D: is small on Windows runners; C: holds the ComfyUI venv.
+            echo "MANAGED_COMFY_ROOT=C:/vbci/ComfyUI" >> "$GITHUB_ENV"
+            echo "COMFY_DIR=C:/vbci/ComfyUI" >> "$GITHUB_ENV"
+            echo "VB_PY=.venv/Scripts/python.exe" >> "$GITHUB_ENV"
+            echo "COMFY_PY=C:/vbci/ComfyUI/.venv/Scripts/python.exe" >> "$GITHUB_ENV"
+          else
+            sudo apt-get update && sudo apt-get install -y ffmpeg
+            echo "COMFY_DIR=ComfyUI" >> "$GITHUB_ENV"
+            echo "VB_PY=.venv/bin/python" >> "$GITHUB_ENV"
+            echo "COMFY_PY=ComfyUI/.venv/bin/python" >> "$GITHUB_ENV"
+          fi
+
+      - name: Fresh install (install.py --automatic-install, CPU, no weights)
+        timeout-minutes: 20
+        run: |
+          mkdir -p ci-artifacts
+          python install.py --automatic-install $INSTALL_FLAGS 2>&1 | tee ci-artifacts/install.log
+          grep -q "^Install OK" ci-artifacts/install.log
+
+      - name: Pinned Comfy packages are installed
+        run: $VB_PY scripts/ci/fresh_install_check.py pins --python "$COMFY_PY"
+
+      - name: Manager channel after install
+        run: $VB_PY scripts/ci/fresh_install_check.py manager-channel --comfy "$COMFY_DIR"
+
+      - name: Launch ComfyUI --cpu (packs automatic-install puts in)
+        timeout-minutes: 5
+        run: bash scripts/ci/comfy_launch.sh repo-packs
+
+      - name: Install the Klein stills node packs
+        timeout-minutes: 10
+        run: $VB_PY scripts/ci/fresh_install_check.py install-packs --workspace "$COMFY_DIR"
+
+      - name: Pins survive unrelated upgrades and ComfyUI's requirements
+        timeout-minutes: 10
+        run: |
+          $VB_PY scripts/ci/fresh_install_check.py pins --python "$COMFY_PY" --stress \
+            --comfy-requirements "$COMFY_DIR/requirements.txt"
+
+      - name: Launch ComfyUI --cpu, validate the Klein stills graph against /object_info
+        timeout-minutes: 5
+        # Triton is skipped here (--skip-sage); KJNodes logs its optional import.
+        run: bash scripts/ci/comfy_launch.sh klein --validate --allow-missing-module triton
+
+      - name: Manager reset (delete config.ini, first launch, repair, second run unchanged)
+        timeout-minutes: 15
+        run: |
+          check="$VB_PY scripts/ci/fresh_install_check.py"
+          cfg_dir=$($VB_PY -c "import sys; sys.path.insert(0, '.'); from master_agent.comfy.manager_config import manager_dirs; print(manager_dirs(sys.argv[1])[0])" "$COMFY_DIR")
+          $check delete-manager-config --comfy "$COMFY_DIR"
+          SETTLE_S=10 bash scripts/ci/comfy_launch.sh after-delete --allow-missing-module triton || true
+          echo "Manager's own first-launch config.ini:"
+          grep -H channel_url "$cfg_dir/config.ini" || echo "(Manager did not write one)"
+          $VB_PY -m master_agent automatic-install $INSTALL_FLAGS 2>&1 | tee ci-artifacts/repair-1.log
+          $check manager-channel --comfy "$COMFY_DIR"
+          bash scripts/ci/comfy_launch.sh after-repair --allow-missing-module triton
+          $check manager-channel --comfy "$COMFY_DIR" --save ci-artifacts/manager-after-repair.json
+          $VB_PY -m master_agent automatic-install $INSTALL_FLAGS 2>&1 | tee ci-artifacts/repair-2.log
+          grep -E "SKIPPED +ComfyUI-Manager channel" ci-artifacts/repair-2.log
+          $check manager-channel --comfy "$COMFY_DIR" --compare ci-artifacts/manager-after-repair.json
+
+      - name: Stop ComfyUI
+        if: always()
+        run: $VB_PY -m master_agent comfy stop || true
+
+      - name: Upload logs
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: fresh-install-${{ matrix.os }}
+          path: |
+            video_buddy/ci-artifacts/
+            video_buddy/state/logs/
+          if-no-files-found: ignore
