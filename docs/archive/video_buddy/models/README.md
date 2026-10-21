@@ -58,7 +58,7 @@ python -m master_agent download-models --h3 --yes
 
 ## Filenames the agent looks for
 
-GGUF wins when a compatible file is already on disk (QuantStack `LTX-2.3-*-Q4_K_S.gguf`, then Sulphur `sulphur_dev-Q3_K_S.gguf`). The fp8 and EROS names below are the fallback when that slot has no GGUF. Buddy does not download a GGUF pack for you.
+`base` / `eros` / `directors` diffusion is `10Eros_v1.5-Q4_K_M.gguf` on `UnetLoaderGGUF` when that file is already on disk. Otherwise QuantStack `LTX-2.3-*-Q4_K_S.gguf`, then Sulphur `sulphur_dev-Q3_K_S.gguf`. Buddy does not download a GGUF pack for you.
 
 ### base
 - `diffusion_models/ltx-2.3-22b-distilled-1.1_transformer_only_fp8_scaled.safetensors`
@@ -66,7 +66,7 @@ GGUF wins when a compatible file is already on disk (QuantStack `LTX-2.3-*-Q4_K_
 - `text_encoders/gemma_3_12B_it_fp4_mixed.safetensors`
 
 ### eros
-- `diffusion_models/ltx-2.3-22b-distilled-10-eros_fp8.safetensors`
+- `diffusion_models/10Eros_v1.5-Q4_K_M.gguf` (`UnetLoaderGGUF`; not downloaded)
 
 ### directors
 - `diffusion_models/ltx-2.3-22b-dev_transformer_only_fp8_scaled.safetensors`

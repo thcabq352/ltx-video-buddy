@@ -788,7 +788,7 @@ def is_sulphur_or_ltx23_gguf(name: str) -> bool:
         return False
     if not any(tok in base for tok in _QUANT_MARKERS):
         return False
-    if "sulphur" in base:
+    if "sulphur" in base or "10eros" in base:
         return True
     return "ltx23" in _compact_name(base)
 
@@ -918,6 +918,7 @@ def satisfying_weight(
         or "ltx2.3" in low
         or "ltx-2.3" in low
         or "sulphur" in low
+        or "10eros" in low
     ):
         variant = "directors" if ("dev" in low and "distill" not in low) else "base"
         return resolve_ltx23_gguf(variant, scan)

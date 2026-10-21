@@ -15,7 +15,9 @@ from unittest.mock import patch
 from master_agent.comfy.validator import ValidationReport, _validate_scalar
 from master_agent.comfy.workflow_patcher import load_and_patch_workflow
 
-EROS = "LTX2.3_DISTILLED-1.1_BAKED_LTX_10Eros_v14_r768.safetensors"
+EROS = "10Eros_v1.5-Q4_K_M.gguf"
+PROJ = "ltx-2.3-22b-dev-fp8.safetensors"
+AUDIO_VAE = "LTX23_audio_vae_bf16.safetensors"
 FP4 = "gemma_3_12B_it_fp4_mixed.safetensors"
 SULPHUR = "sulphur_dev-Q3_K_S.gguf"
 HERETIC = "gemma-3-12b-it-heretic.safetensors"
@@ -66,9 +68,13 @@ def test_base_uses_sulphur_and_heretic_when_literals_are_missing(tmp_path: Path)
     workflow, meta = _patch("base", tmp_path)
 
     assert meta["checkpoint"] == SULPHUR
-    assert _widget(workflow, "CheckpointLoaderSimple", "ckpt_name") == [SULPHUR]
+    assert _widget(workflow, "CheckpointLoaderSimple", "ckpt_name") == []
     assert _widget(workflow, "LTXAVTextEncoderLoader", "text_encoder") == [HERETIC]
-    assert _widget(workflow, "LTXAVTextEncoderLoader", "ckpt_name") == [SULPHUR]
+    assert _widget(workflow, "LTXAVTextEncoderLoader", "ckpt_name") == [PROJ]
+    assert _widget(workflow, "VAELoader", "vae_name") == [
+        AUDIO_VAE,
+        "taeltx2_3.safetensors",
+    ]
     gguf = _widget(workflow, "UnetLoaderGGUF", "unet_name")
     assert gguf == [SULPHUR]
     blob = " ".join(
@@ -82,14 +88,17 @@ def test_base_uses_sulphur_and_heretic_when_literals_are_missing(tmp_path: Path)
 
 
 def test_eros_checkpoint_stays_when_the_file_exists(tmp_path: Path):
-    _write(tmp_path / "checkpoints" / EROS)
+    _write(tmp_path / "diffusion_models" / EROS)
     _write(tmp_path / "unet" / SULPHUR)
     _write(tmp_path / "text_encoders" / HERETIC)
     workflow, meta = _patch("base", tmp_path)
     assert meta["checkpoint"] == EROS
-    assert workflow["1"]["inputs"]["ckpt_name"] == EROS
-    assert _widget(workflow, "UnetLoaderGGUF", "unet_name") == [SULPHUR]
+    assert workflow["1"]["class_type"] == "UnetLoaderGGUF"
+    assert workflow["1"]["inputs"]["unet_name"] == EROS
+    assert workflow["1"]["inputs"].keys() == {"unet_name"}
     assert _widget(workflow, "LTXAVTextEncoderLoader", "text_encoder") == [HERETIC]
+    assert _widget(workflow, "LTXAVTextEncoderLoader", "ckpt_name") == [PROJ]
+    assert AUDIO_VAE in _widget(workflow, "VAELoader", "vae_name")
 
 
 def test_lipsync_checkpoint_is_not_rewritten_to_sulphur(tmp_path: Path):

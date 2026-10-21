@@ -280,7 +280,7 @@ def test_illegal_frame_override_snaps(state_dir: Path):
 
 
 def test_shipped_base_graph_learns_roles_and_pairs_audio_frames(state_dir: Path):
-    path = Path(__file__).resolve().parents[1] / "workflows" / "base_t2v_i2v.json"
+    path = Path(__file__).resolve().parents[1] / "workflows" / "ltx23_av.json"
     learned = ingest_file(path, slug="base")["learned"]
     assert learned["readiness"]["missing_nodes"] == []
     fields = learned["fields"]
@@ -292,11 +292,18 @@ def test_shipped_base_graph_learns_roles_and_pairs_audio_frames(state_dir: Path)
     assert fields["seed"]["input"] == "noise_seed"
     assert fields["frames"]["node_id"] == "20"
     assert fields["frames"]["input"] == "length"
-    assert fields["checkpoint"]["input"] == "ckpt_name"
+    assert fields["checkpoint"]["node_id"] == "1"
+    assert fields["checkpoint"]["input"] == "unet_name"
+    assert fields["checkpoint"]["class_type"] == "UnetLoaderGGUF"
     assert fields["filename_prefix"]["node_id"] == "90"
     report = dry_run_slug("base", prompt="neon rain", seed=5, frames=25)
     assert report["queued"] is False
     assert report["workflow"]["10"]["inputs"]["text"] == "neon rain"
+    assert report["workflow"]["1"]["inputs"]["unet_name"] == "10Eros_v1.5-Q4_K_M.gguf"
+    assert report["workflow"]["70"]["class_type"] == "VAEDecode"
+    assert report["workflow"]["5"]["inputs"]["vae_name"] == "taeltx2_3.safetensors"
+    assert report["dangers"] == []
     assert report["workflow"]["20"]["inputs"]["length"] == 25
     assert report["workflow"]["21"]["inputs"]["frames_number"] == 25
     assert "ComfyUI-LTXVideo" in learned["requires"]
+    assert "ComfyUI-GGUF" in learned["requires"]

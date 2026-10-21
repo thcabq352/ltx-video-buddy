@@ -334,7 +334,7 @@ def check_ltx23_weights() -> dict[str, Any]:
         return _row(
             "ltx23-weights",
             True,
-            f"GGUF-first {found.name} at {found} — fp8/EROS only if no GGUF matches",
+            f"GGUF-first {found.name} at {found} — 10Eros v1.5 when that file is on disk",
         )
     from master_agent.models.deferred import DOWNLOAD_CMD, REGISTER_CMD, read_marker
 

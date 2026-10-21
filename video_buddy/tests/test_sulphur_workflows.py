@@ -29,14 +29,23 @@ from master_agent.config import WORKFLOW_FILES, WORKFLOWS_DIR
 from master_agent.models.vram_policy import workflow_row
 from master_agent.orchestrator.director import rule_based_variant
 
-# Tower bytes. A change here means the committed graph is no longer the source.
+# Sulphur tower bytes. A change here means the committed Sulphur graph moved.
 _SOURCE_SHA256 = {
     "sulphur/ltx23_i2v_base.json": "571c572d7d377a4c4c102331731ac93862e60cb4b53fd121d554e75adeeafb08",
     "sulphur/ltx23_i2v_distilled.json": "0af6043519b25037edc46978bbf429dffaf23d46ac3496731fc795ab97c5e0ef",
     "sulphur/ltx23_t2v_base.json": "da499a27938b30d8c5814ac66d30f91d66fbe75687533fb0d625ae0f34c8856e",
     "sulphur/ltx23_t2v_distilled.json": "c17a69296352ca626223f75388b981184cef2a3a9ef67d70c71a716709aa7152",
 }
-_EROS_SHA256 = "868c3d110462b6d3be24f28030d410b7ff4ed7ef57b4f77fffdfd2b91442c545"
+# ltx23_av.json: one chain for base / eros / directors. Node 70 is VAEDecode.
+_AV_WORKFLOW = "ltx23_av.json"
+_AV_PRESET = "ltx23_av_presets.yaml"
+_AV_SHA256 = "1e2bd83d772f0e06ddfc1f6270c23900a8e2dc9b7a379639ab1d97d383fe654a"
+_EROS_GGUF = "10Eros_v1.5-Q4_K_M.gguf"
+_REMOVED_AV_JSON = (
+    "base_t2v_i2v.json",
+    "eros_t2v_i2v.json",
+    "directors.json",
+)
 
 
 @pytest.fixture(autouse=True)
@@ -84,10 +93,40 @@ def test_tower_source_graphs_are_unchanged_and_nonempty():
         assert _sha256(path) == digest
 
 
-def test_eros_workflow_is_unchanged():
-    path = WORKFLOWS_DIR / "eros_t2v_i2v.json"
-    assert WORKFLOW_FILES["eros"] == "eros_t2v_i2v.json"
-    assert _sha256(path) == _EROS_SHA256
+def test_av_variants_share_one_workflow_and_a_preset():
+    from master_agent.comfy.workflow_patcher import load_workflow_template, ltx23_av_preset
+
+    path = WORKFLOWS_DIR / _AV_WORKFLOW
+    assert path.is_file()
+    assert _sha256(path) == _AV_SHA256
+    for name in _REMOVED_AV_JSON:
+        assert not (WORKFLOWS_DIR / name).exists()
+    raw = json.loads(path.read_text(encoding="utf-8"))
+    assert raw["70"]["class_type"] == "VAEDecode"
+    assert raw["70"]["inputs"] == {"samples": ["60", 0], "vae": ["5", 0]}
+    assert "LTXVTiledVAEDecode" not in path.read_text(encoding="utf-8")
+    assert raw["2"]["inputs"]["text_encoder"] == "gemma_3_12B_it_fp4_mixed.safetensors"
+    assert raw["3"]["inputs"]["vae_name"] == "LTX23_audio_vae_bf16.safetensors"
+    assert raw["5"]["inputs"]["vae_name"] == "taeltx2_3.safetensors"
+    assert raw["4"]["class_type"] == "LoraLoaderModelOnly"
+    for variant, prefix in (
+        ("base", "ltx_base"),
+        ("eros", "ltx_eros"),
+        ("directors", "ltx_directors"),
+    ):
+        assert WORKFLOW_FILES[variant] == _AV_WORKFLOW
+        assert resolve_workflow_path(variant) == path
+        preset = ltx23_av_preset(variant)
+        assert preset is not None
+        assert preset["unet_name"] == _EROS_GGUF
+        assert preset["filename_prefix"] == prefix
+        assert preset["prompt"]
+        loaded = load_workflow_template(variant)
+        assert loaded["1"]["class_type"] == "UnetLoaderGGUF"
+        assert loaded["1"]["inputs"]["unet_name"] == preset["unet_name"]
+        assert loaded["10"]["inputs"]["text"] == preset["prompt"]
+        assert loaded["90"]["inputs"]["filename_prefix"] == preset["filename_prefix"]
+        assert loaded["70"]["class_type"] == "VAEDecode"
 
 
 def test_runtime_files_are_api_and_keep_active_lora_tokens():
