@@ -1,0 +1,3 @@
+# Optional browser dashboard: `streamlit run streamlit_app.py --server.address 127.0.0.1`.
+# Not part of the base install or the Hermes/agent path.
+streamlit>=1.40

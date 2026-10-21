@@ -95,6 +95,7 @@ ChromaDB at `video_buddy/state/chroma/` (gitignored) holds `workflows`, `runs`, 
 | 11434 | Ollama |
 | 8080 | llama.cpp |
 | 8642 | Hermes. Buddy does not bind it. |
+| 8501 | Optional Streamlit dashboard, only while `streamlit run streamlit_app.py` runs ([Browser dashboard](GETTING_STARTED.md#browser-dashboard)). Bind it to 127.0.0.1. |
 
 Shift budget is about 80 VRAM-minutes. Over cap, the queue HOLDs and the run reports `paused`, not `error`. Diagnose and dry-run do not increment `used`.
 
@@ -111,7 +112,8 @@ The current shift is the ledger's `shift_id`: `used` counts since `shift_started
 The **LTX bot gateway** is the only agent entry point. It loads the
 `video-buddy` skill and runs `python -m master_agent agent <tool> --args JSON`
 from `video_buddy/` (or imports `master_agent.agent_api`). Buddy listens on no
-port of its own.
+port of its own. The optional Streamlit dashboard is for people, not agents: it
+calls the same `agent_api` functions in-process and is not a gateway.
 
 "LTX bot gateway" means the Hermes gateway that serves the LTX bot (profile
 `ltx`, standalone or mux `/p/ltx/` on 8642), driving Buddy through its

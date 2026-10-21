@@ -147,6 +147,19 @@ python -m master_agent comfy run --mode generate --variant ltx25_t2v_i2v --promp
 python -m master_agent run "cinematic close-up of rain on a window" --quality draft --duration 3 --no-interview
 ```
 
+### Browser dashboard
+
+No terminal agent needed. Once the install above works (`health` shows ComfyUI up, or use the dashboard's **Start ComfyUI** button), from `video_buddy/`:
+
+```bash
+pip install -r requirements-ui.txt
+streamlit run streamlit_app.py --server.address 127.0.0.1
+```
+
+Open http://127.0.0.1:8501, type a prompt, pick duration and quality, and press **Generate**. The page shows `health` at the top, polls the render, and plays the MP4 when it is done. **Advanced** has the model variant (blank lets the director pick), storyboard mode, upscale, seed, and **Plan only** (a dry run that uses no GPU). A budget HOLD shows as paused, not failed; `budget reset-shift` continues it. One render runs at a time, and a page refresh finds it again.
+
+`streamlit_app.py` is a thin layer over `master_agent.agent_api` (`health`, `comfy_start`, `create_video`). Keep `--server.address 127.0.0.1`: the page can queue GPU renders and has no login.
+
 `--prepare` lints and writes JSON. It does not queue the GPU. Photo plus a voice file defaults to `ltx25_a2v`. Catalog ids and the H3 voice warning: [Features](FEATURES.md).
 
 12GB cards (RTX 4000 Ada) and fully local LLM pins are in [Weights](WEIGHTS.md#12gb-and-local-llm).
