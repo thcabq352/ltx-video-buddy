@@ -282,7 +282,7 @@ def test_comfy_requirements_file_pins_gguf_and_colour():
         line.strip() for line in ai.COMFY_REQUIREMENTS.read_text().splitlines()
         if line.strip() and not line.startswith("#")
     ]
-    assert reqs == ["gguf==0.19.0", "colour==0.1.5"]
+    assert reqs == ["gguf==0.19.0", "colour-science==0.4.6"]
     assert [r.split("==")[0] for r in reqs] == list(ai.COMFY_PACKAGES)
 
 
@@ -293,7 +293,27 @@ def test_step_comfy_packages_upgrades_into_comfy_venv(tmp_path, installed):
     py.write_text("")
     res = ai.step_comfy_packages(True, workspace=code)
     assert res.status == ai.OK
-    assert installed == [[str(py), "-m", "pip", "install", "--upgrade", "-r", str(ai.COMFY_REQUIREMENTS)]]
+    assert installed == [
+        [str(py), "-m", "pip", "uninstall", "-y", "colour"],
+        [str(py), "-m", "pip", "install", "--upgrade", "-r", str(ai.COMFY_REQUIREMENTS)],
+        [str(py), "-c", "import gguf, colour"],
+    ]
+
+
+def test_step_comfy_packages_installs_node_requirements_first(tmp_path, installed):
+    code = _comfy(tmp_path / "ComfyUI", system_user_api=False)
+    py = code / ".venv" / "bin" / "python"
+    py.parent.mkdir(parents=True)
+    py.write_text("")
+    reqs = []
+    for node in ai.REQUIRED_NODES:
+        d = code / "custom_nodes" / node
+        d.mkdir(parents=True)
+        (d / "requirements.txt").write_text("einops\n")
+        reqs.append(d / "requirements.txt")
+    assert ai.step_comfy_packages(True, workspace=code).status == ai.OK
+    assert installed[:2] == [[str(py), "-m", "pip", "install", "-r", str(r)] for r in reqs]
+    assert installed[-2][-2:] == ["-r", str(ai.COMFY_REQUIREMENTS)]
 
 
 def test_step_comfy_packages_portable_uses_embedded_python(tmp_path, installed):
@@ -306,13 +326,22 @@ def test_step_comfy_packages_portable_uses_embedded_python(tmp_path, installed):
     assert installed[0][:4] == [str(emb), "-s", "-m", "pip"]
 
 
-def test_step_comfy_packages_pip_failure_is_nonfatal(tmp_path, monkeypatch, installed):
+def test_step_comfy_packages_pip_failure_is_fatal(tmp_path, monkeypatch, installed):
     code = _comfy(tmp_path / "ComfyUI", system_user_api=False)
     (code / ".venv" / "bin").mkdir(parents=True)
     (code / ".venv" / "bin" / "python").write_text("")
     monkeypatch.setattr(ai, "_run", lambda cmd, **k: (1, "no network"))
     res = ai.step_comfy_packages(True, workspace=code)
-    assert res.status == ai.NONFATAL and not res.required and "no network" in res.detail
+    assert res.status == ai.FAILED and res.required and "no network" in res.detail
+
+
+def test_step_comfy_packages_import_check_failure_is_fatal(tmp_path, monkeypatch, installed):
+    code = _comfy(tmp_path / "ComfyUI", system_user_api=False)
+    (code / ".venv" / "bin").mkdir(parents=True)
+    (code / ".venv" / "bin" / "python").write_text("")
+    monkeypatch.setattr(ai, "_run", lambda cmd, **k: (1, "No module named 'colour'") if "-c" in cmd else (0, ""))
+    res = ai.step_comfy_packages(True, workspace=code)
+    assert res.status == ai.FAILED and "cannot import" in res.detail
 
 
 def test_dry_run_plan_lists_both_new_steps(tmp_path, monkeypatch, capsys):
