@@ -26,6 +26,7 @@ FULL_INSTALL_CMD_WINDOWS = "install.bat --automatic-install --yes"
 # provides, by design. After a light install they are INFO, not failures.
 LIGHT_INSTALL_NOT_INCLUDED: dict[str, str] = {
     "comfyui": "the light install does not install or start ComfyUI (the full setup does)",
+    "comfy-node-deps": f"the light install does not touch ComfyUI's python; {FULL_INSTALL_CMD} installs them",
     "ltx23-weights": f"the light install downloads no weights; {FULL_INSTALL_CMD} fetches LTX 2.3",
     "ltx25-weights": "LTX 2.5 is an optional gated pack; only the ltx25_* workflows need it",
     "ltx25-ic-lora": "only ltx25_msr and ltx25_v2v_ic_lora need this LoRA",
@@ -51,7 +52,6 @@ STEP_REASONS: dict[str, str] = {
     ".env": "Buddy runs on its built-in defaults without .env",
     "Playwright Chromium": "only the web scraper uses Chromium; video generation does not",
     "Triton + SageAttention": "ComfyUI runs without them, just slower",
-    "Comfy Python packages": "ComfyUI-GGUF's own requirements also pull gguf; re-run automatic-install --yes to retry",
     "ComfyUI-Manager channel": "only ComfyUI-Manager's node browser uses the channel; rendering does not",
     "llama.cpp": "Buddy renders video without a local LLM; the brief / judge LLM stays off",
     "LLM models": "no public GGUF source is defined; video generation does not need them",

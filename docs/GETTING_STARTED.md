@@ -21,7 +21,7 @@ What it installs:
 - comfy-cli at the pin in `requirements.txt` (`comfy-cli==1.20.0`)
 - ComfyUI in its own folder (`MANAGED_COMFY_ROOT`, default `video_buddy/ComfyUI`), with the PyTorch build for your GPU. Buddy only ever uses this ComfyUI.
 - The two custom node packs the LTX 2.3 graphs need: `ComfyUI-LTXVideo` and `ComfyUI-GGUF`
-- The Python packages in `video_buddy/comfy-requirements.txt` (`gguf`, `colour`), installed or upgraded inside ComfyUI's own venv
+- Each node pack's own `requirements.txt`, then `gguf` and `colour-science` (`video_buddy/comfy-requirements.txt`), installed into the Python ComfyUI runs with (its own venv), not Buddy's `.venv`. Already-importable packages are skipped. Both are required: ComfyUI-GGUF and ComfyUI-LTXVideo do not load without them
 - ComfyUI-Manager's channel: `config.ini` and `channels.list` point at the Comfy-Org channel, and an existing `config.ini` with the old `ltdrdata` URL is repaired (see [Comfy](COMFY.md#comfyui-manager-channel))
 - Triton and SageAttention inside ComfyUI's own venv (optional; see [Comfy](COMFY.md#triton-and-sageattention))
 - The LTX 2.3 weights, about 76.5 GB, into `MODELS_DIR` only (never into the ComfyUI folder)
@@ -54,7 +54,8 @@ Other flags: `--gpu auto|nvidia|amd|m-series|cpu` picks the ComfyUI PyTorch buil
 - A pre-flight FAIL stops the run before any change. Fix the item and run the same command again.
 - Running it again is safe. Finished steps are skipped. A half-finished ComfyUI is repaired with `comfy install --restore`.
 - Buddy never uses `sudo` silently. On Linux, when ffmpeg needs administrator rights and `sudo` would ask for a password, the step shows `NEEDS-YOU` with the exact command to run yourself. The same goes for the llama.cpp build tools.
-- Optional steps (Playwright, Comfy Python packages, ComfyUI-Manager channel, Triton, SageAttention, llama.cpp, LLM models) never stop the install. When they fail they show `FAILED-NONFATAL` (or `NEEDS-YOU` with a command) and video generation still works.
+- A pip failure while installing the node packs' Python packages is a `FAILED` step with pip's error and the command to retry: the install ends `Install FAILED`, because video generation cannot work without them.
+- Optional steps (Playwright, ComfyUI-Manager channel, Triton, SageAttention, llama.cpp, LLM models) never stop the install. When they fail they show `FAILED-NONFATAL` (or `NEEDS-YOU` with a command) and video generation still works.
 - The summary ends with doctor's own read-only scan, then `Install OK: N ok, M non-fatal note(s)` and "Ready for generate (LTX 2.3)", or the list of items that still need you and `Install FAILED: ...` (exit 1). Every `INFO` or `FAILED-NONFATAL` line carries a "safe to ignore because ..." note.
 
 When it says ready:

@@ -239,6 +239,33 @@ def check_comfy() -> dict[str, Any]:
     return _row("comfyui", False, detail, fix=hint)
 
 
+def check_comfy_node_deps() -> dict[str, Any]:
+    """gguf / colour-science importable in the managed ComfyUI's own python. Read-only."""
+    state, workspace = _managed_comfy_state()
+    if workspace is None or state != "installed":
+        return _row("comfy-node-deps", True, f"not checked: Buddy's ComfyUI folder is {state}")
+    try:
+        from master_agent.automatic_install import comfy_python, missing_comfy_packages
+
+        py, flags = comfy_python(workspace)
+        if py is None:
+            return _row("comfy-node-deps", True, f"not checked: no ComfyUI python in {workspace}")
+        missing = missing_comfy_packages(py, flags)
+    except Exception as exc:
+        return _row("comfy-node-deps", True, f"not checked ({type(exc).__name__}: {exc})")
+    if not missing:
+        return _row("comfy-node-deps", True, f"gguf, colour-science importable in {py}")
+    from master_agent.install_report import FULL_INSTALL_CMD
+
+    return _row(
+        "comfy-node-deps",
+        False,
+        f"missing in ComfyUI's python {py}: {', '.join(missing)}. "
+        "ComfyUI-LTXVideo / ComfyUI-GGUF will not load, so video generation is blocked",
+        fix=f"{FULL_INSTALL_CMD} (installs them into ComfyUI's python and skips everything already done)",
+    )
+
+
 def _managed_comfy_source() -> str:
     try:
         from master_agent.comfy.root import resolve_managed_comfy_root
@@ -569,6 +596,7 @@ def snapshot() -> list[dict[str, Any]]:
         check_model_folders(),
         check_llm_models(),
         check_comfy(),
+        check_comfy_node_deps(),
         check_vram_policy(),
         check_hardware(),
         check_pack_pins(),

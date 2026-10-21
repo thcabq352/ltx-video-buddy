@@ -1,8 +1,12 @@
 # Installed into ComfyUI's own interpreter (its .venv, or a portable build's
 # python_embeded), not Buddy's .venv. automatic-install runs
-# `<comfy python> -m pip install --upgrade -r comfy-requirements.txt`.
+# `<comfy python> -m pip install --upgrade -r comfy-requirements.txt` when either
+# import is missing, and passes this file as `-c` constraints when it installs
+# each LTX 2.3 node pack's own requirements.txt.
 # Exact pins only: --upgrade on an == pin keeps that version, and CI
 # (scripts/ci/fresh_install_check.py pins) fails if anything moves them.
 # gguf: ComfyUI-GGUF loaders (UnetLoaderGGUF / CLIPLoaderGGUF).
 gguf==0.19.0
-colour==0.1.5
+# colour-science (import name `colour`): ComfyUI-LTXVideo. Not the unrelated
+# PyPI `colour` package. 0.4.6 is the newest release that still supports Python 3.10.
+colour-science==0.4.6
