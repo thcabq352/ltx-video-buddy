@@ -23,6 +23,8 @@ python -m master_agent comfy run --mode generate --variant base --prompt "a test
 
 Plain `python install.py` (no flags) is the **light** install: `.venv`, pip, Playwright, `.env`, ffmpeg, and empty model folders. It does not install ComfyUI or any weights, so `health` and `comfy run` have nothing to talk to until you run the full setup above. Windows: `install.bat`. macOS / Linux: `./install.sh`. `python install.py` never installs Ollama or pulls models; LLM GGUFs with no public source are skipped and the install continues. `python install.py --check` only reports. Agent entry: `python -m master_agent agent list`. Comfy is `:8188`.
 
+Browser instead of a terminal: `pip install -r requirements-ui.txt`, then `streamlit run streamlit_app.py --server.address 127.0.0.1` and open http://127.0.0.1:8501. See [Browser dashboard](../docs/GETTING_STARTED.md#browser-dashboard).
+
 ## Where each fact lives
 
 | Topic | Doc |
