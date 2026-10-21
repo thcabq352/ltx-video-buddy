@@ -7,6 +7,7 @@ workflow step can call it directly. Run from the repo root with Buddy's venv:
     python video_buddy/scripts/ci/fresh_install_check.py scan-log video_buddy/state/logs/comfyui_8188.log
     python video_buddy/scripts/ci/fresh_install_check.py wait-ready --out system_stats.json
     python video_buddy/scripts/ci/fresh_install_check.py install-packs --workspace video_buddy/ComfyUI
+    python video_buddy/scripts/ci/fresh_install_check.py node-floors --workspace video_buddy/ComfyUI
     python video_buddy/scripts/ci/fresh_install_check.py validate-workflow
     python video_buddy/scripts/ci/fresh_install_check.py pins --python <comfy python> --stress
     python video_buddy/scripts/ci/fresh_install_check.py manager-channel --comfy video_buddy/ComfyUI
@@ -184,6 +185,25 @@ def install_packs(workspace: Path, packs: Iterable[str]) -> str:
     if still:
         raise CheckFailed(f"not installed: {', '.join(still)}\n{out[-2000:]}")
     return out
+
+
+def node_floor_problems(workspace: Path, floors: dict[str, str] | None = None) -> list[str]:
+    """Each required pack must be installed with a readable version at or above its floor."""
+    from master_agent.automatic_install import NODE_FLOORS
+    from master_agent.comfy.updates import find_node_folder, meets_floor, read_node_version
+
+    problems = []
+    for name, floor in (NODE_FLOORS if floors is None else floors).items():
+        if find_node_folder(workspace, name) is None:
+            problems.append(f"{name} is not installed (needs >={floor})")
+            continue
+        have = read_node_version(workspace, name)
+        ok = meets_floor(have, floor)
+        if ok is None:
+            problems.append(f"{name} has no readable version in pyproject.toml (needs >={floor})")
+        elif not ok:
+            problems.append(f"{name} {have} is below the floor >={floor}")
+    return problems
 
 
 # --- pinned Comfy packages -----------------------------------------------------
@@ -387,6 +407,21 @@ def _cmd_install_packs(a: argparse.Namespace) -> list[str]:
     return ["installed " + ", ".join(KLEIN_PACKS)]
 
 
+def _cmd_node_floors(a: argparse.Namespace) -> list[str]:
+    from master_agent.automatic_install import NODE_FLOORS
+    from master_agent.comfy.stg_preflight import stg_preflight
+    from master_agent.comfy.updates import read_comfyui_version, read_node_version
+
+    workspace = Path(a.workspace)
+    problems = node_floor_problems(workspace)
+    if problems:
+        raise CheckFailed("\n".join(problems))
+    lines = [f"{name} {read_node_version(workspace, name)} >= {floor}" for name, floor in NODE_FLOORS.items()]
+    lines.append(f"ComfyUI {read_comfyui_version(workspace) or 'unknown'}")
+    lines.append("STG preflight: " + stg_preflight(workspace).message)
+    return lines
+
+
 def _cmd_pins(a: argparse.Namespace) -> list[str]:
     comfy_reqs = Path(a.comfy_requirements) if a.comfy_requirements else None
     return check_pins(a.python, Path(a.requirements), stress=a.stress, comfy_requirements=comfy_reqs)
@@ -454,6 +489,10 @@ def build_parser() -> argparse.ArgumentParser:
     s = sub.add_parser("install-packs", help="comfy node install the Klein stills packs")
     s.add_argument("--workspace", required=True)
     s.set_defaults(func=_cmd_install_packs)
+
+    s = sub.add_parser("node-floors", help="ComfyUI-LTXVideo (and other floored packs) at or above the floor")
+    s.add_argument("--workspace", required=True)
+    s.set_defaults(func=_cmd_node_floors)
 
     s = sub.add_parser("pins", help="assert comfy-requirements.txt pins are installed")
     s.add_argument("--python", default=sys.executable)

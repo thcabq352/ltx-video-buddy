@@ -76,7 +76,8 @@ def test_optional_node_missing_is_not_stale(tmp_path: Path, quiet_cli, monkeypat
     names = {item["name"]: item for item in report["items"]}
     assert names["comfy-cli"]["stale"] is False
     assert names["ComfyUI"]["stale"] is False
-    assert "no core pin" in names["ComfyUI"]["detail"]
+    assert "version unknown" in names["ComfyUI"]["detail"]
+    assert names["ComfyUI-LTXVideo"]["stale"] is False
     assert names["HeartMuLa_ComfyUI"]["stale"] is False
     assert names["HeartMuLa_ComfyUI"]["optional"] is True
     assert report["stale"] == []

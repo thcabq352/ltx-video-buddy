@@ -130,6 +130,9 @@ jobs:
       - name: Pinned Comfy packages are installed
         run: $VB_PY scripts/ci/fresh_install_check.py pins --python "$COMFY_PY"
 
+      - name: ComfyUI-LTXVideo at or above its version floor
+        run: $VB_PY scripts/ci/fresh_install_check.py node-floors --workspace "$COMFY_DIR"
+
       - name: Manager channel after install
         run: $VB_PY scripts/ci/fresh_install_check.py manager-channel --comfy "$COMFY_DIR"
 

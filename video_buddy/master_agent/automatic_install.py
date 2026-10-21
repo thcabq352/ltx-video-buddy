@@ -40,6 +40,10 @@ LTX23_BUNDLE = "ltx23_core"
 # LTXVTiledVAEDecode (ComfyUI-LTXVideo) and UnetLoaderGGUF, which the patcher
 # swaps in when the GGUF is on disk (ComfyUI-GGUF). Comfy registry ids.
 REQUIRED_NODES = ("ComfyUI-LTXVideo", "ComfyUI-GGUF")
+# Minimum versions, not exact pins: an older pack is updated forward, a newer
+# one is left alone. ComfyUI >=0.40 breaks STG on ComfyUI-LTXVideo <1.1.0
+# (Lightricks/ComfyUI-LTXVideo#579). Same floors as comfy/pack_pins.json.
+NODE_FLOORS = {"ComfyUI-LTXVideo": "1.1.0"}
 
 GB = 1_000_000_000
 # ComfyUI checkout + its own venv with CUDA PyTorch + custom nodes + Triton.
@@ -265,6 +269,18 @@ def missing_nodes(workspace: Path, nodes: Iterable[str] = REQUIRED_NODES) -> lis
     folder = workspace / "custom_nodes"
     have = {p.name.lower() for p in folder.iterdir() if p.is_dir()} if folder.is_dir() else set()
     return [n for n in nodes if n.lower() not in have]
+
+
+def nodes_below_floor(workspace: Path, floors: dict[str, str] | None = None) -> dict[str, str]:
+    """``{name: installed}`` for installed packs whose readable version is below its floor."""
+    from master_agent.comfy.updates import meets_floor, read_node_version
+
+    out: dict[str, str] = {}
+    for name, floor in (NODE_FLOORS if floors is None else floors).items():
+        have = read_node_version(workspace, name)
+        if have is not None and meets_floor(have, floor) is False:
+            out[name] = have
+    return out
 
 
 def gpu_install_flag(gpu: dict[str, Any], override: str = "auto") -> str:
@@ -809,23 +825,46 @@ def step_model_paths(apply: bool) -> StepResult:
     return StepResult("model paths", OK, f"{written} (passed to Comfy at launch)")
 
 
+def _floor_text(below: dict[str, str]) -> str:
+    return ", ".join(f"{name} {have} (needs >={NODE_FLOORS[name]})" for name, have in below.items())
+
+
 def step_nodes(apply: bool, *, workspace: Path) -> StepResult:
     missing = missing_nodes(workspace)
-    if not missing:
+    below = nodes_below_floor(workspace)
+    if not missing and not below:
         return StepResult("custom nodes", SKIPPED, "already installed: " + ", ".join(REQUIRED_NODES))
-    argv = comfy_argv(workspace, "node", "install", *missing)
+    commands = []
+    if missing:
+        commands.append(comfy_argv(workspace, "node", "install", *missing))
+    if below:
+        commands.append(comfy_argv(workspace, "node", "update", *below))
     if not apply:
-        return StepResult("custom nodes", PLANNED, " ".join(argv))
+        return StepResult("custom nodes", PLANNED, " && ".join(" ".join(argv) for argv in commands))
     if comfy_install_state(workspace) != "installed":
         return StepResult("custom nodes", FAILED, "waits for ComfyUI")
-    print("$ " + " ".join(argv))
     from master_agent.comfy.tower import _child_env
 
-    code, out = _run(argv, timeout=1800, env=_child_env(workspace))
+    out = ""
+    for argv in commands:
+        print("$ " + " ".join(argv))
+        _code, out = _run(argv, timeout=1800, env=_child_env(workspace))
     still = missing_nodes(workspace)
     if still:
         return StepResult("custom nodes", FAILED, f"not installed: {', '.join(still)} ({out[-300:]})")
-    return StepResult("custom nodes", OK, "installed " + ", ".join(missing))
+    old = nodes_below_floor(workspace)
+    if old:
+        return StepResult("custom nodes", FAILED, f"below the version floor: {_floor_text(old)} ({out[-300:]})")
+    done = []
+    if missing:
+        done.append("installed " + ", ".join(missing))
+    if below:
+        from master_agent.comfy.updates import read_node_version
+
+        done.append("updated " + ", ".join(
+            f"{name} {have} -> {read_node_version(workspace, name) or 'unknown'}" for name, have in below.items()
+        ))
+    return StepResult("custom nodes", OK, "; ".join(done))
 
 
 COMFY_REQUIREMENTS = Path(__file__).resolve().parent.parent / "comfy-requirements.txt"

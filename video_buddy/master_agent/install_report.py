@@ -43,6 +43,7 @@ INFO_ROW_REASONS: dict[str, str] = {
     "heartmula-comfy": "HeartMuLa music is optional; video generation does not use it",
     "hardware": "it is information only and never blocks install",
     "pack-pins": "nothing was updated; stale pins only matter for an installed ComfyUI",
+    "stg": "generate turns STG off for a run only on the known-bad ComfyUI / ComfyUI-LTXVideo pair",
     "model-folders": "each download creates the folder it writes into",
 }
 

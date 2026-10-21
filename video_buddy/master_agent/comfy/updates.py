@@ -33,7 +33,9 @@ SNAPSHOT_NOTE = (
 )
 
 _SEMVER = re.compile(r"v?\d+\.\d+(?:\.\d+)?$")
+_FLOOR = re.compile(r">=\s*(v?\d+\.\d+(?:\.\d+)?)$")
 _COMMIT = re.compile(r"[0-9a-fA-F]{7,40}$")
+_VERSION_PREFIX = re.compile(r"\s*v?(\d+)\.(\d+)(?:\.(\d+))?")
 _REQ = Path(__file__).resolve().parents[2] / "requirements.txt"
 _PINS = Path(__file__).resolve().with_name("pack_pins.json")
 
@@ -104,9 +106,33 @@ def pin_style(expected: str | None) -> str:
         return "none"
     if _SEMVER.fullmatch(text):
         return "semver"
+    if _FLOOR.fullmatch(text):
+        return "floor"
     if _COMMIT.fullmatch(text):
         return "commit"
     return "text"
+
+
+def version_tuple(text: str | None) -> tuple[int, int, int] | None:
+    """``(major, minor, patch)`` from ``1.1``, ``v0.40.0`` or ``1.1.0rc1``; None when unparseable."""
+    m = _VERSION_PREFIX.match(str(text or ""))
+    if not m:
+        return None
+    return int(m.group(1)), int(m.group(2)), int(m.group(3) or 0)
+
+
+def floor_version(expected: str | None) -> str | None:
+    """``1.1.0`` from a ``>=1.1.0`` pin."""
+    m = _FLOOR.fullmatch((expected or "").strip())
+    return m.group(1).lstrip("v") if m else None
+
+
+def meets_floor(installed: str | None, floor: str) -> bool | None:
+    """True / False when both parse, None when ``installed`` is unknown."""
+    have, want = version_tuple(installed), version_tuple(floor)
+    if have is None or want is None:
+        return None
+    return have >= want
 
 
 def installed_comfy_cli_version() -> str | None:
@@ -162,9 +188,9 @@ def read_git_head(repo: Path) -> str | None:
     return None
 
 
-def read_comfyui_version(workspace: Path) -> str | None:
+def read_pyproject_version(folder: Path) -> str | None:
     """``[project].version`` from ``pyproject.toml`` when the line is a simple string."""
-    path = workspace / "pyproject.toml"
+    path = folder / "pyproject.toml"
     if not path.is_file():
         return None
     text = path.read_text(encoding="utf-8", errors="replace")
@@ -172,6 +198,39 @@ def read_comfyui_version(workspace: Path) -> str | None:
     if not match:
         return None
     return match.group(1).strip() or None
+
+
+def read_comfyui_version(workspace: Path) -> str | None:
+    """``pyproject.toml`` version, else ``__version__`` in ``comfyui_version.py``."""
+    version = read_pyproject_version(workspace)
+    if version:
+        return version
+    path = workspace / "comfyui_version.py"
+    if not path.is_file():
+        return None
+    text = path.read_text(encoding="utf-8", errors="replace")
+    match = re.search(r'(?m)^__version__\s*=\s*["\']([^"\']+)["\']', text)
+    return (match.group(1).strip() or None) if match else None
+
+
+def find_node_folder(workspace: Path, name: str) -> Path | None:
+    """``custom_nodes/<name>``, case-insensitively (registry installs may lowercase the folder)."""
+    nodes_dir = workspace / "custom_nodes"
+    exact = nodes_dir / name
+    if exact.is_dir():
+        return exact
+    if not nodes_dir.is_dir():
+        return None
+    want = name.lower()
+    for child in nodes_dir.iterdir():
+        if child.is_dir() and child.name.lower() == want:
+            return child
+    return None
+
+
+def read_node_version(workspace: Path, name: str) -> str | None:
+    folder = find_node_folder(workspace, name)
+    return read_pyproject_version(folder) if folder is not None else None
 
 
 def _workspace(explicit: Path | None = None) -> Path:
@@ -187,6 +246,8 @@ def _matches(installed: str | None, expected: str | None, style: str) -> bool:
         return installed.lower().startswith(expected.lower())
     if style == "semver":
         return installed.lstrip("v") == expected.lstrip("v")
+    if style == "floor":
+        return bool(meets_floor(installed, floor_version(expected) or ""))
     return installed == expected
 
 
@@ -201,7 +262,11 @@ def _item(
 ) -> dict[str, Any]:
     style = pin_style(expected)
     stale = False
-    if expected and style != "none":
+    if style == "floor":
+        # A floor flags only a known-too-old version. Missing or unreadable is
+        # install's job (or the user's), not a stale pin.
+        stale = meets_floor(installed, floor_version(expected) or "") is False
+    elif expected and style != "none":
         if not installed:
             stale = not optional
         else:
@@ -245,7 +310,7 @@ def _scan_core(workspace: Path) -> dict[str, Any]:
     version = read_comfyui_version(workspace) if present else None
     if style == "commit":
         installed = head
-    elif style == "semver":
+    elif style in {"semver", "floor"}:
         installed = version
     else:
         installed = head or version
@@ -257,6 +322,8 @@ def _scan_core(workspace: Path) -> dict[str, Any]:
     elif not expected:
         shown = installed or "present"
         detail = f"ComfyUI {shown} has no core pin"
+    elif style == "floor" and not installed:
+        detail = f"ComfyUI version unknown (no version in pyproject.toml); needs {expected}"
     elif _matches(installed, expected, style):
         detail = f"ComfyUI {installed} matches pin {expected}"
     else:
@@ -273,7 +340,7 @@ def _scan_core(workspace: Path) -> dict[str, Any]:
 
 def _scan_nodes(workspace: Path) -> tuple[list[dict[str, Any]], list[str]]:
     pins = load_node_pins()
-    pinned_names = {pin.name for pin in pins}
+    pinned_names = {pin.name.lower() for pin in pins}
     nodes_dir = workspace / "custom_nodes"
     installed_names: list[str] = []
     if nodes_dir.is_dir():
@@ -282,17 +349,20 @@ def _scan_nodes(workspace: Path) -> tuple[list[dict[str, Any]], list[str]]:
                 installed_names.append(child.name)
     items: list[dict[str, Any]] = []
     for pin in pins:
-        folder = nodes_dir / pin.name
-        head = read_git_head(folder) if folder.is_dir() else None
-        if folder.is_dir() and not head:
-            installed: str | None = "present"
-        else:
-            installed = head
+        found = find_node_folder(workspace, pin.name)
+        folder = found if found is not None else nodes_dir / pin.name
         style = pin_style(pin.commit)
-        if not folder.is_dir():
+        if style in {"semver", "floor"}:
+            installed: str | None = read_pyproject_version(folder) if found is not None else None
+        else:
+            head = read_git_head(folder) if found is not None else None
+            installed = "present" if found is not None and not head else head
+        if found is None:
             detail = f"{pin.name} is not installed"
             if pin.optional:
                 detail += " (optional)"
+        elif style == "floor" and not installed:
+            detail = f"{pin.name} version unknown (no version in pyproject.toml); needs {pin.commit}"
         elif _matches(installed, pin.commit, style):
             detail = f"{pin.name} {installed} matches pin {pin.commit}"
         else:
@@ -301,13 +371,13 @@ def _scan_nodes(workspace: Path) -> tuple[list[dict[str, Any]], list[str]]:
             _item(
                 kind="node",
                 name=pin.name,
-                installed=None if not folder.is_dir() else installed,
+                installed=None if found is None else installed,
                 expected=pin.commit,
                 optional=pin.optional,
                 detail=detail,
             )
         )
-    unpinned = [name for name in installed_names if name not in pinned_names]
+    unpinned = [name for name in installed_names if name.lower() not in pinned_names]
     return items, unpinned
 
 
@@ -407,7 +477,7 @@ def plan_actions(
         if chosen:
             actions.append(chosen)
     else:
-        if core_item.get("stale") and core_item.get("pin_style") == "semver":
+        if core_item.get("stale") and core_item.get("pin_style") in {"semver", "floor"}:
             actions.append(core_action())
         elif core_item.get("stale") and core_item.get("pin_style") == "commit":
             notes.append(
@@ -417,7 +487,7 @@ def plan_actions(
                 "That follows the workspace branch and does not check out the pin."
             )
         semver_nodes = [
-            item for item in node_items if item.get("stale") and item.get("pin_style") == "semver"
+            item for item in node_items if item.get("stale") and item.get("pin_style") in {"semver", "floor"}
         ]
         commit_nodes = [
             item for item in node_items if item.get("stale") and item.get("pin_style") == "commit"

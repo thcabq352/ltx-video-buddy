@@ -550,6 +550,19 @@ def check_pack_pins() -> dict[str, Any]:
     )
 
 
+def check_stg() -> dict[str, Any]:
+    """ComfyUI >=0.40 with ComfyUI-LTXVideo <1.1.0 breaks STG. Report only; generate turns STG off."""
+    try:
+        from master_agent.comfy.stg_preflight import DISABLE, FIX, KEEP, stg_preflight
+
+        result = stg_preflight()
+    except Exception as exc:
+        return _row("stg", False, f"STG preflight failed ({exc}); STG left as authored.")
+    if result.action == KEEP:
+        return _row("stg", True, result.message)
+    return _row("stg", False, result.message, fix=FIX if result.action == DISABLE else "")
+
+
 def check_budget() -> dict[str, Any]:
     """Shift budget, read-only. A HOLD is ``paused``, never a doctor failure."""
     from master_agent.control.budget import format_shift_summary, shift_summary
@@ -572,6 +585,7 @@ def snapshot() -> list[dict[str, Any]]:
         check_vram_policy(),
         check_hardware(),
         check_pack_pins(),
+        check_stg(),
         check_ltx_guide(),
         check_ltx25_weights(),
         check_ltx23_weights(),
@@ -609,6 +623,7 @@ _OPTIONAL_INFO_ROWS = frozenset(
         "heartmula-comfy",
         "hardware",
         "pack-pins",
+        "stg",
         "model-folders",
     }
 )

@@ -2009,6 +2009,11 @@ def load_and_patch_workflow(
     # Final sanitize after extras
     _sanitize_ltx_nodes(workflow, object_info=object_info)
 
+    from master_agent.comfy.stg_preflight import apply_stg_preflight
+
+    # After the last sanitize: it refills stg from GUIDER_*_DEFAULTS.
+    stg_report = apply_stg_preflight(workflow)
+
     from master_agent.comfy.graph_ops import LTX_TEACACHE_VARIANTS, ensure_teacache
 
     # TeaCache model_type "ltxv" is the older LTX-Video pack. LTX 2.3 / 2.5
@@ -2064,6 +2069,10 @@ def load_and_patch_workflow(
         meta["ic_lora"] = ic_lora_info
     if lightx2v_report is not None:
         meta["lightx2v"] = lightx2v_report
+    if stg_report is not None:
+        meta["stg_preflight"] = stg_report
+        if stg_report.get("disabled_nodes"):
+            meta["stg_scale"] = 0.0
     try:
         from master_agent.models.vram_policy import prepare_warning, workflow_row
 

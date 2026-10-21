@@ -102,9 +102,21 @@ Agents use the agent tools `comfy_status`, `comfy_start` and `comfy_restart` (`p
 
 Once the workspace venv (or a portable's `python_embeded`) exists, ComfyUI and comfy-cli run with `VIRTUAL_ENV` and `CONDA_PREFIX` removed, so Buddy's activated venv is not used for Comfy.
 
-Start, stop, status, and restart do not run `comfy install` or `comfy update`. Installing is the job of [automatic install](GETTING_STARTED.md#automatic-install), which runs `comfy --workspace=<root> --where local --skip-prompt install <gpu flag>` (`--nvidia`, `--amd`, `--m-series`, or `--cpu`; `--restore` added to repair a half-finished install), then `comfy … node install ComfyUI-LTXVideo ComfyUI-GGUF`, then the [Comfy Python packages](#comfy-python-packages) and the [ComfyUI-Manager channel](#comfyui-manager-channel). It refuses `COMFY_MODE=external`. `--no-watch` skips the crash-restart watchdog. `--no-wait` returns about 3 s after launch, before `/system_stats` is ready (a crash in those seconds is still reported). If `:8188` is already bound, do not kill a running render. Attach or wait.
+Start, stop, status, and restart do not run `comfy install` or `comfy update`. Installing is the job of [automatic install](GETTING_STARTED.md#automatic-install), which runs `comfy --workspace=<root> --where local --skip-prompt install <gpu flag>` (`--nvidia`, `--amd`, `--m-series`, or `--cpu`; `--restore` added to repair a half-finished install), then `comfy … node install ComfyUI-LTXVideo ComfyUI-GGUF` (ComfyUI-LTXVideo `>=1.1.0`: an older installed copy gets `comfy … node update ComfyUI-LTXVideo`, see [STG preflight](#stg-preflight)), then the [Comfy Python packages](#comfy-python-packages) and the [ComfyUI-Manager channel](#comfyui-manager-channel). It refuses `COMFY_MODE=external`. `--no-watch` skips the crash-restart watchdog. `--no-wait` returns about 3 s after launch, before `/system_stats` is ready (a crash in those seconds is still reported). If `:8188` is already bound, do not kill a running render. Attach or wait.
 
-`comfy update` only reports stale packs until `--yes`. `COMFY_MODE=external` refuses core and node updates. `--cli --yes` pip-installs the pin in `requirements.txt` (`comfy-cli==1.20.0`). It does not float to latest. Before a core or node update, Buddy saves `state/comfy_snapshots/pre-update-….json` via `comfy node save-snapshot`. That snapshot is not a weight rollback. Keep/wipe of LTX packs is `models select`, not this snapshot.
+`comfy update` only reports stale packs until `--yes`. `master_agent/comfy/pack_pins.json` holds floors as well as exact pins: ComfyUI `>=0.40.0` and ComfyUI-LTXVideo `>=1.1.0`. A floor is stale only when the installed version is readable and below it; a newer version is never stale, and a missing or unreadable one is reported, not flagged. A stale floor is updated forward (`comfy update comfy`, `comfy node update ComfyUI-LTXVideo`), never pinned back. `COMFY_MODE=external` refuses core and node updates. `--cli --yes` pip-installs the pin in `requirements.txt` (`comfy-cli==1.20.0`). It does not float to latest. Before a core or node update, Buddy saves `state/comfy_snapshots/pre-update-….json` via `comfy node save-snapshot`. That snapshot is not a weight rollback. Keep/wipe of LTX packs is `models select`, not this snapshot.
+
+## STG preflight
+
+STG (spatio-temporal guidance, `stg` on `GuiderParameters`) is on by default for the LTX graphs. ComfyUI `>=0.40` breaks STG unless ComfyUI-LTXVideo is `>=1.1.0` ([Lightricks/ComfyUI-LTXVideo#579](https://github.com/Lightricks/ComfyUI-LTXVideo/issues/579), fixed in [#583](https://github.com/Lightricks/ComfyUI-LTXVideo/pull/583) / v1.1.0).
+
+Every patched graph with STG above 0 reads the ComfyUI version (`pyproject.toml`, else `comfyui_version.py`) and the ComfyUI-LTXVideo version (its `pyproject.toml`) from the managed workspace, else `COMFYUI_ROOT`. It never asks the network.
+
+- ComfyUI `>=0.40` with ComfyUI-LTXVideo `<1.1.0`: a warning, and `stg` is set to 0 on every `GuiderParameters` node for that run. The run meta records it under `stg_preflight`. Fix: `python -m master_agent comfy update --yes`.
+- Either version unreadable: a warning, and STG stays as authored.
+- Anything else: STG stays on, no warning.
+
+`doctor` shows the same check as the `stg` row (INFO, never a failure).
 
 ## Triton and SageAttention
 
@@ -128,6 +140,7 @@ ComfyUI-LTXVideo also installs `colour-science`, which provides the same `colour
 
 `.github/workflows/fresh-install.yml` runs `install.py --automatic-install --yes --skip-weights --skip-sage --skip-llm --gpu cpu` from a clean checkout. It then starts ComfyUI with `COMFY_EXTRA_ARGS="--cpu --enable-manager"` through `comfy start`. Manager only loads with `--enable-manager`, and Buddy's own launch does not pass that flag. Each launch waits for `/system_stats`. It fails on `InvalidChannel`, `ModuleNotFoundError` or `IMPORT FAILED` in the log, and on Manager's `/v2/manager/channel_url_list` not selecting the Comfy-Org channel. The job also:
 
+- checks that ComfyUI-LTXVideo is installed at `>=1.1.0` (`node-floors`);
 - installs the Klein stills packs and checks the pins after `pip install --upgrade` of other packages and of ComfyUI's own requirements (torch excluded);
 - checks `260615_VIDEO-BUDDY_FLUX_KLEIN_9B_V01_api.json` against the live `/object_info` and the offline validator;
 - deletes Manager's `config.ini`, launches, repairs with `automatic-install`, launches again, then repairs a second time and checks that nothing changed.

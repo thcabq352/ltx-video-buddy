@@ -1,6 +1,11 @@
 {
-  "comfyui": null,
+  "comfyui": ">=0.40.0",
   "nodes": [
+    {
+      "name": "ComfyUI-LTXVideo",
+      "version": ">=1.1.0",
+      "note": "Floor, not an exact pin. ComfyUI >=0.40 breaks STG on older ComfyUI-LTXVideo (Lightricks/ComfyUI-LTXVideo#579, fixed in #583 / v1.1.0)."
+    },
     {
       "name": "HeartMuLa_ComfyUI",
       "commit": "fdb53c4",

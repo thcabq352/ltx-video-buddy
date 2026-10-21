@@ -266,7 +266,7 @@ ltx25_inoutpaint:
     lowered to 16.
   vram_class: heavy
   vram_peak_gb: 15.7
-  requires: [ComfyUI-LTXVideo, VideoHelperSuite, ComfyUI-GGUF]
+  requires: [ComfyUI-LTXVideo>=1.1.0, VideoHelperSuite, ComfyUI-GGUF]
   fields:
     prompt:
       node_id: "20"
@@ -683,7 +683,7 @@ ltx23_lipsync_v08:
   vram_class: heavy
   vram_peak_gb: 15.4
   safer_alternate: lipsync
-  requires: [ComfyUI-LTXVideo, ComfyUI-Mickmumpitz-Nodes, KJNodes, VideoHelperSuite,
+  requires: [ComfyUI-LTXVideo>=1.1.0, ComfyUI-Mickmumpitz-Nodes, KJNodes, VideoHelperSuite,
              comfyui_controlnet_aux, ComfyUI_essentials, ComfyUI-Easy-Use, rgthree-comfy]
   fields:
     # Positive CLIP (6202:5834) stays linked to PrimitiveStringMultiline 6203.
@@ -911,7 +911,7 @@ vb_movie_builder:
   vram_class: heavy
   vram_peak_gb: 15.8
   safer_alternate: ltx25_t2v_i2v
-  requires: [ComfyUI-Mickmumpitz-Nodes (ShotAssembler/ShotVideoOutput/ResolutionPicker), movie_builder_shims (ShotOrder/ShotDuplicator), ComfyUI-LTXVideo, KJNodes, RES4LYF, VideoHelperSuite, ComfyUI-Easy-Use, rgthree-comfy, ComfyUI-Olm-DragCrop, ComfyUI_preview360panorama]
+  requires: [ComfyUI-Mickmumpitz-Nodes (ShotAssembler/ShotVideoOutput/ResolutionPicker), movie_builder_shims (ShotOrder/ShotDuplicator), ComfyUI-LTXVideo>=1.1.0, KJNodes, RES4LYF, VideoHelperSuite, ComfyUI-Easy-Use, rgthree-comfy, ComfyUI-Olm-DragCrop, ComfyUI_preview360panorama]
   fields:
     prompt:
       node_id: "13383"
@@ -932,7 +932,7 @@ ltx25_t2v_i2v:
   description: LTX 2.5 single-stage distilled T2V / I2V
   vram_class: safe
   vram_peak_gb: 12.5
-  requires: [ComfyUI-LTXVideo, VideoHelperSuite]
+  requires: [ComfyUI-LTXVideo>=1.1.0, VideoHelperSuite]
   fields:
     # Primitives, not CLIPTextEncode. Those encoders are links; index 0 is
     # the negative encoder. Overwriting the link swaps the prompt.
@@ -950,7 +950,7 @@ ltx25_t2v_i2v_two_stage:
   vram_class: tight
   vram_peak_gb: 14.0
   safer_alternate: ltx25_t2v_i2v
-  requires: [ComfyUI-LTXVideo, VideoHelperSuite, LTXVLatentUpsampler]
+  requires: [ComfyUI-LTXVideo>=1.1.0, VideoHelperSuite, LTXVLatentUpsampler]
   fields:
     # Primitives feed the Positive / Negative encoders; CLIPTextEncode index 0
     # is the Negative encoder in these graphs.
@@ -967,7 +967,7 @@ ltx25_flf2v:
   description: LTX 2.5 first + last frame to video
   vram_class: safe
   vram_peak_gb: 12.8
-  requires: [ComfyUI-LTXVideo, VideoHelperSuite]
+  requires: [ComfyUI-LTXVideo>=1.1.0, VideoHelperSuite]
   fields:
     # Primitives feed the Positive / Negative encoders; CLIPTextEncode index 0
     # is the Negative encoder in these graphs.
@@ -982,7 +982,7 @@ ltx25_msr:
   description: LTX 2.5 multi-reference (pic1–pic4 + background)
   vram_class: tight
   vram_peak_gb: 13.2
-  requires: [ComfyUI-LTXVideo (ComfyUILTX25MSR*), VideoHelperSuite]
+  requires: [ComfyUI-LTXVideo>=1.1.0 (ComfyUILTX25MSR*), VideoHelperSuite]
   fields:
     # Primitives feed the Positive / Negative encoders; CLIPTextEncode index 0
     # is the Negative encoder in these graphs.
@@ -999,7 +999,7 @@ ltx25_v2v_ic_lora:
   description: LTX 2.5 video-to-video IC-LoRA
   vram_class: tight
   vram_peak_gb: 13.0
-  requires: [ComfyUI-LTXVideo (LTXVICLoRALoader), VideoHelperSuite]
+  requires: [ComfyUI-LTXVideo>=1.1.0 (LTXVICLoRALoader), VideoHelperSuite]
   fields:
     # Primitives feed the Positive / Negative encoders; CLIPTextEncode index 0
     # is the Negative encoder in these graphs.
@@ -1016,7 +1016,7 @@ ltx25_a2v:
   description: LTX 2.5 audio-to-video two-stage distilled
   vram_class: safe
   vram_peak_gb: 12.8
-  requires: [ComfyUI-LTXVideo, VideoHelperSuite]
+  requires: [ComfyUI-LTXVideo>=1.1.0, VideoHelperSuite]
   fields:
     # Primitives feed the Positive / Negative encoders; CLIPTextEncode index 0
     # is the Negative encoder in these graphs.
@@ -1035,7 +1035,7 @@ ltx25_t2a:
   description: LTX 2.5 text-to-audio single-stage distilled
   vram_class: safe
   vram_peak_gb: 8.5
-  requires: [ComfyUI-LTXVideo]
+  requires: [ComfyUI-LTXVideo>=1.1.0]
   fields:
     prompt: { node_id: "6", input: value }
     negative_prompt: { node_id: "7", input: value }
