@@ -5,4 +5,7 @@
 # (scripts/ci/fresh_install_check.py pins) fails if anything moves them.
 # gguf: ComfyUI-GGUF loaders (UnetLoaderGGUF / CLIPLoaderGGUF).
 gguf==0.19.0
-colour==0.1.5
+# colour-science (imports as `colour`): ComfyUI-LTXVideo HDR primaries. NOT the
+# unrelated `colour` package, which also claims `import colour` and lacks it.
+# 0.4.6 is the newest release that still supports Python 3.10.
+colour-science==0.4.6

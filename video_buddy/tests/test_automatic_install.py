@@ -543,6 +543,7 @@ def test_full_yes_run_never_invokes_ollama_and_skipped_models_do_not_block(env, 
     monkeypatch.setattr(ai, "step_comfy_cli", lambda apply: ai.StepResult("comfy-cli", ai.SKIPPED, "pinned"))
     monkeypatch.setattr(ai, "step_comfyui", lambda apply, **k: ai.StepResult("ComfyUI", ai.OK, "installed"))
     monkeypatch.setattr(ai, "step_nodes", lambda apply, **k: ai.StepResult("custom nodes", ai.OK, "installed"))
+    monkeypatch.setattr(ai, "step_comfy_packages", lambda apply, **k: ai.StepResult("Comfy Python packages", ai.OK, "installed"))
     monkeypatch.setattr(ai, "step_accel", lambda apply, **k: ai.StepResult("Triton + SageAttention", ai.SKIPPED, "cpu", required=False))
     monkeypatch.setattr(ai, "step_weights", lambda apply, **k: ai.StepResult("LTX 2.3 weights", ai.OK, "ready"))
     monkeypatch.setattr(ai, "verify_rows", lambda: [{"ok": True, "name": "ffmpeg", "detail": "ok"}])

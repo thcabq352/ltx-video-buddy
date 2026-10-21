@@ -85,7 +85,7 @@ def test_scan_log_cli(tmp_path, capsys):
 
 
 def test_repo_comfy_requirements_are_exact_pins():
-    assert fic.read_pins() == {"gguf": "0.19.0", "colour": "0.1.5"}
+    assert fic.read_pins() == {"gguf": "0.19.0", "colour-science": "0.4.6"}
 
 
 @pytest.mark.parametrize("line", ["gguf", "gguf>=0.19", "gguf~=0.19.0", "colour==0.1.*"])
@@ -97,10 +97,10 @@ def test_read_pins_rejects_loose_requirements(tmp_path, line):
 
 
 def test_pin_mismatches():
-    pins = {"gguf": "0.19.0", "colour": "0.1.5"}
-    assert fic.pin_mismatches(pins, {"gguf": "0.19.0", "colour": "0.1.5"}) == []
-    assert fic.pin_mismatches(pins, {"gguf": "0.20.0", "colour": None}) == [
-        "colour: pinned 0.1.5, installed nothing",
+    pins = {"gguf": "0.19.0", "colour-science": "0.4.6"}
+    assert fic.pin_mismatches(pins, {"gguf": "0.19.0", "colour-science": "0.4.6"}) == []
+    assert fic.pin_mismatches(pins, {"gguf": "0.20.0", "colour-science": None}) == [
+        "colour-science: pinned 0.4.6, installed nothing",
         "gguf: pinned 0.19.0, installed 0.20.0",
     ]
 
@@ -117,7 +117,7 @@ def test_without_torch_keeps_everything_else():
 
 def test_check_pins_stress_reinstalls_then_rechecks(tmp_path, monkeypatch):
     req = tmp_path / "comfy-requirements.txt"
-    req.write_text("gguf==0.19.0\ncolour==0.1.5\n")
+    req.write_text("gguf==0.19.0\ncolour-science==0.4.6\n")
     comfy_reqs = tmp_path / "requirements.txt"
     comfy_reqs.write_text("torch\nnumpy>=1.25.0\ngguf\n")
     pip_calls: list[tuple[str, ...]] = []
@@ -129,7 +129,7 @@ def test_check_pins_stress_reinstalls_then_rechecks(tmp_path, monkeypatch):
             filtered.append(Path(args[-1]).read_text())
 
     monkeypatch.setattr(fic, "_pip", fake_pip)
-    monkeypatch.setattr(fic, "installed_versions", lambda py, names: {"gguf": "0.19.0", "colour": "0.1.5"})
+    monkeypatch.setattr(fic, "installed_versions", lambda py, names: {"gguf": "0.19.0", "colour-science": "0.4.6"})
     lines = fic.check_pins("py", req, stress=True, comfy_requirements=comfy_reqs)
     assert pip_calls[0] == ("--upgrade", *fic.UNRELATED_UPGRADES)
     assert pip_calls[-1] == ("--upgrade", "-r", str(req))

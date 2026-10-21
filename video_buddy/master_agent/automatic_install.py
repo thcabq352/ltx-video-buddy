@@ -6,7 +6,7 @@ first, then prints the plan. Nothing changes without ``--yes``.
 With ``--yes`` it installs, in order: ffmpeg, comfy-cli at the
 requirements.txt pin, ComfyUI into its own folder (``MANAGED_COMFY_ROOT`` or
 ``PROJECT_ROOT/ComfyUI``), the custom nodes the LTX 2.3 graphs need,
-``comfy-requirements.txt`` (gguf, colour) into the Comfy venv, ComfyUI-Manager's
+``comfy-requirements.txt`` (gguf, colour-science) into the Comfy venv, ComfyUI-Manager's
 channel (``config.ini`` / ``channels.list``, see ``comfy/manager_config.py``), Triton +
 SageAttention inside the Comfy venv (optional), the LTX 2.3 weights into
 ``MODELS_DIR``, then llama.cpp into ``LLAMACPP_ROOT`` (optional). LTX 2.3 is
@@ -829,32 +829,64 @@ def step_nodes(apply: bool, *, workspace: Path) -> StepResult:
 
 
 COMFY_REQUIREMENTS = Path(__file__).resolve().parent.parent / "comfy-requirements.txt"
-COMFY_PACKAGES = ("gguf", "colour")
+COMFY_PACKAGES = ("gguf", "colour-science")
+# Import names checked in the Comfy interpreter after pip (colour-science imports as ``colour``).
+COMFY_IMPORTS = ("gguf", "colour")
+# Unrelated PyPI package that also installs ``import colour``; older installs pinned it by mistake.
+WRONG_COLOUR_PACKAGE = "colour"
+
+
+def node_requirements(workspace: Path, nodes: Iterable[str] = REQUIRED_NODES) -> list[Path]:
+    """requirements.txt of each required custom node that is on disk (case-insensitive folder match)."""
+    folder = workspace / "custom_nodes"
+    if not folder.is_dir():
+        return []
+    by_name = {p.name.lower(): p for p in folder.iterdir() if p.is_dir()}
+    out = []
+    for n in nodes:
+        d = by_name.get(n.lower())
+        if d is not None and (d / "requirements.txt").is_file():
+            out.append(d / "requirements.txt")
+    return out
 
 
 def step_comfy_packages(apply: bool, *, workspace: Path) -> StepResult:
-    """``pip install --upgrade`` comfy-requirements.txt (gguf, colour) into ComfyUI's own interpreter."""
+    """Required custom nodes' requirements.txt, then comfy-requirements.txt (gguf, colour-science),
+    into the interpreter ComfyUI launches with (``comfy_interpreter``: the workspace venv), then
+    ``import gguf, colour`` there. Any failure is FAILED: without these ComfyUI-LTXVideo and
+    ComfyUI-GGUF do not load."""
     from master_agent.comfy.layout import PORTABLE_PYTHON_FLAGS, PORTABLE, comfy_interpreter, detect_layout
 
     name = "Comfy Python packages"
     label = ", ".join(COMFY_PACKAGES)
     if comfy_install_state(workspace) != "installed":
         if not apply:
-            return StepResult(name, PLANNED, f"after ComfyUI: pip install --upgrade {label} into the Comfy venv", required=False)
-        return StepResult(name, NONFATAL, f"waits for ComfyUI ({label} not installed)", required=False)
+            return StepResult(name, PLANNED, f"after ComfyUI: pip install {label} + node requirements into the Comfy venv")
+        return StepResult(name, FAILED, f"waits for ComfyUI ({label} not installed)")
     py = comfy_interpreter(workspace)
     if py is None:
-        return StepResult(name, NONFATAL, f"no Comfy interpreter found; {label} not installed", required=False)
+        return StepResult(name, FAILED, f"no Comfy interpreter (venv) found in {workspace}; {label} not installed")
     layout = detect_layout(workspace)
     flags = list(PORTABLE_PYTHON_FLAGS) if layout is not None and layout.kind == PORTABLE else []
-    cmd = [str(py), *flags, "-m", "pip", "install", "--upgrade", "-r", str(COMFY_REQUIREMENTS)]
+    base = [str(py), *flags, "-m", "pip"]
+    cmds = [[*base, "install", "-r", str(r)] for r in node_requirements(workspace)]
+    # Clear the wrong ``colour`` package so it cannot shadow colour-science (no-op when absent).
+    cmds.append([*base, "uninstall", "-y", WRONG_COLOUR_PACKAGE])
+    # Pins last so they win over looser node requirements.
+    cmds.append([*base, "install", "--upgrade", "-r", str(COMFY_REQUIREMENTS)])
     if not apply:
-        return StepResult(name, PLANNED, " ".join(cmd), required=False)
-    print("$ " + " ".join(cmd))
-    code, out = _run(cmd, timeout=900)
+        return StepResult(name, PLANNED, " ".join(cmds[-1]), lines=[" ".join(c) for c in cmds[:-1]])
+    for cmd in cmds:
+        print("$ " + " ".join(cmd))
+        code, out = _run(cmd, timeout=900)
+        if code != 0:
+            return StepResult(name, FAILED, f"pip failed (rc={code}) in {py}: {' '.join(cmd[len(base):])}: {out[-300:]}")
+    check = [str(py), *flags, "-c", "import " + ", ".join(COMFY_IMPORTS)]
+    print("$ " + " ".join(check))
+    code, out = _run(check, timeout=120)
     if code != 0:
-        return StepResult(name, NONFATAL, f"pip failed: {out[-300:]}", required=False)
-    return StepResult(name, OK, f"{label} installed/upgraded in {py}", required=False)
+        return StepResult(name, FAILED, f"{py} still cannot import {', '.join(COMFY_IMPORTS)}: {out[-300:]}")
+    return StepResult(name, OK, f"{label} + node requirements installed in {py}")
 
 
 def step_manager_config(apply: bool, *, workspace: Path) -> StepResult:
@@ -1009,7 +1041,7 @@ def cmd_automatic_install(args: Any) -> int:
         ("model folders", True, lambda: step_model_folders(apply)),
         ("model paths", True, lambda: step_model_paths(apply)),
         ("custom nodes", True, lambda: step_nodes(apply, workspace=workspace)),
-        ("Comfy Python packages", False, lambda: step_comfy_packages(apply, workspace=workspace)),
+        ("Comfy Python packages", True, lambda: step_comfy_packages(apply, workspace=workspace)),
         ("ComfyUI-Manager channel", False, lambda: step_manager_config(apply, workspace=workspace)),
         ("Triton + SageAttention", False, lambda: step_accel(apply, workspace=workspace, gpu=pf.gpu, skip=skip_sage)),
         ("LTX 2.3 weights", True, lambda: step_weights(apply, skip=skip_weights)),
