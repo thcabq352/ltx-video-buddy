@@ -1,4 +1,6 @@
-"""Pure helpers behind the Streamlit dashboard. No GPU, no Streamlit, agent_api mocked.
+"""Streamlit dashboard: pure helpers, plus the page under AppTest. No GPU, agent_api mocked.
+
+The page tests skip when ``requirements-ui.txt`` is not installed.
 
 Run: python -m pytest tests/test_streamlit_app.py -q
 """
