@@ -1,6 +1,8 @@
 # Installed into ComfyUI's own interpreter (its .venv, or a portable build's
 # python_embeded), not Buddy's .venv. automatic-install runs
 # `<comfy python> -m pip install --upgrade -r comfy-requirements.txt`.
+# Exact pins only: --upgrade on an == pin keeps that version, and CI
+# (scripts/ci/fresh_install_check.py pins) fails if anything moves them.
 # gguf: ComfyUI-GGUF loaders (UnetLoaderGGUF / CLIPLoaderGGUF).
-gguf
-colour
+gguf==0.19.0
+colour==0.1.5

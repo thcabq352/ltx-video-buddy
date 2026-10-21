@@ -120,7 +120,19 @@ After each install Buddy runs `import triton` / `import sageattention` in the Co
 
 ## Comfy Python packages
 
-Automatic install runs `<comfy-python> -m pip install --upgrade -r video_buddy/comfy-requirements.txt` (`gguf`, `colour`) in the Comfy venv, or in `python_embeded` with `-s` for a portable build. A pip failure is `FAILED-NONFATAL`; run `automatic-install --yes` again to retry.
+Automatic install runs `<comfy-python> -m pip install --upgrade -r video_buddy/comfy-requirements.txt` (`gguf==0.19.0`, `colour==0.1.5`) in the Comfy venv, or in `python_embeded` with `-s` for a portable build. The file holds exact pins only, so `--upgrade` keeps those versions. A pip failure is `FAILED-NONFATAL`; run `automatic-install --yes` again to retry.
+
+ComfyUI-LTXVideo also installs `colour-science`, which provides the same `colour` import name. When both are installed, `import colour` loads `colour-science`.
+
+## Install CI
+
+`.github/workflows/fresh-install.yml` runs `install.py --automatic-install --yes --skip-weights --skip-sage --skip-llm --gpu cpu` from a clean checkout. It then starts ComfyUI with `COMFY_EXTRA_ARGS="--cpu --enable-manager"` through `comfy start`. Manager only loads with `--enable-manager`, and Buddy's own launch does not pass that flag. Each launch waits for `/system_stats`. It fails on `InvalidChannel`, `ModuleNotFoundError` or `IMPORT FAILED` in the log, and on Manager's `/v2/manager/channel_url_list` not selecting the Comfy-Org channel. The job also:
+
+- installs the Klein stills packs and checks the pins after `pip install --upgrade` of other packages and of ComfyUI's own requirements (torch excluded);
+- checks `260615_VIDEO-BUDDY_FLUX_KLEIN_9B_V01_api.json` against the live `/object_info` and the offline validator;
+- deletes Manager's `config.ini`, launches, repairs with `automatic-install`, launches again, then repairs a second time and checks that nothing changed.
+
+Linux runs on pushes to `main` and PRs that touch the install path, nightly, and on demand. Windows runs nightly and on demand. The checks live in `video_buddy/scripts/ci/fresh_install_check.py`, and each subcommand also runs by hand. The `comfy-pins` job in `pytest.yml` checks the pins in a clean venv on every push.
 
 ## ComfyUI-Manager channel
 
@@ -129,7 +141,7 @@ Automatic install runs `<comfy-python> -m pip install --upgrade -r video_buddy/c
 Automatic install points Manager at `https://raw.githubusercontent.com/Comfy-Org/ComfyUI-Manager/main` (note the hyphen: `ComfyOrg` without it is a 404). Manager only accepts a `channel_url` listed in its `channels.list`, so both files are written, in `ComfyUI/user/__manager/` (or `ComfyUI/user/default/ComfyUI-Manager/` on older ComfyUI):
 
 - `config.ini`: `[default] channel_url = <Comfy-Org URL>`. An existing file is edited in place: only an `ltdrdata` (or `ComfyOrg`) `channel_url` is replaced, or a missing one added. Every other key is kept, and a `channel_url` you set to another URL is left alone.
-- `channels.list`: `default::<Comfy-Org URL>`, so the UI shows the `default` channel selected. Other channels are kept.
+- `channels.list`: `default::<Comfy-Org URL>`, so the UI shows the `default` channel selected. Entries under the `ltdrdata` or `ComfyOrg` URL (`recent`, `legacy`, `forked`, `dev`, `tutorial`) move to the Comfy-Org URL with the same `node_db/...` path. Channels pointing anywhere else are kept.
 
 Manager has no `channel` or `auto-updates` key in `config.ini`, so Buddy writes neither. Running automatic install again changes nothing once the files are fixed; on an existing ComfyUI it repairs them without reinstalling.
 
