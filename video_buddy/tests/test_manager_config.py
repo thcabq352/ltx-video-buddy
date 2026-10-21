@@ -1,4 +1,6 @@
-"""ComfyUI-Manager channel fix and the Comfy-venv gguf / colour step.
+"""ComfyUI-Manager channel fix and where the Comfy-venv package steps sit in the plan.
+
+The package steps themselves are in test_comfy_node_deps.py.
 
 Only tmp paths are written. Subprocesses are mocked.
 
@@ -277,52 +279,14 @@ def test_step_manager_config_waits_for_comfy(tmp_path):
     assert res.status == ai.NONFATAL and not res.required
 
 
-def test_comfy_requirements_file_pins_gguf_and_colour():
-    reqs = [
-        line.strip() for line in ai.COMFY_REQUIREMENTS.read_text().splitlines()
-        if line.strip() and not line.startswith("#")
-    ]
-    assert reqs == ["gguf==0.19.0", "colour==0.1.5"]
-    assert [r.split("==")[0] for r in reqs] == list(ai.COMFY_PACKAGES)
-
-
-def test_step_comfy_packages_upgrades_into_comfy_venv(tmp_path, installed):
-    code = _comfy(tmp_path / "ComfyUI", system_user_api=False)
-    py = code / ".venv" / "bin" / "python"
-    py.parent.mkdir(parents=True)
-    py.write_text("")
-    res = ai.step_comfy_packages(True, workspace=code)
-    assert res.status == ai.OK
-    assert installed == [[str(py), "-m", "pip", "install", "--upgrade", "-r", str(ai.COMFY_REQUIREMENTS)]]
-
-
-def test_step_comfy_packages_portable_uses_embedded_python(tmp_path, installed):
-    top = tmp_path / "ComfyUI_windows_portable"
-    code = _comfy(top / "ComfyUI", system_user_api=True)
-    emb = top / "python_embeded" / "python.exe"
-    emb.parent.mkdir(parents=True)
-    emb.write_text("")
-    ai.step_comfy_packages(True, workspace=code)
-    assert installed[0][:4] == [str(emb), "-s", "-m", "pip"]
-
-
-def test_step_comfy_packages_pip_failure_is_nonfatal(tmp_path, monkeypatch, installed):
-    code = _comfy(tmp_path / "ComfyUI", system_user_api=False)
-    (code / ".venv" / "bin").mkdir(parents=True)
-    (code / ".venv" / "bin" / "python").write_text("")
-    monkeypatch.setattr(ai, "_run", lambda cmd, **k: (1, "no network"))
-    res = ai.step_comfy_packages(True, workspace=code)
-    assert res.status == ai.NONFATAL and not res.required and "no network" in res.detail
-
-
 def test_dry_run_plan_lists_both_new_steps(tmp_path, monkeypatch, capsys):
-    """The full plan includes the two steps after custom nodes, before Triton."""
+    """The full plan runs pack requirements, then the Comfy packages, after custom nodes and before Triton."""
     seen: list[str] = []
     for name in ("step_env_file", "step_playwright", "step_ffmpeg", "step_comfy_cli", "step_model_folders",
                  "step_model_paths", "step_weights", "step_llm_models"):
         monkeypatch.setattr(ai, name, lambda *a, _n=name, **k: seen.append(_n) or ai.StepResult(_n, ai.SKIPPED, ""))
-    for name in ("step_comfyui", "step_nodes", "step_comfy_packages", "step_manager_config", "step_accel",
-                 "step_llamacpp"):
+    for name in ("step_comfyui", "step_nodes", "step_node_requirements", "step_comfy_packages",
+                 "step_manager_config", "step_accel", "step_llamacpp"):
         monkeypatch.setattr(ai, name, lambda *a, _n=name, **k: seen.append(_n) or ai.StepResult(_n, ai.SKIPPED, ""))
     monkeypatch.setattr(ai, "run_preflight", lambda **k: ai.Preflight(checks=[], gpu={"vendor": "cpu"}))
     monkeypatch.setattr(ai, "print_preflight", lambda pf: None)
@@ -332,4 +296,5 @@ def test_dry_run_plan_lists_both_new_steps(tmp_path, monkeypatch, capsys):
 
     assert ai.cmd_automatic_install(Namespace(yes=False, gpu="cpu")) == 0
     i = seen.index
-    assert i("step_nodes") < i("step_comfy_packages") < i("step_manager_config") < i("step_accel")
+    assert i("step_nodes") < i("step_node_requirements") < i("step_comfy_packages")
+    assert i("step_comfy_packages") < i("step_manager_config") < i("step_accel")

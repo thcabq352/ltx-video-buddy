@@ -85,7 +85,7 @@ def test_scan_log_cli(tmp_path, capsys):
 
 
 def test_repo_comfy_requirements_are_exact_pins():
-    assert fic.read_pins() == {"gguf": "0.19.0", "colour": "0.1.5"}
+    assert fic.read_pins() == {"gguf": "0.19.0", "colour-science": "0.4.6"}
 
 
 @pytest.mark.parametrize("line", ["gguf", "gguf>=0.19", "gguf~=0.19.0", "colour==0.1.*"])

@@ -5,8 +5,9 @@ first, then prints the plan. Nothing changes without ``--yes``.
 
 With ``--yes`` it installs, in order: ffmpeg, comfy-cli at the
 requirements.txt pin, ComfyUI into its own folder (``MANAGED_COMFY_ROOT`` or
-``PROJECT_ROOT/ComfyUI``), the custom nodes the LTX 2.3 graphs need,
-``comfy-requirements.txt`` (gguf, colour) into the Comfy venv, ComfyUI-Manager's
+``PROJECT_ROOT/ComfyUI``), the custom nodes the LTX 2.3 graphs need, each
+pack's own ``requirements.txt``, then ``comfy-requirements.txt`` (gguf,
+colour-science) into the Comfy venv when they are not importable, ComfyUI-Manager's
 channel (``config.ini`` / ``channels.list``, see ``comfy/manager_config.py``), Triton +
 SageAttention inside the Comfy venv (optional), the LTX 2.3 weights into
 ``MODELS_DIR``, then llama.cpp into ``LLAMACPP_ROOT`` (optional). LTX 2.3 is
@@ -24,8 +25,10 @@ Automatic install never calls Ollama.
 
 from __future__ import annotations
 
+import json
 import os
 import platform
+import re
 import shutil
 import subprocess
 import sys
@@ -829,32 +832,152 @@ def step_nodes(apply: bool, *, workspace: Path) -> StepResult:
 
 
 COMFY_REQUIREMENTS = Path(__file__).resolve().parent.parent / "comfy-requirements.txt"
-COMFY_PACKAGES = ("gguf", "colour")
+# (pip distribution, import name) the LTX 2.3 packs import at load time:
+# ComfyUI-GGUF needs gguf, ComfyUI-LTXVideo needs colour-science. The unrelated
+# PyPI ``colour`` package also imports as ``colour``, so the distribution is checked too.
+COMFY_PACKAGES = (("gguf", "gguf"), ("colour-science", "colour"))
+TORCH_PACKAGES = frozenset({"torch", "torchvision", "torchaudio"})
+
+_PACKAGE_PROBE = (
+    "import importlib, importlib.metadata as md, json, sys\n"
+    "missing = []\n"
+    "for pair in sys.argv[1:]:\n"
+    "    dist, mod = pair.split(':', 1)\n"
+    "    try:\n"
+    "        md.version(dist)\n"
+    "        importlib.import_module(mod)\n"
+    "    except Exception:\n"
+    "        missing.append(dist)\n"
+    "print('VB_MISSING=' + json.dumps(missing))\n"
+)
+
+
+def comfy_python(workspace: Path) -> tuple[Path | None, list[str]]:
+    """The interpreter ``comfy start`` launches ComfyUI with, plus its flags (``-s`` for portable)."""
+    from master_agent.comfy.layout import comfy_interpreter, detect_layout
+
+    layout = detect_layout(workspace)
+    if layout is not None:
+        return layout.python, list(layout.python_flags)
+    return comfy_interpreter(workspace), []
+
+
+def missing_comfy_packages(
+    py: Path | str, flags: Iterable[str] = (), packages: Iterable[tuple[str, str]] = COMFY_PACKAGES
+) -> list[str]:
+    """Distributions in ``packages`` that ``py`` cannot import. Read-only; runs in that interpreter."""
+    packages = list(packages)
+    cmd = [str(py), *flags, "-c", _PACKAGE_PROBE, *(f"{dist}:{mod}" for dist, mod in packages)]
+    code, out = _run(cmd, timeout=120)
+    # _run merges stderr in; colour-science warns on import (no matplotlib).
+    marked = [line for line in out.splitlines() if line.startswith("VB_MISSING=")]
+    if code == 0 and marked:
+        try:
+            found = json.loads(marked[-1].removeprefix("VB_MISSING="))
+            if isinstance(found, list):
+                return [str(d) for d in found]
+        except ValueError:
+            pass
+    return [dist for dist, _mod in packages]
+
+
+def _pip_cmd(py: Path, flags: list[str], *args: str) -> list[str]:
+    return [str(py), *flags, "-m", "pip", "install", *args]
+
+
+def without_torch(requirements_text: str) -> str:
+    """A pack's requirements minus torch*: pip would swap ComfyUI's CUDA wheels for PyPI ones."""
+    keep = []
+    for raw in requirements_text.splitlines():
+        pkg = re.split(r"[<>=!~\[;\s]", raw.strip(), maxsplit=1)[0].lower()
+        if pkg in TORCH_PACKAGES:
+            continue
+        keep.append(raw)
+    return "\n".join(keep) + "\n"
+
+
+def step_node_requirements(apply: bool, *, workspace: Path) -> StepResult:
+    """Each LTX 2.3 pack's own requirements.txt into ComfyUI's interpreter (pins as ``-c`` constraints)."""
+    name = "custom node requirements"
+    if comfy_install_state(workspace) != "installed":
+        if not apply:
+            return StepResult(name, PLANNED, "after ComfyUI: pip install -r each pack's requirements.txt into the Comfy venv")
+        return StepResult(name, FAILED, "waits for ComfyUI")
+    py, flags = comfy_python(workspace)
+    if py is None:
+        return StepResult(name, FAILED, f"no ComfyUI interpreter found in {workspace}")
+    folders = {p.name.lower(): p for p in (workspace / "custom_nodes").iterdir() if p.is_dir()} \
+        if (workspace / "custom_nodes").is_dir() else {}
+    packs = [(n, folders[n.lower()] / "requirements.txt") for n in REQUIRED_NODES if n.lower() in folders]
+    packs = [(n, req) for n, req in packs if req.is_file()]
+    if not packs:
+        if apply:
+            return StepResult(name, SKIPPED, "no pack requirements.txt found")
+        return StepResult(name, PLANNED, "after custom nodes: pip install -r each pack's requirements.txt")
+    lines: list[str] = []
+    done: list[str] = []
+    for pack, req in packs:
+        with tempfile.TemporaryDirectory() as tmp:
+            filtered = Path(tmp) / f"{pack}-requirements.txt"
+            filtered.write_text(without_torch(req.read_text(encoding="utf-8")), encoding="utf-8")
+            cmd = _pip_cmd(py, flags, "-r", str(filtered), "-c", str(COMFY_REQUIREMENTS))
+            shown = " ".join(_pip_cmd(py, flags, "-r", str(req), "-c", str(COMFY_REQUIREMENTS)))
+            if not apply:
+                lines.append(shown + " (torch lines dropped)")
+                continue
+            print("$ " + shown + "  (torch lines dropped)")
+            code, out = _run(cmd, timeout=1800)
+        if code != 0:
+            return StepResult(
+                name,
+                FAILED,
+                f"pip could not install {pack}'s requirements into {py}, so {pack} will not load in ComfyUI. "
+                f"pip said: {out[-400:]}",
+                lines=[*lines, f"Fix the error above, then run automatic-install --yes again (or run: {shown})"],
+            )
+        done.append(pack)
+    if not apply:
+        return StepResult(name, PLANNED, f"{len(packs)} pack(s) into {py}", lines=lines)
+    return StepResult(name, OK, f"{', '.join(done)} requirements installed in {py}")
 
 
 def step_comfy_packages(apply: bool, *, workspace: Path) -> StepResult:
-    """``pip install --upgrade`` comfy-requirements.txt (gguf, colour) into ComfyUI's own interpreter."""
-    from master_agent.comfy.layout import PORTABLE_PYTHON_FLAGS, PORTABLE, comfy_interpreter, detect_layout
-
+    """Make gguf and colour-science importable in ComfyUI's own interpreter. Skips when they already are."""
     name = "Comfy Python packages"
-    label = ", ".join(COMFY_PACKAGES)
+    label = ", ".join(dist for dist, _mod in COMFY_PACKAGES)
     if comfy_install_state(workspace) != "installed":
         if not apply:
-            return StepResult(name, PLANNED, f"after ComfyUI: pip install --upgrade {label} into the Comfy venv", required=False)
-        return StepResult(name, NONFATAL, f"waits for ComfyUI ({label} not installed)", required=False)
-    py = comfy_interpreter(workspace)
+            return StepResult(name, PLANNED, f"after ComfyUI: make {label} importable in the Comfy venv")
+        return StepResult(name, FAILED, f"waits for ComfyUI ({label} not installed)")
+    py, flags = comfy_python(workspace)
     if py is None:
-        return StepResult(name, NONFATAL, f"no Comfy interpreter found; {label} not installed", required=False)
-    layout = detect_layout(workspace)
-    flags = list(PORTABLE_PYTHON_FLAGS) if layout is not None and layout.kind == PORTABLE else []
-    cmd = [str(py), *flags, "-m", "pip", "install", "--upgrade", "-r", str(COMFY_REQUIREMENTS)]
+        return StepResult(name, FAILED, f"no ComfyUI interpreter found in {workspace}; {label} not installed")
+    missing = missing_comfy_packages(py, flags)
+    if not missing:
+        return StepResult(name, SKIPPED, f"{label} already importable in {py}")
+    cmd = _pip_cmd(py, flags, "--upgrade", "-r", str(COMFY_REQUIREMENTS))
     if not apply:
-        return StepResult(name, PLANNED, " ".join(cmd), required=False)
+        return StepResult(name, PLANNED, f"missing {', '.join(missing)}: " + " ".join(cmd))
     print("$ " + " ".join(cmd))
     code, out = _run(cmd, timeout=900)
+    fix = f"Fix the error above, then run automatic-install --yes again (or run: {' '.join(cmd)})"
     if code != 0:
-        return StepResult(name, NONFATAL, f"pip failed: {out[-300:]}", required=False)
-    return StepResult(name, OK, f"{label} installed/upgraded in {py}", required=False)
+        return StepResult(
+            name,
+            FAILED,
+            f"pip could not install {', '.join(missing)} into ComfyUI's python {py}; "
+            f"ComfyUI-LTXVideo / ComfyUI-GGUF will not load and video generation stays blocked. pip said: {out[-400:]}",
+            lines=[fix],
+        )
+    still = missing_comfy_packages(py, flags)
+    if still:
+        return StepResult(
+            name,
+            FAILED,
+            f"pip finished but {', '.join(still)} still cannot be imported by {py}",
+            lines=[fix],
+        )
+    return StepResult(name, OK, f"installed {', '.join(missing)} in {py}")
 
 
 def step_manager_config(apply: bool, *, workspace: Path) -> StepResult:
@@ -1009,7 +1132,8 @@ def cmd_automatic_install(args: Any) -> int:
         ("model folders", True, lambda: step_model_folders(apply)),
         ("model paths", True, lambda: step_model_paths(apply)),
         ("custom nodes", True, lambda: step_nodes(apply, workspace=workspace)),
-        ("Comfy Python packages", False, lambda: step_comfy_packages(apply, workspace=workspace)),
+        ("custom node requirements", True, lambda: step_node_requirements(apply, workspace=workspace)),
+        ("Comfy Python packages", True, lambda: step_comfy_packages(apply, workspace=workspace)),
         ("ComfyUI-Manager channel", False, lambda: step_manager_config(apply, workspace=workspace)),
         ("Triton + SageAttention", False, lambda: step_accel(apply, workspace=workspace, gpu=pf.gpu, skip=skip_sage)),
         ("LTX 2.3 weights", True, lambda: step_weights(apply, skip=skip_weights)),

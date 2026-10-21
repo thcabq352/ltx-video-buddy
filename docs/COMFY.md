@@ -120,9 +120,12 @@ After each install Buddy runs `import triton` / `import sageattention` in the Co
 
 ## Comfy Python packages
 
-Automatic install runs `<comfy-python> -m pip install --upgrade -r video_buddy/comfy-requirements.txt` (`gguf==0.19.0`, `colour==0.1.5`) in the Comfy venv, or in `python_embeded` with `-s` for a portable build. The file holds exact pins only, so `--upgrade` keeps those versions. A pip failure is `FAILED-NONFATAL`; run `automatic-install --yes` again to retry.
+ComfyUI-GGUF needs `gguf` and ComfyUI-LTXVideo needs `colour-science` (import name `colour`) in the Python that ComfyUI runs with. That is the interpreter `comfy start` launches: the workspace `.venv`, or `python_embeded` (with `-s`) for a portable build. Never Buddy's `.venv` or the system Python. Automatic install does two steps after the custom nodes:
 
-ComfyUI-LTXVideo also installs `colour-science`, which provides the same `colour` import name. When both are installed, `import colour` loads `colour-science`.
+1. **custom node requirements**: `<comfy-python> -m pip install -r custom_nodes/<pack>/requirements.txt -c video_buddy/comfy-requirements.txt` for ComfyUI-LTXVideo and ComfyUI-GGUF. `torch*` lines are dropped so pip never swaps ComfyUI's PyTorch build. This runs on every `--yes`; pip leaves what is already satisfied alone.
+2. **Comfy Python packages**: checks inside the Comfy Python that `gguf` and `colour-science` are installed and import. When both do, the step is `SKIPPED`. Otherwise it runs `<comfy-python> -m pip install --upgrade -r video_buddy/comfy-requirements.txt` (`gguf==0.19.0`, `colour-science==0.4.6`), then checks again.
+
+Both steps are required. A pip failure, or a package that still does not import, is `FAILED` with pip's output and the command to retry, and the install ends `Install FAILED`. The file holds exact pins only, so `--upgrade` keeps those versions. The unrelated PyPI package `colour` also imports as `colour`, so the check looks for the `colour-science` distribution too. Older installs pinned that wrong package; run `automatic-install --yes` again to fix them. `doctor` reports the same check as the `comfy-node-deps` row.
 
 ## Install CI
 

@@ -58,6 +58,7 @@ Gated Hub packs need `HF_TOKEN` or `huggingface-cli login`. LTX 2.5 is the LTX-2
 | `model-folders` | every subfolder above exists in `MODELS_DIR`. Informational; `setup --fix` creates them |
 | `llm-models` | `qwen3-vl-heretic` / `nomic-embed-text` GGUFs are in `MODELS_DIR`. Informational; never fails doctor |
 | `comfyui` | `COMFYUI_URL` `/system_stats` answers. With no ComfyUI installed the fix line says to run automatic install |
+| `comfy-node-deps` | `gguf` and `colour-science` import in Buddy's ComfyUI's own Python (ComfyUI-GGUF / ComfyUI-LTXVideo need them). Not checked when that ComfyUI is not installed. The fix line is automatic install |
 | `hardware` | One routing sentence. Does not block install |
 | `vram-policy` | The loader order below |
 | `ltx25-weights` | `ltx25_core` scan plus the loader pick |
@@ -65,7 +66,7 @@ Gated Hub packs need `HF_TOKEN` or `huggingface-cli login`. LTX 2.5 is the LTX-2
 | `h3-weights` | `h3_fl2va` scan plus the loader pick |
 | `heartlib` / `heartmula-weights` / `heartmula-comfy` | Reported. An INFO here does not fail doctor and does not fetch |
 
-After `setup --fix` (and so after plain `install.py`), the rows the light install never provides (`comfyui` and the weight rows) print as `INFO` with a "safe to ignore because ..." line instead of failing, and the report ends with `Install OK: N ok, M non-fatal note(s)` or `Install FAILED: ...` (exit 1). Plain `doctor` still counts them.
+After `setup --fix` (and so after plain `install.py`), the rows the light install never provides (`comfyui`, `comfy-node-deps`, and the weight rows) print as `INFO` with a "safe to ignore because ..." line instead of failing, and the report ends with `Install OK: N ok, M non-fatal note(s)` or `Install FAILED: ...` (exit 1). Plain `doctor` still counts them.
 
 A ready transformer line names the file the default loader will wire. A zero-byte duration head is optional: no shipped LTX 2.5 graph loads it, so it does not fail `ltx25-weights`.
 
