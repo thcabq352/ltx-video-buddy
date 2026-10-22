@@ -82,7 +82,9 @@ def server_argv(
     When automatic install wrote ``state/llamacpp-models.ini``, pass it as
     ``--models-preset`` so the served names (``qwen3-vl-heretic``,
     ``nomic-embed-text``) point at the GGUF files, with ``embedding`` on the
-    embed slot and ``mmproj`` when a projector file is present.
+    embed slot. A ``mmproj`` line is how llama-server loads the projector
+    (``--mmproj``) for that model, including when the files live in another
+    folder such as ``gguf_vl_heretic/``.
     """
     argv = [
         binary,

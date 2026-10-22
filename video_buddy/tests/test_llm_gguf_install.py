@@ -44,8 +44,9 @@ def test_manifest_pins_verified_filenames_and_no_default_mmproj():
         "SergiusFlavius/Qwen3-VL-8B-Instruct-heretic-gguf",
         "mradermacher/Qwen-3-VL-8B-Instruct-heretic-GGUF",
     }
-    note = llm_gguf.vision_note()
-    assert "no mmproj" in note
+    note = llm_gguf.vision_note(root=Path("/no/such/llm-models"))
+    assert "text-only" in note and "no mmproj" in note
+    assert "gguf_vl_heretic" in note
     assert "mmproj-Qwen3-VL-8B-Instruct-heretic-F16.gguf" in note
     assert "Qwen-3-VL-8B-Instruct-heretic.mmproj-f16.gguf" in note
 
@@ -206,6 +207,212 @@ def test_preset_wires_model_mmproj_and_embedding(tmp_path, monkeypatch):
     assert row["ok"] is True
     assert "vision mmproj: mmproj-custom.gguf" in row["detail"]
     assert row["fix"] == ""
+
+
+def _touch(path: Path, payload: bytes = b"x") -> Path:
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_bytes(payload)
+    return path
+
+
+def _vision_pair(folder: Path, model_name: str = "model.Q4_K_M.gguf") -> tuple[Path, Path]:
+    model = _touch(folder / model_name, b"brain-bytes")
+    proj = _touch(folder / "mmproj-Q8_0.gguf", b"proj-bytes")
+    return model, proj
+
+
+def _ollama_embed(root: Path, payload: bytes = b"GGUF" + b"\0" * 16) -> Path:
+    import json
+
+    blob = _touch(root / "blobs" / "sha256-abc123", payload)
+    manifest = root / "manifests" / "registry.ollama.ai" / "library" / "nomic-embed-text" / "latest"
+    manifest.parent.mkdir(parents=True, exist_ok=True)
+    manifest.write_text(
+        json.dumps(
+            {
+                "layers": [
+                    {
+                        "mediaType": "application/vnd.ollama.image.model",
+                        "digest": "sha256:abc123",
+                        "size": len(payload),
+                    },
+                    {
+                        "mediaType": "application/vnd.ollama.image.license",
+                        "digest": "sha256:not-a-model",
+                        "size": 12,
+                    },
+                ]
+            }
+        ),
+        encoding="utf-8",
+    )
+    return blob
+
+
+def _use_models(tmp_path, monkeypatch):
+    models = tmp_path / "models"
+    state = tmp_path / "state"
+    models.mkdir()
+    monkeypatch.setattr(config, "MODELS_DIR", models)
+    monkeypatch.setattr(config, "STATE_DIR", state)
+    monkeypatch.setattr(config, "LLAMACPP_MODEL", "qwen3-vl-heretic")
+    monkeypatch.setattr(config, "KB_EMBED_MODEL", "nomic-embed-text")
+    monkeypatch.setattr(config, "LLM_PROVIDER", "auto")
+    env_file = tmp_path / ".env"
+    env_file.write_text("FOO=1\n", encoding="utf-8")
+    monkeypatch.setattr(llm_gguf, "env_file", lambda: env_file)
+    return models, state
+
+
+def test_prefers_gguf_vl_heretic_pair_and_skips_4b_download(tmp_path, monkeypatch):
+    models, state = _use_models(tmp_path, monkeypatch)
+    model, proj = _vision_pair(models / "gguf_vl_heretic")
+    other_model, _other_proj = _vision_pair(models / "other_vl", model_name="other.gguf")
+    embed = _touch(models / "nomic-embed-text" / "kept-embed.gguf", b"embed-bytes")
+    before = {path: path.read_bytes() for path in (model, proj, other_model, embed)}
+    monkeypatch.setattr(llm_gguf, "download_into", lambda *a, **k: pytest.fail("downloaded"))
+
+    brain = llm_gguf.install_slot(llm_gguf.LLM_SLOTS["qwen3-vl-heretic"], apply=True, fetch=True)
+    assert brain.status == "present"
+    assert str(model) in "\n".join(brain.lines)
+    assert "vision: enabled" in "\n".join(brain.lines)
+    assert llm_gguf.bytes_still_needed(models, slots=[llm_gguf.LLM_SLOTS["qwen3-vl-heretic"]]) == 0
+
+    from master_agent import automatic_install as ai
+
+    res = ai.step_llm_models(True, skip=False, fetch=True)
+    text = "\n".join(res.lines)
+    assert "vision: enabled" in text
+    assert str(model) in text and str(proj) in text
+    assert "4B file is not downloaded" in text
+    preset = (state / "llamacpp-models.ini").read_text(encoding="utf-8")
+    assert "[qwen3-vl-heretic]" in preset
+    assert f"model = {model.resolve()}" in preset
+    assert f"mmproj = {proj.resolve()}" in preset
+    assert "other_vl" not in preset
+    assert not (models / "qwen3-vl-heretic").exists()
+    assert {path: path.read_bytes() for path in before} == before
+
+    row = llm_gguf.doctor_row()
+    assert row["ok"] is True
+    assert "vision: enabled" in row["detail"]
+    assert f"brain: {model}" in row["detail"]
+    assert f"projector: {proj}" in row["detail"]
+    assert f"embed: {embed}" in row["detail"]
+    assert "vision mmproj: mmproj-Q8_0.gguf" in row["detail"]
+    argv = srv.server_argv("llama-server", host="127.0.0.1", port=8080, models_dir=models)
+    assert argv[argv.index("--models-preset") + 1] == str(state / "llamacpp-models.ini")
+
+
+def test_other_folder_pair_used_when_preferred_dir_is_absent(tmp_path, monkeypatch):
+    models, _state = _use_models(tmp_path, monkeypatch)
+    _touch(models / "diffusion_models" / "ltx.gguf", b"not-a-brain")
+    model, proj = _vision_pair(models / "custom_vl", model_name="weights.gguf")
+    found = llm_gguf.discover_local_vision_pair(models)
+    assert found is not None
+    assert found.model == model and found.mmproj == proj
+
+
+def test_nested_pair_and_unprefixed_projector_are_not_adopted(tmp_path):
+    nested = tmp_path / "gguf_vl_heretic" / "nested"
+    _vision_pair(nested)
+    assert llm_gguf.discover_local_vision_pair(tmp_path) is None
+    odd = tmp_path / "odd_vl"
+    _touch(odd / "weights.gguf", b"m")
+    _touch(odd / "weights.mmproj-f16.gguf", b"p")
+    assert llm_gguf.discover_local_vision_pair(tmp_path) is None
+
+
+def test_text_only_4b_keeps_download_behavior_and_says_how_to_add_a_projector(tmp_path, monkeypatch):
+    models, state = _use_models(tmp_path, monkeypatch)
+    brain = _touch(models / "qwen3-vl-heretic" / "custom-brain.gguf", b"4b")
+    embed = _touch(models / "nomic-embed-text" / "nomic-embed-text-v1.5.f16.gguf", b"e")
+    monkeypatch.setattr(llm_gguf, "download_into", lambda *a, **k: pytest.fail("downloaded"))
+    from master_agent import automatic_install as ai
+
+    res = ai.step_llm_models(True, skip=False, fetch=True)
+    text = "\n".join(res.lines)
+    assert res.detail == "present: qwen3-vl-heretic, nomic-embed-text"
+    assert "vision: text-only" in text
+    assert "no mmproj" in text
+    assert "gguf_vl_heretic" in text
+    assert "mmproj*.gguf" in text
+    preset = (state / "llamacpp-models.ini").read_text(encoding="utf-8")
+    assert f"model = {brain.resolve()}" in preset
+    assert f"model = {embed.resolve()}" in preset
+    assert "mmproj = " not in preset
+    row = llm_gguf.doctor_row()
+    assert row["ok"] is True
+    assert "vision: text-only" in row["detail"]
+    assert "projector: none" in row["detail"]
+    assert f"brain: {brain}" in row["detail"]
+    assert f"embed: {embed}" in row["detail"]
+    assert "vision mmproj: not in the default repo" in row["detail"]
+    assert "gguf_vl_heretic" in row["detail"]
+
+
+def test_ollama_embed_blob_is_referenced_read_only(tmp_path, monkeypatch):
+    models, state = _use_models(tmp_path, monkeypatch)
+    _vision_pair(models / "gguf_vl_heretic")
+    ollama = tmp_path / "ollama"
+    blob = _ollama_embed(ollama)
+    monkeypatch.setenv("OLLAMA_MODELS", str(ollama))
+    snapshot = blob.read_bytes()
+    inode = blob.stat().st_ino
+    monkeypatch.setattr(llm_gguf, "download_into", lambda *a, **k: pytest.fail("downloaded"))
+
+    embed = llm_gguf.install_slot(llm_gguf.LLM_SLOTS["nomic-embed-text"], apply=True, fetch=True)
+    assert embed.status == "present"
+    assert str(blob) in "\n".join(embed.lines)
+    assert "not copied" in "\n".join(embed.lines)
+    assert llm_gguf.bytes_still_needed(models) == 0
+    assert not (models / "nomic-embed-text").exists()
+    assert blob.read_bytes() == snapshot and blob.stat().st_ino == inode
+
+    path = llm_gguf.write_preset(models)
+    text = path.read_text(encoding="utf-8")
+    assert f"model = {blob.resolve()}" in text
+    assert "embedding = true" in text
+    row = llm_gguf.doctor_row()
+    assert row["ok"] is True
+    assert "vision: enabled" in row["detail"]
+    assert f"embed: {blob}" in row["detail"]
+    assert "read-only" in row["detail"]
+    assert (state / "llamacpp-models.ini").is_file()
+
+
+def test_local_embed_wins_over_ollama_blob(tmp_path, monkeypatch):
+    models, _state = _use_models(tmp_path, monkeypatch)
+    local = _touch(models / "nomic-embed-text" / "nomic-embed-text-v1.5.f16.gguf", b"local-embed")
+    blob = _ollama_embed(tmp_path / "ollama")
+    monkeypatch.setenv("OLLAMA_MODELS", str(tmp_path / "ollama"))
+    ready = llm_gguf.file_ready(
+        llm_gguf.LLM_SLOTS["nomic-embed-text"],
+        llm_gguf.LLM_SLOTS["nomic-embed-text"].files[0],
+        models,
+    )
+    assert ready == local
+    assert blob.read_bytes().startswith(b"GGUF")
+
+
+def test_non_gguf_ollama_blob_is_ignored(tmp_path, monkeypatch):
+    models, _state = _use_models(tmp_path, monkeypatch)
+    blob = _ollama_embed(tmp_path / "ollama", payload=b"NOT-A-GGUF-FILE!!")
+    monkeypatch.setenv("OLLAMA_MODELS", str(tmp_path / "ollama"))
+    assert llm_gguf.ollama_embed_blob("nomic-embed-text") is None
+    slot = llm_gguf.LLM_SLOTS["nomic-embed-text"]
+    assert llm_gguf.file_ready(slot, slot.files[0], models) is None
+    assert llm_gguf.bytes_still_needed(models, slots=[slot]) == llm_gguf.EMBED_SIZE_BYTES
+    assert blob.is_file()
+
+
+def test_download_into_refuses_to_touch_an_ollama_blob(tmp_path, monkeypatch):
+    blob = _ollama_embed(tmp_path / "ollama")
+    monkeypatch.setenv("OLLAMA_MODELS", str(tmp_path / "ollama"))
+    before = blob.read_bytes()
+    with pytest.raises(RuntimeError, match="never modified"):
+        llm_gguf.download_into(llm_gguf.LLM_SLOTS["nomic-embed-text"].files[0], blob)
+    assert blob.read_bytes() == before
 
 
 def test_doctor_row_warns_when_the_files_are_missing(tmp_path, monkeypatch):

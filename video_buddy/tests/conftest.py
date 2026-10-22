@@ -27,6 +27,9 @@ for name in _TRACKED_STATE_FILES:
 os.environ.setdefault("STATE_DIR", str(_state))
 os.environ.setdefault("CHROMA_DIR", str(_state / "chroma"))
 os.environ.setdefault("OUTPUTS_DIR", str(_root / "outputs"))
+# Keep LLM discovery off the operator's real ~/.ollama blobs. Tests that want
+# a blob set OLLAMA_MODELS themselves. Read at call time, so this sticks.
+os.environ["OLLAMA_MODELS"] = str(_root / "ollama-models")
 
 
 def pytest_sessionfinish(session, exitstatus):  # noqa: ARG001
