@@ -284,6 +284,29 @@ def gpu_install_flag(gpu: dict[str, Any], override: str = "auto") -> str:
     return "--cpu"
 
 
+COMFY_CUDA_VERSION_ENV = "VIDEO_BUDDY_COMFY_CUDA_VERSION"
+_BLACKWELL_RE = re.compile(r"RTX\s*50\d0|RTX\s*PRO\s*\d+\s*Blackwell|\bB[12]00\b|\bGB[12]0\d", re.I)
+
+
+def is_blackwell(gpu: dict[str, Any]) -> bool:
+    return str(gpu.get("vendor") or "").lower() == "nvidia" and bool(_BLACKWELL_RE.search(str(gpu.get("name") or "")))
+
+
+def comfy_cuda_args(gpu_flag: str) -> list[str]:
+    """Extra ``--cuda-version X`` for ``comfy install --nvidia``.
+
+    comfy-cli 1.20 already picks the torch wheel tag from the NVIDIA driver
+    (``cuda_detect.resolve_cuda_wheel``), so a Blackwell (sm_120) card with a
+    570+/580+ driver gets cu128/cu130 without help. Only when driver detection
+    fails does it fall back to cu126, which has no sm_120 kernels. Set
+    ``VIDEO_BUDDY_COMFY_CUDA_VERSION=13.0`` (or 12.8) to force a tag.
+    """
+    want = os.environ.get(COMFY_CUDA_VERSION_ENV, "").strip()
+    if gpu_flag != "--nvidia" or not re.fullmatch(r"\d+\.\d+", want):
+        return []
+    return ["--cuda-version", want]
+
+
 def comfy_argv(workspace: Path, *args: str) -> list[str]:
     from master_agent.comfy.tower import resolve_comfy_cli
 
@@ -769,7 +792,7 @@ def step_comfyui(apply: bool, *, workspace: Path, state: str, gpu_flag: str) -> 
     guard = portable_guard(workspace, state)
     if guard is not None:
         return StepResult("ComfyUI", FAILED, guard)
-    args = ["install", gpu_flag] + (["--restore"] if state == "partial" else [])
+    args = ["install", gpu_flag, *comfy_cuda_args(gpu_flag)] + (["--restore"] if state == "partial" else [])
     argv = comfy_argv(workspace, *args)
     if not apply:
         verb = "repair" if state == "partial" else "install"
