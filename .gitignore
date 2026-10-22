@@ -46,6 +46,8 @@ video_buddy/llama.cpp/
 video_buddy/state/managed_comfy.json
 video_buddy/state/model_selector.json
 video_buddy/state/extra_model_paths.yaml
+video_buddy/state/LAUNCH_NOTES.txt
+video_buddy/state/llamacpp-models.ini
 video_buddy/state/comfy_snapshots/
 video_buddy/ai-toolkit/
 video_buddy/blender-*/

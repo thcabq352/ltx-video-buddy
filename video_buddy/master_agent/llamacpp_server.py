@@ -77,8 +77,14 @@ def server_argv(
     port: int,
     models_dir: Path,
 ) -> list[str]:
-    """``llama-server`` router mode pointed at the central models directory."""
-    return [
+    """``llama-server`` router mode pointed at the central models directory.
+
+    When automatic install wrote ``state/llamacpp-models.ini``, pass it as
+    ``--models-preset`` so the served names (``qwen3-vl-heretic``,
+    ``nomic-embed-text``) point at the GGUF files, with ``embedding`` on the
+    embed slot and ``mmproj`` when a projector file is present.
+    """
+    argv = [
         binary,
         "--host",
         host,
@@ -87,6 +93,15 @@ def server_argv(
         "--models-dir",
         str(models_dir),
     ]
+    try:
+        from master_agent.models.llm_gguf import preset_path
+
+        preset = preset_path()
+        if preset.is_file():
+            argv.extend(["--models-preset", str(preset)])
+    except Exception:
+        pass
+    return argv
 
 
 def _tcp_open(host: str, port: int, timeout: float = 0.4) -> bool:

@@ -45,9 +45,10 @@ def main(argv: list[str] | None = None) -> int:
             "plan. With --yes it installs ffmpeg, comfy-cli (pinned), ComfyUI in its own folder "
             "(MANAGED_COMFY_ROOT or ./ComfyUI) with the LTX 2.3 custom nodes, optional Triton + "
             "SageAttention inside the Comfy venv, the LTX 2.3 weights into MODELS_DIR, and optional "
-            "llama.cpp (built from the pinned LLAMACPP_REF into LLAMACPP_ROOT, else the official prebuilt). "
-            "Local LLM models with no public GGUF source are skipped and the install continues. "
-            "LTX 2.3 is the only video model it installs."
+            "llama.cpp (built from the pinned LLAMACPP_REF into LLAMACPP_ROOT, else the official prebuilt), "
+            "and the local LLM GGUFs (Qwen3-VL-4B heretic Q4_K_M and nomic-embed-text Q4_K_M) into MODELS_DIR. "
+            "A missing LLM file fails that step out loud (direct link, manual steps, LAUNCH_NOTES.txt). "
+            "LTX 2.3 is the only video model it installs. Ollama is never installed."
         ),
     )
     p.add_argument("--yes", action="store_true", help="consent: install and download everything in the plan")
@@ -87,7 +88,7 @@ def main(argv: list[str] | None = None) -> int:
         aliases=["doctor"],
         help="check local deps + 16GB pack policy + LTX 2.5 / H3 weights (scan first; --fix-models after you agree)",
     )
-    p.add_argument("--fix", action="store_true", help="create venv, pip install, Playwright, .env, ffmpeg; local LLM GGUFs with no public source are skipped (never pulls Ollama)")
+    p.add_argument("--fix", action="store_true", help="create venv, pip install, Playwright, .env, ffmpeg; warns loudly if LLM GGUFs are missing (automatic-install downloads them; never pulls Ollama)")
     p.add_argument(
         "--fix-models",
         action="store_true",

@@ -28,7 +28,9 @@ def _no_ollama(cmd) -> None:
 def plain(tmp_path, monkeypatch):
     """`setup --fix` with every installer stubbed and every subprocess recorded."""
     models = tmp_path / "models"
+    state = tmp_path / "state"
     monkeypatch.setattr(config, "MODELS_DIR", models)
+    monkeypatch.setattr(config, "STATE_DIR", state)
     monkeypatch.setattr(ai, "models_dir", lambda: models)
     calls: list[list[str]] = []
 
@@ -53,13 +55,16 @@ def plain(tmp_path, monkeypatch):
     return SimpleNamespace(models=models, calls=calls)
 
 
-def test_setup_fix_skips_llm_models_without_ollama(plain, capsys):
+def test_setup_fix_warns_when_llm_missing_without_ollama_pull(plain, capsys):
     rc = setup_mod.cmd_setup(do_fix=True, yes=True)
     out = capsys.readouterr().out
     assert rc == 0
-    assert "Skipped qwen3-vl-heretic: no public GGUF source is defined; continuing." in out
-    assert "Skipped nomic-embed-text: no public GGUF source is defined; continuing." in out
-    assert "ollama" not in out.lower()
+    assert "WARNING: LOCAL LLM IS NOT READY" in out
+    assert "https://huggingface.co/DreamFast/Qwen3-VL-4b-Heretic-GGUF/resolve/main/qwen3-vl-4b-heretic-Q4_K_M.gguf" in out
+    assert "https://huggingface.co/nomic-ai/nomic-embed-text-v1.5-GGUF/resolve/main/nomic-embed-text-v1.5.Q4_K_M.gguf" in out
+    assert "LAUNCH_NOTES.txt" in out
+    assert "WARN  llm-models" in out
+    assert "ollama pull" not in out.lower()
     assert all("ollama" not in " ".join(c).lower() for c in plain.calls)
 
 
@@ -70,8 +75,10 @@ def test_setup_fix_reports_present_gguf(plain, capsys):
     out = capsys.readouterr().out
     assert rc == 0
     assert "qwen3-vl-heretic (text + vision: brief, director, judge): found" in out
-    assert "Skipped nomic-embed-text: no public GGUF source is defined; continuing." in out
-    assert "ollama" not in out.lower()
+    assert "WARNING: LOCAL LLM IS NOT READY" in out
+    assert "nomic-embed-text" in out
+    assert "Skipped nomic-embed-text" not in out
+    assert "ollama pull" not in out.lower()
 
 
 def test_llm_model_step_error_does_not_fail_fix(plain, monkeypatch, capsys):
@@ -80,16 +87,20 @@ def test_llm_model_step_error_does_not_fail_fix(plain, monkeypatch, capsys):
 
     monkeypatch.setattr(ai, "step_llm_models", boom)
     assert setup_mod.fix() == 0
-    assert "LLM model check skipped (models dir unreadable); continuing." in capsys.readouterr().out
+    assert "WARNING: local LLM check failed (models dir unreadable)" in capsys.readouterr().out
 
 
-def test_doctor_llm_row_is_informational(plain, capsys):
+def test_doctor_llm_row_warns_with_link(plain, capsys):
     row = setup_mod.check_llm_models()
     assert row["name"] == "llm-models" and row["ok"] is False
-    assert "no public GGUF source is defined" in row["detail"]
+    assert "MISSING" in row["detail"]
+    assert "huggingface.co" in row["fix"]
     assert "ollama" not in (row["detail"] + row["fix"]).lower()
     assert setup_mod.print_report([row]) == 0
-    assert "All checked dependencies are ready." in capsys.readouterr().out
+    out = capsys.readouterr().out
+    assert "WARN  llm-models" in out
+    assert "All checked dependencies are ready." not in out
+    assert "warning" in out.lower()
 
 
 def test_snapshot_has_no_ollama_row():

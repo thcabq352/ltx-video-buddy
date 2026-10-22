@@ -16,9 +16,13 @@ the Comfy tree; managed launch keeps passing Buddy's ``extra_model_paths.yaml``.
 
 The local LLM models (``LLAMACPP_MODEL`` for brief / director / judge,
 ``KB_EMBED_MODEL`` for knowledge-base embeddings) are GGUFs llama-server
-serves from ``MODELS_DIR``. The repo defines no public download source for
-them, so they are skipped with a plain message and the install continues.
-Automatic install never calls Ollama.
+serves from ``MODELS_DIR/<name>/``. Public sources live in
+``models/llm_gguf.py`` (same Hub download as the LTX weights). A file that is
+already the full size is skipped. A short file is fetched again. If a slot
+has no source or the download fails, the step fails out loud: the summary,
+``state/LAUNCH_NOTES.txt``, and doctor's ``llm-models`` row all name the
+direct link and the manual steps. Automatic install never calls Ollama.
+Unset ``LLM_PROVIDER`` is set to ``llamacpp`` in ``.env``.
 
 ``doctor`` stays a scanner. This module is the only thing that installs.
 """
@@ -362,10 +366,12 @@ def check_disk(
     models: Path,
     workspace: Path,
     llama_dir: Path,
+    llm_bytes: int = 0,
 ) -> Check:
     needs: dict[int, dict[str, Any]] = {}
     for label, path, size, env_var in (
         ("LTX 2.3 weights", models, weights_bytes, "MODELS_DIR"),
+        ("Local LLM GGUFs", models, llm_bytes, "MODELS_DIR"),
         ("ComfyUI + its venv", workspace, comfy_bytes, "MANAGED_COMFY_ROOT"),
         ("llama.cpp", llama_dir, llama_bytes, "LLAMACPP_ROOT"),
     ):
@@ -425,8 +431,8 @@ def check_hf(missing_weights: list[Any], *, env_file: Path) -> Check:
                 "Hugging Face access",
                 PASS,
                 [
-                    "Not needed: the LTX 2.3 files Buddy downloads are public on Hugging Face, "
-                    "so no token is required.",
+                    "Not needed: the LTX 2.3 files and the local LLM GGUFs Buddy downloads are "
+                    "public on Hugging Face, so no token is required.",
                 ],
                 blocking=True,
             )
@@ -505,9 +511,27 @@ def check_llamacpp(plan: Any, *, skip: bool) -> Check:
             "Buddy still renders video without it. To get the local LLM later, install the build tools: "
             + _toolchain_hint(plan.system)
         )
-    for name, role in llm_models():
-        if local_llm_gguf(name) is None:
-            lines.append(f"{name} ({role}): no public GGUF source is defined; it will be skipped.")
+    from master_agent.models.llm_gguf import configured_slots, slot_ready
+
+    for slot in configured_slots():
+        if slot_ready(slot):
+            lines.append(f"{slot.name} ({slot.role}): already on disk.")
+        elif slot.files:
+            spec = slot.files[0]
+            lines.append(
+                f"{slot.name} ({slot.role}): will download {spec.filename} "
+                f"({spec.size_label}) from {spec.repo_id}."
+            )
+            lines.append(f"  {spec.url}")
+            if slot.vision and not slot.publishes_mmproj:
+                lines.append(
+                    "  That repo publishes no mmproj file. Text works; the vision judge cannot see images."
+                )
+        else:
+            lines.append(
+                f"{slot.name} ({slot.role}): NO public GGUF source. "
+                "The install will fail this slot and print the manual steps."
+            )
     lines.append("This is information only; it never stops the install.")
     return Check("llama.cpp", INFO, lines)
 
@@ -594,6 +618,8 @@ def run_preflight(*, skip_weights: bool = False, skip_llm: bool = False) -> Pref
     except Exception:
         mode = "managed"
     state = comfy_install_state(workspace) if mode != "external" else "absent"
+    from master_agent.models.llm_gguf import bytes_still_needed
+
     weights = scan_bundle(LTX23_BUNDLE)
     missing_weights = [] if skip_weights else list(weights.missing_mandatory)
     gpu = detect_gpu()
@@ -604,6 +630,7 @@ def run_preflight(*, skip_weights: bool = False, skip_llm: bool = False) -> Pref
             weights_bytes=sum(int(w.size_bytes) for w in missing_weights),
             comfy_bytes=0 if state == "installed" else COMFY_OVERHEAD_BYTES,
             llama_bytes=0 if llama is None else int(llama.disk_bytes),
+            llm_bytes=0 if skip_llm else bytes_still_needed(),
             models=models_dir(),
             workspace=workspace,
             llama_dir=llamacpp_root(),
@@ -731,38 +758,77 @@ def step_llamacpp(apply: bool, *, plan: Any, skip: bool) -> StepResult:
     return StepResult("llama.cpp", res.status, res.detail, required=False, lines=res.lines)
 
 
-def step_llm_models(apply: bool, *, skip: bool) -> StepResult:
-    """GGUFs for ``LLAMACPP_MODEL`` / ``KB_EMBED_MODEL``. No public source is defined: skip, continue."""
+def step_llm_models(apply: bool, *, skip: bool, fetch: bool = True) -> StepResult:
+    """Download ``LLAMACPP_MODEL`` / ``KB_EMBED_MODEL`` into ``MODELS_DIR/<name>/``.
+
+    Same shape as the Comfy Python packages step: required when this command
+    fetches, skip when the files are already the right size, verify after the
+    copy, and fail loudly (link + manual steps + ``LAUNCH_NOTES.txt``) otherwise.
+    ``fetch=False`` is the light install: it does not download, and it still
+    refuses to skip quietly. ``--skip-llm`` is the only quiet skip.
+    """
     if skip:
         return StepResult("LLM models", SKIPPED, "--skip-llm", required=False)
-    present: list[str] = []
-    skipped: list[str] = []
+    from master_agent.models import llm_gguf
+
+    outcomes = [
+        llm_gguf.install_slot(slot, apply=apply, fetch=fetch)
+        for slot in llm_gguf.configured_slots()
+    ]
+    failed = [o for o in outcomes if o.status == "failed"]
+    if failed:
+        # Do not pin llama.cpp when the files are missing: an explicit pin would
+        # stop the auto fallback to Ollama. Report whatever is already set.
+        from master_agent import config
+
+        path = llm_gguf.env_file()
+        pinned = llm_gguf.read_provider(path.read_text(encoding="utf-8")) if path.is_file() else None
+        provider = pinned or config.LLM_PROVIDER or "auto"
+        action = "unchanged" if pinned else "not changed (download failed)"
+    else:
+        provider, action = llm_gguf.ensure_provider(apply)
     lines: list[str] = []
-    for name, role in llm_models():
-        found = local_llm_gguf(name)
-        if found is not None:
-            present.append(name)
-            lines.append(f"{name} ({role}): found {found}")
-            continue
-        skipped.append(name)
-        line = f"Skipped {name}: no public GGUF source is defined; continuing."
-        lines.append(line)
-        if apply:
-            print(line)
-    if skipped:
-        lines.append(
-            f"To use them, put the GGUF files in {models_dir()} (llama-server serves that folder); "
-            "nothing else needs to change."
+    for outcome in outcomes:
+        lines.extend(outcome.lines)
+    lines.append(llm_gguf.provider_sentence(provider) + f" ({action})")
+    lines.extend(llm_gguf.vision_note().splitlines())
+    preset = llm_gguf.write_preset() if apply else None
+    if preset is not None:
+        lines.append(f"llama.cpp preset: {preset}")
+    notes = None
+    if apply:
+        notes = llm_gguf.write_launch_notes(
+            llm_gguf.render_launch_notes(
+                outcomes=outcomes, provider=provider, provider_action=action
+            )
         )
-    detail = "; ".join(
-        part
-        for part in (
-            ("present: " + ", ".join(present)) if present else "",
-            ("skipped (no public GGUF source): " + ", ".join(skipped)) if skipped else "",
+        lines.append(f"Wrote {notes}")
+    failed = [o for o in outcomes if o.status == "failed"]
+    if failed:
+        detail = "MISSING: " + ", ".join(o.slot.name for o in failed)
+        if notes is not None:
+            lines.insert(0, llm_gguf.warning_box(notes, failed))
+        # Light install warns and continues. Automatic install treats a failed
+        # download as a required failure so the summary cannot say ready.
+        return StepResult("LLM models", FAILED, detail, required=bool(fetch), lines=lines)
+    downloaded = [o.slot.name for o in outcomes if o.status == "downloaded"]
+    present = [o.slot.name for o in outcomes if o.status == "present"]
+    planned = [o.slot.name for o in outcomes if o.status == "planned"]
+    if planned and not apply:
+        return StepResult(
+            "LLM models",
+            PLANNED,
+            "download " + ", ".join(planned),
+            required=True,
+            lines=lines,
         )
-        if part
-    )
-    return StepResult("LLM models", SKIPPED, detail, required=False, lines=lines)
+    if downloaded:
+        detail = "downloaded: " + ", ".join(downloaded)
+        if present:
+            detail += "; present: " + ", ".join(present)
+        return StepResult("LLM models", OK, detail, required=True, lines=lines)
+    detail = "present: " + ", ".join(present) if present else "ready"
+    return StepResult("LLM models", SKIPPED, detail, required=True, lines=lines)
 
 
 def step_comfy_cli(apply: bool) -> StepResult:
@@ -1082,7 +1148,7 @@ def step_weights(apply: bool, *, skip: bool) -> StepResult:
 def verify_rows() -> list[dict[str, Any]]:
     """Doctor's own scan rows (read-only) for the pieces generate needs."""
     from master_agent.llamacpp_server import resolve_binary
-    from master_agent.setup import check_ffmpeg, check_ltx23_weights
+    from master_agent.setup import check_ffmpeg, check_llm_models, check_ltx23_weights
 
     binary = resolve_binary()
     llama = {
@@ -1090,7 +1156,7 @@ def verify_rows() -> list[dict[str, Any]]:
         "ok": bool(binary),
         "detail": binary or "not installed (optional: Buddy renders without a local LLM)",
     }
-    return [check_ffmpeg(), check_ltx23_weights(), llama]
+    return [check_ffmpeg(), check_ltx23_weights(), llama, check_llm_models()]
 
 
 # --- command -------------------------------------------------------------------
@@ -1106,8 +1172,6 @@ def classify_step(r: StepResult) -> str:
         return R_INFO
     if r.status in {NONFATAL, NEEDS_YOU, FAILED}:
         return R_NONFATAL
-    if r.name == "LLM models" and "skipped" in r.detail:
-        return R_INFO
     return R_OK
 
 
@@ -1198,11 +1262,15 @@ def cmd_automatic_install(args: Any) -> int:
     for row in verify_rows():
         if row["ok"]:
             mark = "OK  "
+        elif row["name"] == "llm-models":
+            mark = "WARN"
         elif row["name"] == "llama.cpp" or row.get("deferred"):
             mark = "INFO"
         else:
             mark = "NEED"
         print(f"  {mark}  {row['name']:<14} {row['detail']}")
+        if mark == "WARN" and row.get("fix"):
+            print(f"        -> {row['fix']}")
         if mark == "INFO":
             why = DEFERRED_REASON if row.get("deferred") else STEP_REASONS["llama.cpp"]
             print(f"        {safe_to_ignore(why)}")
@@ -1211,15 +1279,10 @@ def cmd_automatic_install(args: Any) -> int:
     ok_count = sum(1 for lv in levels if lv == R_OK)
     note_count = sum(1 for lv in levels if lv not in {R_OK, R_FAIL})
     print()
-    skipped_models = [
-        line.split(":", 1)[0].removeprefix("Skipped ")
-        for r in results
-        if r.name == "LLM models"
-        for line in r.lines
-        if line.startswith("Skipped ")
-    ]
-    if skipped_models:
-        print("Skipped (no public GGUF source is defined): " + ", ".join(skipped_models))
+    llm = next((r for r in results if r.name == "LLM models"), None)
+    if llm is not None and llm.status == FAILED:
+        print("LOCAL LLM FAILED. The lines above name the direct link and the manual steps.")
+        print("state/LAUNCH_NOTES.txt has the same warning. Video files may already be installed.")
     llama = next((r for r in results if r.name == "llama.cpp"), None)
     if llama is not None and llama.status in {NONFATAL, NEEDS_YOU}:
         print("No local LLM runtime yet: video generation works; the local brief / judge LLM stays off.")

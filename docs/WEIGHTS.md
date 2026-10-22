@@ -33,7 +33,7 @@ python -m master_agent workflows --vram
 | *(none)* | Scan and print `OK` / `NEED` |
 | `--scan-only` | Report only. Does not install or fetch weights |
 | `--use-existing` | Keep files already on disk. Does not download |
-| `--fix` | The light install: venv, pip, Playwright, `.env`, ffmpeg, the empty model folders. LLM GGUFs not in `MODELS_DIR` are skipped ("no public GGUF source is defined; continuing"). Never pulls Ollama. Still no video weights |
+| `--fix` | The light install: venv, pip, Playwright, `.env`, ffmpeg, the empty model folders. Missing LLM GGUFs print a warning with the direct link and `state/LAUNCH_NOTES.txt` (`doctor` shows `WARN`). It does not download those files. Never pulls Ollama. Still no video weights |
 | `--fix-models` | After the scan, fetch confirmed-missing LTX 2.5 weights. Explicit consent |
 | `download-models` | List confirmed-missing slots. Exit 2 if something is missing. Nothing downloaded |
 | `download-models --yes` | Fetch that missing set only |
@@ -56,7 +56,7 @@ Gated Hub packs need `HF_TOKEN` or `huggingface-cli login`. LTX 2.5 is the LTX-2
 | `env` | `.env` exists |
 | `ffmpeg` | on PATH |
 | `model-folders` | every subfolder above exists in `MODELS_DIR`. Informational; `setup --fix` creates them |
-| `llm-models` | `qwen3-vl-heretic` / `nomic-embed-text` GGUFs are in `MODELS_DIR`. Informational; never fails doctor |
+| `llm-models` | `qwen3-vl-heretic` / `nomic-embed-text` GGUFs are in `MODELS_DIR`. Missing files are `WARN` with the download link. The row does not by itself make `doctor` exit 1, because video generation can still run |
 | `comfyui` | `COMFYUI_URL` `/system_stats` answers. With no ComfyUI installed the fix line says to run automatic install |
 | `comfy-node-deps` | `gguf` and `colour-science` import in Buddy's ComfyUI's own Python (ComfyUI-GGUF / ComfyUI-LTXVideo need them). Not checked when that ComfyUI is not installed. The fix line is automatic install |
 | `hardware` | One routing sentence. Does not block install |
@@ -66,11 +66,35 @@ Gated Hub packs need `HF_TOKEN` or `huggingface-cli login`. LTX 2.5 is the LTX-2
 | `h3-weights` | `h3_fl2va` scan plus the loader pick |
 | `heartlib` / `heartmula-weights` / `heartmula-comfy` | Reported. An INFO here does not fail doctor and does not fetch |
 
-After `setup --fix` (and so after plain `install.py`), the rows the light install never provides (`comfyui`, `comfy-node-deps`, and the weight rows) print as `INFO` with a "safe to ignore because ..." line instead of failing, and the report ends with `Install OK: N ok, M non-fatal note(s)` or `Install FAILED: ...` (exit 1). Plain `doctor` still counts them.
+After `setup --fix` (and so after plain `install.py`), the rows the light install never provides (`comfyui`, `comfy-node-deps`, and the weight rows) print as `INFO` with a "safe to ignore because ..." line instead of failing, and the report ends with `Install OK: N ok, M non-fatal note(s)` or `Install FAILED: ...` (exit 1). Plain `doctor` still counts them. A missing local LLM prints `WARN  llm-models` with the link. That warning is counted in the note total and does not by itself fail the light install.
 
 A ready transformer line names the file the default loader will wire. A zero-byte duration head is optional: no shipped LTX 2.5 graph loads it, so it does not fail `ltx25-weights`.
 
 Hardware sentence (also on managed `comfy start` / `status` / `restart`): NVIDIA at 12GB and above can use full checkpoints; 8–12GB and below, and no-GPU, are told to use a quantized pack or CPU. AMD with ROCm uses the same bands. AMD without ROCm is told to install ROCm first. `VRAM_GB`, when set, is the number in that sentence.
+
+## Local LLM GGUFs
+
+These are not Comfy weights. llama-server's `--models-dir` router serves a folder under `MODELS_DIR` by the folder name. Automatic install (`python install.py --automatic-install --yes`) downloads the two public files below. A file that is already the full size is skipped. A short copy of the same name is downloaded again. The Hub download resumes.
+
+| What it is for | Folder | File | Direct link |
+|---|---|---|---|
+| Brief, director, storyboard, text judge | `MODELS_DIR/qwen3-vl-heretic/` | `qwen3-vl-4b-heretic-Q4_K_M.gguf` (2,497,281,696 bytes) | https://huggingface.co/DreamFast/Qwen3-VL-4b-Heretic-GGUF/resolve/main/qwen3-vl-4b-heretic-Q4_K_M.gguf |
+| Knowledge-base embeddings | `MODELS_DIR/nomic-embed-text/` | `nomic-embed-text-v1.5.Q4_K_M.gguf` (84,106,624 bytes) | https://huggingface.co/nomic-ai/nomic-embed-text-v1.5-GGUF/resolve/main/nomic-embed-text-v1.5.Q4_K_M.gguf |
+
+`DreamFast/Qwen3-VL-4b-Heretic-GGUF` publishes no `mmproj` file (Hub file list, 2026-10-22). Text works. The vision judge cannot see images with this file. Two optional 8B packs include a projector. Automatic install does not download them:
+
+- [SergiusFlavius/Qwen3-VL-8B-Instruct-heretic-gguf](https://huggingface.co/SergiusFlavius/Qwen3-VL-8B-Instruct-heretic-gguf) — `Qwen3-VL-8B-Instruct-heretic-Q4_K_M.gguf` and `mmproj-Qwen3-VL-8B-Instruct-heretic-F16.gguf` (the mmproj name starts with `mmproj`).
+- [mradermacher/Qwen-3-VL-8B-Instruct-heretic-GGUF](https://huggingface.co/mradermacher/Qwen-3-VL-8B-Instruct-heretic-GGUF) — `Qwen-3-VL-8B-Instruct-heretic.Q4_K_M.gguf` and `Qwen-3-VL-8B-Instruct-heretic.mmproj-f16.gguf`. That mmproj name does not start with `mmproj`. Point llama.cpp at it with the preset `mmproj =` line, or rename the file so the name starts with `mmproj`.
+
+If a download fails, or `LLAMACPP_MODEL` is a name this repo does not know, the install prints a warning box and writes the same steps to `video_buddy/state/LAUNCH_NOTES.txt`. `doctor` shows `WARN`. `--skip-llm` is the only quiet skip. Plain `install.py` and `setup --fix` do not download the ~2.6 GB; they print the warning and continue.
+
+### Which program answers the LLM
+
+- **llama.cpp** is the program on this computer. It reads the GGUF files above. When `.env` has no `LLM_PROVIDER` line and the GGUF files are in place, automatic install adds `LLM_PROVIDER=llamacpp`. A failed download leaves the line alone. You do not install Ollama for llama.cpp.
+- **Ollama** is a separate app you install yourself from https://ollama.com/download. Buddy does not install it and does not run `ollama pull`. Set `LLM_PROVIDER=ollama` only if that is the app you want. An existing line is left as you wrote it.
+- **auto** (only if you write `LLM_PROVIDER=auto`) tries llama.cpp first, then Ollama. It does not call a cloud model. Cloud Grok runs only if you set `LLM_PROVIDER=grok`.
+
+`doctor` prints `LLM_PROVIDER=` on the `llm-models` row. When the files are on disk, automatic install writes `state/llamacpp-models.ini` and llama-server is started with `--models-preset` pointing at it.
 
 ## Loader policy
 
@@ -100,7 +124,7 @@ LLM_PANEL=local
 PANEL_JUDGE=ollama
 ```
 
-`FORCE_LOADER=gguf` hides NVFP4 and bf16 from suggestions. It does not block a machine whose only transformer is bf16. `LLM_PROVIDER=auto` stays local (llama.cpp, then Ollama); with both down, LLM calls fail instead of reaching Grok.
+That `LLM_PROVIDER=ollama` block is for a machine that already runs the Ollama app. Automatic install's default, when `.env` has no `LLM_PROVIDER` line and the GGUF download succeeded, is `LLM_PROVIDER=llamacpp`. `FORCE_LOADER=gguf` hides NVFP4 and bf16 from suggestions. It does not block a machine whose only transformer is bf16. `LLM_PROVIDER=auto` stays local (llama.cpp, then Ollama); with both down, LLM calls fail instead of reaching Grok.
 
 LoRA A/B locks the text encoder. The proven LTX 2.3 family is `gemma_3_12B_it_fp8_scaled`. Do not swap it for a Heretic encoder mid-comparison. Only the LoRA name and strength change. Windows folder-prefixed names stay backslash style (`wan\file.safetensors`).
 

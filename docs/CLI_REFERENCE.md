@@ -6,10 +6,10 @@ All commands are `python -m master_agent …` from `video_buddy/`. `python -m ma
 
 | Command | Role |
 |---|---|
-| `automatic-install` | Automatic install: pre-flight, then ffmpeg, comfy-cli, ComfyUI in its own folder, LTX 2.3 nodes, their `requirements.txt` plus `gguf` + `colour-science` in the Comfy venv (skipped when already importable; a pip failure fails the install), ComfyUI-Manager channel fix (`config.ini` / `channels.list`), Triton + SageAttention in the Comfy venv, LTX 2.3 weights, llama.cpp (built from the pinned `LLAMACPP_REF`, official prebuilt as fallback; optional), LLM models (skipped with a note when no public GGUF source is defined). Never installs or calls Ollama. Plan only until `--yes`. `--preflight-only`, `--dry-run`, `--gpu auto\|nvidia\|amd\|m-series\|cpu`, `--skip-weights`, `--skip-sage`, `--skip-llm`. Also `python install.py --automatic-install …`. See [Getting started](GETTING_STARTED.md#automatic-install) |
+| `automatic-install` | Automatic install: pre-flight, then ffmpeg, comfy-cli, ComfyUI in its own folder, LTX 2.3 nodes, their `requirements.txt` plus `gguf` + `colour-science` in the Comfy venv (skipped when already importable; a pip failure fails the install), ComfyUI-Manager channel fix (`config.ini` / `channels.list`), Triton + SageAttention in the Comfy venv, LTX 2.3 weights, llama.cpp (built from the pinned `LLAMACPP_REF`, official prebuilt as fallback; optional), LLM models (`qwen3-vl-4b-heretic-Q4_K_M.gguf` and `nomic-embed-text-v1.5.Q4_K_M.gguf` into `MODELS_DIR/<name>/`; a missing file fails the install out loud with the direct link and `state/LAUNCH_NOTES.txt`). Never installs or calls Ollama. Plan only until `--yes`. `--preflight-only`, `--dry-run`, `--gpu auto\|nvidia\|amd\|m-series\|cpu`, `--skip-weights`, `--skip-sage`, `--skip-llm`. Also `python install.py --automatic-install …`. See [Getting started](GETTING_STARTED.md#automatic-install) |
 | `curriculum` | L0→L5 card. `--json` |
 | `about` | Studio card. Also `GET /api/about` |
-| `doctor` / `setup` | Deps + weight scan. `--fix` installs deps, skips LLM GGUFs with no public source, and never pulls Ollama. `python install.py` runs `setup --fix`; `python install.py --check` runs `setup` (report only, needs an existing `.venv`). See [Weights](WEIGHTS.md#consent) |
+| `doctor` / `setup` | Deps + weight scan. `--fix` installs deps, warns loudly when the LLM GGUFs are missing (it does not download them), and never pulls Ollama. A missing local LLM is `WARN  llm-models` with the download link. `python install.py` runs `setup --fix`; `python install.py --check` runs `setup` (report only, needs an existing `.venv`). See [Weights](WEIGHTS.md#consent) |
 | `inventory` | Discovered files and roles. `--json` |
 | `workflows` | Default catalog. `--vram` prints the pack table. `--json` |
 | `health` | Comfy `:8188`, GPU stats, and a one-line shift budget (`budget: used / cap VRAM-min used, remaining; paused runs`). `doctor` shows the same line as its `budget` row. See [Architecture](ARCHITECTURE.md) |
@@ -53,7 +53,7 @@ python -m master_agent power-tune "neon rain" --variant base --json
 | `OLLAMA_URL` | `http://127.0.0.1:11434` |
 | `OLLAMA_MODEL` | `qwen3-vl-heretic` |
 
-Buddy starts `llama-server --models-dir $MODELS_DIR` (default `video_buddy/models/`) and stops that process on shutdown. A missing binary warns and auto falls through to Ollama. `health` prints llama.cpp, Ollama, and Grok separately. See [Architecture](ARCHITECTURE.md#local-model).
+Buddy starts `llama-server --models-dir $MODELS_DIR` (default `video_buddy/models/`). When `state/llamacpp-models.ini` exists it also passes `--models-preset`. Buddy stops that process on shutdown. A missing binary warns and auto falls through to Ollama. `health` prints llama.cpp, Ollama, and Grok separately. See [Architecture](ARCHITECTURE.md#local-model).
 
 ## Models
 

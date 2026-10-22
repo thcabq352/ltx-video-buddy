@@ -46,6 +46,7 @@ def env(tmp_path: Path, monkeypatch: pytest.MonkeyPatch):
     from master_agent import config
 
     monkeypatch.setattr(config, "MODELS_DIR", models)
+    monkeypatch.setattr(config, "STATE_DIR", state_dir)
     monkeypatch.setattr(ai, "models_dir", lambda: models)
     llama_root = tmp_path / "llama.cpp"
     monkeypatch.setattr(config, "LLAMACPP_ROOT", llama_root)
@@ -188,7 +189,9 @@ def test_preflight_order_and_happy_path(env):
     assert llama.status == ai.INFO and not llama.blocking
     text = " ".join(llama.lines)
     assert "official prebuilt release b11389" in text and "the CUDA toolkit (nvcc)" in text
-    assert "qwen3-vl-heretic" in text and "no public GGUF source is defined" in text
+    assert "qwen3-vl-heretic" in text and "DreamFast/Qwen3-VL-4b-Heretic-GGUF" in text
+    assert "qwen3-vl-4b-heretic-Q4_K_M.gguf" in text
+    assert "https://huggingface.co/DreamFast/Qwen3-VL-4b-Heretic-GGUF/resolve/main/qwen3-vl-4b-heretic-Q4_K_M.gguf" in text
     assert pf.llama.method == "prebuilt"
 
 
@@ -199,8 +202,9 @@ def test_preflight_low_disk_fails_closed_with_free_and_needed(env, monkeypatch):
     assert bad is not None and bad.name == "Disk space"
     text = "\n".join(bad.lines)
     assert "40.0 GB free" in text
-    # 76.5 weights + 15 Comfy + 2.5 llama.cpp CUDA prebuilt + 5 headroom
-    assert "99.0 GB needed" in text
+    # 76.5 weights + 2.6 LLM GGUFs + 15 Comfy + 2.5 llama.cpp CUDA prebuilt + 5 headroom
+    assert "101.6 GB needed" in text
+    assert "Local LLM GGUFs 2.6 GB" in text
     assert "llama.cpp 2.5 GB" in text
     assert "MODELS_DIR=" in text and "Free up at least" in text
 
@@ -338,7 +342,11 @@ def test_dry_run_prints_plan_and_changes_nothing(env, capsys):
     assert "Video model: LTX 2.3 only." in out
     assert "--nvidia" in out and "automatic-install --yes" in out
     assert "PLANNED          llama.cpp (optional)" in out
-    assert "ollama" not in out.lower()
+    assert "PLANNED          LLM models" in out
+    assert "qwen3-vl-4b-heretic-Q4_K_M.gguf" in out
+    assert "nomic-embed-text-v1.5.Q4_K_M.gguf" in out
+    assert "ollama pull" not in out.lower()
+    assert not (env.state / "LAUNCH_NOTES.txt").exists()
     assert env.calls == []
     assert not env.workspace.exists() and not env.models.exists() and not env.llama_root.exists()
 
@@ -359,7 +367,8 @@ def test_parser_install_all_alias_and_help(monkeypatch, capsys):
         cli_parser.main(["automatic-install", "--help"])
     out = capsys.readouterr().out
     assert "--skip-llm" in out and "llama.cpp" in out
-    assert "ollama" not in out.lower()
+    assert "ollama is never installed" in out.lower()
+    assert "ollama pull" not in out.lower()
 
 
 # --- ComfyUI / nodes / ffmpeg steps -------------------------------------------
@@ -474,6 +483,13 @@ def test_apply_summary_reports_needs_you(env, monkeypatch, capsys):
     monkeypatch.setattr(ai, "step_accel", lambda apply, **k: ai.StepResult("Triton + SageAttention", ai.NONFATAL, "x", required=False))
     monkeypatch.setattr(ai, "step_weights", lambda apply, **k: ai.StepResult("LTX 2.3 weights", ai.OK, "ready"))
     monkeypatch.setattr(ai, "verify_rows", lambda: [{"ok": False, "name": "ffmpeg", "detail": "missing"}])
+    from master_agent.models import llm_gguf
+
+    monkeypatch.setattr(
+        llm_gguf,
+        "install_slot",
+        lambda slot, **k: llm_gguf.SlotOutcome(slot, "present", "found", [f"{slot.name}: found"]),
+    )
 
     def offline(url, dest):
         raise OSError("offline")
@@ -550,32 +566,46 @@ def test_full_yes_run_never_invokes_ollama_and_skipped_models_do_not_block(env, 
     monkeypatch.setattr(ai, "step_accel", lambda apply, **k: ai.StepResult("Triton + SageAttention", ai.SKIPPED, "cpu", required=False))
     monkeypatch.setattr(ai, "step_weights", lambda apply, **k: ai.StepResult("LTX 2.3 weights", ai.OK, "ready"))
     monkeypatch.setattr(ai, "verify_rows", lambda: [{"ok": True, "name": "ffmpeg", "detail": "ok"}])
+    from master_agent.models import llm_gguf
+
+    monkeypatch.setattr(
+        llm_gguf,
+        "install_slot",
+        lambda slot, **k: llm_gguf.SlotOutcome(slot, "downloaded", "downloaded", [f"{slot.name}: downloaded"]),
+    )
 
     rc = ai.cmd_automatic_install(_args(yes=True))
     out = capsys.readouterr().out
     assert rc == 0
     assert "Ready for generate (LTX 2.3)" in out
-    assert "Skipped qwen3-vl-heretic: no public GGUF source is defined; continuing." in out
-    assert "Skipped nomic-embed-text: no public GGUF source is defined; continuing." in out
-    assert "Skipped (no public GGUF source is defined): qwen3-vl-heretic, nomic-embed-text" in out
-    assert "SKIPPED          LLM models (optional)" in out
+    assert "downloaded: qwen3-vl-heretic, nomic-embed-text" in out
+    assert "OK               LLM models" in out
+    assert "SKIPPED          LLM models" not in out
     assert "Still needs you" not in out
+    assert "LOCAL LLM FAILED" not in out
     assert "OK               llama.cpp (optional): official prebuilt b11389 (cuda)" in out
     assert any("llama-b11389-bin-ubuntu-cuda-12.8-x64.tar.gz" in r for r in recorded)
     assert all("ollama" not in r.lower() for r in recorded), recorded
-    assert "ollama" not in out.lower()
+    assert "ollama pull" not in out.lower()
     assert (env.llama_root / "installed.json").is_file()
 
 
-def test_llm_models_skip_and_continue_without_source(env, capsys):
+def test_llm_models_unknown_name_fails_loud(env, monkeypatch, capsys):
+    from master_agent import config
+
+    monkeypatch.setattr(config, "LLAMACPP_MODEL", "custom-brain")
+    monkeypatch.setattr(config, "KB_EMBED_MODEL", "custom-embed")
     res = ai.step_llm_models(True, skip=False)
     out = capsys.readouterr().out
-    assert res.status == ai.SKIPPED and not res.required and not res.failed_required
-    assert out.splitlines() == [
-        "Skipped qwen3-vl-heretic: no public GGUF source is defined; continuing.",
-        "Skipped nomic-embed-text: no public GGUF source is defined; continuing.",
-    ]
-    assert "skipped (no public GGUF source): qwen3-vl-heretic, nomic-embed-text" == res.detail
+    assert res.status == ai.FAILED and res.required and res.failed_required
+    assert res.detail == "MISSING: custom-brain, custom-embed"
+    text = "\n".join(res.lines)
+    assert "WARNING: LOCAL LLM IS NOT READY" in text
+    assert "No public GGUF source" in text or "no public download" in text
+    assert "not changed (download failed)" in text
+    notes = (env.state / "LAUNCH_NOTES.txt").read_text(encoding="utf-8")
+    assert "custom-brain" in notes and "WARNING" in notes
+    assert out == ""
 
 
 def test_llm_models_already_in_models_dir_are_found(env, capsys):
@@ -586,7 +616,47 @@ def test_llm_models_already_in_models_dir_are_found(env, capsys):
     res = ai.step_llm_models(True, skip=False)
     assert capsys.readouterr().out == ""
     assert res.detail == "present: qwen3-vl-heretic, nomic-embed-text"
+    preset = (env.state / "llamacpp-models.ini").read_text(encoding="utf-8")
+    assert "[qwen3-vl-heretic]" in preset and "[nomic-embed-text]" in preset
+    assert "embedding = true" in preset
+    notes = (env.state / "LAUNCH_NOTES.txt").read_text(encoding="utf-8")
+    assert "The local LLM files are in place." in notes
     assert ai.check_llamacpp(ai.plan_llamacpp(env.gpu), skip=False).lines[-1].startswith("This is information only")
+
+
+def test_llm_download_failure_blocks_ready(env, monkeypatch, capsys):
+    from master_agent.models import llm_gguf
+
+    env_file = env.tmp / ".env"
+    env_file.write_text("FOO=1\n", encoding="utf-8")
+    monkeypatch.setattr(setup_mod, "ENV_FILE", env_file)
+
+    def boom(spec, dest, progress=print):
+        raise RuntimeError("network down")
+
+    monkeypatch.setattr(llm_gguf, "download_into", boom)
+    monkeypatch.setattr(ai, "step_playwright", lambda apply: ai.StepResult("Playwright Chromium", ai.OK, "ready", required=False))
+    monkeypatch.setattr(ai, "step_comfy_cli", lambda apply: ai.StepResult("comfy-cli", ai.SKIPPED, "pinned"))
+    monkeypatch.setattr(ai, "step_comfyui", lambda apply, **k: ai.StepResult("ComfyUI", ai.OK, "installed"))
+    monkeypatch.setattr(ai, "step_nodes", lambda apply, **k: ai.StepResult("custom nodes", ai.OK, "installed"))
+    monkeypatch.setattr(ai, "step_node_requirements", lambda apply, **k: ai.StepResult("custom node requirements", ai.OK, "installed"))
+    monkeypatch.setattr(ai, "step_comfy_packages", lambda apply, **k: ai.StepResult("Comfy Python packages", ai.SKIPPED, "importable"))
+    monkeypatch.setattr(ai, "step_accel", lambda apply, **k: ai.StepResult("Triton + SageAttention", ai.SKIPPED, "cpu", required=False))
+    monkeypatch.setattr(ai, "step_weights", lambda apply, **k: ai.StepResult("LTX 2.3 weights", ai.OK, "ready"))
+    monkeypatch.setattr(ai, "step_llamacpp", lambda apply, **k: ai.StepResult("llama.cpp", ai.OK, "ready", required=False))
+    monkeypatch.setattr(ai, "step_env_file", lambda apply: ai.StepResult(".env", ai.SKIPPED, "present", required=False))
+
+    rc = ai.cmd_automatic_install(_args(yes=True))
+    out = capsys.readouterr().out
+    assert rc == 1
+    assert "LOCAL LLM FAILED" in out
+    assert "Ready for generate" not in out
+    assert "https://huggingface.co/DreamFast/Qwen3-VL-4b-Heretic-GGUF/resolve/main/qwen3-vl-4b-heretic-Q4_K_M.gguf" in out
+    assert "LLM models" in out.split("Still needs you:")[1]
+    assert "LLM_PROVIDER=llamacpp" not in env_file.read_text(encoding="utf-8")
+    notes = (env.state / "LAUNCH_NOTES.txt").read_text(encoding="utf-8")
+    assert "network down" in notes
+    assert "nomic-embed-text-v1.5.Q4_K_M.gguf" in notes
 
 
 def test_skip_llm_leaves_llama_out_of_disk_and_steps(env, monkeypatch, capsys):

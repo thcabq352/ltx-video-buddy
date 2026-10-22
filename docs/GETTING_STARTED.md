@@ -25,7 +25,8 @@ What it installs:
 - ComfyUI-Manager's channel: `config.ini` and `channels.list` point at the Comfy-Org channel, and an existing `config.ini` with the old `ltdrdata` URL is repaired (see [Comfy](COMFY.md#comfyui-manager-channel))
 - Triton and SageAttention inside ComfyUI's own venv (optional; see [Comfy](COMFY.md#triton-and-sageattention))
 - The LTX 2.3 weights, about 76.5 GB, into `MODELS_DIR` only (never into the ComfyUI folder)
-- llama.cpp for the local LLM (optional; see [llama.cpp](#llamacpp) below)
+- llama.cpp for the local LLM (optional runtime; see [llama.cpp](#llamacpp) below)
+- The local LLM files, about 2.6 GB, into `MODELS_DIR`: the text brain `qwen3-vl-4b-heretic-Q4_K_M.gguf` and the embedding file `nomic-embed-text-v1.5.Q4_K_M.gguf`
 
 LTX 2.3 is the only video model automatic install sets up. Other packs stay opt-in through `download-models`. Automatic install never installs Ollama or pulls anything through it.
 
@@ -35,10 +36,10 @@ The pre-flight runs first, before anything is downloaded or installed. It prints
 
 | Check | Kind | What it looks at |
 |---|---|---|
-| Disk space | stops on FAIL | Free space on each drive that will hold the LTX 2.3 weights (`MODELS_DIR`), the ComfyUI folder, and llama.cpp (`LLAMACPP_ROOT`). Uses the real file sizes of what is still missing, plus 5 GB headroom. On an empty machine that is about 97–99 GB (llama.cpp takes 0.3–5 GB depending on build or prebuilt, CPU or CUDA). Prints free vs needed, and how to free space or move a folder to a bigger drive. |
+| Disk space | stops on FAIL | Free space on each drive that will hold the LTX 2.3 weights (`MODELS_DIR`), the local LLM GGUFs (about 2.6 GB, same drive), the ComfyUI folder, and llama.cpp (`LLAMACPP_ROOT`). Uses the real file sizes of what is still missing, plus 5 GB headroom. On an empty machine that is about 100–102 GB (llama.cpp takes 0.3–5 GB depending on build or prebuilt, CPU or CUDA). Prints free vs needed, and how to free space or move a folder to a bigger drive. |
 | Hugging Face access | stops on FAIL | The LTX 2.3 files are public, so no token is needed. If `HF_TOKEN` is set, it is checked with a lightweight sign-in call, because a bad token breaks even public downloads. The token is never printed. |
 | GPU / VRAM | information only | Reads `nvidia-smi`. Under 14 GB VRAM, the GGUF Q4 loader is used. No GPU means CPU mode: it works, but is very slow. |
-| llama.cpp | information only | One of: found (`LLAMACPP_BIN`, `PATH`, or Buddy's own copy), will build from source, will use the official prebuilt release (and which build tool is missing), or unavailable (with the command that installs the build tools). Also lists each local LLM model that will be skipped. |
+| llama.cpp | information only | One of: found (`LLAMACPP_BIN`, `PATH`, or Buddy's own copy), will build from source, will use the official prebuilt release (and which build tool is missing), or unavailable (with the command that installs the build tools). Also lists each local LLM file it will download, with the link. |
 | ComfyUI folder | stops on FAIL | The folder must be writable and either empty, a ComfyUI, or missing. Notes an existing install (that step is then skipped). Refuses when `COMFY_MODE=external`. |
 
 ```bash
@@ -55,7 +56,8 @@ Other flags: `--gpu auto|nvidia|amd|m-series|cpu` picks the ComfyUI PyTorch buil
 - Running it again is safe. Finished steps are skipped. A half-finished ComfyUI is repaired with `comfy install --restore`.
 - Buddy never uses `sudo` silently. On Linux, when ffmpeg needs administrator rights and `sudo` would ask for a password, the step shows `NEEDS-YOU` with the exact command to run yourself. The same goes for the llama.cpp build tools.
 - A pip failure while installing the node packs' Python packages is a `FAILED` step with pip's error and the command to retry: the install ends `Install FAILED`, because video generation cannot work without them.
-- Optional steps (Playwright, ComfyUI-Manager channel, Triton, SageAttention, llama.cpp, LLM models) never stop the install. When they fail they show `FAILED-NONFATAL` (or `NEEDS-YOU` with a command) and video generation still works.
+- Optional steps (Playwright, ComfyUI-Manager channel, Triton, SageAttention, llama.cpp) never stop the install. When they fail they show `FAILED-NONFATAL` (or `NEEDS-YOU` with a command) and video generation still works.
+- The LLM file step is required, the same way the Comfy Python packages step is: already-complete files are skipped, a finished download is checked for size, and a failure is loud. The summary, `state/LAUNCH_NOTES.txt`, and `doctor` name the direct link and the exact folder to copy the file into. The install then exits with a problem to fix, so it does not say "Ready" while the local LLM is missing. `--skip-llm` is the only way to leave that step out.
 - The summary ends with doctor's own read-only scan, then `Install OK: N ok, M non-fatal note(s)` and "Ready for generate (LTX 2.3)", or the list of items that still need you and `Install FAILED: ...` (exit 1). Every `INFO` or `FAILED-NONFATAL` line carries a "safe to ignore because ..." note.
 
 When it says ready:
@@ -75,11 +77,33 @@ The local LLM (brief, director, judge, knowledge-base embeddings) runs on llama.
 
 Running it again is safe: a finished copy at the pinned tag is skipped, and a half-done checkout or download is resumed. Buddy finds that `llama-server` by itself; `LLAMACPP_BIN` and `PATH` still win.
 
-The LLM models are GGUF files llama-server serves from `MODELS_DIR`: `LLAMACPP_MODEL` (`qwen3-vl-heretic`) and `KB_EMBED_MODEL` (`nomic-embed-text`). Buddy has no public download source for them, so automatic install skips each one with a line like "Skipped qwen3-vl-heretic: no public GGUF source is defined; continuing." It does not stop or ask, and the run can still end "Ready for generate (LTX 2.3)". The summary lists them on a "Skipped" line. To use them, put the GGUF files in `MODELS_DIR`.
+The LLM files are GGUFs. llama-server serves each one from a folder under `MODELS_DIR` whose name is the model id (`LLAMACPP_MODEL`, default `qwen3-vl-heretic`, and `KB_EMBED_MODEL`, default `nomic-embed-text`). Automatic install downloads them. A file that is already the full size is skipped. A half-downloaded file is fetched again (the Hub download resumes). Running it again is safe.
+
+| What it is for | Folder | File | Direct link |
+|---|---|---|---|
+| Brief, director, storyboard, text judge | `MODELS_DIR/qwen3-vl-heretic/` | `qwen3-vl-4b-heretic-Q4_K_M.gguf` (about 2.5 GB) | https://huggingface.co/DreamFast/Qwen3-VL-4b-Heretic-GGUF/resolve/main/qwen3-vl-4b-heretic-Q4_K_M.gguf |
+| Knowledge-base embeddings | `MODELS_DIR/nomic-embed-text/` | `nomic-embed-text-v1.5.Q4_K_M.gguf` (about 84 MB) | https://huggingface.co/nomic-ai/nomic-embed-text-v1.5-GGUF/resolve/main/nomic-embed-text-v1.5.Q4_K_M.gguf |
+
+That brain repo does not publish an `mmproj` file (checked on the Hub file list). Text works. The vision judge cannot see images with this file. Two optional 8B packs do include a projector. Automatic install does not download them. If you want the vision judge to see images, download one of these yourself and put the model plus the mmproj in `MODELS_DIR/qwen3-vl-heretic/`:
+
+- [SergiusFlavius/Qwen3-VL-8B-Instruct-heretic-gguf](https://huggingface.co/SergiusFlavius/Qwen3-VL-8B-Instruct-heretic-gguf) — `Qwen3-VL-8B-Instruct-heretic-Q4_K_M.gguf` and `mmproj-Qwen3-VL-8B-Instruct-heretic-F16.gguf` (the mmproj name already starts with `mmproj`, which llama.cpp expects).
+- [mradermacher/Qwen-3-VL-8B-Instruct-heretic-GGUF](https://huggingface.co/mradermacher/Qwen-3-VL-8B-Instruct-heretic-GGUF) — `Qwen-3-VL-8B-Instruct-heretic.Q4_K_M.gguf` and `Qwen-3-VL-8B-Instruct-heretic.mmproj-f16.gguf`. That mmproj name does not start with `mmproj`. Rename it so it does, or keep the `mmproj =` line automatic install writes in `state/llamacpp-models.ini`.
+
+If a download fails, or you set `LLAMACPP_MODEL` to a name this repo does not know, the install prints a warning box, writes the same text to `video_buddy/state/LAUNCH_NOTES.txt`, and `doctor` shows `WARN  llm-models` with the link. Copy the file into the folder named above and run the same command again.
+
+### Which program answers the LLM
+
+Two programs can run the local model. Buddy never installs the second one.
+
+- **llama.cpp** (the default this installer sets up). It is a program on this computer. It reads the GGUF files above. You do not install anything else. When `.env` has no `LLM_PROVIDER` line and the GGUF files are in place, automatic install adds `LLM_PROVIDER=llamacpp`. A failed download leaves the line alone, so `auto` can still try Ollama.
+- **Ollama**. A separate app you install yourself from https://ollama.com/download. Buddy does not install it and does not run `ollama pull`. Set `LLM_PROVIDER=ollama` only if that is the app you want. An existing `LLM_PROVIDER=ollama` line is left as you wrote it. The GGUF files are still downloaded for llama.cpp.
+- **auto** (only if you write `LLM_PROVIDER=auto`). Buddy tries llama.cpp first, then Ollama. It does not call a cloud model. Cloud Grok runs only if you set `LLM_PROVIDER=grok`.
+
+`doctor` prints the value it will use on the `llm-models` row.
 
 ## Install
 
-`install.py` without `--automatic-install` is the **light** install. It creates `.venv`, installs pip deps, Playwright Chromium, copies `.env`, tries ffmpeg, and creates the empty model folders under `MODELS_DIR`. It does not install ComfyUI or download video weights, so nothing renders and nothing answers on `:8188` afterwards. A `THIS IS THE LIGHT INSTALL` banner at the start and the end says so and gives the full-setup command. Its report marks ComfyUI and the weight rows `INFO` ("safe to ignore because ...") and ends with `Install OK: N ok, M non-fatal note(s)`; only real failures (venv, pip, ffmpeg, ...) end `Install FAILED` with exit 1. It handles the LLM models the same way automatic install does: each one not already in `MODELS_DIR` is skipped with "Skipped qwen3-vl-heretic: no public GGUF source is defined; continuing." and the install carries on. It never installs Ollama or runs `ollama pull`.
+`install.py` without `--automatic-install` is the **light** install. It creates `.venv`, installs pip deps, Playwright Chromium, copies `.env`, tries ffmpeg, and creates the empty model folders under `MODELS_DIR`. It does not install ComfyUI or download video weights, so nothing renders and nothing answers on `:8188` afterwards. A `THIS IS THE LIGHT INSTALL` banner at the start and the end says so and gives the full-setup command. Its report marks ComfyUI and the weight rows `INFO` ("safe to ignore because ...") and ends with `Install OK: N ok, M non-fatal note(s)`; only real failures (venv, pip, ffmpeg, ...) end `Install FAILED` with exit 1. It does not download the local LLM GGUFs (about 2.6 GB). If those files are missing it prints a warning with the direct link, writes `video_buddy/state/LAUNCH_NOTES.txt`, and `doctor` shows `WARN  llm-models`. That warning does not fail the light install. It never installs Ollama or runs `ollama pull`.
 
 `python install.py --check` only reports: it runs `setup` (the doctor) with the existing `.venv` and creates, installs, and downloads nothing. With no `.venv` yet it says so and exits 1.
 
@@ -97,9 +121,9 @@ python -m master_agent comfy start
 python -m master_agent health
 ```
 
-`setup` is `doctor`. `setup --fix` installs missing deps (ffmpeg via winget, brew, or apt-get when that tool exists) and skips LLM GGUFs with no public source, as above. It never pulls Ollama models. Doctor lists them on an informational `llm-models` row that never fails the check. If you run Ollama yourself, install it from https://ollama.com/download and pull your own models; Buddy does not.
+`setup` is `doctor`. `setup --fix` installs missing deps (ffmpeg via winget, brew, or apt-get when that tool exists) and warns out loud when the LLM GGUFs are not in `MODELS_DIR`, as above. It never pulls Ollama models. `doctor` prints `WARN  llm-models` (with the download link) when those files are missing. That row does not by itself make `doctor` exit 1, because video generation can still run; it is not a quiet info line. If you run Ollama yourself, install it from https://ollama.com/download and set `LLM_PROVIDER=ollama`. Buddy does not install Ollama.
 
-Local LLM order for `LLM_PROVIDER=auto` (the default when unset): llama.cpp, then Ollama. `auto` never calls a cloud model; Grok is opt-in with `LLM_PROVIDER=grok`. llama.cpp is preferred. Buddy starts `llama-server` against `MODELS_DIR` when `LLAMACPP_BIN` or `llama-server` is available, and stops it on shutdown. If that binary is missing, Buddy warns and uses Ollama. Pin `LLM_PROVIDER=llamacpp` or `LLM_PROVIDER=ollama` to force one backend. See [Architecture](ARCHITECTURE.md#local-model).
+When `LLM_PROVIDER` is unset and the GGUF files are in place, automatic install writes `LLM_PROVIDER=llamacpp`. `auto` (only if you set it) tries llama.cpp, then Ollama, and never a cloud model. Grok is opt-in with `LLM_PROVIDER=grok`. Buddy starts `llama-server` against `MODELS_DIR` when `LLAMACPP_BIN` or `llama-server` is available, and stops it on shutdown. If that binary is missing and the provider is `auto`, Buddy warns and uses Ollama. Pin `LLM_PROVIDER=llamacpp` or `LLM_PROVIDER=ollama` to force one backend. See [Architecture](ARCHITECTURE.md#local-model).
 
 Windows portable Comfy: `ComfyUI_windows_portable\run_api_8188.bat`. Elsewhere start Comfy with `--port 8188`, or set `COMFYUI_URL`.
 

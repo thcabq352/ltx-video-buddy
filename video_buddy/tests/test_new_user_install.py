@@ -255,7 +255,8 @@ def test_light_report_downgrades_what_the_light_install_never_provides(capsys):
     out = capsys.readouterr().out
     assert "NEED" not in out
     assert "INFO  comfyui" in out
-    assert out.count("safe to ignore because") == 4
+    assert "WARN  llm-models" in out
+    assert out.count("safe to ignore because") == 3
     assert out.strip().splitlines()[-1] == "Install OK: 2 ok, 4 non-fatal note(s)."
 
 
@@ -272,7 +273,7 @@ def test_plain_doctor_still_counts_comfy_and_weights():
     assert setup_mod.classify_row(_row("comfyui", False), light=True) == ir.INFO
     assert setup_mod.classify_row(_row("ltx23-weights", False), weight_optional=True) == ir.INFO
     assert setup_mod.classify_row(_row("venv", False), light=True) == ir.FAIL
-    assert setup_mod.classify_row(_row("llm-models", False)) == ir.INFO
+    assert setup_mod.classify_row(_row("llm-models", False)) == ir.WARN
 
 
 def test_plain_doctor_footer_does_not_send_comfy_to_setup_fix(capsys):
@@ -317,7 +318,8 @@ def test_ffmpeg_failure_stays_loud(monkeypatch, capsys):
         (ai.StepResult("LTX 2.3 weights", ai.FAILED, "x"), ir.FAIL),
         (ai.StepResult("Triton + SageAttention", ai.NONFATAL, "x", required=False), ir.NONFATAL),
         (ai.StepResult("llama.cpp", ai.NEEDS_YOU, "cmake", required=False), ir.NONFATAL),
-        (ai.StepResult("LLM models", ai.SKIPPED, "skipped (no public GGUF source): a", required=False), ir.INFO),
+        (ai.StepResult("LLM models", ai.FAILED, "MISSING: qwen3-vl-heretic", required=True), ir.FAIL),
+        (ai.StepResult("LLM models", ai.SKIPPED, "present: qwen3-vl-heretic", required=True), ir.OK),
     ],
 )
 def test_classify_step(result, level):
