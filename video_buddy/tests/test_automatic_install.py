@@ -715,6 +715,25 @@ def test_existing_llama_server_honors_llamacpp_bin(env, monkeypatch, tmp_path):
     assert ai.existing_llama_server() == str(binary)
 
 
+def test_preflight_uses_local_vision_pair_and_skips_4b_bytes(env):
+    """A model + mmproj already under MODELS_DIR is the brain. Disk math drops the 4B."""
+    folder = env.models / "gguf_vl_heretic"
+    folder.mkdir(parents=True)
+    model = folder / "model.Q4_K_M.gguf"
+    proj = folder / "mmproj-Q8_0.gguf"
+    model.write_bytes(b"brain")
+    proj.write_bytes(b"proj")
+    pf = ai.run_preflight()
+    disk = "\n".join(next(c for c in pf.checks if c.name == "Disk space").lines)
+    llama = "\n".join(next(c for c in pf.checks if c.name == "llama.cpp").lines)
+    assert "Local LLM GGUFs 0.1 GB" in disk
+    assert "Local LLM GGUFs 2.6 GB" not in disk
+    assert "vision: enabled" in llama
+    assert str(model) in llama and str(proj) in llama
+    assert "DreamFast/Qwen3-VL-4b-Heretic-GGUF" not in llama
+    assert "nomic-embed-text-v1.5.Q4_K_M.gguf" in llama
+
+
 def test_blackwell_detection_and_comfy_cuda_override(monkeypatch):
     assert ai.is_blackwell({"vendor": "nvidia", "name": "NVIDIA GeForce RTX 5060 Ti"})
     assert not ai.is_blackwell({"vendor": "nvidia", "name": "NVIDIA GeForce RTX 4090"})

@@ -6,6 +6,14 @@ size. Automatic install downloads the missing files into
 ``--models-dir`` router exposes under that name. ``download_hub_file`` is the
 resumable Hub fetch (cache resume, then a copy into ``MODELS_DIR``).
 
+Before that download, a vision-capable pair already on disk is the brain.
+``MODELS_DIR/gguf_vl_heretic/`` is checked first, then any other folder directly
+under ``MODELS_DIR`` that holds a model ``*.gguf`` and an ``mmproj*.gguf``.
+The preset points ``qwen3-vl-heretic`` at those files (``mmproj`` set) and the
+4B file is not downloaded. An Ollama ``nomic-embed-text`` blob can be referenced
+read-only instead of downloading the 84 MB embed file. Nothing already on disk
+is moved, renamed, or deleted.
+
 Verified against the Hugging Face file listing on 2026-10-22:
 
 - ``DreamFast/Qwen3-VL-4b-Heretic-GGUF`` siblings include
@@ -14,12 +22,13 @@ Verified against the Hugging Face file listing on 2026-10-22:
 - ``nomic-ai/nomic-embed-text-v1.5-GGUF`` includes
   ``nomic-embed-text-v1.5.Q4_K_M.gguf`` (84,106,624 bytes).
 
-8B heretic GGUFs that do ship an mmproj are optional, not the default. See
-``OPTIONAL_BRAIN_ALTERNATIVES``.
+8B heretic GGUFs that do ship an mmproj are not downloaded. They are used when
+they are already on disk. See ``OPTIONAL_BRAIN_ALTERNATIVES``.
 """
 
 from __future__ import annotations
 
+import json
 import os
 import re
 import shutil
@@ -37,6 +46,15 @@ EMBED_SIZE_BYTES = 84_106_624
 
 LAUNCH_NOTES_NAME = "LAUNCH_NOTES.txt"
 PRESET_NAME = "llamacpp-models.ini"
+
+# Served name of the default brain (LLAMACPP_MODEL / VISION_MODEL).
+DEFAULT_BRAIN_NAME = "qwen3-vl-heretic"
+# Scott's tower keeps a complete vision pair here. Checked before any other folder.
+PREFERRED_VISION_DIR = "gguf_vl_heretic"
+
+_OLLAMA_MODEL_MEDIA = "application/vnd.ollama.image.model"
+_SHA256_DIGEST = re.compile(r"^sha256:([0-9a-fA-F]+)$")
+_GGUF_MAGIC = b"GGUF"
 
 _PROVIDER_LINE = re.compile(
     r"^(?:export\s+)?LLM_PROVIDER\s*=\s*(.*?)\s*$",
@@ -144,10 +162,11 @@ def _file(
 
 
 # Keyed by the served name (the folder under MODELS_DIR, and the model id
-# llama-server's router exposes). mmproj is absent on purpose.
+# llama-server's router exposes). The 4B repo has no mmproj; a local pair
+# can still fill this slot. See ``discover_local_vision_pair``.
 LLM_SLOTS: dict[str, LlmSlot] = {
-    "qwen3-vl-heretic": LlmSlot(
-        name="qwen3-vl-heretic",
+    DEFAULT_BRAIN_NAME: LlmSlot(
+        name=DEFAULT_BRAIN_NAME,
         role="text + vision: brief, director, judge",
         files=(_file(BRAIN_FILENAME, BRAIN_REPO, BRAIN_SIZE_BYTES),),
         publishes_mmproj=False,
@@ -241,12 +260,223 @@ def _matching_ggufs(name: str, root: Path) -> list[Path]:
     return found
 
 
-def file_ready(slot: LlmSlot, spec: LlmFile, root: Path | None = None) -> Path | None:
-    """Canonical file at full size, or a different non-empty GGUF the user already put here.
+@dataclass(frozen=True)
+class LocalVisionPair:
+    """A model GGUF and an ``mmproj*.gguf`` that already share one folder."""
 
-    A short copy of the canonical filename is not ready: it is a partial download.
+    model: Path
+    mmproj: Path
+
+    @property
+    def directory(self) -> Path:
+        return self.model.parent
+
+
+def _is_under(path: Path, root: Path) -> bool:
+    try:
+        path.resolve().relative_to(root.resolve())
+    except (OSError, ValueError):
+        return False
+    return True
+
+
+def _pair_in_directory(folder: Path) -> LocalVisionPair | None:
+    """Model ``*.gguf`` plus ``mmproj*.gguf`` as direct children. Read-only."""
+    if not folder.is_dir():
+        return None
+    models: list[tuple[int, str, Path]] = []
+    projectors: list[tuple[int, str, Path]] = []
+    try:
+        entries = list(folder.iterdir())
+    except OSError:
+        return None
+    for path in entries:
+        if not path.is_file() or path.suffix.lower() != ".gguf":
+            continue
+        try:
+            size = path.stat().st_size
+        except OSError:
+            continue
+        if size <= 0:
+            continue
+        key = path.name.lower()
+        if key.startswith("mmproj"):
+            projectors.append((size, key, path))
+        elif "mmproj" not in key:
+            models.append((size, key, path))
+    if not models or not projectors:
+        return None
+    model = sorted(models, key=lambda item: (-item[0], item[1]))[0][2]
+    mmproj = sorted(projectors, key=lambda item: (-item[0], item[1]))[0][2]
+    return LocalVisionPair(model=model, mmproj=mmproj)
+
+
+def _vision_dir_rank(name: str) -> int:
+    label = name.lower()
+    if "heretic" in label:
+        return 0
+    if "qwen" in label or "vl" in label:
+        return 1
+    return 2
+
+
+def discover_local_vision_pair(root: Path | None = None) -> LocalVisionPair | None:
+    """On-disk vision pair, or None.
+
+    Order: ``MODELS_DIR/gguf_vl_heretic/``, then ``MODELS_DIR/qwen3-vl-heretic/``
+    when that folder itself has a projector, then any other direct child folder
+    that has both a model ``*.gguf`` and an ``mmproj*.gguf``. Names with
+    ``heretic``, then ``qwen`` / ``vl``, win ties. Nested folders are not walked.
+    Nothing is moved or deleted.
     """
     base = root or models_root()
+    if not base.is_dir():
+        return None
+    preferred = _pair_in_directory(base / PREFERRED_VISION_DIR)
+    if preferred is not None:
+        return preferred
+    own = _pair_in_directory(base / DEFAULT_BRAIN_NAME)
+    if own is not None:
+        return own
+    ranked: list[tuple[int, str, LocalVisionPair]] = []
+    try:
+        children = list(base.iterdir())
+    except OSError:
+        return None
+    skip = {PREFERRED_VISION_DIR, DEFAULT_BRAIN_NAME}
+    for child in children:
+        if not child.is_dir() or child.name in skip or child.name.startswith("."):
+            continue
+        hit = _pair_in_directory(child)
+        if hit is None:
+            continue
+        ranked.append((_vision_dir_rank(child.name), child.name.lower(), hit))
+    if not ranked:
+        return None
+    ranked.sort(key=lambda item: (item[0], item[1]))
+    return ranked[0][2]
+
+
+def adopted_vision_pair(slot: LlmSlot, root: Path | None = None) -> LocalVisionPair | None:
+    """Pair that should serve as the default brain, if this slot is that brain.
+
+    A custom ``LLAMACPP_MODEL`` is left alone. Only ``qwen3-vl-heretic`` adopts
+    a pair found in another folder, so the vision judge's model name stays put.
+    """
+    if not slot.vision or slot.name != DEFAULT_BRAIN_NAME:
+        return None
+    return discover_local_vision_pair(root or models_root())
+
+
+def ollama_models_root() -> Path:
+    """Ollama's models directory (``blobs`` and ``manifests``). Never created here."""
+    raw = os.environ.get("OLLAMA_MODELS", "").strip()
+    if raw:
+        return Path(raw).expanduser()
+    return Path.home() / ".ollama" / "models"
+
+
+def is_ollama_reference(path: Path) -> bool:
+    """True when ``path`` lives under the Ollama models directory."""
+    return _is_under(path, ollama_models_root())
+
+
+def _gguf_magic(path: Path) -> bool:
+    try:
+        with path.open("rb") as handle:
+            return handle.read(4) == _GGUF_MAGIC
+    except OSError:
+        return False
+
+
+def _ollama_blob(root: Path, digest: str) -> Path | None:
+    match = _SHA256_DIGEST.match(digest.strip())
+    if match is None:
+        return None
+    return root / "blobs" / f"sha256-{match.group(1)}"
+
+
+def _blob_from_manifest(root: Path, manifest: Path) -> Path | None:
+    try:
+        if not manifest.is_file():
+            return None
+        data = json.loads(manifest.read_text(encoding="utf-8"))
+    except (OSError, UnicodeError, json.JSONDecodeError):
+        return None
+    layers = data.get("layers") if isinstance(data, dict) else None
+    if not isinstance(layers, list):
+        return None
+    ranked: list[tuple[int, int, Path]] = []
+    for layer in layers:
+        if not isinstance(layer, dict):
+            continue
+        path = _ollama_blob(root, str(layer.get("digest") or ""))
+        if path is None or not _gguf_magic(path):
+            continue
+        media = str(layer.get("mediaType") or "")
+        try:
+            size = int(layer.get("size") or 0)
+        except (TypeError, ValueError):
+            size = 0
+        prefer = 0 if media == _OLLAMA_MODEL_MEDIA or media.endswith(".model") else 1
+        ranked.append((prefer, -size, path))
+    if not ranked:
+        return None
+    ranked.sort(key=lambda item: (item[0], item[1], str(item[2])))
+    return ranked[0][2]
+
+
+def ollama_embed_blob(model_name: str = "nomic-embed-text") -> Path | None:
+    """Read-only path to an Ollama GGUF blob for ``model_name``, or None.
+
+    Looks up ``<name>:latest`` (or the tag in the name) under the Ollama
+    manifests and returns the model-layer blob when it starts with the GGUF
+    magic. Does not create, copy, move, or delete anything. A miss means the
+    caller should download the Q4 file instead.
+    """
+    raw = (model_name or "").strip()
+    if not raw:
+        return None
+    name, _, tag = raw.partition(":")
+    name = name.strip().strip("/")
+    tag = (tag or "latest").strip() or "latest"
+    if not name or "/" in name or "/" in tag:
+        return None
+    root = ollama_models_root()
+    manifests = (
+        root / "manifests" / "registry.ollama.ai" / "library" / name / tag,
+        root / "manifests" / "registry.ollama.ai" / name / tag,
+    )
+    for manifest in manifests:
+        blob = _blob_from_manifest(root, manifest)
+        if blob is not None:
+            return blob
+    return None
+
+
+def adopted_embed_blob(slot: LlmSlot) -> Path | None:
+    """Ollama embed blob to reference when this embed slot has no local GGUF.
+
+    The blob lives outside ``MODELS_DIR``. Callers try it only after a local
+    GGUF missed, and they never write to the path.
+    """
+    if slot.vision or "embed" not in slot.name:
+        return None
+    return ollama_embed_blob(slot.name)
+
+
+def file_ready(slot: LlmSlot, spec: LlmFile, root: Path | None = None) -> Path | None:
+    """Canonical file at full size, a stand-in GGUF, a local vision pair, or an Ollama embed blob.
+
+    A short copy of the canonical filename is not ready: it is a partial download.
+    A vision pair wins over the 4B file so the brain can see images.
+    An Ollama embed blob is used only when no embed GGUF is already under ``MODELS_DIR``.
+    """
+    base = root or models_root()
+    if spec.role == "model":
+        pair = adopted_vision_pair(slot, base)
+        if pair is not None:
+            return pair.model
     dest = slot_dir(slot, base) / spec.filename
     if size_ok(dest, spec.size_bytes):
         return dest
@@ -267,11 +497,17 @@ def file_ready(slot: LlmSlot, spec: LlmFile, root: Path | None = None) -> Path |
                         return path
                 except OSError:
                     continue
+    if spec.role == "model":
+        # Only after every local candidate missed, so a file already in MODELS_DIR wins.
+        return adopted_embed_blob(slot)
     return None
 
 
 def mmproj_present(slot: LlmSlot, root: Path | None = None) -> Path | None:
     base = root or models_root()
+    pair = adopted_vision_pair(slot, base)
+    if pair is not None:
+        return pair.mmproj
     for path in _matching_ggufs(slot.name, base):
         if "mmproj" in path.name.lower():
             try:
@@ -285,6 +521,31 @@ def mmproj_present(slot: LlmSlot, root: Path | None = None) -> Path | None:
             if path.name.lower().startswith("mmproj") and path.stat().st_size > 0:
                 return path
     return None
+
+
+def model_path_for(slot: LlmSlot, root: Path | None = None) -> Path | None:
+    """GGUF this slot will load, or None when the slot is not ready."""
+    base = root or models_root()
+    for spec in slot.files:
+        if spec.role == "model":
+            return file_ready(slot, spec, base)
+    matches = [
+        path
+        for path in _matching_ggufs(slot.name, base)
+        if "mmproj" not in path.name.lower() and path.is_file() and path.stat().st_size > 0
+    ]
+    return matches[0] if matches else None
+
+
+def projector_how_to() -> str:
+    """One plain sentence: how to give the vision judge a projector."""
+    return (
+        "To add a projector, put a model .gguf and a file whose name starts with mmproj "
+        f"(mmproj*.gguf) in the same folder under MODELS_DIR. Buddy looks in "
+        f"MODELS_DIR/{PREFERRED_VISION_DIR}/ first, then any other folder that has both. "
+        "It does not download the projector and it does not move or delete files. "
+        "Then run: python -m master_agent automatic-install --yes"
+    )
 
 
 def slot_ready(slot: LlmSlot, root: Path | None = None) -> bool:
@@ -306,12 +567,69 @@ def bytes_still_needed(root: Path | None = None, slots: list[LlmSlot] | None = N
     return total
 
 
-def vision_note() -> str:
+def usage_lines(root: Path | None = None) -> list[str]:
+    """Which brain, projector, and embed files are in use, and whether vision is on."""
+    base = models_root() if root is None else root
+    lines: list[str] = []
+    brain = next((slot for slot in configured_slots() if slot.vision), None)
+    embed = next((slot for slot in configured_slots() if not slot.vision), None)
+    if brain is not None:
+        model = model_path_for(brain, base)
+        proj = mmproj_present(brain, base)
+        if model is not None:
+            lines.append(f"brain: {model}")
+        else:
+            lines.append(f"brain: missing ({brain.name})")
+        if proj is not None:
+            lines.append(f"projector: {proj}")
+            lines.append("vision: enabled")
+        else:
+            lines.append("projector: none")
+            lines.append("vision: text-only")
+    if embed is not None:
+        path = model_path_for(embed, base)
+        if path is None:
+            lines.append(f"embed: missing ({embed.name})")
+        elif is_ollama_reference(path):
+            lines.append(f"embed: {path} (read-only Ollama file, not copied)")
+        else:
+            lines.append(f"embed: {path}")
+    return lines
+
+
+def vision_note(root: Path | None = None) -> str:
+    """Plain-language vision status for the install notes.
+
+    With a projector on disk, vision is on and the 4B download is not the brain.
+    With only the 4B (or nothing), vision is text-only and the note says how to
+    add a projector. ``root`` defaults to ``MODELS_DIR``.
+    """
+    base = models_root() if root is None else root
+    brain = next((slot for slot in configured_slots() if slot.vision), None)
+    model = model_path_for(brain, base) if brain is not None else None
+    proj = mmproj_present(brain, base) if brain is not None else None
+    if model is not None and proj is not None:
+        canonical = slot_dir(brain, base) / BRAIN_FILENAME if brain is not None else None
+        if canonical is not None and model.resolve() == canonical.resolve():
+            which = "The brain is the 4B file plus this projector."
+        else:
+            which = "This existing pair is the brain. The 4B file is not downloaded."
+        return "\n".join(
+            [
+                "Vision: enabled. The vision judge can see images.",
+                f"Brain: {model}",
+                f"Projector: {proj}",
+                "llama-server reads the mmproj line in state/llamacpp-models.ini and loads that projector (--mmproj).",
+                which,
+                "The files stay where they are. Buddy does not move, rename, or delete them.",
+            ]
+        )
     lines = [
-        "Vision: the default brain repo has no mmproj file, so the vision judge cannot see images.",
+        "Vision: text-only. The vision judge cannot see images (no mmproj).",
         f"Checked {BRAIN_REPO}: {BRAIN_FILENAME} is text-path only.",
         "Text still works (brief, director, storyboard, text judge).",
-        "Optional 8B packs that include an mmproj (not downloaded by default):",
+        projector_how_to(),
+        "Optional packs that include a projector (not downloaded):",
     ]
     for alt in OPTIONAL_BRAIN_ALTERNATIVES:
         lines.append(f"  - {alt.model_url}")
@@ -421,7 +739,13 @@ def download_into(spec: LlmFile, dest: Path, progress=print) -> Path:
 
     The Hub download itself resumes in the Hugging Face cache (same helper the
     LTX weights use). The copy into ``MODELS_DIR`` happens after that file is complete.
+    An Ollama blob is never the destination: those files are referenced, not changed.
     """
+    dest = Path(dest)
+    if is_ollama_reference(dest):
+        raise RuntimeError(
+            f"Refusing to change {dest}. An Ollama file is only referenced, never modified."
+        )
     dest.parent.mkdir(parents=True, exist_ok=True)
     if dest.is_file() and not size_ok(dest, spec.size_bytes):
         dest.unlink()
@@ -457,6 +781,22 @@ class SlotOutcome:
     lines: list[str]
 
 
+def _found_lines(slot: LlmSlot, root: Path, found: list[str]) -> list[str]:
+    head = f"{slot.name} ({slot.role}): found {found[0]}" if found else f"{slot.name}: found"
+    lines = [head]
+    if slot.vision:
+        proj = mmproj_present(slot, root)
+        if proj is not None:
+            lines.append(f"  projector: {proj}")
+            lines.append("  vision: enabled")
+        else:
+            lines.append("  vision: text-only (no mmproj). The vision judge cannot see images.")
+            lines.append(f"  {projector_how_to()}")
+    elif found and is_ollama_reference(Path(found[0])):
+        lines.append("  read-only Ollama file; not copied or modified")
+    return lines
+
+
 def install_slot(slot: LlmSlot, *, apply: bool, fetch: bool, progress=print) -> SlotOutcome:
     root = models_root()
     if slot_ready(slot, root):
@@ -467,7 +807,8 @@ def install_slot(slot: LlmSlot, *, apply: bool, fetch: bool, progress=print) -> 
                 found.append(str(path))
         if not found:
             found = [str(p) for p in _matching_ggufs(slot.name, root)]
-        return SlotOutcome(slot, "present", f"found {found[0]}" if found else "found", [f"{slot.name} ({slot.role}): found {found[0]}" if found else f"{slot.name}: found"])
+        detail = f"found {found[0]}" if found else "found"
+        return SlotOutcome(slot, "present", detail, _found_lines(slot, root, found))
 
     if not slot.has_source:
         lines = manual_lines(slot, reason="No public GGUF source is defined for this name.")
@@ -526,13 +867,22 @@ def write_preset(root: Path | None = None) -> Path | None:
         "",
         "; Written by automatic install. Names match LLAMACPP_MODEL and KB_EMBED_MODEL.",
         "; llama-server --models-dir serves the folder name; this preset pins the file.",
+        "; A mmproj line is the projector llama-server loads for that model (--mmproj).",
         "",
     ]
     wrote = False
     for slot in configured_slots():
         model_path: Path | None = None
         mmproj: Path | None = None
+        pair = adopted_vision_pair(slot, base)
+        if pair is not None:
+            model_path = pair.model
+            mmproj = pair.mmproj
         for spec in slot.files:
+            if model_path is not None and spec.role == "model":
+                continue
+            if mmproj is not None and spec.role == "mmproj":
+                continue
             if spec.role == "model":
                 ready = file_ready(slot, spec, base)
                 if ready is not None and ready.name == spec.filename and size_ok(ready, spec.size_bytes):
@@ -594,6 +944,8 @@ def render_launch_notes(*, outcomes: list[SlotOutcome], provider: str, provider_
         lines.append("")
     lines.append(vision_note())
     lines.append("")
+    lines.extend(usage_lines())
+    lines.append("")
     lines.append("llama.cpp is the program on this computer. Ollama is a different app.")
     lines.append("Buddy does not install Ollama and does not run ollama pull.")
     return "\n".join(lines).rstrip() + "\n"
@@ -646,12 +998,15 @@ def doctor_row() -> dict[str, str | bool]:
         parts.append("present: " + ", ".join(present))
     if missing:
         parts.append("MISSING: " + ", ".join(missing))
-    vision = mmproj_present(LLM_SLOTS["qwen3-vl-heretic"]) if "qwen3-vl-heretic" in {s.name for s in configured_slots()} else None
-    brain = next((s for s in configured_slots() if s.vision), None)
-    if brain is not None and brain.name == "qwen3-vl-heretic" and vision is None:
+    parts.extend(usage_lines())
+    brain = next((slot for slot in configured_slots() if slot.vision), None)
+    proj = mmproj_present(brain) if brain is not None else None
+    if brain is not None and brain.name == DEFAULT_BRAIN_NAME and proj is None:
         parts.append("vision mmproj: not in the default repo (text works; vision judge cannot see images)")
-    elif vision is not None:
-        parts.append(f"vision mmproj: {vision.name}")
+        if model_path_for(brain) is not None:
+            parts.append(projector_how_to())
+    elif proj is not None:
+        parts.append(f"vision mmproj: {proj.name}")
     fix = ""
     if missing:
         fix = " | ".join(fixes) + "  then python -m master_agent automatic-install --yes"

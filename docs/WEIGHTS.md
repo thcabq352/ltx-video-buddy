@@ -56,7 +56,7 @@ Gated Hub packs need `HF_TOKEN` or `huggingface-cli login`. LTX 2.5 is the LTX-2
 | `env` | `.env` exists |
 | `ffmpeg` | on PATH |
 | `model-folders` | every subfolder above exists in `MODELS_DIR`. Informational; `setup --fix` creates them |
-| `llm-models` | `qwen3-vl-heretic` / `nomic-embed-text` GGUFs are in `MODELS_DIR`. Missing files are `WARN` with the download link. The row does not by itself make `doctor` exit 1, because video generation can still run |
+| `llm-models` | `qwen3-vl-heretic` / `nomic-embed-text` GGUFs are in use (a local vision pair or an Ollama embed blob counts). The row names the brain, projector, and embed files and whether vision is enabled. Missing files are `WARN` with the download link. The row does not by itself make `doctor` exit 1, because video generation can still run |
 | `comfyui` | `COMFYUI_URL` `/system_stats` answers. With no ComfyUI installed the fix line says to run automatic install |
 | `comfy-node-deps` | `gguf` and `colour-science` import in Buddy's ComfyUI's own Python (ComfyUI-GGUF / ComfyUI-LTXVideo need them). Not checked when that ComfyUI is not installed. The fix line is automatic install |
 | `hardware` | One routing sentence. Does not block install |
@@ -81,7 +81,11 @@ These are not Comfy weights. llama-server's `--models-dir` router serves a folde
 | Brief, director, storyboard, text judge | `MODELS_DIR/qwen3-vl-heretic/` | `qwen3-vl-4b-heretic-Q4_K_M.gguf` (2,497,281,696 bytes) | https://huggingface.co/DreamFast/Qwen3-VL-4b-Heretic-GGUF/resolve/main/qwen3-vl-4b-heretic-Q4_K_M.gguf |
 | Knowledge-base embeddings | `MODELS_DIR/nomic-embed-text/` | `nomic-embed-text-v1.5.Q4_K_M.gguf` (84,106,624 bytes) | https://huggingface.co/nomic-ai/nomic-embed-text-v1.5-GGUF/resolve/main/nomic-embed-text-v1.5.Q4_K_M.gguf |
 
-`DreamFast/Qwen3-VL-4b-Heretic-GGUF` publishes no `mmproj` file (Hub file list, 2026-10-22). Text works. The vision judge cannot see images with this file. Two optional 8B packs include a projector. Automatic install does not download them:
+Automatic install looks for a vision pair before it downloads the 4B file. The first place is `MODELS_DIR/gguf_vl_heretic/` (a model `.gguf` next to an `mmproj*.gguf`, for example `model.Q4_K_M.gguf` and `mmproj-Q8_0.gguf`). Then `MODELS_DIR/qwen3-vl-heretic/` if that folder has a projector. Then any other folder directly under `MODELS_DIR` with both files. When a pair is found, `state/llamacpp-models.ini` points the `qwen3-vl-heretic` name at those paths and sets `mmproj`, so llama-server loads the projector (`--mmproj`) and the vision judge can see images. The 4B file is not downloaded. Buddy does not move, rename, or delete the files that are already there.
+
+`doctor` and the install summary name the brain file, the projector file, the embed file, and whether vision is enabled or text-only.
+
+`DreamFast/Qwen3-VL-4b-Heretic-GGUF` publishes no `mmproj` file (Hub file list, 2026-10-22). If that 4B file is the only brain, text works and vision is text-only: the vision judge cannot see images. To add a projector, put a model `.gguf` and an `mmproj*.gguf` in one folder under `MODELS_DIR` (see above) and run automatic install again. Two optional 8B packs include a projector. Automatic install does not download them:
 
 - [SergiusFlavius/Qwen3-VL-8B-Instruct-heretic-gguf](https://huggingface.co/SergiusFlavius/Qwen3-VL-8B-Instruct-heretic-gguf) — `Qwen3-VL-8B-Instruct-heretic-Q4_K_M.gguf` and `mmproj-Qwen3-VL-8B-Instruct-heretic-F16.gguf` (the mmproj name starts with `mmproj`).
 - [mradermacher/Qwen-3-VL-8B-Instruct-heretic-GGUF](https://huggingface.co/mradermacher/Qwen-3-VL-8B-Instruct-heretic-GGUF) — `Qwen-3-VL-8B-Instruct-heretic.Q4_K_M.gguf` and `Qwen-3-VL-8B-Instruct-heretic.mmproj-f16.gguf`. That mmproj name does not start with `mmproj`. Point llama.cpp at it with the preset `mmproj =` line, or rename the file so the name starts with `mmproj`.
@@ -94,7 +98,9 @@ If a download fails, or `LLAMACPP_MODEL` is a name this repo does not know, the 
 - **Ollama** is a separate app you install yourself from https://ollama.com/download. Buddy does not install it and does not run `ollama pull`. Set `LLM_PROVIDER=ollama` only if that is the app you want. An existing line is left as you wrote it.
 - **auto** (only if you write `LLM_PROVIDER=auto`) tries llama.cpp first, then Ollama. It does not call a cloud model. Cloud Grok runs only if you set `LLM_PROVIDER=grok`.
 
-`doctor` prints `LLM_PROVIDER=` on the `llm-models` row. When the files are on disk, automatic install writes `state/llamacpp-models.ini` and llama-server is started with `--models-preset` pointing at it.
+If `nomic-embed-text` is already registered in Ollama (`nomic-embed-text:latest`) and there is no embed GGUF under `MODELS_DIR`, automatic install points the embed slot at that Ollama blob. The blob is read-only: it is not copied, moved, or deleted. Otherwise the 84 MB Q4 file is downloaded.
+
+`doctor` prints `LLM_PROVIDER=` on the `llm-models` row, plus the brain, projector, and embed paths and whether vision is enabled. When the files are on disk, automatic install writes `state/llamacpp-models.ini` and llama-server is started with `--models-preset` pointing at it. A `mmproj` line in that file is the projector (`--mmproj`).
 
 ## Loader policy
 

@@ -17,11 +17,17 @@ the Comfy tree; managed launch keeps passing Buddy's ``extra_model_paths.yaml``.
 The local LLM models (``LLAMACPP_MODEL`` for brief / director / judge,
 ``KB_EMBED_MODEL`` for knowledge-base embeddings) are GGUFs llama-server
 serves from ``MODELS_DIR/<name>/``. Public sources live in
-``models/llm_gguf.py`` (same Hub download as the LTX weights). A file that is
-already the full size is skipped. A short file is fetched again. If a slot
-has no source or the download fails, the step fails out loud: the summary,
-``state/LAUNCH_NOTES.txt``, and doctor's ``llm-models`` row all name the
-direct link and the manual steps. Automatic install never calls Ollama.
+``models/llm_gguf.py`` (same Hub download as the LTX weights). A vision pair
+already on disk (``MODELS_DIR/gguf_vl_heretic/`` first, then any folder with a
+model ``*.gguf`` and an ``mmproj*.gguf``) is the brain and the 4B file is not
+downloaded. An existing Ollama ``nomic-embed-text`` blob may be referenced
+read-only instead of downloading the embed file. Nothing already on disk is
+moved or deleted. A file that is already the full size is skipped. A short
+file is fetched again. If a slot has no source or the download fails, the step
+fails out loud: the summary, ``state/LAUNCH_NOTES.txt``, and doctor's
+``llm-models`` row all name the direct link and the manual steps, which brain
+and embed are in use, and whether vision is on. Automatic install never
+installs Ollama and never runs ``ollama pull``.
 Unset ``LLM_PROVIDER`` is set to ``llamacpp`` in ``.env``.
 
 ``doctor`` stays a scanner. This module is the only thing that installs.
@@ -511,11 +517,37 @@ def check_llamacpp(plan: Any, *, skip: bool) -> Check:
             "Buddy still renders video without it. To get the local LLM later, install the build tools: "
             + _toolchain_hint(plan.system)
         )
-    from master_agent.models.llm_gguf import configured_slots, slot_ready
+    from master_agent.models.llm_gguf import (
+        BRAIN_FILENAME,
+        configured_slots,
+        is_ollama_reference,
+        mmproj_present,
+        model_path_for,
+        projector_how_to,
+        slot_dir,
+        slot_ready,
+    )
 
     for slot in configured_slots():
         if slot_ready(slot):
             lines.append(f"{slot.name} ({slot.role}): already on disk.")
+            model = model_path_for(slot)
+            if slot.vision:
+                proj = mmproj_present(slot)
+                if model is not None:
+                    lines.append(f"  brain: {model}")
+                if proj is not None:
+                    lines.append(f"  projector: {proj}")
+                    lines.append("  vision: enabled")
+                    canonical = slot_dir(slot) / BRAIN_FILENAME
+                    if model is None or model.resolve() != canonical.resolve():
+                        lines.append("  The 4B download is skipped; this pair is the brain.")
+                else:
+                    lines.append("  vision: text-only (no mmproj). The vision judge cannot see images.")
+                    lines.append(f"  {projector_how_to()}")
+            elif model is not None and is_ollama_reference(model):
+                lines.append(f"  embed: {model}")
+                lines.append("  read-only Ollama file; not copied or modified")
         elif slot.files:
             spec = slot.files[0]
             lines.append(
@@ -527,6 +559,7 @@ def check_llamacpp(plan: Any, *, skip: bool) -> Check:
                 lines.append(
                     "  That repo publishes no mmproj file. Text works; the vision judge cannot see images."
                 )
+                lines.append(f"  {projector_how_to()}")
         else:
             lines.append(
                 f"{slot.name} ({slot.role}): NO public GGUF source. "
@@ -792,6 +825,7 @@ def step_llm_models(apply: bool, *, skip: bool, fetch: bool = True) -> StepResul
         lines.extend(outcome.lines)
     lines.append(llm_gguf.provider_sentence(provider) + f" ({action})")
     lines.extend(llm_gguf.vision_note().splitlines())
+    lines.extend(llm_gguf.usage_lines())
     preset = llm_gguf.write_preset() if apply else None
     if preset is not None:
         lines.append(f"llama.cpp preset: {preset}")
