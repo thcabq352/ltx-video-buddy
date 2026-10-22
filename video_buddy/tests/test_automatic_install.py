@@ -643,3 +643,15 @@ def test_existing_llama_server_honors_llamacpp_bin(env, monkeypatch, tmp_path):
     binary.write_text("")
     monkeypatch.setattr(config, "LLAMACPP_BIN", str(binary))
     assert ai.existing_llama_server() == str(binary)
+
+
+def test_blackwell_detection_and_comfy_cuda_override(monkeypatch):
+    assert ai.is_blackwell({"vendor": "nvidia", "name": "NVIDIA GeForce RTX 5060 Ti"})
+    assert not ai.is_blackwell({"vendor": "nvidia", "name": "NVIDIA GeForce RTX 4090"})
+    monkeypatch.delenv(ai.COMFY_CUDA_VERSION_ENV, raising=False)
+    assert ai.comfy_cuda_args("--nvidia") == []
+    monkeypatch.setenv(ai.COMFY_CUDA_VERSION_ENV, "13.0")
+    assert ai.comfy_cuda_args("--nvidia") == ["--cuda-version", "13.0"]
+    assert ai.comfy_cuda_args("--cpu") == []
+    monkeypatch.setenv(ai.COMFY_CUDA_VERSION_ENV, "bogus")
+    assert ai.comfy_cuda_args("--nvidia") == []
