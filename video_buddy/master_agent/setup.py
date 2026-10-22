@@ -2,9 +2,10 @@
 
 Pip packages, Playwright Chromium, .env, ffmpeg, and the empty Comfy-style
 model folders under ``MODELS_DIR`` (``--fix`` only). The local LLM GGUFs
-(``LLAMACPP_MODEL``, ``KB_EMBED_MODEL``) have no public download source, so
-they are reported and skipped, the same way automatic install skips them.
-Setup never installs Ollama or pulls Ollama models.
+(``LLAMACPP_MODEL``, ``KB_EMBED_MODEL``) have public sources, but this light
+install does not download them. It prints a loud warning with the direct link
+and writes ``state/LAUNCH_NOTES.txt``. ``automatic-install --yes`` downloads
+them. Setup never installs Ollama or pulls Ollama models.
 ComfyUI itself is a separate render engine (not downloaded here).
 """
 
@@ -158,24 +159,18 @@ def confirm_prompt(prompt: str) -> bool:
 
 
 def check_llm_models() -> dict[str, Any]:
-    """Local LLM GGUFs in ``MODELS_DIR``. Scan only; informational, never fails doctor."""
+    """Local LLM GGUFs in ``MODELS_DIR``. Scan only. Missing files are a WARN, not a quiet skip."""
     try:
-        from master_agent.automatic_install import llm_models, local_llm_gguf, models_dir
+        from master_agent.models.llm_gguf import doctor_row
 
-        found: list[str] = []
-        skipped: list[str] = []
-        for name, _role in llm_models():
-            (found if local_llm_gguf(name) is not None else skipped).append(name)
-        folder = models_dir()
+        return doctor_row()
     except Exception as exc:
-        return _row("llm-models", True, f"scan skipped: {exc}")
-    parts = []
-    if found:
-        parts.append("present: " + ", ".join(found))
-    if skipped:
-        parts.append("skipped (no public GGUF source is defined): " + ", ".join(skipped))
-    fix = f"put the GGUF files in {folder} (llama-server serves that folder)" if skipped else ""
-    return _row("llm-models", not skipped, "; ".join(parts) or "none configured", fix=fix)
+        return _row(
+            "llm-models",
+            False,
+            f"WARNING: could not scan local LLM files ({exc})",
+            fix="python -m master_agent automatic-install --yes",
+        )
 
 
 def check_model_folders() -> dict[str, Any]:
@@ -628,10 +623,10 @@ _WEIGHT_ROWS = frozenset(
 
 # Optional or report-only rows: show them, and do not fail doctor.
 # Hardware never blocks install. Stale packs wait for an explicit comfy update.
-# LLM GGUFs have no public source; Buddy renders video without them.
+# Missing LLM GGUFs are WARN (a link and manual steps), not INFO and not a
+# quiet skip. They do not change the exit code: video generation can still run.
 _OPTIONAL_INFO_ROWS = frozenset(
     {
-        "llm-models",
         "heartlib",
         "heartmula-weights",
         "heartmula-comfy",
@@ -640,6 +635,7 @@ _OPTIONAL_INFO_ROWS = frozenset(
         "model-folders",
     }
 )
+_WARN_ROWS = frozenset({"llm-models"})
 
 # Rows ``setup --fix`` can actually repair. Everything else needs automatic
 # install, download-models, or the user.
@@ -654,11 +650,13 @@ def heartmula_rows() -> list[dict[str, Any]]:
 
 def classify_row(row: dict[str, Any], *, light: bool = False, weight_optional: bool = False) -> str:
     """OK | INFO | FAIL for one doctor row. ``light`` is the plain install.py / setup --fix view."""
-    from master_agent.install_report import FAIL, INFO, LIGHT_INSTALL_NOT_INCLUDED, OK
+    from master_agent.install_report import FAIL, INFO, LIGHT_INSTALL_NOT_INCLUDED, OK, WARN
 
     name = row["name"]
     if row["ok"]:
         return OK
+    if name in _WARN_ROWS:
+        return WARN
     if name in _OPTIONAL_INFO_ROWS or row.get("deferred"):
         return INFO
     if weight_optional and name in _WEIGHT_ROWS:
@@ -685,11 +683,11 @@ def print_report(rows: list[dict[str, Any]], *, weight_optional: bool = False, l
     light install never provides (ComfyUI, weight packs) to INFO, and ends
     with the ``Install OK`` / ``Install FAILED`` summary line.
     """
-    from master_agent.install_report import FAIL, INFO, OK, safe_to_ignore, summary_line
+    from master_agent.install_report import FAIL, INFO, OK, WARN, safe_to_ignore, summary_line
 
     print("VIDEO BUDDY setup")
     failed: list[str] = []
-    counts = {OK: 0, INFO: 0}
+    counts = {OK: 0, INFO: 0, WARN: 0}
     for row in rows:
         level = classify_row(row, light=light, weight_optional=weight_optional)
         name = row["name"]
@@ -701,8 +699,10 @@ def print_report(rows: list[dict[str, Any]], *, weight_optional: bool = False, l
             mark = "NEED"
         else:
             counts[level] += 1
-            mark = "OK  " if level == OK else "INFO"
+            mark = "OK  " if level == OK else ("WARN" if level == WARN else "INFO")
         print(f"  {mark}  {name:<18} {detail}")
+        if level == WARN:
+            print("        WARNING: local LLM files are missing. This is not safe to ignore.")
         if level == INFO:
             if row.get("deferred"):
                 from master_agent.models.deferred import REASON as why
@@ -714,8 +714,9 @@ def print_report(rows: list[dict[str, Any]], *, weight_optional: bool = False, l
         if level != OK and row.get("fix") and not use_existing:
             print(f"        -> {row['fix']}")
     print()
+    notes = counts[INFO] + counts[WARN]
     if light:
-        print(summary_line(ok=counts[OK], notes=counts[INFO], failed=failed))
+        print(summary_line(ok=counts[OK], notes=notes, failed=failed))
     elif failed:
         fixable = [n for n in failed if n in _FIXED_BY_SETUP_FIX]
         rest = [n for n in failed if n not in _FIXED_BY_SETUP_FIX]
@@ -728,6 +729,12 @@ def print_report(rows: list[dict[str, Any]], *, weight_optional: bool = False, l
             print(f"  setup --fix does not handle: {', '.join(rest)}. Each row's -> line says what does.")
             if "comfyui" in rest or "ltx23-weights" in rest:
                 print(f"  ComfyUI + LTX 2.3 for a new machine: {FULL_INSTALL_CMD}")
+    elif counts[WARN]:
+        print(
+            f"Video checks passed with {counts[WARN]} warning(s): "
+            + ", ".join(n for n in (row["name"] for row in rows) if n == "llm-models")
+            + ". See the WARN row above. Local LLM features stay off until those files are in place."
+        )
     else:
         print("All checked dependencies are ready.")
     return 0 if not failed else 1
@@ -828,20 +835,24 @@ def install_ffmpeg() -> None:
 
 
 def install_llm_models() -> None:
-    """Same step as automatic install: GGUFs with no public source are skipped. Never fails."""
+    """Warn loudly when the GGUFs are missing. The light install does not download them.
+
+    ``automatic-install --yes`` is the command that fetches them. This function
+    does not fail ``setup --fix``: video deps are a separate step, and the
+    warning is the doctor's WARN row plus ``LAUNCH_NOTES.txt``.
+    """
     try:
         from master_agent.automatic_install import step_llm_models
 
-        result = step_llm_models(True, skip=False)
+        result = step_llm_models(True, skip=False, fetch=False)
     except Exception as exc:
-        from master_agent.install_report import INFO, STEP_REASONS, safe_to_ignore
-
-        print(f"{INFO}  LLM model check skipped ({exc}); continuing.")
-        print(f"        {safe_to_ignore(STEP_REASONS['LLM models'])}")
+        print(f"WARNING: local LLM check failed ({exc}). This is not a silent skip.")
+        print("        Run: python -m master_agent automatic-install --yes")
         return
     for line in result.lines:
-        if not line.startswith("Skipped "):
-            print(line)
+        print(line)
+    if result.status == "FAILED":
+        print("WARNING: local LLM files are missing. See LAUNCH_NOTES.txt. Video install continues.")
 
 
 def fix() -> int:

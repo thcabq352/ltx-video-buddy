@@ -36,9 +36,12 @@ LIGHT_INSTALL_NOT_INCLUDED: dict[str, str] = {
     "dev-fp8-trailer": "it only checks a dev checkpoint that is not part of any install",
 }
 
+WARN = "WARN"
+
 # Report-only doctor rows. They never fail doctor, light install or not.
+# ``llm-models`` is not in this map: a missing GGUF is a WARN with a link,
+# never a "safe to ignore" note.
 INFO_ROW_REASONS: dict[str, str] = {
-    "llm-models": "no public GGUF source is defined for them; Buddy renders video without a local LLM",
     "heartlib": "HeartMuLa music is optional; video generation does not use it",
     "heartmula-weights": "HeartMuLa music is optional; video generation does not use it",
     "heartmula-comfy": "HeartMuLa music is optional; video generation does not use it",
@@ -54,7 +57,6 @@ STEP_REASONS: dict[str, str] = {
     "Triton + SageAttention": "ComfyUI runs without them, just slower",
     "ComfyUI-Manager channel": "only ComfyUI-Manager's node browser uses the channel; rendering does not",
     "llama.cpp": "Buddy renders video without a local LLM; the brief / judge LLM stays off",
-    "LLM models": "no public GGUF source is defined; video generation does not need them",
     "LTX 2.3 weights": "you deferred them with --skip-weights; only generate needs them",
 }
 
