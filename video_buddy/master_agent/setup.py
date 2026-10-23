@@ -703,6 +703,8 @@ def print_report(rows: list[dict[str, Any]], *, weight_optional: bool = False, l
         print(f"  {mark}  {name:<18} {detail}")
         if level == WARN:
             print("        WARNING: local LLM files are missing. This is not safe to ignore.")
+            if "projector MISSING" in str(detail):
+                print("        WARNING: the brain GGUF is on disk but the vision projector is not.")
         if level == INFO:
             if row.get("deferred"):
                 from master_agent.models.deferred import REASON as why

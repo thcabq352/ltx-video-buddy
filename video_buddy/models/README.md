@@ -23,7 +23,7 @@ Download sources, the scan order, consent, and the loader order are in [`docs/WE
 | `clip_vision/` | CLIP vision encoders (IPAdapter graphs) |
 | `controlnet/` | ControlNets (`ControlNetLoaderAdvanced`) |
 
-Local LLM GGUFs for llama.cpp (`LLAMACPP_MODEL`, `KB_EMBED_MODEL`) go in a folder named after the model: `models/qwen3-vl-heretic/qwen3-vl-4b-heretic-Q4_K_M.gguf` and `models/nomic-embed-text/nomic-embed-text-v1.5.Q4_K_M.gguf`. `automatic-install --yes` downloads those two public files. They are not Comfy weights. See [`docs/WEIGHTS.md`](../../docs/WEIGHTS.md#local-llm-ggufs).
+Local LLM GGUFs for llama.cpp (`LLAMACPP_MODEL`, `KB_EMBED_MODEL`) go in a folder named after the model: `models/qwen3-vl-heretic/qwen3-vl-4b-heretic-Q4_K_M.gguf`, `models/qwen3-vl-heretic/mmproj-Qwen3VL-4B-Instruct-F16.gguf` (the vision projector, from `Qwen/Qwen3-VL-4B-Instruct-GGUF`), and `models/nomic-embed-text/nomic-embed-text-v1.5.Q4_K_M.gguf`. `automatic-install --yes` downloads those three public files. They are not Comfy weights. See [`docs/WEIGHTS.md`](../../docs/WEIGHTS.md#local-llm-ggufs).
 
 The legacy `state/download_models.py` also writes `SEEDVR2/` here for the SeedVR2 upscaler custom node.
 

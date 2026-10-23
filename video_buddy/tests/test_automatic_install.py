@@ -45,6 +45,8 @@ def env(tmp_path: Path, monkeypatch: pytest.MonkeyPatch):
     monkeypatch.setattr(setup_mod, "ENV_EXAMPLE", tmp_path / ".env.example")
     from master_agent import config
 
+    monkeypatch.setattr(config, "LLM_PROVIDER", config.LLM_PROVIDER)
+    monkeypatch.delenv("LLM_PROVIDER", raising=False)
     monkeypatch.setattr(config, "MODELS_DIR", models)
     monkeypatch.setattr(config, "STATE_DIR", state_dir)
     monkeypatch.setattr(ai, "models_dir", lambda: models)
@@ -192,6 +194,9 @@ def test_preflight_order_and_happy_path(env):
     assert "qwen3-vl-heretic" in text and "DreamFast/Qwen3-VL-4b-Heretic-GGUF" in text
     assert "qwen3-vl-4b-heretic-Q4_K_M.gguf" in text
     assert "https://huggingface.co/DreamFast/Qwen3-VL-4b-Heretic-GGUF/resolve/main/qwen3-vl-4b-heretic-Q4_K_M.gguf" in text
+    assert "mmproj-Qwen3VL-4B-Instruct-F16.gguf" in text
+    assert "https://huggingface.co/Qwen/Qwen3-VL-4B-Instruct-GGUF/resolve/main/mmproj-Qwen3VL-4B-Instruct-F16.gguf" in text
+    assert "DreamFast publishes no mmproj" in text
     assert pf.llama.method == "prebuilt"
 
 
@@ -202,9 +207,9 @@ def test_preflight_low_disk_fails_closed_with_free_and_needed(env, monkeypatch):
     assert bad is not None and bad.name == "Disk space"
     text = "\n".join(bad.lines)
     assert "40.0 GB free" in text
-    # 76.5 weights + 2.6 LLM GGUFs + 15 Comfy + 2.5 llama.cpp CUDA prebuilt + 5 headroom
-    assert "101.6 GB needed" in text
-    assert "Local LLM GGUFs 2.6 GB" in text
+    # 76.5 weights + 3.4 LLM GGUFs + 15 Comfy + 2.5 llama.cpp CUDA prebuilt + 5 headroom
+    assert "102.4 GB needed" in text
+    assert "Local LLM GGUFs 3.4 GB" in text
     assert "llama.cpp 2.5 GB" in text
     assert "MODELS_DIR=" in text and "Free up at least" in text
 
@@ -344,6 +349,7 @@ def test_dry_run_prints_plan_and_changes_nothing(env, capsys):
     assert "PLANNED          llama.cpp (optional)" in out
     assert "PLANNED          LLM models" in out
     assert "qwen3-vl-4b-heretic-Q4_K_M.gguf" in out
+    assert "mmproj-Qwen3VL-4B-Instruct-F16.gguf" in out
     assert "nomic-embed-text-v1.5.Q4_K_M.gguf" in out
     assert "ollama pull" not in out.lower()
     assert not (env.state / "LAUNCH_NOTES.txt").exists()
@@ -615,6 +621,9 @@ def test_llm_models_unknown_name_fails_loud(env, monkeypatch, capsys):
 def test_llm_models_already_in_models_dir_are_found(env, capsys):
     env.models.mkdir()
     (env.models / "qwen3-vl-heretic-Q4_K_M.gguf").write_bytes(b"x")
+    proj = env.models / "qwen3-vl-heretic" / "mmproj-custom.gguf"
+    proj.parent.mkdir()
+    proj.write_bytes(b"p")
     (env.models / "nomic-embed-text").mkdir()
     (env.models / "nomic-embed-text" / "nomic-embed-text-v1.5.f16.gguf").write_bytes(b"x")
     res = ai.step_llm_models(True, skip=False)
@@ -622,6 +631,7 @@ def test_llm_models_already_in_models_dir_are_found(env, capsys):
     assert res.detail == "present: qwen3-vl-heretic, nomic-embed-text"
     preset = (env.state / "llamacpp-models.ini").read_text(encoding="utf-8")
     assert "[qwen3-vl-heretic]" in preset and "[nomic-embed-text]" in preset
+    assert f"mmproj = {proj.resolve()}" in preset
     assert "embedding = true" in preset
     notes = (env.state / "LAUNCH_NOTES.txt").read_text(encoding="utf-8")
     assert "The local LLM files are in place." in notes
@@ -634,6 +644,7 @@ def test_llm_download_failure_blocks_ready(env, monkeypatch, capsys):
     env_file = env.tmp / ".env"
     env_file.write_text("FOO=1\n", encoding="utf-8")
     monkeypatch.setattr(setup_mod, "ENV_FILE", env_file)
+    monkeypatch.setenv("OLLAMA_MODELS", str(env.tmp / "no-ollama"))
 
     def boom(spec, dest, progress=print):
         raise RuntimeError("network down")
@@ -658,6 +669,10 @@ def test_llm_download_failure_blocks_ready(env, monkeypatch, capsys):
     assert "LOCAL LLM FAILED" in out
     assert "Ready for generate" not in out
     assert "https://huggingface.co/DreamFast/Qwen3-VL-4b-Heretic-GGUF/resolve/main/qwen3-vl-4b-heretic-Q4_K_M.gguf" in out
+    assert "https://huggingface.co/Qwen/Qwen3-VL-4B-Instruct-GGUF/resolve/main/mmproj-Qwen3VL-4B-Instruct-F16.gguf" in out
+    assert "WARN  llm-models" in out
+    assert "not a silent skip" in out
+    assert "MISSING: qwen3-vl-heretic, nomic-embed-text" in out
     assert "LLM models" in out.split("Still needs you:")[1]
     assert "LLM_PROVIDER=llamacpp" not in env_file.read_text(encoding="utf-8")
     notes = (env.state / "LAUNCH_NOTES.txt").read_text(encoding="utf-8")
@@ -733,10 +748,11 @@ def test_preflight_uses_local_vision_pair_and_skips_4b_bytes(env):
     disk = "\n".join(next(c for c in pf.checks if c.name == "Disk space").lines)
     llama = "\n".join(next(c for c in pf.checks if c.name == "llama.cpp").lines)
     assert "Local LLM GGUFs 0.1 GB" in disk
-    assert "Local LLM GGUFs 2.6 GB" not in disk
+    assert "Local LLM GGUFs 3.4 GB" not in disk
     assert "vision: enabled" in llama
     assert str(model) in llama and str(proj) in llama
     assert "DreamFast/Qwen3-VL-4b-Heretic-GGUF" not in llama
+    assert "Qwen/Qwen3-VL-4B-Instruct-GGUF" not in llama
     assert "nomic-embed-text-v1.5.Q4_K_M.gguf" in llama
 
 

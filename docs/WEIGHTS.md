@@ -74,27 +74,28 @@ Hardware sentence (also on managed `comfy start` / `status` / `restart`): NVIDIA
 
 ## Local LLM GGUFs
 
-These are not Comfy weights. llama-server's `--models-dir` router serves a folder under `MODELS_DIR` by the folder name. Automatic install (`python install.py --automatic-install --yes`) downloads the two public files below. A file that is already the full size is skipped. A short copy of the same name is downloaded again. The Hub download resumes.
+These are not Comfy weights. llama-server's `--models-dir` router serves a folder under `MODELS_DIR` by the folder name. Automatic install (`python install.py --automatic-install --yes`) downloads the three public files below with a direct Hugging Face resolve URL when nothing local fills that slot. A file that is already the full size is skipped. A short copy is resumed from `<filename>.partial`. The finished file must match the pinned size and SHA256.
 
 | What it is for | Folder | File | Direct link |
 |---|---|---|---|
 | Brief, director, storyboard, text judge | `MODELS_DIR/qwen3-vl-heretic/` | `qwen3-vl-4b-heretic-Q4_K_M.gguf` (2,497,281,696 bytes) | https://huggingface.co/DreamFast/Qwen3-VL-4b-Heretic-GGUF/resolve/main/qwen3-vl-4b-heretic-Q4_K_M.gguf |
+| Vision projector (mmproj) | `MODELS_DIR/qwen3-vl-heretic/` | `mmproj-Qwen3VL-4B-Instruct-F16.gguf` (836,180,256 bytes) | https://huggingface.co/Qwen/Qwen3-VL-4B-Instruct-GGUF/resolve/main/mmproj-Qwen3VL-4B-Instruct-F16.gguf |
 | Knowledge-base embeddings | `MODELS_DIR/nomic-embed-text/` | `nomic-embed-text-v1.5.Q4_K_M.gguf` (84,106,624 bytes) | https://huggingface.co/nomic-ai/nomic-embed-text-v1.5-GGUF/resolve/main/nomic-embed-text-v1.5.Q4_K_M.gguf |
 
 Automatic install looks for a vision pair before it downloads the 4B file. The first place is `MODELS_DIR/gguf_vl_heretic/` (a model `.gguf` next to an `mmproj*.gguf`, for example `model.Q4_K_M.gguf` and `mmproj-Q8_0.gguf`). Then `MODELS_DIR/qwen3-vl-heretic/` if that folder has a projector. Then any other folder directly under `MODELS_DIR` with both files. When a pair is found, `state/llamacpp-models.ini` points the `qwen3-vl-heretic` name at those paths and sets `mmproj`, so llama-server loads the projector (`--mmproj`) and the vision judge can see images. The 4B file is not downloaded. Buddy does not move, rename, or delete the files that are already there.
 
 `doctor` and the install summary name the brain file, the projector file, the embed file, and whether vision is enabled or text-only.
 
-`DreamFast/Qwen3-VL-4b-Heretic-GGUF` publishes no `mmproj` file (Hub file list, 2026-10-22). If that 4B file is the only brain, text works and vision is text-only: the vision judge cannot see images. To add a projector, put a model `.gguf` and an `mmproj*.gguf` in one folder under `MODELS_DIR` (see above) and run automatic install again. Two optional 8B packs include a projector. Automatic install does not download them:
+`DreamFast/Qwen3-VL-4b-Heretic-GGUF` publishes no `mmproj` file (Hub file list, 2026-10-23). The projector automatic install fetches is the public Qwen file in the table above (`mmproj-Qwen3VL-4B-Instruct-F16.gguf`, 836,180,256 bytes, SHA256 `256f3a43bd4205ffef48d6b92715e1e70b5b0e9aef06522584967513a9985331`). It is written next to the 4B brain, and `state/llamacpp-models.ini` gets an `mmproj =` line for it. If the brain GGUF is on disk and that projector is not, `doctor` shows `WARN` and the detail says the projector is missing. A projector already on disk still counts: put a model `.gguf` and an `mmproj*.gguf` in one folder under `MODELS_DIR` (see above) and the Qwen file is not downloaded. Two optional 8B packs include their own projector. Automatic install does not download them:
 
 - [SergiusFlavius/Qwen3-VL-8B-Instruct-heretic-gguf](https://huggingface.co/SergiusFlavius/Qwen3-VL-8B-Instruct-heretic-gguf) — `Qwen3-VL-8B-Instruct-heretic-Q4_K_M.gguf` and `mmproj-Qwen3-VL-8B-Instruct-heretic-F16.gguf` (the mmproj name starts with `mmproj`).
 - [mradermacher/Qwen-3-VL-8B-Instruct-heretic-GGUF](https://huggingface.co/mradermacher/Qwen-3-VL-8B-Instruct-heretic-GGUF) — `Qwen-3-VL-8B-Instruct-heretic.Q4_K_M.gguf` and `Qwen-3-VL-8B-Instruct-heretic.mmproj-f16.gguf`. That mmproj name does not start with `mmproj`. Point llama.cpp at it with the preset `mmproj =` line, or rename the file so the name starts with `mmproj`.
 
-If a download fails, or `LLAMACPP_MODEL` is a name this repo does not know, the install prints a warning box and writes the same steps to `video_buddy/state/LAUNCH_NOTES.txt`. `doctor` shows `WARN`. `--skip-llm` is the only quiet skip. Plain `install.py` and `setup --fix` do not download the ~2.6 GB; they print the warning and continue.
+If a download fails, or `LLAMACPP_MODEL` is a name this repo does not know, the install prints a warning box and writes the same steps to `video_buddy/state/LAUNCH_NOTES.txt`. `doctor` shows `WARN`. `--skip-llm` is the only quiet skip. Plain `install.py` and `setup --fix` do not download the ~3.4 GB; they print the warning and continue.
 
 ### Which program answers the LLM
 
-- **llama.cpp** is the program on this computer. It reads the GGUF files above. When `.env` has no `LLM_PROVIDER` line and the GGUF files are in place, automatic install adds `LLM_PROVIDER=llamacpp`. A failed download leaves the line alone. You do not install Ollama for llama.cpp.
+- **llama.cpp** is the program on this computer. It reads the GGUF files above. When the GGUF files are in place and `.env` is missing or has no `LLM_PROVIDER` line, automatic install writes `LLM_PROVIDER=llamacpp`. A value you already set in `.env` or in the environment is left as you wrote it. A failed download leaves the line alone. You do not install Ollama for llama.cpp.
 - **Ollama** is a separate app you install yourself from https://ollama.com/download. Buddy does not install it and does not run `ollama pull`. Set `LLM_PROVIDER=ollama` only if that is the app you want. An existing line is left as you wrote it.
 - **auto** (only if you write `LLM_PROVIDER=auto`) tries llama.cpp first, then Ollama. It does not call a cloud model. Cloud Grok runs only if you set `LLM_PROVIDER=grok`.
 
