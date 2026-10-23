@@ -66,7 +66,11 @@ jobs:
       matrix:
         os: ${{ fromJSON(needs.plan.outputs.os) }}
     runs-on: ${{ matrix.os }}
-    timeout-minutes: 45
+    # ffmpeg's apt download from azure.archive.ubuntu.com is bimodal: ~15s, or
+    # 19–38 min at tens of kB/s (run 39947944671 fetched 94.1 MB in 37min 40s,
+    # then this 45-minute cap cancelled a later step). 75 leaves room for that
+    # download plus the install and the longer Windows ready wait below.
+    timeout-minutes: 75
     defaults:
       run:
         shell: bash
@@ -75,6 +79,11 @@ jobs:
       COMFY_EXTRA_ARGS: --cpu --enable-manager
       PYTHONUTF8: "1"
       INSTALL_FLAGS: --yes --skip-weights --skip-sage --skip-llm --gpu cpu
+      # Cold Windows CPU startup (comfy-kitchen 0.2.40) did not bind :8188
+      # within the 180s default on run 39947944671. Ubuntu on the same commit
+      # was ready in well under a minute. 420s covers a slow import; the launch
+      # step timeouts below still fail a process that never listens.
+      COMFY_READY_TIMEOUT_S: "420"
     steps:
       - uses: actions/checkout@v4
 
@@ -105,8 +114,18 @@ jobs:
           df -h .
 
       - name: ffmpeg + paths
+        # No short step timeout. A green run (39891249729) spent 18min 51s
+        # fetching the same 94.1 MB at 83 kB/s and then passed. Run 39947944671
+        # fetched it in 37min 40s at 41.6 kB/s and the step succeeded; the job
+        # cap cancelled later work. That is a slow mirror, not an apt lock or
+        # a debconf prompt. The apt options below only bound a no-byte stall
+        # (http timeout) and a lock wait. The job timeout above covers the
+        # slow-but-progressing download.
         run: |
           if [ "$RUNNER_OS" = Windows ]; then
+            # Real-time scanning of a fresh venv makes the first ComfyUI import
+            # stall past the ready timeout. Ignore a policy that forbids this.
+            powershell.exe -NoProfile -Command 'try { Add-MpPreference -ExclusionPath "C:\vbci","D:\a\ltx-video-buddy" } catch { Write-Host $_ }' || true
             choco install ffmpeg -y --no-progress
             # D: is small on Windows runners; C: holds the ComfyUI venv.
             echo "MANAGED_COMFY_ROOT=C:/vbci/ComfyUI" >> "$GITHUB_ENV"
@@ -114,7 +133,17 @@ jobs:
             echo "VB_PY=.venv/Scripts/python.exe" >> "$GITHUB_ENV"
             echo "COMFY_PY=C:/vbci/ComfyUI/.venv/Scripts/python.exe" >> "$GITHUB_ENV"
           else
-            sudo apt-get update && sudo apt-get install -y ffmpeg
+            # Timeout=30 fails a connection that stops sending bytes. It does
+            # not abort a transfer that is merely slow. Lock::Timeout stops an
+            # unattended-upgrades wait from sitting until the job cap.
+            APT_OPTS=(
+              -o Acquire::Retries=3
+              -o Acquire::http::Timeout=30
+              -o Acquire::https::Timeout=30
+              -o DPkg::Lock::Timeout=120
+            )
+            sudo DEBIAN_FRONTEND=noninteractive apt-get "${APT_OPTS[@]}" update
+            sudo DEBIAN_FRONTEND=noninteractive apt-get "${APT_OPTS[@]}" install -y ffmpeg
             echo "COMFY_DIR=ComfyUI" >> "$GITHUB_ENV"
             echo "VB_PY=.venv/bin/python" >> "$GITHUB_ENV"
             echo "COMFY_PY=ComfyUI/.venv/bin/python" >> "$GITHUB_ENV"
@@ -134,7 +163,7 @@ jobs:
         run: $VB_PY scripts/ci/fresh_install_check.py manager-channel --comfy "$COMFY_DIR"
 
       - name: Launch ComfyUI --cpu (packs automatic-install puts in)
-        timeout-minutes: 5
+        timeout-minutes: 12
         run: bash scripts/ci/comfy_launch.sh repo-packs
 
       - name: Install the Klein stills node packs
@@ -148,12 +177,12 @@ jobs:
             --comfy-requirements "$COMFY_DIR/requirements.txt"
 
       - name: Launch ComfyUI --cpu, validate the Klein stills graph against /object_info
-        timeout-minutes: 5
+        timeout-minutes: 12
         # Triton is skipped here (--skip-sage); KJNodes logs its optional import.
         run: bash scripts/ci/comfy_launch.sh klein --validate --allow-missing-module triton
 
       - name: Manager reset (delete config.ini, first launch, repair, second run unchanged)
-        timeout-minutes: 15
+        timeout-minutes: 30
         run: |
           check="$VB_PY scripts/ci/fresh_install_check.py"
           cfg_dir=$($VB_PY -c "import sys; sys.path.insert(0, '.'); from master_agent.comfy.manager_config import manager_dirs; print(manager_dirs(sys.argv[1])[0])" "$COMFY_DIR")

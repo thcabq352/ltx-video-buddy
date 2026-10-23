@@ -55,6 +55,8 @@ _LOCK = threading.Lock()
 
 DEFAULT_PORT = 8188
 DEFAULT_READY_TIMEOUT_S = 180.0
+# CI sets this when a cold Windows CPU import needs longer than 180s to bind :8188.
+READY_TIMEOUT_ENV = "COMFY_READY_TIMEOUT_S"
 DEFAULT_POLL_S = 2.0
 DEFAULT_WATCH_INTERVAL_S = 15.0
 # --no-wait still watches this long so an instant crash is reported, not hidden.
@@ -378,6 +380,20 @@ def http_ready(base_url: str, *, timeout: float = 5.0) -> tuple[bool, str]:
     return False, last
 
 
+def ready_timeout_from_env(default: float = DEFAULT_READY_TIMEOUT_S) -> float:
+    """Seconds to wait for ComfyUI. ``COMFY_READY_TIMEOUT_S`` overrides the default."""
+    raw = os.environ.get(READY_TIMEOUT_ENV, "").strip()
+    if not raw:
+        return float(default)
+    try:
+        value = float(raw)
+    except ValueError:
+        return float(default)
+    if value <= 0:
+        return float(default)
+    return value
+
+
 def wait_until_ready(
     base_url: str,
     *,
@@ -619,7 +635,7 @@ class ManagedComfyTower:
         workspace: Path | None = None,
         base_url: str | None = None,
         port: int | None = None,
-        ready_timeout_s: float = DEFAULT_READY_TIMEOUT_S,
+        ready_timeout_s: float | None = None,
         watch_interval_s: float = DEFAULT_WATCH_INTERVAL_S,
     ) -> None:
         st = load_state()
@@ -635,6 +651,8 @@ class ManagedComfyTower:
             self.base_url = st.base_url.rstrip("/")
         else:
             self.base_url = _default_base_url(self.port)
+        if ready_timeout_s is None:
+            ready_timeout_s = ready_timeout_from_env()
         self.ready_timeout_s = float(ready_timeout_s)
         self.watch_interval_s = float(watch_interval_s)
 
