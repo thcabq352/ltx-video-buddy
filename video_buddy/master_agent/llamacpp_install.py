@@ -150,6 +150,24 @@ def _prebuilt_dirs(root: Path) -> list[Path]:
     return dirs
 
 
+def server_in_tree(directory: Path | str, *, system: str | None = None) -> Path | None:
+    """``llama-server`` directly in ``directory``, or under ``build/bin`` / ``build/bin/Release``.
+
+    Used when ``LLAMACPP_BIN`` is a directory (a cmake ``Release`` folder or a
+    llama.cpp checkout) rather than the executable itself.
+    """
+    directory = Path(directory)
+    name = binary_name(system)
+    for cand in (
+        directory / name,
+        directory / "build" / "bin" / name,
+        directory / "build" / "bin" / "Release" / name,
+    ):
+        if cand.is_file():
+            return cand
+    return None
+
+
 def buddy_binary(root: Path | str | None, *, system: str | None = None) -> Path | None:
     """The ``llama-server`` automatic install put under ``root``, if any.
 

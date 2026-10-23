@@ -375,7 +375,7 @@ def test_doctor_llama_row_reports_prebuilt_path_and_build(tmp_path, monkeypatch)
     monkeypatch.setattr(li._platform, "system", lambda: "Windows")
     row = next(r for r in verify_rows() if r["name"] == "llama.cpp")
     assert row["ok"] is True
-    assert row["detail"] == f"{exe} (build 11389)"
+    assert row["detail"] == f"Buddy install: {exe} (build 11389)"
 
     linux = tmp_path / "linux-llama"
     binary = linux / "prebuilt" / "b11389" / "llama-server"
@@ -385,7 +385,7 @@ def test_doctor_llama_row_reports_prebuilt_path_and_build(tmp_path, monkeypatch)
     monkeypatch.setattr(li._platform, "system", lambda: "Linux")
     row = next(r for r in verify_rows() if r["name"] == "llama.cpp")
     assert row["ok"] is True
-    assert row["detail"] == f"{binary} (build 11389)"
+    assert row["detail"] == f"Buddy install: {binary} (build 11389)"
 
 
 def test_doctor_llama_row_when_not_installed(tmp_path, monkeypatch):
@@ -397,3 +397,98 @@ def test_doctor_llama_row_when_not_installed(tmp_path, monkeypatch):
     row = next(r for r in verify_rows() if r["name"] == "llama.cpp")
     assert row["ok"] is False
     assert row["detail"] == li.NOT_INSTALLED
+
+
+def _buddy_prebuilt(root: Path) -> Path:
+    binary = root / "prebuilt" / "b11389" / "llama-server"
+    binary.parent.mkdir(parents=True)
+    binary.write_bytes(b"")
+    return binary
+
+
+def test_llamacpp_bin_directory_uses_server_inside_it(tmp_path, monkeypatch):
+    from master_agent.automatic_install import verify_rows
+
+    root = tmp_path / "buddy"
+    _isolate_llama_lookup(monkeypatch, root)
+    monkeypatch.setattr(li._platform, "system", lambda: "Windows")
+    release = tmp_path / "old" / "build" / "bin" / "Release"
+    exe = release / "llama-server.exe"
+    exe.parent.mkdir(parents=True)
+    exe.write_bytes(b"")
+    monkeypatch.setattr(cfg, "LLAMACPP_BIN", str(release))
+    assert srv.resolve_binary() == str(exe)
+    row = next(r for r in verify_rows() if r["name"] == "llama.cpp")
+    assert row["ok"] is True
+    assert row["detail"] == f"LLAMACPP_BIN: {exe}"
+
+    checkout = tmp_path / "checkout"
+    nested = checkout / "build" / "bin" / "Release" / "llama-server.exe"
+    nested.parent.mkdir(parents=True)
+    nested.write_bytes(b"")
+    monkeypatch.setattr(cfg, "LLAMACPP_BIN", str(checkout))
+    assert srv.resolve_binary() == str(nested)
+    plain = checkout / "build" / "bin" / "llama-server.exe"
+    plain.parent.mkdir(parents=True, exist_ok=True)
+    plain.write_bytes(b"")
+    # build/bin is preferred over build/bin/Release when both exist under the root.
+    assert srv.resolve_binary() == str(plain)
+
+
+def test_stale_llamacpp_bin_falls_through_to_buddy(tmp_path, monkeypatch, caplog):
+    import logging
+
+    from master_agent.automatic_install import verify_rows
+
+    root = tmp_path / "llama.cpp"
+    binary = _buddy_prebuilt(root)
+    _isolate_llama_lookup(monkeypatch, root)
+    stale = r"C:\Windows\llama.cpp\build\bin\Release"
+    monkeypatch.setattr(cfg, "LLAMACPP_BIN", stale)
+    with caplog.at_level(logging.WARNING, logger="master_agent.llamacpp_server"):
+        assert srv.resolve_binary() == str(binary)
+    assert stale in caplog.text
+    row = next(r for r in verify_rows() if r["name"] == "llama.cpp")
+    assert row["ok"] is True
+    assert row["detail"] == (
+        f"Buddy install: {binary} (build 11389); LLAMACPP_BIN={stale} is not a llama-server"
+    )
+    empty = tmp_path / "empty-bin"
+    empty.mkdir()
+    monkeypatch.setattr(cfg, "LLAMACPP_BIN", str(empty))
+    found = srv.locate_server()
+    assert found.path == str(binary) and found.source == "Buddy install" and found.stale == str(empty)
+
+    monkeypatch.setattr(cfg, "LLAMACPP_BIN", stale)
+    monkeypatch.setattr(srv.shutil, "which", lambda name: "/usr/bin/llama-server" if name == "llama-server" else None)
+    assert srv.resolve_binary() == "/usr/bin/llama-server"
+    found = srv.locate_server()
+    assert found.source == "PATH" and found.stale == stale
+
+
+def test_llamacpp_bin_file_wins_over_path_and_buddy(tmp_path, monkeypatch):
+    from master_agent.automatic_install import verify_rows
+
+    root = tmp_path / "llama.cpp"
+    _buddy_prebuilt(root)
+    _isolate_llama_lookup(monkeypatch, root)
+    chosen = tmp_path / "custom-llama-server"
+    chosen.write_bytes(b"")
+    monkeypatch.setattr(cfg, "LLAMACPP_BIN", str(chosen))
+    monkeypatch.setattr(srv.shutil, "which", lambda name: "/usr/bin/llama-server")
+    assert srv.resolve_binary() == str(chosen)
+    row = next(r for r in verify_rows() if r["name"] == "llama.cpp")
+    assert row["detail"] == f"LLAMACPP_BIN: {chosen}"
+
+
+def test_llamacpp_bin_unset_reports_buddy_or_missing(tmp_path, monkeypatch):
+    from master_agent.automatic_install import verify_rows
+
+    root = tmp_path / "llama.cpp"
+    _isolate_llama_lookup(monkeypatch, root)
+    row = next(r for r in verify_rows() if r["name"] == "llama.cpp")
+    assert row["ok"] is False and row["detail"] == li.NOT_INSTALLED
+    binary = _buddy_prebuilt(root)
+    row = next(r for r in verify_rows() if r["name"] == "llama.cpp")
+    assert row["ok"] is True
+    assert row["detail"] == f"Buddy install: {binary} (build 11389)"

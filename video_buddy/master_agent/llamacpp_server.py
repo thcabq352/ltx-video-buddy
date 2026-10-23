@@ -44,22 +44,74 @@ def reset_state() -> None:
     _warned.clear()
 
 
-def resolve_binary() -> str | None:
-    """``LLAMACPP_BIN`` if it exists, else ``llama-server`` on ``PATH``, else the
-    one automatic install put under ``LLAMACPP_ROOT``."""
+class LocatedLlama:
+    """Where ``llama-server`` was found, and a stale ``LLAMACPP_BIN`` if any."""
+
+    def __init__(self, path: str | None, source: str = "", stale: str = "") -> None:
+        self.path = path
+        self.source = source
+        self.stale = stale
+
+
+def _from_explicit(explicit: str) -> Path | None:
+    """A file, ``llama-server`` inside a directory, or ``which`` of the value."""
+    path = Path(explicit)
+    if path.is_file():
+        return path
+    if path.is_dir():
+        from master_agent.llamacpp_install import server_in_tree
+
+        hit = server_in_tree(path)
+        if hit is not None:
+            return hit
+    found = shutil.which(explicit)
+    return Path(found) if found else None
+
+
+def locate_server() -> LocatedLlama:
+    """``LLAMACPP_BIN``, else ``llama-server`` on ``PATH``, else Buddy's install.
+
+    A directory ``LLAMACPP_BIN`` is searched for ``llama-server`` (``.exe`` on
+    Windows), including ``build/bin`` and ``build/bin/Release`` under it.
+    A value that names nothing is logged and does not hide PATH or the Buddy
+    install under ``LLAMACPP_ROOT``.
+    """
     explicit = (cfg.LLAMACPP_BIN or "").strip().strip('"')
+    stale = ""
     if explicit:
-        path = Path(explicit)
-        if path.is_file():
-            return str(path)
-        return shutil.which(explicit)
+        found = _from_explicit(explicit)
+        if found is not None:
+            return LocatedLlama(str(found), "LLAMACPP_BIN")
+        stale = explicit
+        log.warning(
+            "LLAMACPP_BIN=%s is not a llama-server; looking on PATH and in the Buddy install",
+            explicit,
+        )
     on_path = shutil.which("llama-server")
     if on_path:
-        return on_path
+        return LocatedLlama(on_path, "PATH", stale)
     from master_agent.llamacpp_install import buddy_binary
 
     mine = buddy_binary(getattr(cfg, "LLAMACPP_ROOT", None))
-    return str(mine) if mine else None
+    if mine is not None:
+        return LocatedLlama(str(mine), "Buddy install", stale)
+    return LocatedLlama(None, "", stale)
+
+
+def resolve_binary() -> str | None:
+    """Path from :func:`locate_server`, or ``None`` when nothing is installed."""
+    return locate_server().path
+
+
+def describe_located(found: LocatedLlama, root: Path | str | None = None) -> str:
+    """Doctor line: which source won, the path, the build, and a stale-bin note."""
+    from master_agent.llamacpp_install import NOT_INSTALLED, llama_status_detail
+
+    note = f"LLAMACPP_BIN={found.stale} is not a llama-server" if found.stale else ""
+    if not found.path:
+        return f"{NOT_INSTALLED}; {note}" if note else NOT_INSTALLED
+    text = f"{found.source}: {llama_status_detail(found.path, root)}"
+    return f"{text}; {note}" if note else text
 
 
 def endpoint_parts(url: str | None = None) -> tuple[str, int, str]:
