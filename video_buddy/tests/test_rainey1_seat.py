@@ -190,7 +190,8 @@ def test_detached_flags_are_not_a_thread():
         assert flags["creationflags"] & subprocess.CREATE_NEW_PROCESS_GROUP
     else:
         assert flags["start_new_session"] is True
-    assert "ThreadPoolExecutor" not in Path("/workspace/video_buddy/streamlit_app.py").read_text(encoding="utf-8")
+    app_py = Path(__file__).resolve().parents[1] / "streamlit_app.py"
+    assert "ThreadPoolExecutor" not in app_py.read_text(encoding="utf-8")
 
 
 def test_look_check_uses_llamacpp_and_records_a_fire(monkeypatch):
@@ -225,7 +226,7 @@ def test_flux_ltx_i2v_uses_klein_4b():
 
 
 def test_sdxl_workflows_still_resolve():
-    root = Path("/workspace/video_buddy/workflows")
+    root = Path(__file__).resolve().parents[1] / "workflows"
     names = [
         "Video-Buddy_AI-RENDERING_SDXL_ADV_v04.json",
         "Video-Buddy_AI-RENDERING_SDXL_ADV_v06.json",
@@ -240,7 +241,7 @@ def test_z_image_turbo_download_and_policy_still_resolve():
     from master_agent.models.vram_policy import _OTHER
     import importlib.util
 
-    path = Path("/workspace/video_buddy/state/download_models.py")
+    path = Path(__file__).resolve().parents[1] / "state" / "download_models.py"
     spec = importlib.util.spec_from_file_location("vb_download_models", path)
     mod = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(mod)

@@ -228,6 +228,26 @@ def test_module_import_does_not_load_streamlit():
     subprocess.run([sys.executable, "-c", code], cwd=VIDEO_BUDDY, check=True)
 
 
+class _FinishedProc:
+    """Stand-in for a detached child that already wrote its result file."""
+
+    def poll(self) -> int:
+        return 0
+
+    def wait(self, timeout: float | None = None) -> int:
+        del timeout
+        return 0
+
+
+def _inprocess_spawn(argv, *, log_path, cwd=None, popen=None):
+    """Run the brief here so the page test's ``create_video`` mock is the one that fires."""
+    del log_path, cwd, popen
+    from master_agent.detached_job import run_brief
+
+    run_brief(Path(argv[-1]))
+    return _FinishedProc()
+
+
 @pytest.fixture
 def page(monkeypatch):
     """The real page under Streamlit's AppTest, with agent_api health/create_video mocked."""
@@ -235,6 +255,7 @@ def page(monkeypatch):
     import streamlit as st
 
     from master_agent import agent_api
+    from master_agent import process_detach
 
     st.cache_resource.clear()
     st.cache_data.clear()
@@ -243,6 +264,9 @@ def page(monkeypatch):
         "local_llm": {"active": "llamacpp"},
         "budget": {"paused": False, "line": "budget: 0.0 / 80.0 VRAM-min used"},
     })
+    # Production submit is a detached OS process. AppTest stays in-process so
+    # the create_video mock on this interpreter is the call that runs.
+    monkeypatch.setattr(process_detach, "spawn_detached", _inprocess_spawn)
     yield testing.AppTest.from_file(str(VIDEO_BUDDY / "streamlit_app.py"), default_timeout=15)
     st.cache_resource.clear()
     st.cache_data.clear()
