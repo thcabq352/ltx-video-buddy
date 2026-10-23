@@ -61,6 +61,7 @@ def test_setup_fix_warns_when_llm_missing_without_ollama_pull(plain, capsys):
     assert rc == 0
     assert "WARNING: LOCAL LLM IS NOT READY" in out
     assert "https://huggingface.co/DreamFast/Qwen3-VL-4b-Heretic-GGUF/resolve/main/qwen3-vl-4b-heretic-Q4_K_M.gguf" in out
+    assert "https://huggingface.co/Qwen/Qwen3-VL-4B-Instruct-GGUF/resolve/main/mmproj-Qwen3VL-4B-Instruct-F16.gguf" in out
     assert "https://huggingface.co/nomic-ai/nomic-embed-text-v1.5-GGUF/resolve/main/nomic-embed-text-v1.5.Q4_K_M.gguf" in out
     assert "LAUNCH_NOTES.txt" in out
     assert "WARN  llm-models" in out
@@ -74,7 +75,8 @@ def test_setup_fix_reports_present_gguf(plain, capsys):
     rc = setup_mod.fix()
     out = capsys.readouterr().out
     assert rc == 0
-    assert "qwen3-vl-heretic (text + vision: brief, director, judge): found" in out
+    assert "projector MISSING" in out
+    assert "qwen3-vl-heretic-Q4_K_M.gguf" in out
     assert "WARNING: LOCAL LLM IS NOT READY" in out
     assert "nomic-embed-text" in out
     assert "Skipped nomic-embed-text" not in out

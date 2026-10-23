@@ -46,7 +46,7 @@ def main(argv: list[str] | None = None) -> int:
             "(MANAGED_COMFY_ROOT or ./ComfyUI) with the LTX 2.3 custom nodes, optional Triton + "
             "SageAttention inside the Comfy venv, the LTX 2.3 weights into MODELS_DIR, and optional "
             "llama.cpp (built from the pinned LLAMACPP_REF into LLAMACPP_ROOT, else the official prebuilt), "
-            "and the local LLM GGUFs (Qwen3-VL-4B heretic Q4_K_M and nomic-embed-text Q4_K_M) into MODELS_DIR. "
+            "and the local LLM GGUFs (Qwen3-VL-4B heretic Q4_K_M, its Qwen3-VL-4B mmproj, and nomic-embed-text Q4_K_M) into MODELS_DIR. "
             "An existing vision pair (model .gguf plus mmproj*.gguf, MODELS_DIR/gguf_vl_heretic/ first) "
             "is used as the brain instead of the 4B download. "
             "A missing LLM file fails that step out loud (direct link, manual steps, LAUNCH_NOTES.txt). "

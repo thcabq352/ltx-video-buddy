@@ -17,18 +17,21 @@ the Comfy tree; managed launch keeps passing Buddy's ``extra_model_paths.yaml``.
 The local LLM models (``LLAMACPP_MODEL`` for brief / director / judge,
 ``KB_EMBED_MODEL`` for knowledge-base embeddings) are GGUFs llama-server
 serves from ``MODELS_DIR/<name>/``. Public sources live in
-``models/llm_gguf.py`` (same Hub download as the LTX weights). A vision pair
-already on disk (``MODELS_DIR/gguf_vl_heretic/`` first, then any folder with a
-model ``*.gguf`` and an ``mmproj*.gguf``) is the brain and the 4B file is not
-downloaded. An existing Ollama ``nomic-embed-text`` blob may be referenced
-read-only instead of downloading the embed file. Nothing already on disk is
-moved or deleted. A file that is already the full size is skipped. A short
-file is fetched again. If a slot has no source or the download fails, the step
-fails out loud: the summary, ``state/LAUNCH_NOTES.txt``, and doctor's
-``llm-models`` row all name the direct link and the manual steps, which brain
-and embed are in use, and whether vision is on. Automatic install never
-installs Ollama and never runs ``ollama pull``.
-Unset ``LLM_PROVIDER`` is set to ``llamacpp`` in ``.env``.
+``models/llm_gguf.py``. When the slot is empty, automatic install GETs the
+public Hugging Face resolve URL into that folder (pinned size and SHA256,
+resumable ``.partial``). A vision pair already on disk
+(``MODELS_DIR/gguf_vl_heretic/`` first, then any folder with a model ``*.gguf``
+and an ``mmproj*.gguf``) is the brain and the 4B file is not downloaded. An
+existing Ollama ``nomic-embed-text`` blob may be referenced read-only instead
+of downloading the embed file. Nothing already on disk is moved or deleted.
+A file that is already the full size is skipped. A short file is resumed.
+If a slot has no source or the download fails, the step fails out loud: the
+summary, ``state/LAUNCH_NOTES.txt``, and doctor's ``llm-models`` row all name
+the direct link and the manual steps, which brain and embed are in use, and
+whether vision is on. Automatic install never installs Ollama and never runs
+``ollama pull``. When the GGUFs are in place and ``LLM_PROVIDER`` is unset,
+it is set to ``llamacpp`` in ``.env`` (a new file is created if needed). An
+explicit value in ``.env`` or the environment is left alone.
 
 ``doctor`` stays a scanner. This module is the only thing that installs.
 """
@@ -520,6 +523,7 @@ def check_llamacpp(plan: Any, *, skip: bool) -> Check:
     from master_agent.models.llm_gguf import (
         BRAIN_FILENAME,
         configured_slots,
+        file_ready,
         is_ollama_reference,
         mmproj_present,
         model_path_for,
@@ -549,13 +553,21 @@ def check_llamacpp(plan: Any, *, skip: bool) -> Check:
                 lines.append(f"  embed: {model}")
                 lines.append("  read-only Ollama file; not copied or modified")
         elif slot.files:
-            spec = slot.files[0]
-            lines.append(
-                f"{slot.name} ({slot.role}): will download {spec.filename} "
-                f"({spec.size_label}) from {spec.repo_id}."
-            )
-            lines.append(f"  {spec.url}")
-            if slot.vision and not slot.publishes_mmproj:
+            for spec in slot.files:
+                ready = file_ready(slot, spec)
+                if ready is not None:
+                    lines.append(f"  {spec.role}: already on disk at {ready}")
+                    continue
+                lines.append(
+                    f"{slot.name} ({slot.role}): will download {spec.filename} "
+                    f"({spec.size_label}) from {spec.repo_id}."
+                )
+                lines.append(f"  {spec.url}")
+            if slot.vision and any(spec.role == "mmproj" for spec in slot.files):
+                lines.append(
+                    "  DreamFast publishes no mmproj. The projector is the public Qwen3-VL-4B file above."
+                )
+            elif slot.vision and not slot.publishes_mmproj:
                 lines.append(
                     "  That repo publishes no mmproj file. Text works; the vision judge cannot see images."
                 )
@@ -1342,6 +1354,10 @@ def cmd_automatic_install(args: Any) -> int:
         else:
             mark = "NEED"
         print(f"  {mark}  {row['name']:<14} {row['detail']}")
+        if mark == "WARN":
+            print("        WARNING: local LLM files are missing. This is not a silent skip.")
+            if "projector MISSING" in str(row.get("detail")):
+                print("        WARNING: the brain GGUF is on disk but the vision projector is not.")
         if mark == "WARN" and row.get("fix"):
             print(f"        -> {row['fix']}")
         if mark == "INFO":

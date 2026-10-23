@@ -1,10 +1,12 @@
 """Public GGUF sources for the local LLM (llama.cpp router).
 
-Same idea as the LTX weight manifest: a pinned Hub repo, filename, and byte
-size. Automatic install downloads the missing files into
-``MODELS_DIR/<served-name>/``, which is the folder llama-server's
-``--models-dir`` router exposes under that name. ``download_hub_file`` is the
-resumable Hub fetch (cache resume, then a copy into ``MODELS_DIR``).
+Same idea as the LTX weight manifest: a pinned Hub repo, filename, byte size,
+and SHA256. When nothing local satisfies the slot, automatic install GETs the
+public Hugging Face resolve URL straight into ``MODELS_DIR/<served-name>/``.
+That folder is the name llama-server's ``--models-dir`` router exposes. The
+download writes ``<filename>.partial``, resumes with an HTTP Range on the next
+run, and replaces the partial only after the pinned size and SHA256 match.
+A file that is already at least that size is left in place.
 
 Before that download, a vision-capable pair already on disk is the brain.
 ``MODELS_DIR/gguf_vl_heretic/`` is checked first, then any other folder directly
@@ -14,35 +16,61 @@ The preset points ``qwen3-vl-heretic`` at those files (``mmproj`` set) and the
 read-only instead of downloading the 84 MB embed file. Nothing already on disk
 is moved, renamed, or deleted.
 
-Verified against the Hugging Face file listing on 2026-10-22:
+Verified against the Hugging Face file listing on 2026-10-22, and the LFS oid
+on the tree API on 2026-10-23:
 
 - ``DreamFast/Qwen3-VL-4b-Heretic-GGUF`` siblings include
-  ``qwen3-vl-4b-heretic-Q4_K_M.gguf`` (2,497,281,696 bytes) and no file whose
-  name contains ``mmproj``. The publisher marks these GGUFs as text-path.
+  ``qwen3-vl-4b-heretic-Q4_K_M.gguf`` (2,497,281,696 bytes, SHA256
+  ``f98bb854…5518``) and no file whose name contains ``mmproj``. The publisher
+  marks these GGUFs as text-path. Resolve ``Content-Length`` is the same size.
 - ``nomic-ai/nomic-embed-text-v1.5-GGUF`` includes
-  ``nomic-embed-text-v1.5.Q4_K_M.gguf`` (84,106,624 bytes).
+  ``nomic-embed-text-v1.5.Q4_K_M.gguf`` (84,106,624 bytes, SHA256
+  ``d4e38889…95ac``).
+- ``Qwen/Qwen3-VL-4B-Instruct-GGUF`` includes
+  ``mmproj-Qwen3VL-4B-Instruct-F16.gguf`` (836,180,256 bytes, SHA256
+  ``256f3a43…5331``). That is the projector for this 4B brain. HEAD
+  ``Content-Length`` on the resolve URL is the same size. The file is ungated.
 
-8B heretic GGUFs that do ship an mmproj are not downloaded. They are used when
-they are already on disk. See ``OPTIONAL_BRAIN_ALTERNATIVES``.
+8B heretic GGUFs that ship their own mmproj are not downloaded. They are used
+when they are already on disk. See ``OPTIONAL_BRAIN_ALTERNATIVES``.
 """
 
 from __future__ import annotations
 
+import hashlib
 import json
 import os
 import re
-import shutil
+import urllib.error
+import urllib.request
 from dataclasses import dataclass
 from pathlib import Path
 
-# Hub listing 2026-10-22. Do not invent an mmproj for the 4B repo: it is not there.
+# Hub listing 2026-10-22; LFS sha256 from the tree API 2026-10-23.
+# Do not invent an mmproj for the 4B repo: it is not there.
 BRAIN_REPO = "DreamFast/Qwen3-VL-4b-Heretic-GGUF"
 BRAIN_FILENAME = "qwen3-vl-4b-heretic-Q4_K_M.gguf"
 BRAIN_SIZE_BYTES = 2_497_281_696
+BRAIN_SHA256 = "f98bb854272a6e66cda692046c433a4253bd2d11e8d7fa818849d0cad3145518"
 
 EMBED_REPO = "nomic-ai/nomic-embed-text-v1.5-GGUF"
 EMBED_FILENAME = "nomic-embed-text-v1.5.Q4_K_M.gguf"
 EMBED_SIZE_BYTES = 84_106_624
+EMBED_SHA256 = "d4e388894e09cf3816e8b0896d81d265b55e7a9fff9ab03fe8bf4ef5e11295ac"
+
+# DreamFast's GGUF repo is text-path only (no mmproj sibling, Hub tree 2026-10-23).
+# The bf16 card says the vision encoder is preserved from Qwen3-VL-4B-Instruct, so
+# the projector is the public file from Qwen's own GGUF repo. Ungated. HEAD
+# Content-Length on the resolve URL matches this size. The name starts with
+# mmproj, which is what llama.cpp loads.
+MMPROJ_REPO = "Qwen/Qwen3-VL-4B-Instruct-GGUF"
+MMPROJ_FILENAME = "mmproj-Qwen3VL-4B-Instruct-F16.gguf"
+MMPROJ_SIZE_BYTES = 836_180_256
+MMPROJ_SHA256 = "256f3a43bd4205ffef48d6b92715e1e70b5b0e9aef06522584967513a9985331"
+
+_CHUNK = 1024 * 1024
+_FETCH_TIMEOUT_S = 120
+_USER_AGENT = "video-buddy/llm-gguf"
 
 LAUNCH_NOTES_NAME = "LAUNCH_NOTES.txt"
 PRESET_NAME = "llamacpp-models.ini"
@@ -76,6 +104,7 @@ class LlmFile:
     size_bytes: int
     role: str  # "model" or "mmproj"
     url: str
+    sha256: str = ""
 
     @property
     def size_label(self) -> str:
@@ -135,7 +164,7 @@ class LlmSlot:
     name: str
     role: str
     files: tuple[LlmFile, ...]
-    # True only when this slot's own repo published an mmproj we download.
+    # True when automatic install downloads an mmproj for this slot.
     publishes_mmproj: bool = False
     vision: bool = False
 
@@ -150,6 +179,7 @@ def _file(
     size_bytes: int,
     *,
     role: str = "model",
+    sha256: str = "",
 ) -> LlmFile:
     return LlmFile(
         filename=filename,
@@ -158,24 +188,35 @@ def _file(
         size_bytes=size_bytes,
         role=role,
         url=hub_url(repo_id, filename),
+        sha256=sha256,
     )
 
 
 # Keyed by the served name (the folder under MODELS_DIR, and the model id
-# llama-server's router exposes). The 4B repo has no mmproj; a local pair
-# can still fill this slot. See ``discover_local_vision_pair``.
+# llama-server's router exposes). DreamFast publishes no mmproj, so the
+# projector is the public Qwen3-VL-4B file. A local pair can still fill this
+# slot and skip both downloads. See ``discover_local_vision_pair``.
 LLM_SLOTS: dict[str, LlmSlot] = {
     DEFAULT_BRAIN_NAME: LlmSlot(
         name=DEFAULT_BRAIN_NAME,
         role="text + vision: brief, director, judge",
-        files=(_file(BRAIN_FILENAME, BRAIN_REPO, BRAIN_SIZE_BYTES),),
-        publishes_mmproj=False,
+        files=(
+            _file(BRAIN_FILENAME, BRAIN_REPO, BRAIN_SIZE_BYTES, sha256=BRAIN_SHA256),
+            _file(
+                MMPROJ_FILENAME,
+                MMPROJ_REPO,
+                MMPROJ_SIZE_BYTES,
+                role="mmproj",
+                sha256=MMPROJ_SHA256,
+            ),
+        ),
+        publishes_mmproj=True,
         vision=True,
     ),
     "nomic-embed-text": LlmSlot(
         name="nomic-embed-text",
         role="knowledge-base embeddings",
-        files=(_file(EMBED_FILENAME, EMBED_REPO, EMBED_SIZE_BYTES),),
+        files=(_file(EMBED_FILENAME, EMBED_REPO, EMBED_SIZE_BYTES, sha256=EMBED_SHA256),),
         publishes_mmproj=False,
         vision=False,
     ),
@@ -465,6 +506,23 @@ def adopted_embed_blob(slot: LlmSlot) -> Path | None:
     return ollama_embed_blob(slot.name)
 
 
+def _pinned_mmproj(slot: LlmSlot) -> LlmFile | None:
+    return next((spec for spec in slot.files if spec.role == "mmproj"), None)
+
+
+def _counts_as_projector(slot: LlmSlot, path: Path) -> bool:
+    """A real projector. A short copy of the pinned filename is a partial download."""
+    try:
+        if not path.is_file() or path.stat().st_size <= 0:
+            return False
+    except OSError:
+        return False
+    pinned = _pinned_mmproj(slot)
+    if pinned is not None and path.name == pinned.filename and not size_ok(path, pinned.size_bytes):
+        return False
+    return True
+
+
 def file_ready(slot: LlmSlot, spec: LlmFile, root: Path | None = None) -> Path | None:
     """Canonical file at full size, a stand-in GGUF, a local vision pair, or an Ollama embed blob.
 
@@ -473,10 +531,11 @@ def file_ready(slot: LlmSlot, spec: LlmFile, root: Path | None = None) -> Path |
     An Ollama embed blob is used only when no embed GGUF is already under ``MODELS_DIR``.
     """
     base = root or models_root()
-    if spec.role == "model":
-        pair = adopted_vision_pair(slot, base)
-        if pair is not None:
-            return pair.model
+    pair = adopted_vision_pair(slot, base)
+    if pair is not None and spec.role == "model":
+        return pair.model
+    if pair is not None and spec.role == "mmproj" and _counts_as_projector(slot, pair.mmproj):
+        return pair.mmproj
     dest = slot_dir(slot, base) / spec.filename
     if size_ok(dest, spec.size_bytes):
         return dest
@@ -491,12 +550,10 @@ def file_ready(slot: LlmSlot, spec: LlmFile, root: Path | None = None) -> Path |
             continue
     if spec.role == "mmproj":
         for path in _matching_ggufs(slot.name, base):
-            if path.name.lower().startswith("mmproj"):
-                try:
-                    if path.is_file() and path.stat().st_size > 0:
-                        return path
-                except OSError:
-                    continue
+            if path.name == spec.filename:
+                continue
+            if path.name.lower().startswith("mmproj") and _counts_as_projector(slot, path):
+                return path
     if spec.role == "model":
         # Only after every local candidate missed, so a file already in MODELS_DIR wins.
         return adopted_embed_blob(slot)
@@ -506,19 +563,15 @@ def file_ready(slot: LlmSlot, spec: LlmFile, root: Path | None = None) -> Path |
 def mmproj_present(slot: LlmSlot, root: Path | None = None) -> Path | None:
     base = root or models_root()
     pair = adopted_vision_pair(slot, base)
-    if pair is not None:
+    if pair is not None and _counts_as_projector(slot, pair.mmproj):
         return pair.mmproj
     for path in _matching_ggufs(slot.name, base):
-        if "mmproj" in path.name.lower():
-            try:
-                if path.is_file() and path.stat().st_size > 0:
-                    return path
-            except OSError:
-                continue
+        if "mmproj" in path.name.lower() and _counts_as_projector(slot, path):
+            return path
     folder = slot_dir(slot, base)
     if folder.is_dir():
         for path in sorted(folder.glob("*.gguf")):
-            if path.name.lower().startswith("mmproj") and path.stat().st_size > 0:
+            if path.name.lower().startswith("mmproj") and _counts_as_projector(slot, path):
                 return path
     return None
 
@@ -538,12 +591,14 @@ def model_path_for(slot: LlmSlot, root: Path | None = None) -> Path | None:
 
 
 def projector_how_to() -> str:
-    """One plain sentence: how to give the vision judge a projector."""
+    """How the vision judge gets a projector."""
     return (
-        "To add a projector, put a model .gguf and a file whose name starts with mmproj "
-        f"(mmproj*.gguf) in the same folder under MODELS_DIR. Buddy looks in "
+        "Automatic install downloads the public Qwen3-VL-4B projector "
+        f"({MMPROJ_FILENAME}, {MMPROJ_REPO}) next to the 4B brain when no projector is already on disk. "
+        "A projector you already have also counts: put a model .gguf and a file whose name starts with "
+        f"mmproj (mmproj*.gguf) in the same folder under MODELS_DIR. Buddy looks in "
         f"MODELS_DIR/{PREFERRED_VISION_DIR}/ first, then any other folder that has both. "
-        "It does not download the projector and it does not move or delete files. "
+        "It does not move or delete files that are already there. "
         "Then run: python -m master_agent automatic-install --yes"
     )
 
@@ -625,8 +680,9 @@ def vision_note(root: Path | None = None) -> str:
             ]
         )
     lines = [
-        "Vision: text-only. The vision judge cannot see images (no mmproj).",
-        f"Checked {BRAIN_REPO}: {BRAIN_FILENAME} is text-path only.",
+        "Vision: text-only until a projector is on disk. The vision judge cannot see images (no mmproj).",
+        f"Checked {BRAIN_REPO}: {BRAIN_FILENAME} is text-path only (no mmproj in that repo).",
+        f"Automatic install downloads {MMPROJ_FILENAME} from {MMPROJ_REPO} into the brain folder.",
         "Text still works (brief, director, storyboard, text judge).",
         projector_how_to(),
         "Optional packs that include a projector (not downloaded):",
@@ -664,7 +720,10 @@ def manual_lines(slot: LlmSlot, *, reason: str) -> list[str]:
     lines.append(
         f"{step}. Run again: python -m master_agent automatic-install --yes"
     )
-    lines.append("   A file that is already the full size is skipped. A short file is downloaded again.")
+    lines.append(
+        "   A file that is already the full size is skipped. "
+        "A short copy is resumed from the .partial file beside it."
+    )
     return lines
 
 
@@ -708,10 +767,13 @@ def read_provider(text: str) -> str | None:
 
 
 def ensure_provider(apply: bool) -> tuple[str, str]:
-    """Return ``(value, action)`` where action is unchanged, planned, set, or unset.
+    """Return ``(value, action)`` where action is unchanged, planned, or set.
 
-    An explicit line in ``.env`` is left alone (Ollama, llama.cpp, auto, or grok).
-    When the line is missing and ``apply`` is true, write ``LLM_PROVIDER=llamacpp``.
+    An explicit ``.env`` line is left alone (Ollama, llama.cpp, auto, or grok).
+    An ``LLM_PROVIDER`` already in the process environment is left alone too.
+    When both are unset and ``apply`` is true, write ``LLM_PROVIDER=llamacpp``.
+    A missing ``.env`` is created with that one line. A file that exists gets
+    the line appended. A commented-out example line does not count as set.
     """
     from master_agent import config
 
@@ -723,54 +785,256 @@ def ensure_provider(apply: bool) -> tuple[str, str]:
         current = read_provider(text)
     if current:
         return current, "unchanged"
+    environ_value = os.environ.get("LLM_PROVIDER")
+    if environ_value is not None and environ_value.strip():
+        return environ_value.strip().strip('"').strip("'"), "unchanged"
     if not apply:
         return "llamacpp", "planned"
     if not path.is_file():
-        return (config.LLM_PROVIDER or "auto"), "unset"
-    suffix = "" if text.endswith("\n") or text == "" else "\n"
-    path.write_text(text + suffix + "LLM_PROVIDER=llamacpp\n", encoding="utf-8")
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.write_text("LLM_PROVIDER=llamacpp\n", encoding="utf-8")
+    else:
+        suffix = "" if text.endswith("\n") or text == "" else "\n"
+        path.write_text(text + suffix + "LLM_PROVIDER=llamacpp\n", encoding="utf-8")
     config.LLM_PROVIDER = "llamacpp"
     os.environ["LLM_PROVIDER"] = "llamacpp"
     return "llamacpp", "set"
 
 
-def download_into(spec: LlmFile, dest: Path, progress=print) -> Path:
-    """Fetch ``spec`` to ``dest``. Skip is the caller's job. Short dest is replaced.
+def partial_path(dest: Path) -> Path:
+    """Sibling kept until the pinned size and SHA256 both match."""
+    return Path(dest).with_name(Path(dest).name + ".partial")
 
-    The Hub download itself resumes in the Hugging Face cache (same helper the
-    LTX weights use). The copy into ``MODELS_DIR`` happens after that file is complete.
-    An Ollama blob is never the destination: those files are referenced, not changed.
+
+def sha256_file(path: Path) -> str:
+    digest = hashlib.sha256()
+    with path.open("rb") as handle:
+        for chunk in iter(lambda: handle.read(_CHUNK), b""):
+            digest.update(chunk)
+    return digest.hexdigest()
+
+
+def _header(resp, name: str) -> str | None:
+    getter = getattr(resp, "getheader", None)
+    if callable(getter):
+        for candidate in (name, name.lower(), name.title()):
+            value = getter(candidate)
+            if value:
+                return str(value)
+    headers = getattr(resp, "headers", None)
+    if headers is None:
+        return None
+    wanted = name.lower()
+    try:
+        items = list(headers.items())
+    except Exception:
+        return None
+    for key, value in items:
+        if str(key).lower() == wanted and value:
+            return str(value)
+    return None
+
+
+def _status(resp) -> int:
+    raw = getattr(resp, "status", None)
+    if raw is None:
+        raw = getattr(resp, "code", None)
+    if raw is None:
+        return 200
+    return int(raw)
+
+
+def _declared_total(resp, status: int, have: int) -> int | None:
+    """Byte length the server claims, or None when it did not say."""
+    if status == 206:
+        content_range = _header(resp, "Content-Range") or ""
+        if "/" in content_range:
+            total = content_range.rsplit("/", 1)[-1].strip()
+            if total.isdigit():
+                return int(total)
+        length = _header(resp, "Content-Length")
+        if length and length.strip().isdigit():
+            return have + int(length.strip())
+        return None
+    length = _header(resp, "Content-Length")
+    if length and str(length).strip().isdigit():
+        return int(str(length).strip())
+    return None
+
+
+def _reject_insecure(resp, url: str) -> None:
+    geturl = getattr(resp, "geturl", None)
+    if not callable(geturl):
+        return
+    final = str(geturl() or "")
+    if final and not final.startswith("https://"):
+        raise RuntimeError(f"Refusing non-HTTPS response for {url}: {final}")
+
+
+def _resume_partial(dest: Path, size_bytes: int) -> Path:
+    """Use a short destination as the resume base. A longer partial wins."""
+    partial = partial_path(dest)
+    if not dest.is_file():
+        if partial.is_file() and partial.stat().st_size > size_bytes:
+            partial.unlink()
+        return partial
+    try:
+        dest_size = dest.stat().st_size
+    except OSError:
+        dest_size = -1
+    if dest_size >= size_bytes:
+        return partial
+    try:
+        part_size = partial.stat().st_size if partial.is_file() else -1
+    except OSError:
+        part_size = -1
+    if dest_size > part_size:
+        if partial.exists():
+            partial.unlink()
+        dest.replace(partial)
+    else:
+        dest.unlink()
+    if partial.is_file() and partial.stat().st_size > size_bytes:
+        partial.unlink()
+    return partial
+
+
+def _commit_partial(partial: Path, dest: Path, size_bytes: int, sha256: str, url: str) -> None:
+    got = partial.stat().st_size if partial.is_file() else 0
+    if got != size_bytes:
+        raise RuntimeError(
+            f"{dest.name} is {got} bytes; expected {size_bytes}. "
+            f"The partial file was kept at {partial} so the next run can resume. {url}"
+        )
+    if sha256:
+        digest = sha256_file(partial)
+        if digest.lower() != sha256.lower():
+            partial.unlink(missing_ok=True)
+            raise RuntimeError(
+                f"SHA256 mismatch for {dest.name}: got {digest}, expected {sha256}. "
+                f"The partial file was removed. Download {url} again."
+            )
+    os.replace(partial, dest)
+
+
+def download_resolve(
+    url: str,
+    dest: Path,
+    size_bytes: int,
+    *,
+    sha256: str = "",
+    opener=None,
+    progress=print,
+    timeout: float = _FETCH_TIMEOUT_S,
+) -> Path:
+    """GET ``url`` into ``dest`` via ``dest.partial``. Idempotent and resumable.
+
+    A destination that is already at least ``size_bytes`` is returned without
+    a request. Otherwise bytes land in ``<name>.partial``. A later call sends
+    ``Range: bytes=<have>-``. The partial replaces ``dest`` only when the size
+    matches and, when ``sha256`` is set, the digest matches. A declared
+    ``Content-Length`` or ``Content-Range`` total that is not ``size_bytes``
+    is refused before any new bytes are written. The response must stay HTTPS.
     """
     dest = Path(dest)
     if is_ollama_reference(dest):
         raise RuntimeError(
             f"Refusing to change {dest}. An Ollama file is only referenced, never modified."
         )
+    if not str(url).startswith("https://"):
+        raise RuntimeError(f"Refusing non-HTTPS URL {url}")
+    if size_bytes <= 0:
+        raise RuntimeError(f"Refusing to fetch {url}: no pinned size")
     dest.parent.mkdir(parents=True, exist_ok=True)
-    if dest.is_file() and not size_ok(dest, spec.size_bytes):
-        dest.unlink()
-    from master_agent.models.download import download_hub_file
+    if size_ok(dest, size_bytes):
+        progress(f"SKIP {dest.name} — already at least {size_bytes} bytes at {dest}")
+        return dest
+    partial = _resume_partial(dest, size_bytes)
+    open_url = opener or urllib.request.urlopen
+    restarted = False
+    while True:
+        have = partial.stat().st_size if partial.is_file() else 0
+        if have > size_bytes:
+            partial.unlink()
+            have = 0
+        if have == size_bytes:
+            _commit_partial(partial, dest, size_bytes, sha256, url)
+            progress(f"OK   {dest}")
+            return dest
+        headers = {"User-Agent": _USER_AGENT}
+        if have:
+            headers["Range"] = f"bytes={have}-"
+        req = urllib.request.Request(url, headers=headers)
+        try:
+            resp = open_url(req, timeout=timeout)
+        except urllib.error.HTTPError as exc:
+            if exc.code == 416 and have and not restarted:
+                partial.unlink(missing_ok=True)
+                restarted = True
+                continue
+            raise RuntimeError(f"Download failed for {url}: HTTP {exc.code}") from exc
+        except Exception as exc:
+            raise RuntimeError(f"Download failed for {url}: {exc}") from exc
+        with resp:
+            status = _status(resp)
+            _reject_insecure(resp, url)
+            if status == 416 and have and not restarted:
+                if partial.exists():
+                    partial.unlink()
+                restarted = True
+                continue
+            if status >= 400:
+                raise RuntimeError(f"Download failed for {url}: HTTP {status}")
+            if status == 200:
+                declared = _declared_total(resp, 200, 0)
+            elif status == 206:
+                declared = _declared_total(resp, 206, have)
+            else:
+                declared = None
+            if declared is not None and declared != size_bytes:
+                raise RuntimeError(
+                    f"{url} declared {declared} bytes; expected {size_bytes}. "
+                    "Refusing to save a different file."
+                )
+            if have and status == 200:
+                # The server ignored Range and sent the whole file. Start over.
+                if partial.exists():
+                    partial.unlink()
+                have = 0
+            elif have and status != 206:
+                raise RuntimeError(f"Download failed for {url}: HTTP {status} on resume")
+            elif status not in (200, 206):
+                raise RuntimeError(f"Download failed for {url}: HTTP {status}")
+            with partial.open("ab" if have else "wb") as handle:
+                while True:
+                    chunk = resp.read(_CHUNK)
+                    if not chunk:
+                        break
+                    handle.write(chunk)
+        got = partial.stat().st_size if partial.is_file() else 0
+        if got != size_bytes:
+            raise RuntimeError(
+                f"{dest.name} is {got} bytes; expected {size_bytes}. "
+                f"The partial file was kept at {partial} so the next run can resume. {url}"
+            )
+        _commit_partial(partial, dest, size_bytes, sha256, url)
+        progress(f"OK   {dest}")
+        return dest
 
-    got = download_hub_file(
-        repo_id=spec.repo_id,
-        repo_filename=spec.repo_filename,
-        dest=dest,
+
+def download_into(spec: LlmFile, dest: Path, progress=print) -> Path:
+    """Fetch ``spec.url`` to ``dest`` in ``MODELS_DIR``. Idempotent.
+
+    A short destination becomes the ``.partial`` resume base. An Ollama blob
+    is never the destination: those files are referenced, not changed.
+    """
+    return download_resolve(
+        spec.url,
+        dest,
+        spec.size_bytes,
+        sha256=spec.sha256,
         progress=progress,
     )
-    if Path(got).resolve() != dest.resolve():
-        if not size_ok(Path(got), spec.size_bytes):
-            raise RuntimeError(
-                f"Found {got} but it is smaller than {spec.size_bytes} bytes. "
-                f"Download {spec.url} and save it as {dest}."
-            )
-        shutil.copyfile(got, dest)
-    if not size_ok(dest, spec.size_bytes):
-        have = dest.stat().st_size if dest.is_file() else 0
-        raise RuntimeError(
-            f"{dest.name} is {have} bytes; expected at least {spec.size_bytes}. "
-            f"Download {spec.url} and save it as {dest}."
-        )
-    return dest
 
 
 @dataclass
@@ -877,7 +1141,8 @@ def write_preset(root: Path | None = None) -> Path | None:
         pair = adopted_vision_pair(slot, base)
         if pair is not None:
             model_path = pair.model
-            mmproj = pair.mmproj
+            if _counts_as_projector(slot, pair.mmproj):
+                mmproj = pair.mmproj
         for spec in slot.files:
             if model_path is not None and spec.role == "model":
                 continue
@@ -990,7 +1255,9 @@ def doctor_row() -> dict[str, str | bool]:
             continue
         missing.append(slot.name)
         if slot.files:
-            fixes.append(slot.files[0].url + " -> " + str(slot_dir(slot) / slot.files[0].filename))
+            for spec in slot.files:
+                if file_ready(slot, spec) is None:
+                    fixes.append(spec.url + " -> " + str(slot_dir(slot) / spec.filename))
         else:
             fixes.append(f"no public source for {slot.name}; put a GGUF in {slot_dir(slot)}")
     parts = [f"LLM_PROVIDER={provider}"]
@@ -1000,12 +1267,16 @@ def doctor_row() -> dict[str, str | bool]:
         parts.append("MISSING: " + ", ".join(missing))
     parts.extend(usage_lines())
     brain = next((slot for slot in configured_slots() if slot.vision), None)
+    model = model_path_for(brain) if brain is not None else None
     proj = mmproj_present(brain) if brain is not None else None
-    if brain is not None and brain.name == DEFAULT_BRAIN_NAME and proj is None:
-        parts.append("vision mmproj: not in the default repo (text works; vision judge cannot see images)")
-        if model_path_for(brain) is not None:
-            parts.append(projector_how_to())
-    elif proj is not None:
+    if model is not None and proj is None:
+        parts.append(
+            f"projector MISSING: brain GGUF is present ({model.name}) but no mmproj; "
+            "the vision judge cannot see images"
+        )
+    elif proj is None:
+        parts.append("projector: none yet")
+    else:
         parts.append(f"vision mmproj: {proj.name}")
     fix = ""
     if missing:
