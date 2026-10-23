@@ -288,6 +288,23 @@ def test_watchdog_restarts_after_grace(isolated):
     assert len(_comfy_popens(isolated)) == 1
 
 
+def test_ready_timeout_env_overrides_default(monkeypatch):
+    monkeypatch.delenv(tower.READY_TIMEOUT_ENV, raising=False)
+    assert tower.ready_timeout_from_env() == tower.DEFAULT_READY_TIMEOUT_S
+    monkeypatch.setenv(tower.READY_TIMEOUT_ENV, "420")
+    assert tower.ready_timeout_from_env() == 420.0
+    monkeypatch.setenv(tower.READY_TIMEOUT_ENV, "nope")
+    assert tower.ready_timeout_from_env() == tower.DEFAULT_READY_TIMEOUT_S
+    monkeypatch.setenv(tower.READY_TIMEOUT_ENV, "0")
+    assert tower.ready_timeout_from_env() == tower.DEFAULT_READY_TIMEOUT_S
+
+
+def test_tower_ready_timeout_comes_from_env(isolated, monkeypatch):
+    monkeypatch.setenv(tower.READY_TIMEOUT_ENV, "420")
+    assert ManagedComfyTower().ready_timeout_s == 420.0
+    assert ManagedComfyTower(ready_timeout_s=90).ready_timeout_s == 90.0
+
+
 def test_watchdog_waits_out_startup_grace(isolated):
     st = load_state()
     st.want_running = True
