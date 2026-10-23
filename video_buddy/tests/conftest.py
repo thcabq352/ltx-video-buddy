@@ -30,6 +30,9 @@ os.environ.setdefault("OUTPUTS_DIR", str(_root / "outputs"))
 # Keep LLM discovery off the operator's real ~/.ollama blobs. Tests that want
 # a blob set OLLAMA_MODELS themselves. Read at call time, so this sticks.
 os.environ["OLLAMA_MODELS"] = str(_root / "ollama-models")
+# Existing submits are not the first-launch sequence. Seat tests opt back in.
+os.environ.setdefault("FIRST_GATE", "passed")
+os.environ.setdefault("SEAT_MIN_FREE_GB", "0")
 
 
 def pytest_sessionfinish(session, exitstatus):  # noqa: ARG001
@@ -41,6 +44,15 @@ import pytest  # noqa: E402
 from master_agent.comfy import layout as _comfy_layout  # noqa: E402
 
 _REAL_PORTABLE_SEARCH_ROOTS = _comfy_layout.portable_search_roots
+
+
+@pytest.fixture(autouse=True)
+def _reset_gpu_seat():
+    from master_agent.gpu_seat import reset_state
+
+    reset_state()
+    yield
+    reset_state()
 
 
 @pytest.fixture(autouse=True)

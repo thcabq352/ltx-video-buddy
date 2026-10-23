@@ -1172,7 +1172,7 @@
         "Node name for S&R": "UNETLoader"
       },
       "widgets_values": [
-        "flux-2-klein-9b-fp8.safetensors",
+        "flux-2-klein-4b-fp8.safetensors",
         "default"
       ],
       "shape": "box"
@@ -1255,7 +1255,7 @@
         }
       },
       "widgets_values": [
-        "qwen_3_8b_fp8mixed.safetensors",
+        "qwen_3_4b_fp4_flux2.safetensors",
         "flux2",
         "default"
       ],
@@ -2171,7 +2171,7 @@
       "outputs": [],
       "properties": {},
       "widgets_values": [
-        "## How to use\n\nThis workflow uses **FLUX.2 Klein 9B** to turn rough control passes into a finished image. Load your **Canny** (line/edge) image and **Depth** map plus any reference image, write a prompt describing the final look you want, then run. The model follows the combined control passes while the **consistency LoRA** keeps colors and details faithful to your references — raise or lower its strength (default `0.7`) if edits drift too far or not enough.\n\n---\n\n## Required models\n\n| File | Put it in | Download |\n|------|-----------|----------|\n| `flux-2-klein-9b-fp8.safetensors` | `models/diffusion_models/` | [black-forest-labs/FLUX.2-klein-9b-fp8](https://huggingface.co/black-forest-labs/FLUX.2-klein-9b-fp8) *(gated – accept the license first)* |\n| `qwen_3_8b_fp8mixed.safetensors` | `models/text_encoders/` | [Comfy-Org/flux2-klein-9B](https://huggingface.co/Comfy-Org/flux2-klein-9B/resolve/main/split_files/text_encoders/qwen_3_8b_fp8mixed.safetensors) |\n| `flux2-vae.safetensors` | `models/vae/` | [Comfy-Org/flux2-dev](https://huggingface.co/Comfy-Org/flux2-dev/resolve/main/split_files/vae/flux2-vae.safetensors) |\n| `Flux2-Klein-9B-consistency-V2.safetensors` | `models/loras/` | [dx8152/Flux2-Klein-9B-Consistency](https://huggingface.co/dx8152/Flux2-Klein-9B-Consistency/resolve/main/Flux2-Klein-9B-consistency-V2.safetensors) |\n"
+        "## How to use\n\nThis workflow uses **FLUX.2 [klein] 4B** to turn rough control passes into a finished image. Load your **Canny** (line/edge) image and **Depth** map plus any reference image, write a prompt describing the final look you want, then run. The model follows the combined control passes while the **consistency LoRA** keeps colors and details faithful to your references — raise or lower its strength (default `0.7`) if edits drift too far or not enough.\n\n---\n\n## Required models\n\n| File | Put it in | Download |\n|------|-----------|----------|\n| `flux-2-klein-4b-fp8.safetensors` | `models/diffusion_models/` | [black-forest-labs/FLUX.2-klein-4b-fp8](https://huggingface.co/black-forest-labs/FLUX.2-klein-4b-fp8) (Apache 2.0, ungated) |\n| `qwen_3_4b_fp4_flux2.safetensors` | `models/text_encoders/` | [Comfy-Org/Flux-2-Klein-4B](https://huggingface.co/Comfy-Org/Flux-2-Klein-4B/resolve/main/split_files/text_encoders/qwen_3_4b_fp4_flux2.safetensors) |\n| `flux2-vae.safetensors` | `models/vae/` | [Comfy-Org/flux2-dev](https://huggingface.co/Comfy-Org/flux2-dev/resolve/main/split_files/vae/flux2-vae.safetensors) |\n| `Flux2-Klein-9B-consistency-V2.safetensors` | `models/loras/` | [dx8152/Flux2-Klein-9B-Consistency]((not downloaded; FLUX.2 [klein] 4B is the only Flux)/resolve/main/Flux2-Klein-9B-consistency-V2.safetensors) |\n"
       ],
       "color": "#97651BFF",
       "bgcolor": "#B67921FF"

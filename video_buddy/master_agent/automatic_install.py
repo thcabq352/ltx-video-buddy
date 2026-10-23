@@ -678,7 +678,10 @@ def run_preflight(*, skip_weights: bool = False, skip_llm: bool = False) -> Pref
 
 
 def print_preflight(pf: Preflight) -> None:
+    from master_agent.models.klein import LICENSE_LINE
+
     print("AUTOMATIC INSTALL — pre-flight check (nothing has been changed yet)")
+    print(LICENSE_LINE)
     print()
     for c in pf.checks:
         print(f"  [{c.status}] {c.name}")
@@ -1222,6 +1225,35 @@ def _print_steps(results: list[StepResult]) -> None:
             print(f"                   {safe_to_ignore(STEP_REASONS[r.name])}")
 
 
+def step_vram_profile(apply: bool, gpu: dict[str, Any] | None = None) -> StepResult:
+    """Write the VRAM profile from nvidia-smi. Existing KEY=value lines stay."""
+    from master_agent.setup import ENV_FILE
+    from master_agent.vram_env import apply_vram_env
+
+    detected = None if not gpu else gpu.get("vram_gb")
+    try:
+        detected_gb = None if detected is None else float(detected)
+    except (TypeError, ValueError):
+        detected_gb = None
+    plan = apply_vram_env(detected_gb, ENV_FILE, apply=apply)
+    status = OK if apply else PLANNED
+    return StepResult("VRAM profile", status, plan.summary(), required=False)
+
+
+def step_klein_4b(apply: bool, *, requested: bool = False) -> StepResult:
+    """FLUX.2 [klein] 4B is the default stills pack. No 9B and no FLUX.3."""
+    from master_agent.models.klein import LICENSE_LINE, download_klein_4b
+
+    label = "requested with --klein-4b" if requested else "default stills pack"
+    if not apply:
+        return StepResult("Klein 4B stills", PLANNED, f"{LICENSE_LINE} ({label})", required=False)
+    try:
+        paths = download_klein_4b(print)
+    except Exception as exc:
+        return StepResult("Klein 4B stills", NONFATAL, f"{type(exc).__name__}: {exc}"[:400], required=False)
+    return StepResult("Klein 4B stills", OK, f"{len(paths)} file(s). {LICENSE_LINE}", required=False)
+
+
 def cmd_automatic_install(args: Any) -> int:
     preflight_only = bool(getattr(args, "preflight_only", False))
     apply = bool(getattr(args, "yes", False)) and not bool(getattr(args, "dry_run", False))
@@ -1239,11 +1271,16 @@ def cmd_automatic_install(args: Any) -> int:
 
     workspace = managed_workspace()
     flag = gpu_install_flag(pf.gpu, gpu_override)
+    from master_agent.models.klein import LICENSE_LINE
+
+    print(LICENSE_LINE)
     print("AUTOMATIC INSTALL — " + ("installing" if apply else "plan (dry run; nothing will change)"))
-    print("Video model: LTX 2.3 only.")
+    print("Video model: LTX 2.3 only. Stills Flux: FLUX.2 [klein] 4B only.")
     print()
+    klein_requested = bool(getattr(args, "klein_4b", False))
     steps: list[tuple[str, bool, Callable[[], StepResult]]] = [
         (".env", False, lambda: step_env_file(apply)),
+        ("VRAM profile", False, lambda: step_vram_profile(apply, gpu=pf.gpu)),
         ("Playwright Chromium", False, lambda: step_playwright(apply)),
         ("ffmpeg", True, lambda: step_ffmpeg(apply)),
         ("comfy-cli", True, lambda: step_comfy_cli(apply)),
@@ -1258,6 +1295,7 @@ def cmd_automatic_install(args: Any) -> int:
         ("ComfyUI-Manager channel", False, lambda: step_manager_config(apply, workspace=workspace)),
         ("Triton + SageAttention", False, lambda: step_accel(apply, workspace=workspace, gpu=pf.gpu, skip=skip_sage)),
         ("LTX 2.3 weights", True, lambda: step_weights(apply, skip=skip_weights)),
+        ("Klein 4B stills", False, lambda: step_klein_4b(apply, requested=klein_requested)),
         ("llama.cpp", False, lambda: step_llamacpp(apply, plan=pf.llama, skip=skip_llm)),
         ("LLM models", False, lambda: step_llm_models(apply, skip=skip_llm)),
     ]
@@ -1274,6 +1312,7 @@ def cmd_automatic_install(args: Any) -> int:
     if not apply:
         _print_steps(results)
         print()
+        print(LICENSE_LINE)
         print("Nothing was installed. When the plan looks right, run:")
         print("  python -m master_agent automatic-install --yes")
         return 0

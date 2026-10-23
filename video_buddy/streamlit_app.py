@@ -7,16 +7,16 @@ From ``video_buddy/``::
 
 Every action is one ``agent_api`` call; the dashboard has no render logic of
 its own. ``create_video`` blocks for the whole render and returns no job id,
-so the dashboard runs it on a background thread and polls that thread. The
-helpers above ``main`` import neither Streamlit nor the GPU stack, so tests
-run without the UI extra.
+so the dashboard starts a detached OS process (``python -m
+master_agent.detached_job``) and polls that process. Closing the terminal
+does not kill the job. The helpers above ``main`` import neither Streamlit
+nor the GPU stack, so tests run without the UI extra.
 """
 
 from __future__ import annotations
 
 import time
 import uuid
-from concurrent.futures import Future, ThreadPoolExecutor
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any, Callable, Iterable, Optional
@@ -59,13 +59,71 @@ def build_create_args(
     }
 
 
+class _ProcFuture:
+    """``done`` / ``result`` / ``exception`` for a detached Buddy process."""
+
+    def __init__(self, proc: Any, result_path: Path):
+        self._proc = proc
+        self._result_path = result_path
+        self._cached: dict[str, Any] | None = None
+
+    def done(self) -> bool:
+        return self._proc.poll() is not None
+
+    def _load(self) -> dict[str, Any]:
+        if self._cached is not None:
+            return self._cached
+        if self._result_path.is_file():
+            import json
+
+            self._cached = json.loads(self._result_path.read_text(encoding="utf-8"))
+        else:
+            code = self._proc.poll()
+            self._cached = {
+                "status": "error",
+                "error": f"detached job exited {code} without a result file",
+            }
+        return self._cached
+
+    def result(self, timeout: float | None = None) -> dict[str, Any]:
+        self._proc.wait(timeout=timeout)
+        return self._load()
+
+    def exception(self, timeout: float | None = None) -> BaseException | None:
+        del timeout
+        if not self.done():
+            return None
+        payload = self._load()
+        if payload.get("status") == "error" and payload.get("error"):
+            return RuntimeError(str(payload["error"]))
+        return None
+
+
+def _detached_spawn(fn: Callable[..., dict], args: dict[str, Any]) -> _ProcFuture:
+    """Production handoff. ``fn`` is the in-process fallback tests replace."""
+    del fn
+    from master_agent.config import STATE_DIR
+    from master_agent.detached_job import write_brief
+    from master_agent.process_detach import buddy_python_argv, spawn_detached
+
+    job_dir = Path(STATE_DIR) / "jobs"
+    brief = job_dir / f"{uuid.uuid4().hex}.json"
+    result = brief.with_suffix(".result.json")
+    write_brief(brief, args, result=result)
+    proc = spawn_detached(
+        buddy_python_argv("-m", "master_agent.detached_job", str(brief)),
+        log_path=brief.with_suffix(".log"),
+    )
+    return _ProcFuture(proc, result)
+
+
 @dataclass
 class Job:
-    """One ``create_video`` call running on the board's worker thread."""
+    """One ``create_video`` handoff. The default future is a detached process."""
 
     id: str
     args: dict[str, Any]
-    future: Future
+    future: Any
     started_at: float = field(default_factory=time.monotonic)
 
     def elapsed_s(self) -> float:
@@ -73,24 +131,24 @@ class Job:
 
 
 class JobBoard:
-    """Runs one render at a time off the Streamlit script thread.
+    """Runs one render at a time as a detached OS process.
 
     Shared across browser sessions, so a page refresh finds the job again.
     ``submit`` refuses while a job runs; the GPU lock inside ``create_video``
-    would answer ``busy`` anyway.
+    would answer ``busy`` anyway. Tests pass ``spawn`` to avoid a real process.
     """
 
-    def __init__(self) -> None:
-        self._executor = ThreadPoolExecutor(max_workers=1, thread_name_prefix="video-buddy-ui")
+    def __init__(self, spawn: Callable[..., Any] | None = None) -> None:
+        self._spawn = spawn or _detached_spawn
         self._jobs: dict[str, Job] = {}
         self._latest: Optional[str] = None
 
     def submit(self, fn: Callable[..., dict], args: dict[str, Any]) -> Optional[str]:
-        """Start ``fn(**args)``; returns the job id, or ``None`` when a job is still running."""
+        """Start the handoff; returns the job id, or ``None`` when a job is still running."""
         if self.running() is not None:
             return None
         job_id = uuid.uuid4().hex[:8]
-        self._jobs[job_id] = Job(job_id, dict(args), self._executor.submit(fn, **args))
+        self._jobs[job_id] = Job(job_id, dict(args), self._spawn(fn, dict(args)))
         self._latest = job_id
         return job_id
 

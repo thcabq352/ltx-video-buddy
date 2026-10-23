@@ -906,7 +906,11 @@ def _apply_local_family_weights(workflow: dict[str, Any], variant: str) -> None:
     elif family == "flux":
         name = _resolved_family_name("flux")
         if name:
-            _rewrite(("flux1-dev", "flux.1-dev", "flux1_dev"), name, "Flux.1-dev (16GB pick)")
+            _rewrite(
+                ("flux1-dev", "flux.1-dev", "flux1_dev", "flux-2-klein", "flux2-klein", "klein-9b"),
+                name,
+                "FLUX.2 [klein] 4B",
+            )
     elif family == "qwen_edit":
         name = _resolved_family_name("qwen_edit")
         if not name:
@@ -1285,10 +1289,12 @@ def _heuristic_patch(
 
     # Empty latent / size nodes — keep video length and audio frames_number in sync
     ltx_frames = snap_ltx_frames(int(frames)) if frames is not None else None
+    _still_latents = {"EmptyLatentImage", "EmptyFlux2LatentImage"}
     for class_type in (
         "EmptyLTXVLatentVideo",
         "EmptyHunyuanLatentVideo",
         "EmptyLatentImage",
+        "EmptyFlux2LatentImage",
         "LTXVEmptyLatentVideo",
         "WanFunInpaintToVideo",
     ):
@@ -1297,8 +1303,8 @@ def _heuristic_patch(
                 _write_widget(node, "width", width, preserve_links=preserve_links)
             if height is not None:
                 _write_widget(node, "height", height, preserve_links=preserve_links)
-            # EmptyLatentImage (Flux t2i) has no length/frames input
-            if frames is not None and class_type != "EmptyLatentImage":
+            # Still latents (Klein 4B / older image graphs) have no length input.
+            if frames is not None and class_type not in _still_latents:
                 write = ltx_frames if class_type in LTX_LENGTH_CLASSES else frames
                 for k in ("length", "frames", "num_frames", "frame_count"):
                     if k in (node.get("inputs") or {}) or k == "length":
@@ -1480,6 +1486,17 @@ def _heuristic_patch(
                 _set_input(node, "clip_name1", clip_l)
             if t5xxl and _same_weight_family(current_2, t5xxl):
                 _set_input(node, "clip_name2", t5xxl)
+
+    if text_encoder:
+        for _nid, node in _find_nodes_by_class(workflow, "CLIPLoader"):
+            inputs = node.get("inputs") or {}
+            current = inputs.get("clip_name") if isinstance(inputs.get("clip_name"), str) else ""
+            clip_type = str(inputs.get("type") or "")
+            if not (_same_weight_family(current, text_encoder) or "flux" in clip_type):
+                continue
+            _set_input(node, "clip_name", text_encoder)
+            if "flux" in str(text_encoder).lower() or clip_type.startswith("flux"):
+                _set_input(node, "type", "flux2")
 
     if vae_name:
         for _nid, node in _find_nodes_by_class(workflow, "VAELoader"):

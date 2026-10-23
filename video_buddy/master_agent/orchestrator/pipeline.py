@@ -415,6 +415,32 @@ def _apply_rainey1_plan(
     return request, width, height, latent_frames, negative_prompt, variant
 
 
+def _retarget_flux_ltx(
+    variant: Optional[str],
+    request: str,
+    *,
+    dry_run: bool,
+    image_name: Optional[str],
+    seed: Optional[int],
+    width: int,
+    height: int,
+) -> tuple[Optional[str], Optional[str]]:
+    """``flux_ltx_i2v`` stills are Klein 4B; the clip is ``ltx25_t2v_i2v``."""
+    if variant != "flux_ltx_i2v":
+        return variant, image_name
+    from master_agent.orchestrator.flux_ltx import begin
+
+    video, image = begin(
+        request,
+        dry_run=dry_run,
+        image_name=image_name,
+        seed=seed,
+        width=width,
+        height=height,
+    )
+    return video, image
+
+
 def run_pipeline(
     request: str,
     *,
@@ -476,6 +502,15 @@ def run_pipeline(
         height=height,
         latent_frames=latent_frames,
         negative_prompt=negative_prompt,
+    )
+    variant, image_name = _retarget_flux_ltx(
+        variant,
+        request,
+        dry_run=dry_run,
+        image_name=image_name,
+        seed=seed,
+        width=width,
+        height=height,
     )
     result = PipelineResult(run_id, request=request)
     result.heartmula = dict(heartmula or {})
@@ -1203,6 +1238,15 @@ def dry_run_pipeline(
         latent_frames=latent_frames,
         negative_prompt=negative_prompt,
         announce=latent_frames is None,
+    )
+    variant, image_name = _retarget_flux_ltx(
+        variant,
+        request,
+        dry_run=True,
+        image_name=image_name,
+        seed=seed,
+        width=width,
+        height=height,
     )
     from master_agent.comfy.partner_pointers import route_pack_c
 

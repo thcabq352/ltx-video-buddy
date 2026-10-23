@@ -482,6 +482,8 @@ def test_apply_summary_reports_needs_you(env, monkeypatch, capsys):
     monkeypatch.setattr(ai, "step_comfy_packages", lambda apply, **k: ai.StepResult("Comfy Python packages", ai.SKIPPED, "importable"))
     monkeypatch.setattr(ai, "step_accel", lambda apply, **k: ai.StepResult("Triton + SageAttention", ai.NONFATAL, "x", required=False))
     monkeypatch.setattr(ai, "step_weights", lambda apply, **k: ai.StepResult("LTX 2.3 weights", ai.OK, "ready"))
+    monkeypatch.setattr(ai, "step_vram_profile", lambda apply, **k: ai.StepResult("VRAM profile", ai.OK, "noted", required=False))
+    monkeypatch.setattr(ai, "step_klein_4b", lambda apply, **k: ai.StepResult("Klein 4B stills", ai.OK, "ready", required=False))
     monkeypatch.setattr(ai, "verify_rows", lambda: [{"ok": False, "name": "ffmpeg", "detail": "missing"}])
     from master_agent.models import llm_gguf
 
@@ -565,6 +567,8 @@ def test_full_yes_run_never_invokes_ollama_and_skipped_models_do_not_block(env, 
     monkeypatch.setattr(ai, "step_comfy_packages", lambda apply, **k: ai.StepResult("Comfy Python packages", ai.SKIPPED, "importable"))
     monkeypatch.setattr(ai, "step_accel", lambda apply, **k: ai.StepResult("Triton + SageAttention", ai.SKIPPED, "cpu", required=False))
     monkeypatch.setattr(ai, "step_weights", lambda apply, **k: ai.StepResult("LTX 2.3 weights", ai.OK, "ready"))
+    monkeypatch.setattr(ai, "step_vram_profile", lambda apply, **k: ai.StepResult("VRAM profile", ai.OK, "noted", required=False))
+    monkeypatch.setattr(ai, "step_klein_4b", lambda apply, **k: ai.StepResult("Klein 4B stills", ai.OK, "ready", required=False))
     monkeypatch.setattr(ai, "verify_rows", lambda: [{"ok": True, "name": "ffmpeg", "detail": "ok"}])
     from master_agent.models import llm_gguf
 
@@ -643,6 +647,8 @@ def test_llm_download_failure_blocks_ready(env, monkeypatch, capsys):
     monkeypatch.setattr(ai, "step_comfy_packages", lambda apply, **k: ai.StepResult("Comfy Python packages", ai.SKIPPED, "importable"))
     monkeypatch.setattr(ai, "step_accel", lambda apply, **k: ai.StepResult("Triton + SageAttention", ai.SKIPPED, "cpu", required=False))
     monkeypatch.setattr(ai, "step_weights", lambda apply, **k: ai.StepResult("LTX 2.3 weights", ai.OK, "ready"))
+    monkeypatch.setattr(ai, "step_vram_profile", lambda apply, **k: ai.StepResult("VRAM profile", ai.OK, "noted", required=False))
+    monkeypatch.setattr(ai, "step_klein_4b", lambda apply, **k: ai.StepResult("Klein 4B stills", ai.OK, "ready", required=False))
     monkeypatch.setattr(ai, "step_llamacpp", lambda apply, **k: ai.StepResult("llama.cpp", ai.OK, "ready", required=False))
     monkeypatch.setattr(ai, "step_env_file", lambda apply: ai.StepResult(".env", ai.SKIPPED, "present", required=False))
 

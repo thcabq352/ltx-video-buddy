@@ -4806,7 +4806,7 @@
       "title": "Model download links",
       "properties": {},
       "widgets_values": [
-        "Flux2-Klein-9B-consistency-V2.safetensors\n\n[https://huggingface.co/dx8152/Flux2-Klein-9B-Consistency/blob/main/Flux2-Klein-9B-consistency-V2.safetensors](https://huggingface.co/dx8152/Flux2-Klein-9B-Consistency/blob/main/Flux2-Klein-9B-consistency-V2.safetensors)\n\n📁 ComfyUI/models/loras"
+        "Flux2-Klein-9B-consistency-V2.safetensors\n\n[(not downloaded; FLUX.2 [klein] 4B is the only Flux)]((not downloaded; FLUX.2 [klein] 4B is the only Flux))\n\n📁 ComfyUI/models/loras"
       ],
       "color": "#222",
       "bgcolor": "#000"
@@ -6795,7 +6795,7 @@
       "title": "Model download links",
       "properties": {},
       "widgets_values": [
-        "flux-2-klein-9B-360-erp-outpaint-lora_V1.safetensors\n\n[https://huggingface.co/nomadoor/flux-2-klein-9B-360-erp-outpaint-lora/blob/main/flux-2-klein-9B-360-erp-outpaint-lora_V1.safetensors](https://huggingface.co/nomadoor/flux-2-klein-9B-360-erp-outpaint-lora/blob/main/flux-2-klein-9B-360-erp-outpaint-lora_V1.safetensors)\n\n📁 ComfyUI/models/loras"
+        "flux-2-klein-9B-360-erp-outpaint-lora_V1.safetensors\n\n[(not downloaded; FLUX.2 [klein] 4B is the only Flux)]((not downloaded; FLUX.2 [klein] 4B is the only Flux))\n\n📁 ComfyUI/models/loras"
       ],
       "color": "#222",
       "bgcolor": "#000"
@@ -6819,7 +6819,7 @@
       "title": "Model download links",
       "properties": {},
       "widgets_values": [
-        "flux-2-klein-9b-fp8.safetensors\n\n[https://huggingface.co/black-forest-labs/FLUX.2-klein-9b-fp8/blob/main/flux-2-klein-9b-fp8.safetensors](https://huggingface.co/black-forest-labs/FLUX.2-klein-9b-fp8/blob/main/flux-2-klein-9b-fp8.safetensors)\n\n📁 ComfyUI/models/diffusion_models"
+        "flux-2-klein-4b-fp8.safetensors\n\n[https://huggingface.co/black-forest-labs/FLUX.2-klein-4b-fp8/blob/main/flux-2-klein-4b-fp8.safetensors](https://huggingface.co/black-forest-labs/FLUX.2-klein-4b-fp8/blob/main/flux-2-klein-4b-fp8.safetensors)\n\n📁 ComfyUI/models/diffusion_models"
       ],
       "color": "#222",
       "bgcolor": "#000"
@@ -6856,7 +6856,7 @@
         "Node name for S&R": "UNETLoader"
       },
       "widgets_values": [
-        "flux-2-klein-9b-fp8.safetensors",
+        "flux-2-klein-4b-fp8.safetensors",
         "default"
       ],
       "color": "#e7e7e7",
@@ -6990,7 +6990,7 @@
         }
       },
       "widgets_values": [
-        "qwen_3_8b_fp8mixed.safetensors",
+        "qwen_3_4b_fp4_flux2.safetensors",
         "flux2",
         "default"
       ],
@@ -7017,7 +7017,7 @@
       "title": "Model download links",
       "properties": {},
       "widgets_values": [
-        "qwen_3_8b_fp8mixed.safetensors\n\n[https://huggingface.co/Comfy-Org/vae-text-encorder-for-flux-klein-9b/blob/main/split_files/text_encoders/qwen_3_8b_fp8mixed.safetensors](https://huggingface.co/Comfy-Org/vae-text-encorder-for-flux-klein-9b/blob/main/split_files/text_encoders/qwen_3_8b_fp8mixed.safetensors)\n\n📁 ComfyUI/models/text_encoders"
+        "qwen_3_4b_fp4_flux2.safetensors\n\n[https://huggingface.co/Comfy-Org/Flux-2-Klein-4B/blob/main/split_files/text_encoders/qwen_3_4b_fp4_flux2.safetensors](https://huggingface.co/Comfy-Org/Flux-2-Klein-4B/blob/main/split_files/text_encoders/qwen_3_4b_fp4_flux2.safetensors)\n\n📁 ComfyUI/models/text_encoders"
       ],
       "color": "#222",
       "bgcolor": "#000"

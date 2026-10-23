@@ -64,7 +64,7 @@ is hours. Allow ~900s per call.
 | `comfy attach` | Apply previs `buddy.comfy.attach/v1` / WorkflowPatchPlan JSON. Default dry-run (patch + `/object_info`). `--submit` POSTs `/prompt`. |
 | `run "BRIEF"` | Director pipeline. `--dry-run` plan+lint only. `--self-improve-dry` closes judge→revise→rejudge (quality_bar a/c/d, no Comfy). `--attach RECIPE.json` patches a previs pack. `--no-interview` for unattended. `--variant` forces a catalog slug. Every clip writes `shot-N.buddy.json` + run-row ClipProvenance. |
 | `download-models` | List confirmed-missing slots. `--ltx25` / `--h3` / `--heartmula` / `--wan` / … HeartMuLa codec id and consent flags: repo `docs/WEIGHTS.md`. |
-| `download-flux` | One-time Flux fp8 weights (~17GB). |
+| `download-flux` | FLUX.2 [klein] 4B stills (Apache 2.0, the only Flux). |
 | `validate` | One file or `--all`. `--offline` / `--strict` (illegal LTX frames = ERROR). |
 | `scan-models` | Scan `models/` → inventory. |
 | `fetch-object-info` | Cache Comfy `/object_info` to `state/`. |

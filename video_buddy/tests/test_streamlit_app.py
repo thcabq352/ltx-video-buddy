@@ -166,7 +166,14 @@ def test_job_board_runs_one_job_at_a_time():
         gate.wait(5)
         return {"status": "busy"}
 
-    board = app.JobBoard()
+    from concurrent.futures import ThreadPoolExecutor
+
+    pool = ThreadPoolExecutor(max_workers=1)
+
+    def thread_spawn(fn, args):
+        return pool.submit(fn, **args)
+
+    board = app.JobBoard(spawn=thread_spawn)
     first = board.submit(fake_create_video, {"request": "a"})
     assert first and board.running() is board.get(first)
     assert board.submit(fake_create_video, {"request": "b"}) is None

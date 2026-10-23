@@ -15,7 +15,7 @@ Commands:
   brief               Interview-only: rough idea -> creative brief (--go to generate)
   character create|list   CCC stage: bible -> Flux sheet -> captioned dataset
   lora setup|train|validate  Flux LoRA training via ai-toolkit + vision validation
-  download-flux       One-time Flux fp8 weights download (~17GB)
+  download-flux       FLUX.2 [klein] 4B stills (Apache 2.0, the only Flux)
   inventory           List discovered weights (paths + roles) before doctor
   download-models     Scan packs; --scan-only / --use-existing / --download; --yes to fetch
   models manifest     Print the capability-grouped selector catalog

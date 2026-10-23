@@ -1,9 +1,12 @@
-"""Download Flux / LTX 2.5 weights into models/ (idempotent, consent-gated).
+"""Download Klein 4B / LTX 2.5 weights into models/ (idempotent, consent-gated).
 
-Flux t2i set (16GB-friendly fp8, non-gated repos):
-  - Comfy-Org/flux1-dev / flux1-dev-fp8.safetensors     -> models/diffusion_models/
-  - comfyanonymous/flux_text_encoders / clip_l + t5xxl  -> models/text_encoders/
-  - models/vae/ae.safetensors is expected to exist already (warn only).
+FLUX.2 [klein] 4B (Apache 2.0, ungated) is the only Flux stills pack:
+  - black-forest-labs/FLUX.2-klein-4b-fp8 / flux-2-klein-4b-fp8.safetensors
+  - Comfy-Org/Flux-2-Klein-4B text encoder qwen_3_4b_fp4_flux2.safetensors
+  - Comfy-Org/Flux-2-Klein-4B VAE flux2-vae.safetensors
+
+Flux.1 dev/schnell/pro/fill/depth/canny/kontext, Klein 9B, and FLUX.3
+are not offered.
 
 LTX 2.5 official bf16 split pack lives in ``master_agent.models.weights``
 (Hub paths under ``Lightricks/LTX-2.5``). Never auto-download those gated
@@ -31,22 +34,6 @@ import os
 import shutil
 from pathlib import Path
 from typing import Callable
-
-from master_agent.config import (
-    FLUX_CLIP_L,
-    FLUX_T5XXL,
-    FLUX_UNET,
-    FLUX_VAE,
-    MODELS_DIR,
-)
-
-# (repo_id, filename, destination subfolder under MODELS_DIR)
-FLUX_FILES: list[tuple[str, str, str]] = [
-    ("Comfy-Org/flux1-dev", FLUX_UNET, "diffusion_models"),
-    ("comfyanonymous/flux_text_encoders", FLUX_CLIP_L, "text_encoders"),
-    ("comfyanonymous/flux_text_encoders", FLUX_T5XXL, "text_encoders"),
-]
-
 
 class DownloadDestinationError(RuntimeError):
     """Pack download destination is outside Buddy ``MODELS_DIR`` or inside an attached tree."""
@@ -258,37 +245,8 @@ def download_hub_file(
 
 
 def download_flux_weights(progress: Callable[[str], None] = print) -> list[Path]:
-    """Ensure all Flux weights are present under models/. Returns their paths."""
-    paths: list[Path] = []
-    for repo_id, filename, sub in FLUX_FILES:
-        dest = MODELS_DIR / sub / filename
-        paths.append(
-            download_hub_file(
-                repo_id=repo_id,
-                repo_filename=filename,
-                dest=dest,
-                progress=progress,
-            )
-        )
+    """Download FLUX.2 [klein] 4B into MODELS_DIR. Flux.1 is not offered."""
+    from master_agent.models.klein import LICENSE_LINE, download_klein_4b
 
-    vae = MODELS_DIR / "vae" / FLUX_VAE
-    found_vae = vae if vae.is_file() and vae.stat().st_size > 0 else None
-    if found_vae is None:
-        try:
-            from master_agent.models.weights import find_weight_file
-
-            found_vae = find_weight_file(FLUX_VAE)
-        except Exception:
-            found_vae = None
-    if found_vae is not None:
-        progress(
-            f"SKIP download of {FLUX_VAE} — local file found at {found_vae} "
-            "(not re-downloading)"
-        )
-        paths.append(found_vae)
-    else:
-        progress(
-            f"WARN {vae} not found; place {FLUX_VAE} in models/vae manually "
-            "(not downloaded automatically)"
-        )
-    return paths
+    progress(LICENSE_LINE)
+    return download_klein_4b(progress)

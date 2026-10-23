@@ -50,10 +50,10 @@ class TestFluxVariant(unittest.TestCase):
         self.assertEqual(node["inputs"]["text"], "a red cube on a table")
 
     def test_size_lands_on_empty_latent(self):
-        node = self._node("EmptyLatentImage")
+        node = self._node("EmptyFlux2LatentImage")
         self.assertEqual(node["inputs"]["width"], self.meta["width"])
         self.assertEqual(node["inputs"]["height"], self.meta["height"])
-        # EmptyLatentImage must not get video frame-count inputs
+        # Still latents must not get video frame-count inputs
         self.assertNotIn("length", node["inputs"])
 
     def test_seed_steps_land_on_ksampler(self):
@@ -61,19 +61,19 @@ class TestFluxVariant(unittest.TestCase):
         self.assertEqual(node["inputs"]["seed"], 123)
         self.assertEqual(node["inputs"]["steps"], 20)
 
-    def test_clip_names_land_on_dual_clip_loader(self):
-        node = self._node("DualCLIPLoader")
-        self.assertEqual(node["inputs"]["clip_name1"], "clip_l.safetensors")
-        self.assertEqual(node["inputs"]["clip_name2"], "t5xxl_fp8_e4m3fn.safetensors")
+    def test_clip_name_lands_on_clip_loader(self):
+        node = self._node("CLIPLoader")
+        self.assertEqual(node["inputs"]["clip_name"], "qwen_3_4b_fp4_flux2.safetensors")
+        self.assertEqual(node["inputs"]["type"], "flux2")
 
     def test_vae_name_lands_on_vae_loader(self):
         node = self._node("VAELoader")
-        self.assertEqual(node["inputs"]["vae_name"], "ae.safetensors")
+        self.assertEqual(node["inputs"]["vae_name"], "flux2-vae.safetensors")
 
     def test_unet_loader_gets_resolved_checkpoint(self):
         node = self._node("UNETLoader")
-        self.assertEqual(self.meta["checkpoint"], "flux1-dev-fp8.safetensors")
-        self.assertEqual(node["inputs"]["unet_name"], "flux1-dev-fp8.safetensors")
+        self.assertEqual(self.meta["checkpoint"], "flux-2-klein-4b-fp8.safetensors")
+        self.assertEqual(node["inputs"]["unet_name"], "flux-2-klein-4b-fp8.safetensors")
 
 
 class TestWan22Variant(unittest.TestCase):

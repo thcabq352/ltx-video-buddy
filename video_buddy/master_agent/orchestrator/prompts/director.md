@@ -17,7 +17,7 @@ Every slug in `allowed_variants` is a real `workflows/manifests.yaml` entry.
 ## Variants — Wan / Flux / Krea / stills
 - `wan22` / `vb_wan22_vid` — Wan 2.2 two-stage T2V (photoreal / film grain).
   Prefer `wan22` (has a field map).
-- `flux` — Flux.1-dev text-to-image / character sheets.
+- `flux` — FLUX.2 [klein] 4B text-to-image / character sheets.
 - `krea2_img` / `vb_krea2_img` — Krea-2 image generation. Prefer `krea2_img`.
 - `vb_ideogram` — Ideogram API stills (needs an API key).
 - `vb_qwen_edit_360` — Qwen-Image-Edit 360 turnaround / equirectangular.

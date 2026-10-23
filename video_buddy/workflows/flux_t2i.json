@@ -2,24 +2,23 @@
   "1": {
     "class_type": "UNETLoader",
     "inputs": {
-      "unet_name": "flux1-dev-fp8.safetensors",
-      "weight_dtype": "fp8_e4m3fn"
+      "unet_name": "flux-2-klein-4b-fp8.safetensors",
+      "weight_dtype": "default"
     },
     "_meta": { "title": "Load Diffusion Model" }
   },
   "2": {
-    "class_type": "DualCLIPLoader",
+    "class_type": "CLIPLoader",
     "inputs": {
-      "clip_name1": "clip_l.safetensors",
-      "clip_name2": "t5xxl_fp8_e4m3fn.safetensors",
-      "type": "flux"
+      "clip_name": "qwen_3_4b_fp4_flux2.safetensors",
+      "type": "flux2"
     },
-    "_meta": { "title": "DualCLIPLoader" }
+    "_meta": { "title": "CLIPLoader" }
   },
   "3": {
     "class_type": "VAELoader",
     "inputs": {
-      "vae_name": "ae.safetensors"
+      "vae_name": "flux2-vae.safetensors"
     },
     "_meta": { "title": "Load VAE" }
   },
@@ -35,18 +34,18 @@
     "class_type": "FluxGuidance",
     "inputs": {
       "conditioning": ["10", 0],
-      "guidance": 3.5
+      "guidance": 4.0
     },
     "_meta": { "title": "FluxGuidance" }
   },
   "20": {
-    "class_type": "EmptyLatentImage",
+    "class_type": "EmptyFlux2LatentImage",
     "inputs": {
       "width": 1024,
       "height": 1024,
       "batch_size": 1
     },
-    "_meta": { "title": "Empty Latent Image" }
+    "_meta": { "title": "Empty Flux 2 Latent" }
   },
   "50": {
     "class_type": "KSampler",
@@ -56,7 +55,7 @@
       "negative": ["10", 0],
       "latent_image": ["20", 0],
       "seed": 0,
-      "steps": 20,
+      "steps": 4,
       "cfg": 1.0,
       "sampler_name": "euler",
       "scheduler": "simple",

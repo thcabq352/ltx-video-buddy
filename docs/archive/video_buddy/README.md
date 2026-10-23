@@ -498,7 +498,7 @@ fp8 weights, 1024x1024) -> **vision-curated** for identity consistency
 (+500 steps -> lr 2e-4 -> rank 32 -> +1024 res, max 5 attempts).
 
 ```bash
-python -m master_agent download-flux            # one-time ~17GB fp8 weights
+python -m master_agent download-flux            # FLUX.2 [klein] 4B, the only Flux
 python -m master_agent lora setup               # one-time ai-toolkit clone + venv (long)
 python -m master_agent character create "a grizzled dwarven smith, braided beard"
 python -m master_agent character create "..." --train   # sheet + train + validate loop
@@ -509,7 +509,7 @@ python -m master_agent lora validate <name> [--attempt N]
 
 Notes:
 
-- Flux weights come from the non-gated `Comfy-Org/flux1-dev` +
+- Flux weights come from the non-gated `black-forest-labs/FLUX.2-klein-4b-fp8` +
   `comfyanonymous/flux_text_encoders` HF repos into `models/` (shared by
   ComfyUI inference and ai-toolkit training; `ae.safetensors` already ships).
 - ai-toolkit lives in `ai-toolkit/` with its **own** venv (`ai-toolkit/venv`)

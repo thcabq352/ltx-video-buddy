@@ -108,22 +108,39 @@ class ComfyClient:
         if blocked:
             raise ComfyClientError(blocked)
         reject_tiny_vae_on_tiled_decode(workflow)
-        body = {"prompt": workflow, "client_id": self.client_id}
-        r = self._http().post(self._url("/prompt"), json=body, timeout=self.timeout)
-        if r.status_code >= 400:
-            detail = r.text
-            try:
-                detail = json.dumps(r.json(), indent=2)
-            except Exception:
-                pass
-            raise ComfyClientError(f"ComfyUI /prompt failed ({r.status_code}): {detail}")
-        data = r.json()
-        if "error" in data:
-            raise ComfyClientError(f"ComfyUI rejected prompt: {data['error']}")
-        prompt_id = data.get("prompt_id")
-        if not prompt_id:
-            raise ComfyClientError(f"No prompt_id in response: {data}")
-        return prompt_id
+        from master_agent.first_gate import FirstGateBlocked, assert_submit_allowed
+        from master_agent.gpu_seat import SeatRefused, acquire_for_submit, release_after_render
+
+        try:
+            assert_submit_allowed(workflow)
+        except FirstGateBlocked as exc:
+            raise ComfyClientError(str(exc)) from exc
+        try:
+            acquire_for_submit(purpose="ComfyUI render")
+        except SeatRefused as exc:
+            raise ComfyClientError(str(exc)) from exc
+        seated = True
+        try:
+            body = {"prompt": workflow, "client_id": self.client_id}
+            r = self._http().post(self._url("/prompt"), json=body, timeout=self.timeout)
+            if r.status_code >= 400:
+                detail = r.text
+                try:
+                    detail = json.dumps(r.json(), indent=2)
+                except Exception:
+                    pass
+                raise ComfyClientError(f"ComfyUI /prompt failed ({r.status_code}): {detail}")
+            data = r.json()
+            if "error" in data:
+                raise ComfyClientError(f"ComfyUI rejected prompt: {data['error']}")
+            prompt_id = data.get("prompt_id")
+            if not prompt_id:
+                raise ComfyClientError(f"No prompt_id in response: {data}")
+            seated = False
+            return prompt_id
+        finally:
+            if seated:
+                release_after_render()
 
     def get_history(self, prompt_id: str) -> dict[str, Any]:
         r = self._http().get(self._url(f"/history/{prompt_id}"), timeout=self.timeout)
@@ -219,6 +236,20 @@ class ComfyClient:
         timeout: float = JOB_TIMEOUT_S,
     ) -> dict[str, Any]:
         """Poll history until the prompt finishes. Returns history entry."""
+        from master_agent.gpu_seat import release_after_render
+
+        try:
+            return self._wait_for_prompt_body(prompt_id, poll_interval=poll_interval, timeout=timeout)
+        finally:
+            release_after_render()
+
+    def _wait_for_prompt_body(
+        self,
+        prompt_id: str,
+        *,
+        poll_interval: float,
+        timeout: float,
+    ) -> dict[str, Any]:
         deadline = time.time() + timeout
         while time.time() < deadline:
             hist = self.get_history(prompt_id)
