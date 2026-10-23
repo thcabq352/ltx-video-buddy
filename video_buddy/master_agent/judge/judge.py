@@ -976,7 +976,9 @@ def _llm_judge(
         payload["duration_cap_s"] = context.get("duration_cap_s")
         payload["duration_s"] = context.get("duration_s")
     try:
-        llm = get_llm(temperature=0.2)
+        from master_agent.judge.local_look import look_provider_spec
+
+        llm = get_llm(temperature=0.2, provider=look_provider_spec())
         resp = llm.invoke(
             [
                 SystemMessage(content=system),

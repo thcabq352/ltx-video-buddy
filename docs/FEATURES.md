@@ -106,7 +106,7 @@ Comfy Voronoi and Perlin plates are retired. This CPU path is the one that remai
 
 Movie Builder is shot-by-shot LTX 2.3 (Flux stills, per-shot video and audio, voice sample, assembler). The shot guide stays next to the graphs: [`video_buddy/workflows/260507_VIDEO-BUDDY_MOVIE-BUILDER_GUIDE.md`](../video_buddy/workflows/260507_VIDEO-BUDDY_MOVIE-BUILDER_GUIDE.md). It is a heavy graph. See the pack table in [Weights](WEIGHTS.md#pack-table).
 
-CCC: `character create` writes a bible, a Flux sheet, and a captioned dataset. `--train` chains Flux LoRA via a separate ai-toolkit venv (`lora setup`). Rank 16, 1500 steps, resolutions 512 and 768 on a 16GB card. Expect hours. `download-flux` is the one-time Flux fp8 pull (~17GB) and is a different consent from the LTX ask.
+CCC: `character create` writes a bible, a Flux sheet, and a captioned dataset. `--train` chains Flux LoRA via a separate ai-toolkit venv (`lora setup`). Rank 16, 1500 steps, resolutions 512 and 768 on a 16GB card. Expect hours. `download-flux` pulls FLUX.2 [klein] 4B (Apache 2.0, the only Flux) and is a different consent from the LTX ask.
 
 `--upscale seedvr2` is the shipped post-stage (`workflows/upscale_seedvr2_api.json`). `--upscale rtx` needs a gitignored template and raises `FileNotFoundError` on a clean clone. The audit row for RTX stays unwired.
 

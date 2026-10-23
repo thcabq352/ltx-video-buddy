@@ -226,13 +226,15 @@ def test_wan_and_flux_download_targets_are_attested_gguf():
     assert wan_high.repo_id == "QuantStack/Wan2.2-T2V-A14B-GGUF"
     assert wan_high.repo_filename == "HighNoise/Wan2.2-T2V-A14B-HighNoise-Q4_K_S.gguf"
     assert wan_low.repo_filename == "LowNoise/Wan2.2-T2V-A14B-LowNoise-Q4_K_S.gguf"
-    assert flux.filename == "flux1-dev-Q4_K_S.gguf"
-    assert flux.repo_id == "city96/FLUX.1-dev-gguf"
+    assert flux.filename == "flux-2-klein-4b-fp8.safetensors"
+    assert flux.repo_id == "black-forest-labs/FLUX.2-klein-4b-fp8"
     assert pack_kind(wan_high.filename) == "gguf_q4"
-    assert pack_kind(flux.filename) == "gguf_q4"
-    # fp8 remains an accepted local fallback, not the download default
+    assert pack_kind(flux.filename) == "fp8"
+    # fp8 is the Klein 4B download. bf16 counts when it is already on disk.
     assert any("fp8" in n for n in wan_high.candidates)
     assert any("fp8" in n for n in flux.candidates)
+    assert any(n == "flux-2-klein-4b.safetensors" for n in flux.candidates)
+    assert not any("flux1" in n for n in flux.candidates)
     light = WEIGHT_FILES["wan22_lightx2v"]
     assert "lightx2v" in light.filename.lower()
     assert light.mandatory is False

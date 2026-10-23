@@ -13,7 +13,7 @@ def cmd_download_flux(args: argparse.Namespace) -> int:
     except Exception as e:
         print(f"FAIL  {e}")
         return 1
-    print(f"OK    {len(paths)} flux weight file(s) ready")
+    print(f"OK    {len(paths)} Klein 4B weight file(s) ready")
     return 0
 
 

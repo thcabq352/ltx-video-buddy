@@ -86,9 +86,9 @@ seed changes often fix voice/lip-sync without losing the visual.
 
 ## Advanced (Patreon): 360 environments, shot-reverse-shot
 
-- 360 environment generation — prompt or load a reference; runs Flux 2 Klein
-  with `flux-2-klein-9B-360-erp-outpaint-lora` to produce a seamless 360°
-  equirectangular image. The Panorama Viewer node previews it in ComfyUI.
+- 360 environment generation — prompt or load a reference. The still
+  generator is FLUX.2 [klein] 4B (Apache 2.0). The Klein 9B 360 LoRA is not
+  downloaded. The Panorama Viewer node previews the image in ComfyUI.
   The *Load Input Image* toggle switches between an existing reference and the
   outpaint-from-prompt pipeline.
 - Shot-reverse-shot via Environment Crop (Olm DragCrop) — crop background
@@ -114,16 +114,10 @@ preview-only and soft-bypasses when unregistered.
 
 ## Required models (filenames must match loader nodes)
 
-Image generation (Flux 2 Klein, 9B default):
-- `flux-2-klein-9b-fp8` → models/diffusion_models/
-- `Flux2-Klein-9B-consistency-V2` (LoRA) → models/loras/
-- `flux2-vae` → models/vae/
-- `qwen_3_8b_fp8mixed` (text encoder) → models/text_encoders/
-
-4B variant (smaller, more permissive license, faster, lower quality) — swap both:
+Image generation (FLUX.2 [klein] 4B is the only Flux):
 - `flux-2-klein-4b-fp8` → models/diffusion_models/
+- `flux2-vae` → models/vae/
 - `qwen_3_4b_fp4_flux2` (text encoder) → models/text_encoders/
-- advanced 360: also swap LoRA to `flux-2-klein-4B-360-erp-outpaint-lora_V1`
 
 Video + audio (LTX 2.3):
 - `ltx-2.3-22b-dev_transformer_only_fp8_scaled` → models/diffusion_models/
@@ -134,9 +128,6 @@ Video + audio (LTX 2.3):
 - `ltx-2.3_text_projection_bf16` → models/text_encoders/
 - `LTX23_video_vae_bf16` → models/vae/
 - `LTX23_audio_vae_bf16` → models/vae/
-
-Advanced only:
-- `flux-2-klein-9B-360-erp-outpaint-lora_V1` → models/loras/
 
 Low-VRAM alternative:
 - `LTX-2.3-dev-Q4_K_S.gguf` → models/diffusion_models/ (swap the checkpoint

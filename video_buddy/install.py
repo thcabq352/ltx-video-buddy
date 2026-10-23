@@ -30,7 +30,15 @@ MIN_PY = (3, 10)
 ROOT = Path(__file__).resolve().parent
 VENV = ROOT / ".venv"
 REQ = ROOT / "requirements.txt"
-AUTOMATIC_INSTALL_FLAGS = ("--yes", "--preflight-only", "--dry-run", "--skip-weights", "--skip-sage", "--skip-llm")
+AUTOMATIC_INSTALL_FLAGS = (
+    "--yes",
+    "--preflight-only",
+    "--dry-run",
+    "--skip-weights",
+    "--skip-sage",
+    "--skip-llm",
+    "--klein-4b",
+)
 
 
 def _say(msg: str = "") -> None:

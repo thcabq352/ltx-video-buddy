@@ -21,9 +21,15 @@ MODELS = os.path.join(ROOT, "models")
 # (repo_id, repo_filename, dest_path_relative_to_project_root)
 DOWNLOADS = [
     # --- text encoders ---
-    ("Comfy-Org/flux2-klein-9B",
-     "split_files/text_encoders/qwen_3_8b_fp8mixed.safetensors",
-     "models/text_encoders/qwen_3_8b_fp8mixed.safetensors"),
+    ("black-forest-labs/FLUX.2-klein-4b-fp8",
+     "flux-2-klein-4b-fp8.safetensors",
+     "models/diffusion_models/flux-2-klein-4b-fp8.safetensors"),
+    ("Comfy-Org/Flux-2-Klein-4B",
+     "split_files/text_encoders/qwen_3_4b_fp4_flux2.safetensors",
+     "models/text_encoders/qwen_3_4b_fp4_flux2.safetensors"),
+    ("Comfy-Org/Flux-2-Klein-4B",
+     "split_files/vae/flux2-vae.safetensors",
+     "models/vae/flux2-vae.safetensors"),
     ("Comfy-Org/Ideogram-4",
      "text_encoders/qwen3vl_8b_fp8_scaled.safetensors",
      "models/text_encoders/qwen3vl_8b_fp8_scaled.safetensors"),
@@ -145,9 +151,7 @@ DOWNLOADS = [
      "Z-Image-Turbo-Fun-Controlnet-Union-2.1-2601-8steps.safetensors",
      "models/model_patches/Z-Image-Turbo-Fun-Controlnet-Union-2.1-2601-8steps.safetensors"),
     # --- BATCH4: Mickmumpitz MOVIE-BUILDER workflow (260507) ---
-    ("nomadoor/flux-2-klein-9B-360-erp-outpaint-lora",
-     "flux-2-klein-9B-360-erp-outpaint-lora_V1.safetensors",
-     "models/loras/flux-2-klein-9B-360-erp-outpaint-lora_V1.safetensors"),
+    # Klein 9B 360 LoRA is not downloaded. Klein 4B is the only Flux.
     ("QuantStack/LTX-2.3-GGUF",
      "LTX-2.3-dev/LTX-2.3-dev-Q4_K_S.gguf",
      "models/diffusion_models/gguf/LTX-2.3-dev-Q4_K_S.gguf"),

@@ -229,11 +229,11 @@ def test_resolve_weight_finds_flux_in_hf_cache(tmp_path: Path, monkeypatch):
     hub = tmp_path / "hf-home" / "hub"
     dest = _write(
         hub
-        / "models--city96--FLUX.1-dev-gguf"
+        / "models--black-forest-labs--FLUX.2-klein-4b-fp8"
         / "snapshots"
         / "abc"
-        / "flux1-dev-Q4_K_S.gguf",
-        b"gguf",
+        / "flux-2-klein-4b-fp8.safetensors",
+        b"klein",
     )
     monkeypatch.setenv("HF_HOME", str(tmp_path / "hf-home"))
     monkeypatch.delenv("HUGGINGFACE_HUB_CACHE", raising=False)

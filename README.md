@@ -63,4 +63,4 @@ Thanks to Jason Rainey (Rainey1, @jasonr.tv). He has been a collaborator since c
 
 ## License
 
-Video Buddy is an orchestration layer. LTX, Flux, Wan, Qwen, MiniMax, and the other models it drives are third-party works under their own licenses. Several restrict commercial use. LTX 2.5 Hub packs are gated. Selected workflow designs credit [Mickmumpitz](https://mickmumpitz.ai). Review each model's license before commercial use. This repository contains no model weights.
+Video Buddy is an orchestration layer. LTX, Flux, Wan, Qwen, MiniMax, and the other models it drives are third-party works under their own licenses. Several restrict commercial use. LTX 2.5 Hub packs are gated. FLUX.2 [klein] 4B is Apache 2.0, ungated, and the only Flux. Selected workflow designs credit [Mickmumpitz](https://mickmumpitz.ai). Review each model's license before commercial use. This repository contains no model weights.

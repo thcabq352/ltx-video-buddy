@@ -72,6 +72,11 @@ def main(argv: list[str] | None = None) -> int:
     )
     p.add_argument("--skip-sage", action="store_true", help="do not install Triton / SageAttention")
     p.add_argument("--skip-llm", action="store_true", help="do not install llama.cpp or look for local LLM models")
+    p.add_argument(
+        "--klein-4b",
+        action="store_true",
+        help="download FLUX.2 [klein] 4B stills (also the default; no 9B and no FLUX.3)",
+    )
     p.set_defaults(func=cmd_automatic_install)
 
     p = sub.add_parser(
@@ -222,7 +227,7 @@ def main(argv: list[str] | None = None) -> int:
                    help="storyboard LLM panel: preset (default|local | grok | "
                         "grok+local|both | grok+claude | duo) or comma list")
     p.add_argument("--panel-judge",
-                   help="provider that picks the winning storyboard (default: env PANEL_JUDGE or ollama; llamacpp[:model] ok)")
+                   help="provider that picks the winning storyboard (default: env PANEL_JUDGE or llamacpp; llamacpp[:model] ok)")
     p.add_argument("--max-full-judge-rounds", type=int, default=None,
                    help="full-video judge re-gen budget (multi-segment)")
     p.add_argument("--dry-run", action="store_true",
@@ -530,8 +535,22 @@ def main(argv: list[str] | None = None) -> int:
     tr_p.add_argument("--dry-run", action="store_true", help="print the plan; do not import heartlib")
     tr_p.set_defaults(func=cmd_heartmula)
 
-    p = sub.add_parser("download-flux", help="download Flux fp8 weights (~17GB, one-time)")
+    p = sub.add_parser(
+        "download-flux",
+        help="download FLUX.2 [klein] 4B stills (Apache 2.0; the only Flux)",
+    )
     p.set_defaults(func=cmd_download_flux)
+
+    def _cmd_first_gate(gate_args: argparse.Namespace) -> int:
+        from master_agent.first_gate import command
+
+        return command(gate_args)
+
+    p = sub.add_parser(
+        "first-gate",
+        help="one Klein 4B still with the local judge, then one short LTX clip",
+    )
+    p.set_defaults(func=_cmd_first_gate)
 
     p = sub.add_parser(
         "download-models",
@@ -553,7 +572,18 @@ def main(argv: list[str] | None = None) -> int:
     p.add_argument("--vace", action="store_true", help="VACE Skyreels Q4_K_M GGUF")
     p.add_argument("--krea", action="store_true", help="Krea-2 turbo NVFP4")
     p.add_argument("--qwen", action="store_true", help="Qwen-Image-Edit GGUF Q5_0")
-    p.add_argument("--flux-pack", dest="flux_pack", action="store_true", help="Flux.1-dev GGUF/fp8")
+    p.add_argument(
+        "--flux-pack",
+        dest="flux_pack",
+        action="store_true",
+        help="FLUX.2 [klein] 4B fp8 (the only Flux)",
+    )
+    p.add_argument(
+        "--klein-4b",
+        dest="flux_pack",
+        action="store_true",
+        help="same as --flux-pack: FLUX.2 [klein] 4B",
+    )
     p.add_argument(
         "--bundle",
         help="weight bundle id (ltx25_*|ltx23_core|h3_*|wan22|vace|krea2|flux|qwen_edit)",

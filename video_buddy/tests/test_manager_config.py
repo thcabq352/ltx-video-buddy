@@ -283,7 +283,7 @@ def test_dry_run_plan_lists_both_new_steps(tmp_path, monkeypatch, capsys):
     """The full plan runs pack requirements, then the Comfy packages, after custom nodes and before Triton."""
     seen: list[str] = []
     for name in ("step_env_file", "step_playwright", "step_ffmpeg", "step_comfy_cli", "step_model_folders",
-                 "step_model_paths", "step_weights", "step_llm_models"):
+                 "step_model_paths", "step_weights", "step_vram_profile", "step_klein_4b", "step_llm_models"):
         monkeypatch.setattr(ai, name, lambda *a, _n=name, **k: seen.append(_n) or ai.StepResult(_n, ai.SKIPPED, ""))
     for name in ("step_comfyui", "step_nodes", "step_node_requirements", "step_comfy_packages",
                  "step_manager_config", "step_accel", "step_llamacpp"):

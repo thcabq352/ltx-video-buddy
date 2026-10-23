@@ -27,6 +27,7 @@ log = logging.getLogger(__name__)
 
 _LOCK = threading.Lock()
 _proc: subprocess.Popen | None = None
+_last_argv: list[str] = []
 _atexit_done = False
 _failure_at = 0.0
 _warned: set[str] = set()
@@ -36,9 +37,10 @@ _START_TIMEOUT_S = 8.0
 
 def reset_state() -> None:
     """Drop owned-process bookkeeping without signaling it. Tests only."""
-    global _proc, _failure_at
+    global _proc, _failure_at, _last_argv
     _proc = None
     _failure_at = 0.0
+    _last_argv = []
     _warned.clear()
 
 
@@ -103,7 +105,116 @@ def server_argv(
             argv.extend(["--models-preset", str(preset)])
     except Exception:
         pass
+    # Absent means llama.cpp's own default (layers on the GPU). Only pin
+    # ``-ngl`` when the operator or the VRAM profile set LLAMACPP_NGL.
+    raw = (os.getenv("LLAMACPP_NGL") or "").strip()
+    if raw:
+        try:
+            argv = _apply_ngl(argv, int(raw))
+        except ValueError:
+            pass
     return argv
+
+
+def _apply_ngl(argv: list[str], ngl: int | None) -> list[str]:
+    """Replace any GPU-layer flag. ``None`` leaves the argv without ``-ngl``."""
+    cleaned: list[str] = []
+    skip = False
+    for arg in argv:
+        if skip:
+            skip = False
+            continue
+        if arg in ("-ngl", "--n-gpu-layers", "--gpu-layers"):
+            skip = True
+            continue
+        if arg.startswith("--n-gpu-layers=") or arg.startswith("--gpu-layers="):
+            continue
+        cleaned.append(arg)
+    if ngl is not None:
+        cleaned.extend(["-ngl", str(int(ngl))])
+    return cleaned
+
+
+def owned_running() -> bool:
+    return _proc is not None and _proc.poll() is None
+
+
+def owned_argv() -> list[str]:
+    return list(_last_argv)
+
+
+def external_view() -> dict | None:
+    """A llama-server we did not start, or None.
+
+    An open port with no llama-server on the command line is not a GPU LLM.
+    """
+    _bind, port, connect = endpoint_parts()
+    if not _listening(connect, port):
+        return None
+    try:
+        proc = subprocess.run(
+            ["ps", "-eo", "pid,args"],
+            capture_output=True,
+            text=True,
+            timeout=3,
+            check=False,
+        )
+    except (OSError, subprocess.TimeoutExpired):
+        return None
+    if proc.returncode != 0:
+        return None
+    for line in (proc.stdout or "").splitlines():
+        if "llama-server" not in line:
+            continue
+        parts = line.strip().split(None, 1)
+        if len(parts) < 2:
+            continue
+        try:
+            pid = int(parts[0])
+        except ValueError:
+            continue
+        return {"pid": pid, "argv": parts[1].split()}
+    return None
+
+
+def stop_pid(pid: int) -> None:
+    """Stop one llama-server. Owned processes go through :func:`stop`."""
+    if pid <= 0:
+        return
+    if _proc is not None and _proc.pid == pid:
+        stop()
+        return
+    try:
+        if os.name == "nt":
+            subprocess.run(
+                ["taskkill", "/PID", str(pid), "/T", "/F"],
+                capture_output=True,
+                check=False,
+            )
+        else:
+            os.kill(pid, signal.SIGTERM)
+    except OSError:
+        return
+
+
+def start_with_layers(ngl: int) -> str:
+    """Restart the server Buddy owns with an explicit ``-ngl``."""
+    global _proc, _last_argv
+    stop()
+    binary = resolve_binary()
+    if not binary:
+        raise RuntimeError("llama.cpp binary not found")
+    bind, port, _connect = endpoint_parts()
+    argv = _apply_ngl(
+        server_argv(binary, host=bind, port=port, models_dir=Path(cfg.MODELS_DIR)),
+        int(ngl),
+    )
+    proc = _popen(argv)
+    with _LOCK:
+        _proc = proc
+        _last_argv = list(argv)
+    _register_atexit()
+    return "started"
 
 
 def _tcp_open(host: str, port: int, timeout: float = 0.4) -> bool:
@@ -229,7 +340,7 @@ def ensure_started(*, fall_through: bool | None = None) -> str:
 
 
 def _ensure(fall_through: bool | None) -> str:
-    global _proc, _failure_at
+    global _proc, _failure_at, _last_argv
 
     from master_agent.llm import reset_endpoint_cache
 
@@ -253,6 +364,14 @@ def _ensure(fall_through: bool | None) -> str:
         return "missing"
 
     argv = server_argv(binary, host=bind, port=port, models_dir=Path(cfg.MODELS_DIR))
+    try:
+        from master_agent.gpu_seat import llm_must_be_cpu
+
+        if llm_must_be_cpu():
+            argv = _apply_ngl(argv, 0)
+    except Exception:
+        pass
+    _last_argv = list(argv)
     try:
         proc = _popen(argv)
     except OSError as exc:

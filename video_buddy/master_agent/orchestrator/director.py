@@ -67,7 +67,12 @@ _VARIANT_KEYWORDS = [
     )),
     ("vb_ideogram", ("ideogram",)),
     ("krea2_img", ("krea2", "krea-2", "krea 2")),
-    ("flux", ("flux.1", "flux1", "character sheet", "text-to-image", "flux")),
+    ("flux_ltx_i2v", (
+        "flux_ltx_i2v", "flux ltx", "flux still to video", "klein still then",
+    )),
+    ("flux", (
+        "klein 4b", "flux.2", "flux2", "character sheet", "text-to-image", "flux",
+    )),
     # Gitignored example slugs (air_render_*, vb_zimage_turbo_cn,
     # vb_ai_renderer_*, vb_rtx_superres) are only routed when their JSON
     # exists — rule_based_variant skips any variant not in WORKFLOW_FILES.

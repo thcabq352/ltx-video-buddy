@@ -17,6 +17,7 @@ from __future__ import annotations
 import json
 import os
 import platform as _platform
+import re
 import shutil
 import subprocess
 import tarfile
@@ -91,19 +92,108 @@ def read_marker(root: Path) -> dict:
     return data if isinstance(data, dict) else {}
 
 
-def buddy_binary(root: Path | str | None) -> Path | None:
-    """The ``llama-server`` automatic install put under ``root``, if any."""
+_BUILD_REF = re.compile(r"b\d+")
+
+NOT_INSTALLED = "not installed (optional: Buddy renders without a local LLM)"
+
+
+def ref_from_binary(path: Path | str | None) -> str:
+    """Release id from ``prebuilt/<ref>/``, for example ``b11389``. Empty otherwise."""
+    if not path:
+        return ""
+    parts = Path(path).parts
+    if "prebuilt" not in parts:
+        return ""
+    index = parts.index("prebuilt")
+    if index + 1 >= len(parts):
+        return ""
+    name = parts[index + 1]
+    if name.endswith(".partial"):
+        return ""
+    return name
+
+
+def installed_ref(root: Path | str, binary: Path | str | None = None) -> str:
+    """Release id for a Buddy tree. The prebuilt folder wins; else ``installed.json``."""
+    found = ref_from_binary(binary)
+    if found:
+        return found
+    return str(read_marker(Path(root)).get("ref") or "")
+
+
+def find_named_server(directory: Path, name: str) -> Path | None:
+    """``name`` directly in ``directory``, otherwise the shallowest copy under it."""
+    directory = Path(directory)
+    direct = directory / name
+    if direct.is_file():
+        return direct
+    if not directory.is_dir():
+        return None
+    found = [p for p in directory.rglob(name) if p.is_file()]
+    if not found:
+        return None
+    found.sort(key=lambda p: (len(p.parts), str(p)))
+    return found[0]
+
+
+def _prebuilt_dirs(root: Path) -> list[Path]:
+    prebuilt = root / "prebuilt"
+    if not prebuilt.is_dir():
+        return []
+    dirs = [p for p in prebuilt.iterdir() if p.is_dir() and not p.name.endswith(".partial")]
+
+    def _key(path: Path) -> tuple[int, str]:
+        number = int(path.name[1:]) if _BUILD_REF.fullmatch(path.name) else -1
+        return (-number, path.name)
+
+    dirs.sort(key=_key)
+    return dirs
+
+
+def buddy_binary(root: Path | str | None, *, system: str | None = None) -> Path | None:
+    """The ``llama-server`` automatic install put under ``root``, if any.
+
+    Same lookup the installer writes and the runtime starts: ``installed.json``,
+    a cmake build (``build/bin``), or the official prebuilt tree
+    ``prebuilt/<ref>/llama-server`` (``.exe`` on Windows), including one level
+    of archive nesting.
+    """
     if not root:
         return None
     root = Path(root)
     recorded = read_marker(root).get("binary")
     if recorded and Path(recorded).is_file():
         return Path(recorded)
-    name = binary_name()
+    name = binary_name(system)
     for cand in (root / "build" / "bin" / name, root / "build" / "bin" / "Release" / name):
         if cand.is_file():
             return cand
+    for ref_dir in _prebuilt_dirs(root):
+        hit = find_named_server(ref_dir, name)
+        if hit is not None:
+            return hit
     return None
+
+
+def llama_status_detail(binary: str | None, root: Path | str | None = None) -> str:
+    """Doctor text for ``resolve_binary()``: the path, plus ``build 11389`` when known."""
+    if not binary:
+        return NOT_INSTALLED
+    path = Path(binary)
+    ref = ""
+    if root:
+        root_path = Path(root)
+        try:
+            under = path.resolve().is_relative_to(root_path.resolve())
+        except OSError:
+            under = False
+        if under:
+            ref = installed_ref(root_path, path)
+    if not ref:
+        ref = ref_from_binary(path)
+    if _BUILD_REF.fullmatch(ref or ""):
+        return f"{path} (build {ref[1:]})"
+    return str(path)
 
 
 def backend_for(gpu_vendor: str, system: str, machine: str) -> str:
@@ -229,8 +319,8 @@ def plan_llamacpp(
     if existing:
         plan.method, plan.binary, plan.found_via = "found", existing, "LLAMACPP_BIN or PATH"
         return plan
-    mine = buddy_binary(root)
-    if mine is not None and read_marker(root).get("ref") == ref:
+    mine = buddy_binary(root, system=system)
+    if mine is not None and installed_ref(root, mine) == ref:
         plan.method, plan.binary, plan.found_via = "found", str(mine), f"Buddy's own, {ref}"
         plan.backend = str(read_marker(root).get("backend") or backend)
         return plan
@@ -379,7 +469,7 @@ def _prebuilt(
         shutil.rmtree(final)
     os.replace(partial, final)
     name = binary_name(plan.system)
-    found = next((p for p in final.rglob(name) if p.is_file()), None)
+    found = find_named_server(final, name)
     if found is None:
         return None, f"{name} not found in {', '.join(plan.assets)}"
     if plan.system != "Windows":

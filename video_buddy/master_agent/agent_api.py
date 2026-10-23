@@ -385,6 +385,13 @@ def create_video(
             "spoken_line": spoken_line or None,
         }
 
+    from master_agent.first_gate import FirstGateBlocked, assert_submit_allowed
+
+    try:
+        assert_submit_allowed(None)
+    except FirstGateBlocked as exc:
+        return {"status": "error", "error": str(exc), "warning": voice_warn, "notes": voice_warn}
+
     from master_agent.fileutil import file_lock
 
     with file_lock(_gpu_lock_path(), blocking=False) as held:

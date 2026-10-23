@@ -171,11 +171,11 @@ Legacy Mickmumpitz / LTX 2.3 filenames still used by older graphs are installed 
 | AI-VFX / VACE | `vb_aivfx_adv_13` | VACE Q4_K_M file | ~13.6GB. The v1.0 e4m3fn pack is heavy |
 | Movie Builder | `vb_movie_builder` | Flux Klein fp8 | ~15.8GB. Heavy. Safer alternate: `ltx25_t2v_i2v` |
 | CCC | `vb_ccc_adv` / `vb_ccc41_krea2` | Flux Klein / Krea NVFP4 | ~15.5GB. Heavy. Safer: `flux` / `krea2_img` |
-| Flux / Krea | `flux` / `krea2_img` | Flux Q4_K_S file or Krea NVFP4 | ~11GB |
+| Flux / Krea | `flux` / `krea2_img` | FLUX.2 [klein] 4B fp8 or Krea NVFP4 | ~11GB |
 | Qwen Edit | `vb_qwen_edit_360` | Q5_0 + Lightning | ~12GB |
 | HeartMuLa | `heartmula` | heartlib 3B | ~12GB, class tight, about 8–16GB by dtype. Run it before or after LTX, not beside it |
 
-Attested Hub ids (fetch only after the ask): Wan QuantStack HighNoise/LowNoise Q4_K_S or Comfy-Org fp8; VACE `mickmumpitz/VACE_Skyreels_V3_R2V_Merge-GGUF`; Krea `Comfy-Org/Krea-2`; Flux `city96/FLUX.1-dev-gguf` or `Comfy-Org/flux1-dev`; Qwen `QuantStack/Qwen-Image-Edit-2509-GGUF`; H3 [`unsloth/MiniMax-H3-GGUF`](https://huggingface.co/unsloth/MiniMax-H3-GGUF) and [`Comfy-Org/MiniMax-H3`](https://huggingface.co/Comfy-Org/MiniMax-H3). LTX 2.3 (`ltx23_core`, fetched by automatic install or `download-models --ltx23 --yes`): `Lightricks/LTX-2.3` distilled 1.1 checkpoint, QuantStack `LTX-2.3-22B-distilled-1.1-Q4_K_S.gguf` from `QuantStack/LTX-2.3-GGUF`, `Comfy-Org/ltx-2` Gemma 3 12B fp4 text encoder, and the `Kijai/LTX2.3_comfy` distilled LoRA plus full and tiny VAEs. File-by-folder list: [`video_buddy/models/README.md`](../video_buddy/models/README.md#the-ltx-23-pack).
+Attested Hub ids (fetch only after the ask): Wan QuantStack HighNoise/LowNoise Q4_K_S or Comfy-Org fp8; VACE `mickmumpitz/VACE_Skyreels_V3_R2V_Merge-GGUF`; Krea `Comfy-Org/Krea-2`; Flux `black-forest-labs/FLUX.2-klein-4b-fp8` plus `Comfy-Org/Flux-2-Klein-4B` text encoder and VAE (the only Flux); Qwen `QuantStack/Qwen-Image-Edit-2509-GGUF`; H3 [`unsloth/MiniMax-H3-GGUF`](https://huggingface.co/unsloth/MiniMax-H3-GGUF) and [`Comfy-Org/MiniMax-H3`](https://huggingface.co/Comfy-Org/MiniMax-H3). LTX 2.3 (`ltx23_core`, fetched by automatic install or `download-models --ltx23 --yes`): `Lightricks/LTX-2.3` distilled 1.1 checkpoint, QuantStack `LTX-2.3-22B-distilled-1.1-Q4_K_S.gguf` from `QuantStack/LTX-2.3-GGUF`, `Comfy-Org/ltx-2` Gemma 3 12B fp4 text encoder, and the `Kijai/LTX2.3_comfy` distilled LoRA plus full and tiny VAEs. File-by-folder list: [`video_buddy/models/README.md`](../video_buddy/models/README.md#the-ltx-23-pack).
 
 ### Skipping or registering the LTX 2.3 pack
 

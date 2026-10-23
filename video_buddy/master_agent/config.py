@@ -137,7 +137,8 @@ LLM_PROVIDER = (os.getenv("LLM_PROVIDER", "auto") or "auto").strip().lower()
 # grok+claude | duo) or comma list (ollama[:model], llamacpp[:model], grok, claude, …)
 # default/local = local VL heretic; grok = solo; grok+local / grok+claude = panels
 LLM_PANEL = (os.getenv("LLM_PANEL", "default") or "default").strip()
-PANEL_JUDGE = (os.getenv("PANEL_JUDGE", "ollama") or "ollama").strip()
+# Look and taste stay on llama.cpp. SuperGrok is creative direction only.
+PANEL_JUDGE = (os.getenv("PANEL_JUDGE", "llamacpp") or "llamacpp").strip()
 # Empty keeps prompts/judge.md. "rainey1" selects the caliber rubric.
 PANEL_JUDGE_RUBRIC = (os.getenv("PANEL_JUDGE_RUBRIC", "") or "").strip().lower()
 PANEL_MEMBER_TIMEOUT_S = int(os.getenv("PANEL_MEMBER_TIMEOUT_S", "300"))
@@ -473,11 +474,10 @@ MODEL_FILES: dict[str, dict[str, str]] = {
         "checkpoint": "ltx-2.3-22b-dev-fp8.safetensors",
     },
     "flux": {
-        # CCC character sheets + Flux LoRA validation renders (fp8, 16GB-friendly)
-        "diffusion": "flux1-dev-fp8.safetensors",
-        "clip_l": "clip_l.safetensors",
-        "t5xxl": "t5xxl_fp8_e4m3fn.safetensors",
-        "vae": "ae.safetensors",
+        # FLUX.2 [klein] 4B fp8. The only Flux stills pack. Apache 2.0, ungated.
+        "diffusion": "flux-2-klein-4b-fp8.safetensors",
+        "text_encoder": "qwen_3_4b_fp4_flux2.safetensors",
+        "vae": "flux2-vae.safetensors",
     },
     "wan22": {
         # Wan 2.2 two-stage T2V: sequential high/low UNETs. 16GB pick is
@@ -578,12 +578,12 @@ MODEL_FILES["h3_ref2va"] = dict(MODEL_FILES["h3_r2v"])
 # Soft requirements: missing these warn but do not fail preflight hard-count alone
 MODEL_OPTIONAL_KEYS = frozenset({"diffusion", "checkpoint"})
 
-# --- Flux (CCC character sheets + Flux LoRA validation renders) ---
-# Non-gated fp8 set: Comfy-Org/flux1-dev + comfyanonymous/flux_text_encoders
-FLUX_UNET = "flux1-dev-fp8.safetensors"
-FLUX_CLIP_L = "clip_l.safetensors"
-FLUX_T5XXL = "t5xxl_fp8_e4m3fn.safetensors"
-FLUX_VAE = "ae.safetensors"  # already in models/vae
+# --- FLUX.2 [klein] 4B (the only Flux) ---
+# Ungated Apache 2.0. Flux.1 dev/schnell/pro/fill/depth/canny/kontext,
+# Klein 9B, and FLUX.3 are not downloaded.
+FLUX_UNET = "flux-2-klein-4b-fp8.safetensors"
+FLUX_TEXT = "qwen_3_4b_fp4_flux2.safetensors"
+FLUX_VAE = "flux2-vae.safetensors"
 
 # --- Characters & LoRA training (stages 3-4) ---
 CHARACTERS_DIR = Path(os.getenv("CHARACTERS_DIR", str(STATE_DIR / "characters"))).resolve()
@@ -632,6 +632,7 @@ _WORKFLOW_FILE_SEEDS: dict[str, str] = {
     "lipsync": "lipsync_ia2v.json",
     "wan22": "260713_VIDEO-BUDDY_WAN-2-2-VID_1-0_api.json",
     "flux": "flux_t2i.json",
+    "flux_ltx_i2v": "flux_t2i.json",
     "ltx25_t2v_i2v": "ltx-2.5/LTX-2.5_T2V_I2V_Single_Stage_Distilled_api.json",
     "ltx25_t2v_i2v_two_stage": "ltx-2.5/LTX-2.5_T2V_I2V_Two_Stage_Distilled_api.json",
     "ltx25_flf2v": "ltx-2.5/LTX-2.5_FLF2V_api.json",

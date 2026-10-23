@@ -191,7 +191,8 @@ def test_automatic_install_with_skip_weights_exits_zero(env, monkeypatch, capsys
         ("step_comfy_cli", "comfy-cli"), ("step_comfyui", "ComfyUI"), ("step_model_folders", "model folders"),
         ("step_model_paths", "model paths"), ("step_nodes", "custom nodes"),
         ("step_node_requirements", "custom node requirements"), ("step_comfy_packages", "Comfy Python packages"),
-        ("step_accel", "Triton + SageAttention"), ("step_llamacpp", "llama.cpp"), ("step_llm_models", "LLM models"),
+        ("step_accel", "Triton + SageAttention"), ("step_vram_profile", "VRAM profile"),
+        ("step_klein_4b", "Klein 4B stills"), ("step_llamacpp", "llama.cpp"), ("step_llm_models", "LLM models"),
     ):
         monkeypatch.setattr(ai, fn, ok(name))
     monkeypatch.setattr(ai, "run_preflight", lambda **k: SimpleNamespace(ok=True, gpu={}, llama=None))

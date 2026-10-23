@@ -389,7 +389,7 @@ HF_WAN22 = "Comfy-Org/Wan_2.2_ComfyUI_Repackaged"
 HF_WAN22_GGUF = "QuantStack/Wan2.2-T2V-A14B-GGUF"
 HF_VACE_GGUF = "mickmumpitz/VACE_Skyreels_V3_R2V_Merge-GGUF"
 HF_KREA = "Comfy-Org/Krea-2"
-HF_FLUX_GGUF = "city96/FLUX.1-dev-gguf"
+HF_FLUX_KLEIN = "black-forest-labs/FLUX.2-klein-4b-fp8"
 HF_QWEN_EDIT = "QuantStack/Qwen-Image-Edit-2509-GGUF"
 
 WEIGHT_FILES["wan22_high"] = WeightFile(
@@ -458,15 +458,15 @@ WEIGHT_FILES["krea2"] = WeightFile(
 )
 WEIGHT_FILES["flux"] = WeightFile(
     key="flux",
-    filename="flux1-dev-Q4_K_S.gguf",
+    filename="flux-2-klein-4b-fp8.safetensors",
     dest_folder="diffusion_models",
-    repo_id=HF_FLUX_GGUF,
-    repo_filename="flux1-dev-Q4_K_S.gguf",
-    size_bytes=6_800_000_000,
+    repo_id=HF_FLUX_KLEIN,
+    repo_filename="flux-2-klein-4b-fp8.safetensors",
+    size_bytes=4_070_624_520,
     mandatory=True,
     gated=False,
-    license_url="https://huggingface.co/city96/FLUX.1-dev-gguf",
-    note="Flux.1-dev. 16GB download: city96 Q4_K_S GGUF. Comfy-Org fp8 also counts.",
+    license_url="https://huggingface.co/black-forest-labs/FLUX.2-klein-4b-fp8",
+    note="FLUX.2 [klein] 4B fp8, Apache 2.0, ungated. The only Flux. bf16 counts when already on disk.",
     accepts=FLUX_PREFERENCE,
 )
 WEIGHT_FILES["qwen_edit"] = WeightFile(
@@ -1023,8 +1023,8 @@ def _hf_hub_snapshot_roots() -> list[Path]:
         "models--Lightricks--LTX-2.5-22b-IC-LoRA-Ingredients",
         "models--Comfy-Org--MiniMax-H3",
         "models--unsloth--MiniMax-H3-GGUF",
-        "models--Comfy-Org--flux1-dev",
-        "models--comfyanonymous--flux_text_encoders",
+        "models--black-forest-labs--FLUX.2-klein-4b-fp8",
+        "models--Comfy-Org--Flux-2-Klein-4B",
     }
     for weight in WEIGHT_FILES.values():
         if weight.repo_id:

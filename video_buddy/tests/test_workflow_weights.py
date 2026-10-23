@@ -50,13 +50,13 @@ LEAK = (BAKE, RANK111, TAE)
 
 # (variant, substrings that must survive patching)
 KEEP = (
-    ("vb_ccc_adv", ("flux-2-klein-9b-fp8.safetensors", "Flux2-Klein-9B-consistency-V2.safetensors", "flux2-vae.safetensors", "qwen_3_8b_fp8mixed.safetensors")),
+    ("vb_ccc_adv", ("flux-2-klein-4b-fp8.safetensors", "flux2-vae.safetensors", "qwen_3_4b_fp4_flux2.safetensors")),
     ("vb_ideogram", ("ideogram4_fp8_scaled.safetensors", "ideogram4_unconditional_fp8_scaled.safetensors", "flux2-vae.safetensors", "Multiple_Realistic_02-Ideogram")),
     ("vb_aivfx_adv", ("Wan2.1_T2V_14B_FusionX_LoRA.safetensors", "wan_2.1_vae.safetensors", "wan-14B_vace_skyreels")),
     ("vb_aivfx_adv_13", ("Wan2.1_T2V_14B_FusionX_LoRA.safetensors", "wan_2.1_vae.safetensors", "vace")),
     ("vb_ccc41_krea2", ("krea2_turbo_fp8_scaled.safetensors", "krea2_identity_edit_v1_2.safetensors", "wan_2.1_vae.safetensors")),
     ("vb_movie_builder", ("flux-2-klein-9B-360-erp-outpaint-lora_V1.safetensors", "Flux2-Klein-9B-consistency-V2.safetensors", DISTILLED_LORA, "ltx-2.3-id-lora-talkvid-3k.safetensors", "flux2-vae.safetensors", "LTX23_video_vae_bf16.safetensors", "LTX23_audio_vae_bf16.safetensors")),
-    ("260615_video-buddy_flux_klein_9b_v01", ("flux-2-klein-9b-fp8.safetensors", "Flux2-Klein-9B-consistency-V2.safetensors", "qwen_3_8b_fp8mixed.safetensors", "flux2-vae.safetensors")),
+    ("260615_video-buddy_flux_klein_9b_v01", ("flux-2-klein-4b-fp8.safetensors", "qwen_3_4b_fp4_flux2.safetensors", "flux2-vae.safetensors")),
     ("vb_krea2_img", ("krea2", "qwen3vl")),
     ("vb_wan22_vid", ("umt5_xxl", "wan_2.1_vae.safetensors")),
     ("vb_qwen_edit_360", ("qwen",)),

@@ -115,9 +115,36 @@ directors:
 
 flux:
   file: flux_t2i.json
-  description: Flux.1-dev GGUF Q4 / fp8 text-to-image (UNETLoader + DualCLIP + FluxGuidance)
+  description: FLUX.2 [klein] 4B text-to-image (Apache 2.0). The only Flux stills model.
   vram_class: safe
-  vram_peak_gb: 11.0
+  vram_peak_gb: 10.0
+  fields:
+    prompt:
+      node_id: "10"
+      input: text
+    seed:
+      node_id: "50"
+      input: seed
+    width:
+      node_id: "20"
+      input: width
+    height:
+      node_id: "20"
+      input: height
+    steps:
+      node_id: "50"
+      input: steps
+    filename_prefix:
+      node_id: "90"
+      input: filename_prefix
+
+flux_ltx_i2v:
+  file: flux_t2i.json
+  description: Klein 4B still, then ltx25_t2v_i2v. The still generator is FLUX.2 [klein] 4B.
+  still_generator: flux-2-klein-4b-fp8.safetensors
+  video_variant: ltx25_t2v_i2v
+  vram_class: safe
+  vram_peak_gb: 12.0
   fields:
     prompt:
       node_id: "10"

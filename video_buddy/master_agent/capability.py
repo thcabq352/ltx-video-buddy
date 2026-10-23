@@ -51,7 +51,7 @@ _MODEL_FOR_FAMILY = {
     "ltx23": "ltx-2.3",
     "wan22": "wan-2.2",
     "h3": "minimax-h3",
-    "flux": "flux.1",
+    "flux": "flux.2-klein-4b",
     "krea2": "krea-2",
     "vace": "wan-vace",
     "lipsync": "ltx-2.3",

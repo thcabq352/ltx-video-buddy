@@ -6,7 +6,7 @@ gate, and loader remaps all read from here.
 Do not invent weight files. Every filename is attested in
 ``master_agent.models.weights``, ``state/download_models.py``,
 ``config.MODEL_FILES``, or a Hugging Face listing verified this change
-(QuantStack Wan2.2 / LTX-2.3 GGUF, city96 FLUX.1-dev-gguf, Comfy-Org/Krea-2).
+(QuantStack Wan2.2 / LTX-2.3 GGUF, FLUX.2 [klein] 4B, Comfy-Org/Krea-2).
 K3NK AIO I2V packs were searched and are **not** attested — they stay
 off the default table.
 
@@ -201,13 +201,10 @@ _KREA = (
     "qwen3vl_4b_fp8_scaled.safetensors",
 )
 _FLUX = (
-    "flux1-dev-Q4_K_S.gguf",
-    "flux1-dev-Q4_0.gguf",
-    "flux1-dev-fp8.safetensors",
-    "flux-2-klein-9b-fp8.safetensors",
-    "t5xxl_fp8_e4m3fn.safetensors",
-    "clip_l.safetensors",
-    "ae.safetensors",
+    "flux-2-klein-4b-fp8.safetensors",
+    "flux-2-klein-4b.safetensors",
+    "qwen_3_4b_fp4_flux2.safetensors",
+    "flux2-vae.safetensors",
 )
 _OTHER = (
     "seedvr2_ema_7b_sharp-Q4_K_M.gguf",
@@ -231,9 +228,8 @@ WAN22_LOW_PREFERENCE: tuple[str, ...] = (
 VACE_PREFERENCE: tuple[str, ...] = _VACE
 KREA_PREFERENCE: tuple[str, ...] = _KREA[:4]
 FLUX_PREFERENCE: tuple[str, ...] = (
-    "flux1-dev-Q4_K_S.gguf",
-    "flux1-dev-Q4_0.gguf",
-    "flux1-dev-fp8.safetensors",
+    "flux-2-klein-4b-fp8.safetensors",
+    "flux-2-klein-4b.safetensors",
 )
 QWEN_EDIT_PREFERENCE: tuple[str, ...] = (
     "Qwen-Image-Edit-2509-Q5_0.gguf",
@@ -626,7 +622,7 @@ def _build_rows() -> dict[str, WorkflowVramRow]:
             default_pack=_FLUX[0],
             expected_vram_gb=11.0,
             vram_class="safe",
-            notes="city96 flux1-dev-Q4_K_S.gguf when present; Comfy-Org flux1-dev-fp8 is the download fallback.",
+            notes="FLUX.2 [klein] 4B fp8 (Apache 2.0). The only Flux. bf16 counts when it is already on disk.",
         )
     )
 
@@ -672,7 +668,7 @@ def _build_rows() -> dict[str, WorkflowVramRow]:
         WorkflowVramRow(
             slug="vb_movie_builder",
             family="movie_builder",
-            default_pack="flux-2-klein-9b-fp8.safetensors",
+            default_pack="flux-2-klein-4b-fp8.safetensors",
             expected_vram_gb=15.8,
             vram_class="heavy",
             safer_alternate="ltx25_t2v_i2v",
@@ -687,7 +683,7 @@ def _build_rows() -> dict[str, WorkflowVramRow]:
         WorkflowVramRow(
             slug="vb_ccc_adv",
             family="ccc",
-            default_pack="flux-2-klein-9b-fp8.safetensors",
+            default_pack="flux-2-klein-4b-fp8.safetensors",
             expected_vram_gb=15.5,
             vram_class="heavy",
             safer_alternate="flux",
@@ -794,7 +790,7 @@ def _fallback_row(slug: str) -> WorkflowVramRow:
         "wan22": WorkflowVramRow(slug, family, WAN22_HIGH_PREFERENCE[0], 13.2, "tight", notes="Inherits Wan 2.2 Lightx2v path."),
         "vace": WorkflowVramRow(slug, family, _VACE[0], 13.6, "tight", notes="Inherits VACE GGUF Q4_K_M."),
         "krea2": WorkflowVramRow(slug, family, _KREA[0], 10.5, "safe", notes="Inherits Krea-2 NVFP4."),
-        "flux": WorkflowVramRow(slug, family, _FLUX[0], 11.0, "safe", notes="Inherits Flux GGUF/fp8."),
+        "flux": WorkflowVramRow(slug, family, _FLUX[0], 11.0, "safe", notes="Inherits FLUX.2 [klein] 4B fp8."),
         "qwen_edit": WorkflowVramRow(slug, family, _QWEN[0], 12.0, "safe", notes="Inherits Qwen Edit GGUF Q5."),
         "other": WorkflowVramRow(
             slug,
@@ -873,9 +869,9 @@ def format_vram_table() -> str:
         ),
         ("Wan 2.2", "wan22", WAN22_HIGH_PREFERENCE[0], 13.2, "GGUF Q4_K_S or fp8 + Lightx2v; sequential high/low; no dual bf16"),
         ("AI-VFX / VACE", "vb_aivfx_adv_13", _VACE[0], 13.6, "Q4_K_M GGUF default; v1.0 e4m3fn is heavy"),
-        ("Movie Builder", "vb_movie_builder", "flux-2-klein-9b-fp8.safetensors", 15.8, "HEAVY — safer: ltx25_t2v_i2v"),
-        ("CCC", "vb_ccc_adv / vb_ccc41_krea2", "flux-2-klein-9b-fp8.safetensors", 15.5, "HEAVY — safer: flux / krea2_img"),
-        ("Flux / Krea", "flux / krea2_img", f"{_FLUX[0]} / {_KREA[0]}", 11.0, "Flux GGUF Q4 or fp8; Krea NVFP4"),
+        ("Movie Builder", "vb_movie_builder", "flux-2-klein-4b-fp8.safetensors", 15.8, "HEAVY — safer: ltx25_t2v_i2v"),
+        ("CCC", "vb_ccc_adv / vb_ccc41_krea2", "flux-2-klein-4b-fp8.safetensors", 15.5, "HEAVY — safer: flux / krea2_img"),
+        ("Flux / Krea", "flux / krea2_img", f"{_FLUX[0]} / {_KREA[0]}", 11.0, "Klein 4B fp8 is the only Flux; Krea NVFP4"),
         ("Qwen Edit", "vb_qwen_edit_360 / startimage", _QWEN[0], 12.0, "GGUF Q5_0 + Lightning"),
         ("K3NK AIO I2V", "(not shipped)", "—", 0.0, "No attested AIO pack; do not invent. Use wan22 T2V."),
     ]
