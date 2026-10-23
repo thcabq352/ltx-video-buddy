@@ -1184,6 +1184,7 @@ def step_weights(apply: bool, *, skip: bool) -> StepResult:
 
 def verify_rows() -> list[dict[str, Any]]:
     """Doctor's own scan rows (read-only) for the pieces generate needs."""
+    from master_agent.llamacpp_install import llama_status_detail
     from master_agent.llamacpp_server import resolve_binary
     from master_agent.setup import check_ffmpeg, check_llm_models, check_ltx23_weights
 
@@ -1191,7 +1192,7 @@ def verify_rows() -> list[dict[str, Any]]:
     llama = {
         "name": "llama.cpp",
         "ok": bool(binary),
-        "detail": binary or "not installed (optional: Buddy renders without a local LLM)",
+        "detail": llama_status_detail(binary, llamacpp_root()),
     }
     return [check_ffmpeg(), check_ltx23_weights(), llama, check_llm_models()]
 

@@ -312,11 +312,15 @@ def test_version_check_failure_falls_through(tmp_path):
 # --- server lookup ------------------------------------------------------------------------
 
 
-def test_resolve_binary_finds_buddy_build(tmp_path, monkeypatch):
-    root = tmp_path / "llama.cpp"
+def _isolate_llama_lookup(monkeypatch, root: Path) -> None:
     monkeypatch.setattr(cfg, "LLAMACPP_BIN", "")
     monkeypatch.setattr(cfg, "LLAMACPP_ROOT", root)
     monkeypatch.setattr(srv.shutil, "which", lambda name: None)
+
+
+def test_resolve_binary_finds_buddy_build(tmp_path, monkeypatch):
+    root = tmp_path / "llama.cpp"
+    _isolate_llama_lookup(monkeypatch, root)
     assert srv.resolve_binary() is None
     binary = root / "build" / "bin" / "llama-server"
     binary.parent.mkdir(parents=True)
@@ -324,3 +328,72 @@ def test_resolve_binary_finds_buddy_build(tmp_path, monkeypatch):
     assert srv.resolve_binary() == str(binary)
     monkeypatch.setattr(srv.shutil, "which", lambda name: "/usr/bin/llama-server")
     assert srv.resolve_binary() == "/usr/bin/llama-server"
+
+
+def test_buddy_binary_finds_windows_prebuilt_exe(tmp_path):
+    root = tmp_path / "llama.cpp"
+    exe = root / "prebuilt" / "b11389" / "llama-server.exe"
+    exe.parent.mkdir(parents=True)
+    exe.write_bytes(b"")
+    assert li.buddy_binary(root, system="Windows") == exe
+    assert li.llama_status_detail(str(exe), root) == f"{exe} (build 11389)"
+
+
+def test_buddy_binary_finds_linux_prebuilt_names(tmp_path):
+    root = tmp_path / "llama.cpp"
+    flat = root / "prebuilt" / "b11389" / "llama-server"
+    flat.parent.mkdir(parents=True)
+    flat.write_bytes(b"")
+    assert li.buddy_binary(root, system="Linux") == flat
+    nested_root = tmp_path / "nested"
+    nested = nested_root / "prebuilt" / "b11389" / "llama-b11389" / "llama-server"
+    nested.parent.mkdir(parents=True)
+    nested.write_bytes(b"")
+    assert li.buddy_binary(nested_root, system="Linux") == nested
+    assert li.llama_status_detail(str(nested), nested_root) == f"{nested} (build 11389)"
+
+
+def test_prebuilt_tree_without_marker_counts_as_installed(tmp_path):
+    root = tmp_path / "llama.cpp"
+    binary = root / "prebuilt" / REF / "llama-server"
+    binary.parent.mkdir(parents=True)
+    binary.write_bytes(b"")
+    plan = _plan(root, tools={})
+    assert plan.method == "found"
+    assert plan.binary == str(binary)
+    assert plan.found_via == f"Buddy's own, {REF}"
+
+
+def test_doctor_llama_row_reports_prebuilt_path_and_build(tmp_path, monkeypatch):
+    from master_agent.automatic_install import verify_rows
+
+    root = tmp_path / "llama.cpp"
+    exe = root / "prebuilt" / "b11389" / "llama-server.exe"
+    exe.parent.mkdir(parents=True)
+    exe.write_bytes(b"")
+    _isolate_llama_lookup(monkeypatch, root)
+    monkeypatch.setattr(li._platform, "system", lambda: "Windows")
+    row = next(r for r in verify_rows() if r["name"] == "llama.cpp")
+    assert row["ok"] is True
+    assert row["detail"] == f"{exe} (build 11389)"
+
+    linux = tmp_path / "linux-llama"
+    binary = linux / "prebuilt" / "b11389" / "llama-server"
+    binary.parent.mkdir(parents=True)
+    binary.write_bytes(b"")
+    _isolate_llama_lookup(monkeypatch, linux)
+    monkeypatch.setattr(li._platform, "system", lambda: "Linux")
+    row = next(r for r in verify_rows() if r["name"] == "llama.cpp")
+    assert row["ok"] is True
+    assert row["detail"] == f"{binary} (build 11389)"
+
+
+def test_doctor_llama_row_when_not_installed(tmp_path, monkeypatch):
+    from master_agent.automatic_install import verify_rows
+
+    root = tmp_path / "llama.cpp"
+    root.mkdir()
+    _isolate_llama_lookup(monkeypatch, root)
+    row = next(r for r in verify_rows() if r["name"] == "llama.cpp")
+    assert row["ok"] is False
+    assert row["detail"] == li.NOT_INSTALLED
