@@ -38,6 +38,8 @@ from master_agent.comfy.vae_guard import is_tiny_preview_vae, vae_name_for_tiled
 # LTX latent widgets that must stay 8n+1 and paired with audio frames_number
 LTX_LENGTH_CLASSES = frozenset({"EmptyLTXVLatentVideo", "LTXVEmptyLatentVideo"})
 LTX_AUDIO_CLASSES = frozenset({"LTXVEmptyLatentAudio"})
+FLUX_LTX_VARIANT = "flux_ltx_i2v"
+FLUX_LTX_DEFAULT_FRAMES = 25
 
 # Preferred all-in-one checkpoint names (first that exists on disk wins as fallback)
 CHECKPOINT_FALLBACKS = [
@@ -868,6 +870,8 @@ def _apply_local_family_weights(workflow: dict[str, Any], variant: str) -> None:
     from master_agent.models.vram_policy import family_for_slug
 
     family = family_for_slug(variant)
+    if (variant or "").strip().lower() == FLUX_LTX_VARIANT:
+        family = "flux"
     loaders = ("UNETLoader", "UnetLoaderGGUF", "UnetLoader", "DiffusionModelLoader")
     gguf_loaders = ("UnetLoaderGGUF", "UnetLoaderGGUFAdvanced")
 
@@ -951,36 +955,59 @@ def _text_enhancer_clip_name() -> Optional[str]:
     return name_from_local_path(path) or path.name
 
 
+def _set_ltx25_clip_loader(node: dict[str, Any], filename: str) -> None:
+    """CLIPLoaderGGUF for a GGUF Gemma TE, CLIPLoader otherwise. Type stays ltxv."""
+    inputs = node.get("inputs") or {}
+    if filename.lower().endswith(".gguf"):
+        node["class_type"] = "CLIPLoaderGGUF"
+        node["inputs"] = {"clip_name": filename, "type": "ltxv"}
+        return
+    if node.get("class_type") != "CLIPLoader":
+        node["class_type"] = "CLIPLoader"
+        node["inputs"] = {"clip_name": filename, "type": "ltxv", "device": "default"}
+        return
+    inputs["clip_name"] = filename
+    node["inputs"] = inputs
+
+
 def _apply_local_ltx25_weights(workflow: dict[str, Any]) -> None:
     """Prefer a local GGUF / NVFP4 / int8 / heretic TE when one is already present."""
     transformer_name, te_name = _resolved_ltx25_names()
+    te_is_gguf = te_name.lower().endswith(".gguf")
     for class_type in ("UNETLoader", "UnetLoaderGGUF", "DiffusionModelLoader"):
         for _nid, node in _find_nodes_by_class(workflow, class_type):
             # Always pin 2.5 loaders to the local/official 2.5 transformer.
             # A 2.3 all-in-one must not remain on unet_name after patch.
+            # flux_ltx_i2v also carries the Flux still UNET; that one stays Flux.
+            current = str((node.get("inputs") or {}).get("unet_name") or "").lower()
+            if "flux" in current:
+                continue
             _set_transformer_loader(node, transformer_name)
     for _nid, node in _find_nodes_by_class(workflow, "LTXAVTextEncoderLoader"):
+        if te_is_gguf:
+            # The GGUF TE bundles both projection heads; LTXAVTextEncoderLoader cannot read it.
+            _set_ltx25_clip_loader(node, te_name)
+            node.setdefault("_meta", {})["title"] = "LTX 2.5 Gemma 4 TE (GGUF)"
+            continue
         _set_input(node, "text_encoder", te_name)
         inputs = node.get("inputs") or {}
         if "ckpt_name" in inputs and isinstance(inputs.get("ckpt_name"), str):
             if "ltx-2.5" in str(inputs.get("ckpt_name")).lower():
                 _set_input(node, "ckpt_name", transformer_name)
     enhancer_name = _text_enhancer_clip_name()
-    for _nid, node in _find_nodes_by_class(workflow, "CLIPLoader"):
-        title = str((node.get("_meta") or {}).get("title") or "").lower()
-        inputs = node.get("inputs") or {}
-        current = str(inputs.get("clip_name") or "")
-        if "enhancer" in title or "e2b" in current.lower():
-            # Other LTX 2.5 graphs load gemma4_e2b on the enhancer CLIP.
-            # t2a ships the with-proj TE name on that node; retarget it at the
-            # on-disk E2B file, or at the resolved Gemma TE when E2B is absent.
-            if enhancer_name:
-                _set_input(node, "clip_name", enhancer_name)
-            else:
-                _set_input(node, "clip_name", te_name)
-            continue
-        if any(tok in current.lower() for tok in ("gemma", "ltx-2.5", "ltx25", "ltxv")):
-            _set_input(node, "clip_name", te_name)
+    for class_type in ("CLIPLoader", "CLIPLoaderGGUF"):
+        for _nid, node in _find_nodes_by_class(workflow, class_type):
+            title = str((node.get("_meta") or {}).get("title") or "").lower()
+            inputs = node.get("inputs") or {}
+            current = str(inputs.get("clip_name") or "")
+            if "enhancer" in title or "e2b" in current.lower():
+                # Other LTX 2.5 graphs load gemma4_e2b on the enhancer CLIP.
+                # t2a ships the with-proj TE name on that node; retarget it at the
+                # on-disk E2B file, or at the resolved Gemma TE when E2B is absent.
+                _set_ltx25_clip_loader(node, enhancer_name or te_name)
+                continue
+            if any(tok in current.lower() for tok in ("gemma", "ltx-2.5", "ltx25", "ltxv")):
+                _set_ltx25_clip_loader(node, te_name)
 
 
 def _apply_multi_ref(workflow: dict[str, Any], refs: dict[str, Any]) -> list[str]:
@@ -1811,6 +1838,8 @@ def load_and_patch_workflow(
         # the latent grid. Do not apply the landscape 768×512 clamp.
         width = max(256, (int(width) // 32) * 32)
         height = max(256, (int(height) // 32) * 32)
+    if variant == FLUX_LTX_VARIANT and filename_prefix == "ltx_agent":
+        filename_prefix = FLUX_LTX_VARIANT
     gen = get_variant_gen(variant)
     defaulted_length = False
     if (
@@ -1819,6 +1848,10 @@ def load_and_patch_workflow(
         and abs(float(duration_s) - 5.0) < 1e-9
     ):
         frames = INOUTPAINT_DEFAULT_FRAMES
+        defaulted_length = True
+        duration_s = frames / float(gen["fps"])
+    elif variant == FLUX_LTX_VARIANT and frames is None and abs(float(duration_s) - 5.0) < 1e-9:
+        frames = FLUX_LTX_DEFAULT_FRAMES
         defaulted_length = True
         duration_s = frames / float(gen["fps"])
     if frames is None:

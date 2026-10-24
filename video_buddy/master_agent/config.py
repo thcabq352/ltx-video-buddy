@@ -309,6 +309,7 @@ VARIANT_GEN: dict[str, dict[str, int]] = {
     "ltx25_t2a": {"fps": 24, "frame_snap": 8},
     "ltx23_inoutpaint": {"fps": 24, "frame_snap": 8},
     "ltx25_inoutpaint": {"fps": 24, "frame_snap": 8},
+    "flux_ltx_i2v": {"fps": 24, "frame_snap": 8},
     "ltx23_i2v_base": {"fps": 24, "frame_snap": 8},
     "ltx23_i2v_distilled": {"fps": 24, "frame_snap": 8},
     "ltx23_t2v_base": {"fps": 24, "frame_snap": 8},
