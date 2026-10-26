@@ -64,26 +64,6 @@
    "partial": false
   },
   {
-   "name": "flux-2-klein-9b-fp8.safetensors",
-   "rel_path": "diffusion_models/flux-2-klein-9b-fp8.safetensors",
-   "folder": "diffusion_models",
-   "role": "diffusion",
-   "size_bytes": 9433061528,
-   "mtime": "2026-07-30T23:01:30.364099Z",
-   "root": "project",
-   "partial": false
-  },
-  {
-   "name": "flux1-dev-fp8.safetensors",
-   "rel_path": "diffusion_models/flux1-dev-fp8.safetensors",
-   "folder": "diffusion_models",
-   "role": "diffusion",
-   "size_bytes": 17246524772,
-   "mtime": "2026-07-30T22:22:40.682119Z",
-   "root": "project",
-   "partial": false
-  },
-  {
    "name": "LTX-2.3-dev-Q4_K_S.gguf",
    "rel_path": "diffusion_models/gguf/LTX-2.3-dev-Q4_K_S.gguf",
    "folder": "diffusion_models",
@@ -260,26 +240,6 @@
    "role": "other",
    "size_bytes": 995743560,
    "mtime": "2026-08-05T06:38:02.837761Z",
-   "root": "project",
-   "partial": false
-  },
-  {
-   "name": "flux-2-klein-9B-360-erp-outpaint-lora_V1.safetensors",
-   "rel_path": "loras/flux-2-klein-9B-360-erp-outpaint-lora_V1.safetensors",
-   "folder": "loras",
-   "role": "lora",
-   "size_bytes": 82867136,
-   "mtime": "2026-08-05T06:37:00.560233Z",
-   "root": "project",
-   "partial": false
-  },
-  {
-   "name": "Flux2-Klein-9B-consistency-V2.safetensors",
-   "rel_path": "loras/Flux2-Klein-9B-consistency-V2.safetensors",
-   "folder": "loras",
-   "role": "lora",
-   "size_bytes": 331379608,
-   "mtime": "2026-07-30T22:56:59.087386Z",
    "root": "project",
    "partial": false
   },
@@ -1073,15 +1033,18 @@
    "hard_missing": {}
   },
   "flux": {
-   "runnable": true,
+   "runnable": false,
    "present": {
-    "diffusion": "flux1-dev-fp8.safetensors",
-    "clip_l": "clip_l.safetensors",
-    "t5xxl": "t5xxl_fp8_e4m3fn.safetensors",
-    "vae": "ae.safetensors"
+    "vae": "flux2-vae.safetensors"
    },
-   "missing": {},
-   "hard_missing": {}
+   "missing": {
+    "diffusion": "flux-2-klein-4b-fp8.safetensors",
+    "text_encoder": "qwen_3_4b_fp4_flux2.safetensors"
+   },
+   "hard_missing": {
+    "diffusion": "flux-2-klein-4b-fp8.safetensors",
+    "text_encoder": "qwen_3_4b_fp4_flux2.safetensors"
+   }
   },
   "wan22": {
    "runnable": false,

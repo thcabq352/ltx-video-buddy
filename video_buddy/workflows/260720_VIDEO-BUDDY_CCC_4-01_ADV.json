@@ -16260,8 +16260,8 @@
           "name": "MODEL",
           "type": "MODEL",
           "links": [
-            562,
-            834
+            834,
+            619
           ]
         }
       ],
@@ -16273,48 +16273,6 @@
       "widgets_values": [
         "flux-2-klein-4b-fp8.safetensors",
         "default"
-      ],
-      "color": "#d4d4d4",
-      "bgcolor": "#c0c0c0"
-    },
-    {
-      "id": 664,
-      "type": "LoraLoaderModelOnly",
-      "pos": [
-        150,
-        3750
-      ],
-      "size": [
-        310,
-        112
-      ],
-      "flags": {},
-      "order": 351,
-      "mode": 0,
-      "inputs": [
-        {
-          "name": "model",
-          "type": "MODEL",
-          "link": 562
-        }
-      ],
-      "outputs": [
-        {
-          "name": "MODEL",
-          "type": "MODEL",
-          "links": [
-            619
-          ]
-        }
-      ],
-      "properties": {
-        "cnr_id": "comfy-core",
-        "ver": "0.24.1",
-        "Node name for S&R": "LoraLoaderModelOnly"
-      },
-      "widgets_values": [
-        "Flux2-Klein-9B-consistency-V2.safetensors",
-        0.35
       ],
       "color": "#d4d4d4",
       "bgcolor": "#c0c0c0"
@@ -17149,7 +17107,7 @@
       "outputs": [],
       "properties": {},
       "widgets_values": [
-        "# CustomCharacterCreator V.4 — End User Guide\n\n## Overview\n\nCustomCharacterCreator V.4 is a ComfyUI workflow that builds a **multi-view character dataset** from a single reference image. It generates a set of **named scene \"passes\"** (e.g. `T-POSE`, `CLOSE-FRONT`, `OFFICE`, `RUNNING`, `COFFEE`…), can optionally **upscale** them, and can optionally run **Face Detailer** only where a face is small enough to need it.\n\nDataset tagging lives in a **separate standalone tagging workflow**, which keeps this graph focused on generation.\n\n### Color legend (how to read the canvas)\n\n| Zone color | Meaning |\n|---|---|\n| **Grey** | Model loaders, settings, and output/naming |\n| **Green** | Your inputs (reference image, style/clothes prompts) |\n| **Purple** | The scene passes — one group per shot |\n| **Pink** | Heavy sampling stages (Upscaler, Face Detailer) |\n\n---\n\n## Required Custom Nodes\n\nInstall these packs before using the workflow — the graph depends on them.\n\n| Node Pack | Used for |\n|-----------|----------|\n| **ComfyUI Impact Pack** | Face Detailer, and the Save-Dataset switch (`ImpactInversedSwitch`). |\n| **ComfyUI Impact Subpack** | `UltralyticsDetectorProvider` (face detection). |\n| **ComfyUI-KJNodes** | Core routing (`GetNode`/`SetNode`), `JoinStringMulti`, `ImageResizeKJv2`, `StringConstantMultiline`. |\n| **ComfyUI-Easy-Use** | Batch helpers (`imageListToImageBatch`, `imageBatchToImageList`) and float inputs. |\n| **ComfyUI-SeedVR2_VideoUpscaler** | The upscaling stage (SeedVR2). |\n| **rgthree-comfy** | `Image Comparer` preview nodes (bypassed by default). |\n| **ComfyUI-Flux2Klein-Enhancer** | `IdentityGuidance` for the Flux Klein chain. |\n| **ComfyUI-Custom-Scripts** | `MathExpression` (auto upscale resolution). |\n| **WAS Node Suite** | `Image Save` — the final dataset export. |\n| **ComfyUI-AutoCropFaces** | Reference-face detection / crop preparation. |\n| **Mickmumpitz-Nodes** | `ImageCollect`, `ImageCollectUnpack`, `CCC_FaceAreaBatchSplitter`, `CCC_BranchGate`, and the labels. |\n\nThe bypass switches (`ComfySwitchNode`) and the per-scene generation subgraphs are **built-in ComfyUI** — no extra pack needed.\n\n---\n\n## Required Models\n\n### Main Generation Models\n\n| Model file | Loader | Purpose |\n|------|--------|---------|\n| **flux2-vae.safetensors** | VAE Loader | VAE for the main image chain. |\n| **qwen_3_4b_fp4_flux2.safetensors** | CLIP Loader (type `flux2`) | Text/instruction encoder. |\n| **flux-2-klein-4b-fp8.safetensors** | UNET Loader | Main generation model. |\n| **Flux2-Klein-9B-consistency-V2.safetensors** | LoRA (strength **0.35**) | Consistency LoRA — keep enabled. |\n\n### Upscaling Models\n\n| Model file | Purpose | Notes |\n|------|---------|-------|\n| **ema_vae_fp16.safetensors** | VAE for the upscale branch. | Default setup. |\n| **seedvr2_ema_7b_sharp-Q4_K_M.gguf** | SeedVR2 upscaler. | Auto-downloads in the standard setup. |\n\n---\n\n## 1. Load the Models\n\nIn the grey **model-loader** zone, load the four generation models above (VAE, CLIP, UNET, LoRA). The LoRA strength is set to **0.35** by default.\n\n---\n\n## 2. Output Naming  (the grey \"OUTPUT NAMING\" zone)\n\nNaming is now **fully automatic and relative** — you set one main field and everything files itself under `ComfyUI/output/`.\n\n| Field | Default | What it does |\n|---|---|---|\n| **NAME (CHARACTER)** | `MyCharacter` | The one field you change per run — the character/run name. |\n| **ROOT FOLDER** | `CCC` | Top-level bucket for all your datasets. |\n| **TYPE** | `IMG_GEN` / `DATASET` | Stage labels (leave as-is). |\n\nThese compose into a tidy tree:\n\n```\nComfyUI/output/\n  CCC/\n    MyCharacter/\n      MyCharacter_IMG_GEN/     ← raw per-scene generations\n      MyCharacter_DATASET/     ← final upscaled / face-detailed export\n```\n\n- **Nothing is hardcoded to your machine** — the workflow runs on any PC unchanged.\n- **Folders are created automatically** — you do *not* need to pre-make them.\n- For a clean run per character, just change **NAME**. Change **ROOT FOLDER** to start a new project bucket.\n- Advanced: the final export uses a WAS `Image Save` node — a power user can still type an **absolute path** into its location field to export straight into a training folder.\n\n### Resolution\n\nResolution is set with the **Resolution Selector** — pick an **aspect ratio** (default `1:1 (Square)`) and a size multiplier. The upscale stage automatically targets roughly **2× the base width**.\n\n---\n\n## 3. User Input  (the green \"Inputs\" zone)\n\n1. Load your **reference image** (the character to recreate).\n2. Fill in the two prompt fields:\n   - **Style Prompt** — overall visual style / aesthetic.\n   - **Clothes Prompt** — outfit details.\n\nThe **Image Compare** area lets you view results side by side as **RAW**, **UPSCALED**, and **FACE DETAILED**.\n\n---\n\n## 4. Bypass — Upscaler & Face Detailer  (independent switches)\n\nTwo switches in the **Bypass Selection** group control the optional stages, and they work **independently**:\n\n- **Use Upscaler** — `ON` = upscaled, `OFF` = raw passes through.\n- **Use Face Detailer** — `ON` = face-detailed, `OFF` = passes through.\n\nAny combination is valid and **always lands in the final `Image Save` node** — so you can run raw-only, upscale-only, detail-only, or both. Flip the switch booleans to skip a stage; do **not** mute/bypass the whole group (that breaks the chain).\n\nA common flow: run raw first to dial in prompts, then enable upscaling / face detailing once the scenes look right.\n\n---\n\n## 5. Dataset Creation  (the purple scene groups)\n\nEach **purple group is one scene pass** with a short name matching its prompt (`T-POSE`, `CLOSE-ANGRY`, `OFFICE`, `COFFEE`, `FLYING`…). Each group is self-contained. You can:\n\n- **edit** the prompt in a group,\n- **duplicate** a group (copy/paste) to add more scenes,\n- **disable** a group (mute it) to generate fewer images,\n- **rename** the group to match its new prompt.\n\nPrompts are assembled with `JoinStringMulti`, so you decide per group whether the **Style** and **Clothes** prompts apply — just keep or disconnect `Get_style` / `Get_clothes` from that group's join chain.\n\nYou can also point a group at a **different source image** via its `Get INPUT IMAGE`, to remix source references instead of always using the main one.\n\n**Important:** any image you want sent to the Upscaler / Face Detailer must be added to the dataset by wiring its `ImageCollect` node into the shared `Dataset`.\n\n> Prompt conventions used here: describe **the character** (never state a gender), and avoid camera/film-look styling (no \"shot on iPhone\", \"grainy\", \"flash photography\", etc.) so the dataset stays consistent.\n\n---\n\n## 6. Upscaling  (pink)\n\nOptional and adjustable. Default setup is **ema_vae_fp16** + **seedvr2_ema_7b_sharp-Q4_K_M.gguf**. You can change the upscaler model, its settings, and the target resolution. The target defaults to roughly **2× the base width** (auto-computed) but can be overridden.\n\n---\n\n## 7. Face Detailer  (pink)\n\nMeant for **selective** refinement — most useful when the face is small/far in the frame. The key control is the **Area Threshold** in the Face-Area-Batch-Split logic (default **0.15**, confidence **0.5**): faces above the threshold are sent to the detailer, the rest bypass it. Defaults work well for normal use; deeper Face Detailer settings are available if you want them.\n\n---\n\n## Separate Tagging Workflow\n\nIf you need captions, use the dedicated tagging workflow — robust QwenVL-based LLM tagging, compatible with JSON tags for Ideogram 4.\n\n---\n\n## Recommended Order\n\n1. Load the four models.\n2. Set **NAME (CHARACTER)** (and **ROOT FOLDER** if starting a new project).\n3. Pick the **aspect ratio** in the Resolution Selector.\n4. Load the **reference image** and write the **Style** / **Clothes** prompts.\n5. Run **raw** first (both switches OFF) to check prompts and scenes.\n6. Turn on **Upscaler** and/or **Face Detailer** for the final pass.\n\nChange **NAME** for each character/run — every stage refiles automatically under `output/CCC/<NAME>/`, so there is no folder to pre-create and nothing to clean up between runs.\n"
+        "# CustomCharacterCreator V.4 — End User Guide\n\n## Overview\n\nCustomCharacterCreator V.4 is a ComfyUI workflow that builds a **multi-view character dataset** from a single reference image. It generates a set of **named scene \"passes\"** (e.g. `T-POSE`, `CLOSE-FRONT`, `OFFICE`, `RUNNING`, `COFFEE`…), can optionally **upscale** them, and can optionally run **Face Detailer** only where a face is small enough to need it.\n\nDataset tagging lives in a **separate standalone tagging workflow**, which keeps this graph focused on generation.\n\n### Color legend (how to read the canvas)\n\n| Zone color | Meaning |\n|---|---|\n| **Grey** | Model loaders, settings, and output/naming |\n| **Green** | Your inputs (reference image, style/clothes prompts) |\n| **Purple** | The scene passes — one group per shot |\n| **Pink** | Heavy sampling stages (Upscaler, Face Detailer) |\n\n---\n\n## Required Custom Nodes\n\nInstall these packs before using the workflow — the graph depends on them.\n\n| Node Pack | Used for |\n|-----------|----------|\n| **ComfyUI Impact Pack** | Face Detailer, and the Save-Dataset switch (`ImpactInversedSwitch`). |\n| **ComfyUI Impact Subpack** | `UltralyticsDetectorProvider` (face detection). |\n| **ComfyUI-KJNodes** | Core routing (`GetNode`/`SetNode`), `JoinStringMulti`, `ImageResizeKJv2`, `StringConstantMultiline`. |\n| **ComfyUI-Easy-Use** | Batch helpers (`imageListToImageBatch`, `imageBatchToImageList`) and float inputs. |\n| **ComfyUI-SeedVR2_VideoUpscaler** | The upscaling stage (SeedVR2). |\n| **rgthree-comfy** | `Image Comparer` preview nodes (bypassed by default). |\n| **ComfyUI-Flux2Klein-Enhancer** | `IdentityGuidance` for the Flux Klein chain. |\n| **ComfyUI-Custom-Scripts** | `MathExpression` (auto upscale resolution). |\n| **WAS Node Suite** | `Image Save` — the final dataset export. |\n| **ComfyUI-AutoCropFaces** | Reference-face detection / crop preparation. |\n| **Mickmumpitz-Nodes** | `ImageCollect`, `ImageCollectUnpack`, `CCC_FaceAreaBatchSplitter`, `CCC_BranchGate`, and the labels. |\n\nThe bypass switches (`ComfySwitchNode`) and the per-scene generation subgraphs are **built-in ComfyUI** — no extra pack needed.\n\n---\n\n## Required Models\n\n### Main Generation Models\n\n| Model file | Loader | Purpose |\n|------|--------|---------|\n| **flux2-vae.safetensors** | VAE Loader | VAE for the main image chain. |\n| **qwen_3_4b_fp4_flux2.safetensors** | CLIP Loader (type `flux2`) | Text/instruction encoder. |\n| **flux-2-klein-4b-fp8.safetensors** | UNET Loader | Main generation model. |\n\n### Upscaling Models\n\n| Model file | Purpose | Notes |\n|------|---------|-------|\n| **ema_vae_fp16.safetensors** | VAE for the upscale branch. | Default setup. |\n| **seedvr2_ema_7b_sharp-Q4_K_M.gguf** | SeedVR2 upscaler. | Auto-downloads in the standard setup. |\n\n---\n\n## 1. Load the Models\n\nIn the grey **model-loader** zone, load the three generation models above (VAE, CLIP, UNET). The Klein 9B consistency LoRA was removed: this repo has no Klein 4B equivalent.\n\n---\n\n## 2. Output Naming  (the grey \"OUTPUT NAMING\" zone)\n\nNaming is now **fully automatic and relative** — you set one main field and everything files itself under `ComfyUI/output/`.\n\n| Field | Default | What it does |\n|---|---|---|\n| **NAME (CHARACTER)** | `MyCharacter` | The one field you change per run — the character/run name. |\n| **ROOT FOLDER** | `CCC` | Top-level bucket for all your datasets. |\n| **TYPE** | `IMG_GEN` / `DATASET` | Stage labels (leave as-is). |\n\nThese compose into a tidy tree:\n\n```\nComfyUI/output/\n  CCC/\n    MyCharacter/\n      MyCharacter_IMG_GEN/     ← raw per-scene generations\n      MyCharacter_DATASET/     ← final upscaled / face-detailed export\n```\n\n- **Nothing is hardcoded to your machine** — the workflow runs on any PC unchanged.\n- **Folders are created automatically** — you do *not* need to pre-make them.\n- For a clean run per character, just change **NAME**. Change **ROOT FOLDER** to start a new project bucket.\n- Advanced: the final export uses a WAS `Image Save` node — a power user can still type an **absolute path** into its location field to export straight into a training folder.\n\n### Resolution\n\nResolution is set with the **Resolution Selector** — pick an **aspect ratio** (default `1:1 (Square)`) and a size multiplier. The upscale stage automatically targets roughly **2× the base width**.\n\n---\n\n## 3. User Input  (the green \"Inputs\" zone)\n\n1. Load your **reference image** (the character to recreate).\n2. Fill in the two prompt fields:\n   - **Style Prompt** — overall visual style / aesthetic.\n   - **Clothes Prompt** — outfit details.\n\nThe **Image Compare** area lets you view results side by side as **RAW**, **UPSCALED**, and **FACE DETAILED**.\n\n---\n\n## 4. Bypass — Upscaler & Face Detailer  (independent switches)\n\nTwo switches in the **Bypass Selection** group control the optional stages, and they work **independently**:\n\n- **Use Upscaler** — `ON` = upscaled, `OFF` = raw passes through.\n- **Use Face Detailer** — `ON` = face-detailed, `OFF` = passes through.\n\nAny combination is valid and **always lands in the final `Image Save` node** — so you can run raw-only, upscale-only, detail-only, or both. Flip the switch booleans to skip a stage; do **not** mute/bypass the whole group (that breaks the chain).\n\nA common flow: run raw first to dial in prompts, then enable upscaling / face detailing once the scenes look right.\n\n---\n\n## 5. Dataset Creation  (the purple scene groups)\n\nEach **purple group is one scene pass** with a short name matching its prompt (`T-POSE`, `CLOSE-ANGRY`, `OFFICE`, `COFFEE`, `FLYING`…). Each group is self-contained. You can:\n\n- **edit** the prompt in a group,\n- **duplicate** a group (copy/paste) to add more scenes,\n- **disable** a group (mute it) to generate fewer images,\n- **rename** the group to match its new prompt.\n\nPrompts are assembled with `JoinStringMulti`, so you decide per group whether the **Style** and **Clothes** prompts apply — just keep or disconnect `Get_style` / `Get_clothes` from that group's join chain.\n\nYou can also point a group at a **different source image** via its `Get INPUT IMAGE`, to remix source references instead of always using the main one.\n\n**Important:** any image you want sent to the Upscaler / Face Detailer must be added to the dataset by wiring its `ImageCollect` node into the shared `Dataset`.\n\n> Prompt conventions used here: describe **the character** (never state a gender), and avoid camera/film-look styling (no \"shot on iPhone\", \"grainy\", \"flash photography\", etc.) so the dataset stays consistent.\n\n---\n\n## 6. Upscaling  (pink)\n\nOptional and adjustable. Default setup is **ema_vae_fp16** + **seedvr2_ema_7b_sharp-Q4_K_M.gguf**. You can change the upscaler model, its settings, and the target resolution. The target defaults to roughly **2× the base width** (auto-computed) but can be overridden.\n\n---\n\n## 7. Face Detailer  (pink)\n\nMeant for **selective** refinement — most useful when the face is small/far in the frame. The key control is the **Area Threshold** in the Face-Area-Batch-Split logic (default **0.15**, confidence **0.5**): faces above the threshold are sent to the detailer, the rest bypass it. Defaults work well for normal use; deeper Face Detailer settings are available if you want them.\n\n---\n\n## Separate Tagging Workflow\n\nIf you need captions, use the dedicated tagging workflow — robust QwenVL-based LLM tagging, compatible with JSON tags for Ideogram 4.\n\n---\n\n## Recommended Order\n\n1. Load the three models (VAE, CLIP, UNET).\n2. Set **NAME (CHARACTER)** (and **ROOT FOLDER** if starting a new project).\n3. Pick the **aspect ratio** in the Resolution Selector.\n4. Load the **reference image** and write the **Style** / **Clothes** prompts.\n5. Run **raw** first (both switches OFF) to check prompts and scenes.\n6. Turn on **Upscaler** and/or **Face Detailer** for the final pass.\n\nChange **NAME** for each character/run — every stage refiles automatically under `output/CCC/<NAME>/`, so there is no folder to pre-create and nothing to clean up between runs.\n"
       ],
       "color": "#97651BFF",
       "bgcolor": "#B67921FF"
@@ -23070,7 +23028,7 @@
       "title": "Model download links",
       "properties": {},
       "widgets_values": [
-        "**flux2vae.safetensors**\n\nVAE for the main image generation chain.\n\n[https://huggingface.co/Comfy-Org/flux2-dev/blob/main/split_files/vae/flux2-vae.safetensors](https://huggingface.co/Comfy-Org/flux2-dev/blob/main/split_files/vae/flux2-vae.safetensors)\n\n📁 ComfyUI/models/vae"
+        "**flux2vae.safetensors**\n\nVAE for the main image generation chain.\n\n[https://huggingface.co/Comfy-Org/Flux-2-Klein-4B/blob/main/split_files/vae/flux2-vae.safetensors](https://huggingface.co/Comfy-Org/Flux-2-Klein-4B/blob/main/split_files/vae/flux2-vae.safetensors)\n\n📁 ComfyUI/models/vae"
       ],
       "color": "#97651BFF",
       "bgcolor": "#B67921FF"
@@ -23118,7 +23076,7 @@
       "title": "Model download links",
       "properties": {},
       "widgets_values": [
-        "**Flux2-Klein-9B-consistency-V2.safetensors**\n\nMain consistency LoRA — keep enabled.\n\n[(not downloaded; FLUX.2 [klein] 4B is the only Flux)]((not downloaded; FLUX.2 [klein] 4B is the only Flux))\n\n📁 ComfyUI/models/loras"
+        "The Klein 9B consistency LoRA node was removed. No Klein 4B equivalent of Flux2-Klein-9B-consistency-V2.safetensors is in this repo, so this chain uses the FLUX.2 [klein] 4B UNET directly."
       ],
       "color": "#97651BFF",
       "bgcolor": "#B67921FF"
@@ -23166,16 +23124,8 @@
       "IMAGE"
     ],
     [
-      562,
-      527,
-      0,
-      664,
-      0,
-      "MODEL"
-    ],
-    [
       619,
-      664,
+      527,
       0,
       824,
       0,
@@ -27253,7 +27203,7 @@
         },
         "revision": 0,
         "config": {},
-        "name": "Image Edit (Flux.2 Dev)",
+        "name": "Image Edit (FLUX.2 Klein 4B)",
         "inputNode": {
           "id": -10,
           "bounding": [
@@ -29291,7 +29241,7 @@
         },
         "revision": 0,
         "config": {},
-        "name": "Image Edit (Flux.2 Dev)",
+        "name": "Image Edit (FLUX.2 Klein 4B)",
         "inputNode": {
           "id": -10,
           "bounding": [
@@ -31377,7 +31327,7 @@
         },
         "revision": 0,
         "config": {},
-        "name": "Image Edit (Flux.2 Dev)",
+        "name": "Image Edit (FLUX.2 Klein 4B)",
         "inputNode": {
           "id": -10,
           "bounding": [
@@ -33463,7 +33413,7 @@
         },
         "revision": 0,
         "config": {},
-        "name": "Image Edit (Flux.2 Dev)",
+        "name": "Image Edit (FLUX.2 Klein 4B)",
         "inputNode": {
           "id": -10,
           "bounding": [
@@ -35549,7 +35499,7 @@
         },
         "revision": 0,
         "config": {},
-        "name": "Image Edit (Flux.2 Dev)",
+        "name": "Image Edit (FLUX.2 Klein 4B)",
         "inputNode": {
           "id": -10,
           "bounding": [
@@ -37635,7 +37585,7 @@
         },
         "revision": 0,
         "config": {},
-        "name": "Image Edit (Flux.2 Dev)",
+        "name": "Image Edit (FLUX.2 Klein 4B)",
         "inputNode": {
           "id": -10,
           "bounding": [
@@ -39721,7 +39671,7 @@
         },
         "revision": 0,
         "config": {},
-        "name": "Image Edit (Flux.2 Dev)",
+        "name": "Image Edit (FLUX.2 Klein 4B)",
         "inputNode": {
           "id": -10,
           "bounding": [
@@ -41807,7 +41757,7 @@
         },
         "revision": 0,
         "config": {},
-        "name": "Image Edit (Flux.2 Dev)",
+        "name": "Image Edit (FLUX.2 Klein 4B)",
         "inputNode": {
           "id": -10,
           "bounding": [
@@ -43893,7 +43843,7 @@
         },
         "revision": 0,
         "config": {},
-        "name": "Image Edit (Flux.2 Dev)",
+        "name": "Image Edit (FLUX.2 Klein 4B)",
         "inputNode": {
           "id": -10,
           "bounding": [
@@ -45979,7 +45929,7 @@
         },
         "revision": 0,
         "config": {},
-        "name": "Image Edit (Flux.2 Dev)",
+        "name": "Image Edit (FLUX.2 Klein 4B)",
         "inputNode": {
           "id": -10,
           "bounding": [
@@ -48065,7 +48015,7 @@
         },
         "revision": 0,
         "config": {},
-        "name": "Image Edit (Flux.2 Dev)",
+        "name": "Image Edit (FLUX.2 Klein 4B)",
         "inputNode": {
           "id": -10,
           "bounding": [
@@ -50151,7 +50101,7 @@
         },
         "revision": 0,
         "config": {},
-        "name": "Image Edit (Flux.2 Dev)",
+        "name": "Image Edit (FLUX.2 Klein 4B)",
         "inputNode": {
           "id": -10,
           "bounding": [
@@ -52237,7 +52187,7 @@
         },
         "revision": 0,
         "config": {},
-        "name": "Image Edit (Flux.2 Dev)",
+        "name": "Image Edit (FLUX.2 Klein 4B)",
         "inputNode": {
           "id": -10,
           "bounding": [
@@ -54323,7 +54273,7 @@
         },
         "revision": 0,
         "config": {},
-        "name": "Image Edit (Flux.2 Dev)",
+        "name": "Image Edit (FLUX.2 Klein 4B)",
         "inputNode": {
           "id": -10,
           "bounding": [
@@ -56409,7 +56359,7 @@
         },
         "revision": 0,
         "config": {},
-        "name": "Image Edit (Flux.2 Dev)",
+        "name": "Image Edit (FLUX.2 Klein 4B)",
         "inputNode": {
           "id": -10,
           "bounding": [
@@ -58405,7 +58355,7 @@
         },
         "revision": 0,
         "config": {},
-        "name": "Image Edit (Flux.2 Dev)",
+        "name": "Image Edit (FLUX.2 Klein 4B)",
         "inputNode": {
           "id": -10,
           "bounding": [
@@ -60491,7 +60441,7 @@
         },
         "revision": 0,
         "config": {},
-        "name": "Image Edit (Flux.2 Dev)",
+        "name": "Image Edit (FLUX.2 Klein 4B)",
         "inputNode": {
           "id": -10,
           "bounding": [
@@ -62577,7 +62527,7 @@
         },
         "revision": 0,
         "config": {},
-        "name": "Image Edit (Flux.2 Dev)",
+        "name": "Image Edit (FLUX.2 Klein 4B)",
         "inputNode": {
           "id": -10,
           "bounding": [
@@ -64663,7 +64613,7 @@
         },
         "revision": 0,
         "config": {},
-        "name": "Image Edit (Flux.2 Dev)",
+        "name": "Image Edit (FLUX.2 Klein 4B)",
         "inputNode": {
           "id": -10,
           "bounding": [
@@ -66749,7 +66699,7 @@
         },
         "revision": 0,
         "config": {},
-        "name": "Image Edit (Flux.2 Dev)",
+        "name": "Image Edit (FLUX.2 Klein 4B)",
         "inputNode": {
           "id": -10,
           "bounding": [
@@ -68835,7 +68785,7 @@
         },
         "revision": 0,
         "config": {},
-        "name": "Image Edit (Flux.2 Dev)",
+        "name": "Image Edit (FLUX.2 Klein 4B)",
         "inputNode": {
           "id": -10,
           "bounding": [
@@ -70921,7 +70871,7 @@
         },
         "revision": 0,
         "config": {},
-        "name": "Image Edit (Flux.2 Dev)",
+        "name": "Image Edit (FLUX.2 Klein 4B)",
         "inputNode": {
           "id": -10,
           "bounding": [
@@ -73007,7 +72957,7 @@
         },
         "revision": 0,
         "config": {},
-        "name": "Image Edit (Flux.2 Dev)",
+        "name": "Image Edit (FLUX.2 Klein 4B)",
         "inputNode": {
           "id": -10,
           "bounding": [
@@ -75093,7 +75043,7 @@
         },
         "revision": 0,
         "config": {},
-        "name": "Image Edit (Flux.2 Dev)",
+        "name": "Image Edit (FLUX.2 Klein 4B)",
         "inputNode": {
           "id": -10,
           "bounding": [

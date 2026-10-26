@@ -17,7 +17,7 @@ on:
       - video_buddy/master_agent/install_report.py
       - video_buddy/master_agent/comfy/**
       - video_buddy/scripts/ci/**
-      - video_buddy/workflows/260615_VIDEO-BUDDY_FLUX_KLEIN_9B_V01_api.json
+      - video_buddy/workflows/260615_VIDEO-BUDDY_FLUX_KLEIN_4B_V01_api.json
   pull_request:
     paths:
       - .github/workflows/fresh-install.yml
@@ -28,7 +28,7 @@ on:
       - video_buddy/master_agent/install_report.py
       - video_buddy/master_agent/comfy/**
       - video_buddy/scripts/ci/**
-      - video_buddy/workflows/260615_VIDEO-BUDDY_FLUX_KLEIN_9B_V01_api.json
+      - video_buddy/workflows/260615_VIDEO-BUDDY_FLUX_KLEIN_4B_V01_api.json
   schedule:
     - cron: "17 6 * * *"
   workflow_dispatch:

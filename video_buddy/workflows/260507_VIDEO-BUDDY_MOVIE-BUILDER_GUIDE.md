@@ -87,8 +87,10 @@ seed changes often fix voice/lip-sync without losing the visual.
 ## Advanced (Patreon): 360 environments, shot-reverse-shot
 
 - 360 environment generation — prompt or load a reference. The still
-  generator is FLUX.2 [klein] 4B (Apache 2.0). The Klein 9B 360 LoRA is not
-  downloaded. The Panorama Viewer node previews the image in ComfyUI.
+  generator is FLUX.2 [klein] 4B (Apache 2.0). The 360 pass loads
+  `flux-2-klein-4B-360-erp-outpaint-lora_V1.safetensors`. That LoRA is not in
+  the Klein download pack. The Klein 9B consistency LoRA node was removed
+  (no 4B equivalent in this repo). The Panorama Viewer node previews the image in ComfyUI.
   The *Load Input Image* toggle switches between an existing reference and the
   outpaint-from-prompt pipeline.
 - Shot-reverse-shot via Environment Crop (Olm DragCrop) — crop background

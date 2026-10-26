@@ -53,7 +53,7 @@ No eligible file: raise before ComfyUI is queued. The message lists what is miss
 
 ## Flux I2V hook
 
-`workflows/flux_ltx_i2v_api.json` and the `flux_ltx_i2v` manifest slug arrived on this branch when it was rebased onto `origin/main` after PR #92 merged. The detector uses that file when it is present. It does not copy a graph. Preference order for the still: `flux-2-klein-4b-fp8.safetensors` (main's PR #100), then Klein 9B, then `flux1-dev-Q4_K_S`, then `flux1-dev-fp8`. If the workflow file is absent, the route reason says so and names `flux_ltx_i2v_api.json`.
+`workflows/flux_ltx_i2v_api.json` and the `flux_ltx_i2v` manifest slug are on this branch. The detector uses that file when it is present. The still is FLUX.2 [klein] 4B only: download `flux-2-klein-4b-fp8.safetensors` (UNETLoader, `weight_dtype: default`), accept `flux-2-klein-4b.safetensors` when it is already on disk, text encoder `qwen_3_4b_fp4_flux2.safetensors` (`CLIPLoader` type `flux2`), VAE `flux2-vae.safetensors`. Klein 9B, Flux.1, and other Flux sizes are not selectable. If the workflow file is absent, the route reason says so and names `flux_ltx_i2v_api.json`.
 
 Combined VRAM is the Flux still plus the LTX (or H3) model that would animate it. If that sum exceeds free VRAM, Flux I2V is rejected and T2V (or the user's image route) is why.
 

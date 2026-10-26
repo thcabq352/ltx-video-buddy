@@ -141,33 +141,6 @@ flux:
       node_id: "90"
       input: filename_prefix
 
-flux_ltx_i2v:
-  file: flux_t2i.json
-  description: Klein 4B still, then ltx25_t2v_i2v. The still generator is FLUX.2 [klein] 4B.
-  still_generator: flux-2-klein-4b-fp8.safetensors
-  video_variant: ltx25_t2v_i2v
-  vram_class: safe
-  vram_peak_gb: 12.0
-  fields:
-    prompt:
-      node_id: "10"
-      input: text
-    seed:
-      node_id: "50"
-      input: seed
-    width:
-      node_id: "20"
-      input: width
-    height:
-      node_id: "20"
-      input: height
-    steps:
-      node_id: "50"
-      input: steps
-    filename_prefix:
-      node_id: "90"
-      input: filename_prefix
-
 lipsync:
   file: lipsync_ia2v.json
   description: LipDub graph (takes a source video with speech audio)
@@ -657,7 +630,7 @@ vb_aivfx_startimage:
 flux_ltx_i2v:
   file: flux_ltx_i2v_api.json
   format: api
-  description: Flux.1-dev GGUF still → LTX 2.5 i2v 25-frame motion pass with audio (one shared prompt)
+  description: FLUX.2 [klein] 4B still → LTX 2.5 i2v 25-frame motion pass with audio (one shared prompt)
   vram_class: tight
   vram_peak_gb: 13.5
   safer_alternate: ltx25_t2v_i2v

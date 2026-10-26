@@ -212,13 +212,22 @@ CAPABILITY_CATALOG: tuple[Capability, ...] = (
     Capability(
         "flux_ltx_i2v",
         "Flux still → LTX 2.5 i2v hybrid",
-        class_types=("UnetLoaderGGUF", "FluxGuidance", "StringConcatenate", "LTXVImgToVideoInplace"),
+        class_types=(
+            "UNETLoader",
+            "CLIPLoader",
+            "UnetLoaderGGUF",
+            "FluxGuidance",
+            "StringConcatenate",
+            "LTXVImgToVideoInplace",
+        ),
         surfaces=("director", "patcher", "template"),
         templates=("flux_ltx_i2v",),
         notes=(
-            "Flux.1-dev GGUF still feeds the ltx25_t2v_i2v first frame in one prompt and is "
+            "FLUX.2 [klein] 4B still (UNETLoader, qwen_3_4b_fp4_flux2, flux2-vae, "
+            "EmptyFlux2LatentImage) feeds the ltx25_t2v_i2v first frame in one prompt and is "
             "saved as a PNG. One shared aesthetic prompt drives both models; LTX appends a "
-            "motion line. 25 frames with audio. Untested on GPU."
+            "motion line. The LTX half still uses UnetLoaderGGUF. 25 frames with audio. "
+            "Untested on GPU."
         ),
     ),
     Capability(

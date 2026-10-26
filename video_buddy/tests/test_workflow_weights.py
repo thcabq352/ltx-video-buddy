@@ -56,8 +56,8 @@ KEEP = (
     ("vb_aivfx_adv", ("Wan2.1_T2V_14B_FusionX_LoRA.safetensors", "wan_2.1_vae.safetensors", "wan-14B_vace_skyreels")),
     ("vb_aivfx_adv_13", ("Wan2.1_T2V_14B_FusionX_LoRA.safetensors", "wan_2.1_vae.safetensors", "vace")),
     ("vb_ccc41_krea2", ("krea2_turbo_fp8_scaled.safetensors", "krea2_identity_edit_v1_2.safetensors", "wan_2.1_vae.safetensors")),
-    ("vb_movie_builder", ("flux-2-klein-9B-360-erp-outpaint-lora_V1.safetensors", "Flux2-Klein-9B-consistency-V2.safetensors", DISTILLED_LORA, "ltx-2.3-id-lora-talkvid-3k.safetensors", "flux2-vae.safetensors", "LTX23_video_vae_bf16.safetensors", "LTX23_audio_vae_bf16.safetensors")),
-    ("260615_video-buddy_flux_klein_9b_v01", ("flux-2-klein-4b-fp8.safetensors", "qwen_3_4b_fp4_flux2.safetensors", "flux2-vae.safetensors")),
+    ("vb_movie_builder", ("flux-2-klein-4B-360-erp-outpaint-lora_V1.safetensors", "flux-2-klein-4b-fp8.safetensors", "qwen_3_4b_fp4_flux2.safetensors", DISTILLED_LORA, "ltx-2.3-id-lora-talkvid-3k.safetensors", "flux2-vae.safetensors", "LTX23_video_vae_bf16.safetensors", "LTX23_audio_vae_bf16.safetensors")),
+    ("260615_video-buddy_flux_klein_4b_v01", ("flux-2-klein-4b-fp8.safetensors", "qwen_3_4b_fp4_flux2.safetensors", "flux2-vae.safetensors")),
     ("vb_krea2_img", ("krea2", "qwen3vl")),
     ("vb_wan22_vid", ("umt5_xxl", "wan_2.1_vae.safetensors")),
     ("vb_qwen_edit_360", ("qwen",)),
@@ -132,6 +132,9 @@ def test_non_ltx_graphs_do_not_inherit_the_base_bundle(variant, needles):
         assert leak not in blob, f"{variant} leaked {leak}"
     for needle in needles:
         assert needle in blob, f"{variant} lost {needle}"
+    if variant in ("vb_movie_builder", "vb_ccc_adv", "260615_video-buddy_flux_klein_4b_v01"):
+        assert "Flux2-Klein-9B" not in blob
+        assert "flux-2-klein-9" not in blob
     if variant == "vb_ideogram":
         classes = {
             node.get("class_type")

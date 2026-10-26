@@ -132,7 +132,7 @@ Both steps are required. A pip failure, or a package that still does not import,
 `.github/workflows/fresh-install.yml` runs `install.py --automatic-install --yes --skip-weights --skip-sage --skip-llm --gpu cpu` from a clean checkout. It then starts ComfyUI with `COMFY_EXTRA_ARGS="--cpu --enable-manager"` through `comfy start`. Manager only loads with `--enable-manager`, and Buddy's own launch does not pass that flag. Each launch waits for `/system_stats`. It fails on `InvalidChannel`, `ModuleNotFoundError` or `IMPORT FAILED` in the log, and on Manager's `/v2/manager/channel_url_list` not selecting the Comfy-Org channel. The job also:
 
 - installs the Klein stills packs and checks the pins after `pip install --upgrade` of other packages and of ComfyUI's own requirements (torch excluded);
-- checks `260615_VIDEO-BUDDY_FLUX_KLEIN_9B_V01_api.json` against the live `/object_info` and the offline validator;
+- checks `260615_VIDEO-BUDDY_FLUX_KLEIN_4B_V01_api.json` against the live `/object_info` and the offline validator;
 - deletes Manager's `config.ini`, launches, repairs with `automatic-install`, launches again, then repairs a second time and checks that nothing changed.
 
 Linux runs on pushes to `main` and PRs that touch the install path, nightly, and on demand. Windows runs nightly and on demand. The checks live in `video_buddy/scripts/ci/fresh_install_check.py`, and each subcommand also runs by hand. The `comfy-pins` job in `pytest.yml` checks the pins in a clean venv on every push.
