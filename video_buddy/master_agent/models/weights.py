@@ -51,6 +51,9 @@ H3_OPTIONAL_LORAS = frozenset({
 OPTIONAL_STUBS = frozenset({"style.safetensors", "camera-orbit.safetensors"}) | H3_OPTIONAL_LORAS
 
 HF_LTX25 = "Lightricks/LTX-2.5"
+HF_LTX25_GGUF = "Abiray/LTX-2.5-Distilled-GGUF"
+HF_LTX25_TE_GGUF = "elix3r/gemma4-12b-with-proj-ltx-2.5-GGUF"
+HF_LTX25_TE_GGUF_LICENSE = "https://huggingface.co/elix3r/gemma4-12b-with-proj-ltx-2.5-GGUF"
 HF_ICLORA = "Lightricks/LTX-2.5-22b-IC-LoRA-Ingredients"
 HF_LICENSE = "https://huggingface.co/Lightricks/LTX-2.5"
 HF_ICLORA_LICENSE = "https://huggingface.co/Lightricks/LTX-2.5-22b-IC-LoRA-Ingredients"
@@ -74,6 +77,8 @@ class WeightFile:
     # Local alternatives that satisfy this slot. First is preferred when several exist.
     # Official ``filename`` is the Hub download target (not the only accepted name).
     accepts: tuple[str, ...] = ()
+    # Hub LFS sha256 of ``repo_filename`` when the listing or model card publishes it.
+    sha256: str = ""
 
     @property
     def size_label(self) -> str:
@@ -91,8 +96,9 @@ class WeightFile:
         for name in (*self.accepts, self.filename):
             if name and name not in seen:
                 seen.append(name)
+        accepted = tuple(seen)
         for stub, official in STUB_ALIASES.items():
-            if official == self.filename and stub not in seen:
+            if official in accepted and stub not in seen:
                 seen.append(stub)
         return tuple(seen)
 
@@ -106,7 +112,13 @@ TRANSFORMER_PREFERENCE: tuple[str, ...] = (
     "ltx-2.5-22b-distilled-transformer-comfy-int8-convrot.safetensors",
     "ltx-2.5-22b-distilled-transformer-bf16.safetensors",
 )
+# GGUF TEs load through CLIPLoaderGGUF (type ltxv) and need elix3r's
+# ComfyUI-GGUF gemma4 patch. Q4_K_M beats Q2_K when both are on disk.
+LTX25_TE_GGUF_Q2 = "gemma4-12b-with-proj-ltx-2.5-Q2_K.gguf"
+LTX25_TE_GGUF_Q4 = "gemma4-12b-with-proj-ltx-2.5-Q4_K_M.gguf"
 TE_PREFERENCE: tuple[str, ...] = (
+    LTX25_TE_GGUF_Q4,
+    LTX25_TE_GGUF_Q2,
     "gemma4-12b-heretic-ltx25-int8convrot.safetensors",
     "gemma4-12b-with-proj-ltx-2.5-comfy-int8-convrot.safetensors",
     "gemma4-12b-with-proj-ltx-2.5-bf16.safetensors",
@@ -145,32 +157,47 @@ H3_TE_PREFERENCE: tuple[str, ...] = (
 H3_TRANSFORMER_KEYS = frozenset({"h3_fl2va", "h3_ref2va"})
 
 # Official distilled split pack on gated Lightricks/LTX-2.5 (Hub file listing).
-# The Hub download target stays bf16. The loader prefers a GGUF already on
+# The transformer download target is the public Abiray Q4_K_M GGUF (Hub
+# listing 2026-10-20, sha256 0f51eb0d…e0d0, commit d103d88). It is saved under
+# the TRANSFORMER_PREFERENCE[0] name. The loader still prefers a GGUF already on
 # disk, then NVFP4 / int8, and only then bf16 (see transformer_preference_order).
 WEIGHT_FILES: dict[str, WeightFile] = {
     "transformer": WeightFile(
         key="transformer",
-        filename="ltx-2.5-22b-distilled-transformer-bf16.safetensors",
+        filename="ltx-2.5-22b-distilled-transformer-bf16-Q4_K_M.gguf",
         dest_folder="diffusion_models",
-        repo_id=HF_LTX25,
-        repo_filename="diffusion_models/ltx-2.5-22b-distilled-transformer-bf16.safetensors",
-        size_bytes=42_000_000_000,
+        repo_id=HF_LTX25_GGUF,
+        repo_filename="LTX-2.5-Distilled-Q4_K_M.gguf",
+        size_bytes=15_687_639_488,
         mandatory=True,
-        gated=True,
-        note="Official distilled transformer (bf16, 42 GB). Loader prefers on-disk GGUF Q4, then NVFP4 / int8; bf16 is the fallback.",
+        gated=False,
+        note=(
+            "Abiray Q4_K_M GGUF (~15.7 GB). Default download target for 16GB-class. "
+            "Official Lightricks bf16 safetensors (42 GB, gated) still counts if already on disk via accepts."
+        ),
         accepts=TRANSFORMER_PREFERENCE,
+        sha256="0f51eb0d82b19bddbfb3b0371a65217844ea03750f27dd733528f22152e0e0d0",
     ),
+    # elix3r card + Hub listing 2026-10-20 (repo commit 2a18e83). The repo is
+    # auto-approve gated: an HF token and a license click are still required.
     "text_encoder": WeightFile(
         key="text_encoder",
-        filename="gemma4-12b-with-proj-ltx-2.5-bf16.safetensors",
+        filename=LTX25_TE_GGUF_Q2,
         dest_folder="text_encoders",
-        repo_id=HF_LTX25,
-        repo_filename="text_encoders/gemma4-12b-with-proj-ltx-2.5-bf16.safetensors",
-        size_bytes=26_300_000_000,
+        repo_id=HF_LTX25_TE_GGUF,
+        repo_filename=LTX25_TE_GGUF_Q2,
+        size_bytes=5_956_930_560,
         mandatory=True,
         gated=True,
-        note="Official Gemma 4 12B + LTX 2.5 projection (bf16, 26.3 GB). Comfy int8 or heretic int8 also count.",
+        license_url=HF_LTX25_TE_GGUF_LICENSE,
+        note=(
+            "elix3r Gemma 4 12B + LTX 2.5 projections GGUF Q2_K (~6.0 GB). Default download target "
+            "for 16GB-class. Loads via CLIPLoaderGGUF (type ltxv) and needs the repo's "
+            "ComfyUI-GGUF gemma4 patch. Q4_K_M (~8.4 GB), heretic int8convrot (13.2 GB), "
+            "Comfy int8 and official bf16 (26.3 GB) also count."
+        ),
         accepts=TE_PREFERENCE,
+        sha256="a70012eeea2fbee7c9c058fca5710842ec8cb9d9e94e630f2d1a0647a8d300f6",
     ),
     "video_vae": WeightFile(
         key="video_vae",
@@ -642,6 +669,7 @@ BUNDLES: dict[str, tuple[str, ...]] = {
     "ltx25_iclora": (*_LTX25_OFFICIAL, "ic_lora"),
     "ltx25_msr": (*_LTX25_OFFICIAL, "ic_lora"),
     "ltx25_all": _LTX25_ALL,
+    "ltx25_flux_i2v": (*_LTX25_OFFICIAL, *_FLUX),
     "h3_fl2va": _H3_FL2VA,
     "h3_ref2va": _H3_REF2VA,
     "h3_all": _H3_ALL,
@@ -663,6 +691,7 @@ VARIANT_BUNDLES: dict[str, str] = {
     "ltx25_v2v_ic_lora": "ltx25_iclora",
     "ltx25_msr": "ltx25_msr",
     "ltx25_inoutpaint": "ltx25_core",
+    "flux_ltx_i2v": "ltx25_flux_i2v",
     "t2v_i2v": "ltx25_core",
     "t2v_i2v_two_stage": "ltx25_two_stage",
     "flf2v": "ltx25_core",
@@ -741,6 +770,7 @@ def _file_row(w: WeightFile) -> dict[str, Any]:
         "mandatory": w.mandatory,
         "license": w.license_url,
         "note": w.note,
+        "sha256": w.sha256,
     }
 
 
@@ -1749,6 +1779,8 @@ def format_ask(status: WeightStatus) -> str:
             f"  - {w.filename}  →  models/{w.dest_folder}/  ({w.size_label}){gated}"
         )
         lines.append(f"      {w.repo_id}  {w.repo_filename}")
+        if w.sha256:
+            lines.append(f"      sha256: {w.sha256}")
         if w.note:
             lines.append(f"      {w.note}")
         alts = [n for n in w.candidates if n != w.filename]

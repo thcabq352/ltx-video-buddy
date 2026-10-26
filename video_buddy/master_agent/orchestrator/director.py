@@ -35,6 +35,11 @@ _VARIANT_KEYWORDS = [
         "vfx preprocess", "aivfx preprocess", "ai-vfx preprocess",
         "sam3", "depthcrafter", "cotracker", "rmbg",
     )),
+    # Before vb_aivfx_startimage ("start image") and the bare "flux" / "ltx 2.5" rules.
+    ("flux_ltx_i2v", (
+        "flux to ltx", "flux-to-ltx", "flux → ltx", "flux->ltx", "flux ltx",
+        "flux still to video", "flux still into ltx", "flux start frame", "flux_ltx",
+    )),
     ("vb_aivfx_startimage", (
         "vfx start", "aivfx start", "ai-vfx start", "start-image",
         "start image", "qwen start",

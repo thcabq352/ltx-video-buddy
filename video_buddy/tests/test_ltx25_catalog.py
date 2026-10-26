@@ -138,6 +138,23 @@ def test_local_gguf_rewrites_unet_loader_gguf(tmp_path, monkeypatch):
         assert any(str(n).startswith("gemma4-12b-heretic") for n in names), names
 
 
+def test_local_gguf_te_rewrites_clip_loader_gguf(tmp_path, monkeypatch):
+    root = tmp_path / "models"
+    q4 = root / "text_encoders" / "gemma4-12b-with-proj-ltx-2.5-Q4_K_M.gguf"
+    q2 = root / "text_encoders" / "gemma4-12b-with-proj-ltx-2.5-Q2_K.gguf"
+    q4.parent.mkdir(parents=True)
+    q4.write_bytes(b"q4")
+    q2.write_bytes(b"q2")
+    monkeypatch.setattr("master_agent.models.weights.model_search_roots", lambda: [root])
+    wf, _meta = load_and_patch_workflow("ltx25_t2v_i2v", prompt="hero shot", seed=1, duration_s=2.0)
+    clips = _find_nodes_by_class(wf, "CLIPLoaderGGUF")
+    assert clips
+    for _nid, node in clips:
+        assert node["inputs"] == {"clip_name": q4.name, "type": "ltxv"}
+    leftover = [n["inputs"].get("clip_name") for _i, n in _find_nodes_by_class(wf, "CLIPLoader")]
+    assert not any(str(name).endswith(".gguf") for name in leftover), leftover
+
+
 def test_stub_ckpt_remapped_to_official_transformer():
     wf, _meta = load_and_patch_workflow(
         "ltx25_t2v_i2v",
@@ -145,25 +162,19 @@ def test_stub_ckpt_remapped_to_official_transformer():
         seed=1,
         duration_s=2.0,
     )
-    official = "ltx-2.5-22b-distilled-transformer-bf16.safetensors"
+    official = "ltx-2.5-22b-distilled-transformer-bf16-Q4_K_M.gguf"
     stub = "ltx-2.5-22b-distilled.safetensors"
     dumped = str(wf)
     assert stub not in dumped
     assert official in dumped
-    unets = _find_nodes_by_class(wf, "UNETLoader")
-    assert unets, "CheckpointLoaderSimple should rewrite to UNETLoader"
+    unets = _find_nodes_by_class(wf, "UnetLoaderGGUF")
+    assert unets, "CheckpointLoaderSimple should rewrite to UnetLoaderGGUF"
     assert unets[0][1]["inputs"]["unet_name"] == official
-    tes = _find_nodes_by_class(wf, "LTXAVTextEncoderLoader")
-    clips = _find_nodes_by_class(wf, "CLIPLoader")
-    if tes:
-        assert tes[0][1]["inputs"]["text_encoder"].startswith("gemma4-12b-with-proj-ltx-2.5")
-    else:
-        names = [
-            n[1]["inputs"].get("clip_name", "")
-            for n in clips
-            if "enhancer" not in str((n[1].get("_meta") or {}).get("title") or "").lower()
-        ]
-        assert any("gemma4-12b-with-proj-ltx-2.5" in str(n) for n in names), names
+    assert not _find_nodes_by_class(wf, "LTXAVTextEncoderLoader")
+    clips = _find_nodes_by_class(wf, "CLIPLoaderGGUF")
+    names = [n[1]["inputs"].get("clip_name", "") for n in clips]
+    assert "gemma4-12b-with-proj-ltx-2.5-Q2_K.gguf" in names, names
+    assert all(n[1]["inputs"]["type"] == "ltxv" for n in clips)
 
 
 def test_generate_mode_prepares_each_ltx25_id():

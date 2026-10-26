@@ -111,7 +111,7 @@ When several transformers for one slot are already on disk, any VRAM:
 2. Else **NVFP4**, only if `VRAM_GB` ≥ 14.
 3. Else **int8 / fp8**, then official bf16 or the EROS all-in-one.
 
-`VRAM_GB` comes from the environment, else `nvidia-smi`, else 16. Below 14GB, doctor does not suggest NVFP4 or bf16. A heavy file that is already on disk still counts as present, so Buddy does not download a second copy. Leave `FORCE_LOADER` empty when the only local transformer is bf16 or EROS. Those files still load.
+`VRAM_GB` comes from the environment, else `nvidia-smi`, else 16. Below 14GB, doctor does not suggest NVFP4 or bf16. Doctor also asks `torch.cuda.mem_get_info()` for free VRAM when torch and CUDA are available, and uses the lower of that and `VRAM_GB` for this check, so a shared or misreported card is not told to load bf16. If the probe fails, the declared value stands. The loader order itself never probes. A heavy file that is already on disk still counts as present, so Buddy does not download a second copy. Leave `FORCE_LOADER` empty when the only local transformer is bf16 or EROS. Those files still load.
 
 Research JSON may still say `ckpt_name: ltx-2.5-22b-distilled.safetensors` on `CheckpointLoaderSimple`. Buddy remaps that stub to `UNETLoader` / `UnetLoaderGGUF` and `LTXAVTextEncoderLoader`.
 
@@ -141,8 +141,10 @@ Any one transformer name fills the slot. Official bf16 Gemma is not required whe
 
 | Slot | Also counts |
 |---|---|
-| LTX 2.5 transformer | `ltx-2.5-22b-distilled-transformer-bf16-Q4_K_M.gguf`, NVFP4, `comfy-int8-convrot`, research stub `ltx-2.5-22b-distilled.safetensors`, official bf16 |
-| LTX 2.5 text encoder | `gemma4-12b-heretic-ltx25-int8convrot.safetensors`, Comfy int8, other `*heretic*` Gemma, official `gemma4-12b-with-proj-ltx-2.5-bf16.safetensors` |
+| LTX 2.5 transformer | `ltx-2.5-22b-distilled-transformer-bf16-Q4_K_M.gguf` (download target: `Abiray/LTX-2.5-Distilled-GGUF` `LTX-2.5-Distilled-Q4_K_M.gguf`, ~15.7 GB, public), NVFP4, `comfy-int8-convrot`, research stub `ltx-2.5-22b-distilled.safetensors`, official bf16 |
+| LTX 2.5 text encoder | `gemma4-12b-with-proj-ltx-2.5-Q4_K_M.gguf`, `gemma4-12b-with-proj-ltx-2.5-Q2_K.gguf` (download target: `elix3r/gemma4-12b-with-proj-ltx-2.5-GGUF`, ~6.0 GB, auto-approve gated), `gemma4-12b-heretic-ltx25-int8convrot.safetensors`, Comfy int8, other `*heretic*` Gemma, official `gemma4-12b-with-proj-ltx-2.5-bf16.safetensors` |
+
+A GGUF Gemma TE loads through `CLIPLoaderGGUF` (type `ltxv`). Stock ComfyUI-GGUF rejects `general.architecture=gemma4`. Apply the repo's `patches/ComfyUI-GGUF-ltx25-gemma4.patch` (sha256 `1c36aa38…958e`) and restart Comfy. Buddy does not patch custom nodes.
 | LTX 2.5 video VAE | `ltx-2.5-video-vae-bf16.safetensors`, `ltx-2.5-video-vae-conv-bf16.safetensors` |
 | LTX 2.5 audio VAE | `ltx-2.5-audio-vae-bf16.safetensors` |
 | Duration head | `ltx-2.5-duration-head-bf16.safetensors` (optional) |

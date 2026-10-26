@@ -27,6 +27,7 @@ Every slug in `allowed_variants` is a real `workflows/manifests.yaml` entry.
 - `vb_aivfx_adv` — AI-VFX compositor v1.0 (e4m3fn, heavy). Only when the user names v1.0.
 - `vb_aivfx_preprocess` — SAM3 / depth / cotracker / RMBG control videos.
 - `vb_aivfx_startimage` — AI-VFX start-image (Qwen-Image-Edit GGUF).
+- `flux_ltx_i2v` — Flux GGUF still → LTX 2.5 i2v 25-frame motion pass with audio. One shared aesthetic prompt drives both models. Pick it when the user wants a Flux-quality first frame animated by LTX.
 - `vb_movie_builder` — LTX 2.3 Movie Builder (shot-by-shot, ShotAssembler).
 - `vb_ccc_adv` — Consistent Character Creator v4 ADV (large graph; baked widgets).
 - `vb_ccc41_krea2` — CCC 4.1 Krea2-Edit grounded character editing.

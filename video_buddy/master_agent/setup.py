@@ -301,12 +301,13 @@ def check_ltx25_weights() -> dict[str, Any]:
         status = scan_bundle("ltx25_core")
     except Exception as exc:
         return _row("ltx25-weights", False, f"scan failed: {exc}", fix="python -m master_agent download-models --ltx25")
-    from master_agent.models.vram_policy import heavy_not_suggested
+    from master_agent.models.vram_policy import doctor_vram_gb, heavy_not_suggested
     from master_agent.models.weights import describe_transformer_pick
 
     transformer_path = status.found_paths.get("transformer")
     pick = describe_transformer_pick(Path(transformer_path) if transformer_path else None)
-    if transformer_path and heavy_not_suggested(Path(transformer_path).name):
+    usable_gb, _mem = doctor_vram_gb()
+    if transformer_path and heavy_not_suggested(Path(transformer_path).name, vram_gb=usable_gb):
         pick += " — on disk, not suggested for this VRAM; prefer GGUF (FORCE_LOADER=gguf, VRAM_GB=12)"
     if status.ok:
         found = ", ".join(Path(p).name for p in status.found_paths.values()) or "accepted local names"
