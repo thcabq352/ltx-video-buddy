@@ -470,11 +470,12 @@ def _build_rows() -> dict[str, WorkflowVramRow]:
         )
 
     ltx23_notes = (
-        "10Eros diffusion is 10Eros_v1.5-Q4_K_M.gguf via UnetLoaderGGUF "
-        "(quantized ops, diffusion_models/). Gemma, text projection, video VAE, "
-        "and audio VAE stay on their split files. No fp8 cast on the audio VAE. "
-        "When that GGUF is absent, QuantStack Q4_K_S then Sulphur Q3_K_S fill the "
-        "MODEL slot. Not a download pack."
+        "LTX 2.3 base/eros/directors pick one on-disk GGUF via UnetLoaderGGUF: "
+        "distilled Q4 for base, 10Eros_v1.5-Q4_K_M.gguf for eros, dev Q4 for directors. "
+        "Q3 or Sulphur wins only when the preferred file is missing or over VRAM. "
+        "fp8 and bf16 stay the MODEL fallback only when no GGUF matches. "
+        "Gemma, text projection, video VAE, and audio VAE stay on their split files. "
+        "Not a download pack."
     )
     for slug, pack, vram, klass in (
         ("base", LTX23_DISTILLED_GGUF[0], 9.5, "safe"),
@@ -804,7 +805,7 @@ def _fallback_row(slug: str) -> WorkflowVramRow:
             LTX23_DISTILLED_GGUF[0],
             10.0,
             "safe",
-            notes="Inherits LTX 2.3 GGUF-first. 10Eros v1.5 when that file is on disk; QuantStack then Sulphur when it is not.",
+            notes="Inherits the LTX 2.3 reasoned GGUF pick (distilled Q4 for base). fp8/bf16 when no GGUF is on disk.",
         ),
         "wan22": WorkflowVramRow(slug, family, WAN22_HIGH_PREFERENCE[0], 13.2, "tight", notes="Inherits Wan 2.2 Lightx2v path."),
         "vace": WorkflowVramRow(slug, family, _VACE[0], 13.6, "tight", notes="Inherits VACE GGUF Q4_K_M."),
@@ -875,7 +876,7 @@ def format_vram_table() -> str:
             "base / eros / directors",
             LTX23_DISTILLED_GGUF[0],
             9.5,
-            "10Eros v1.5 GGUF when on disk; else QuantStack Q4_K_S then Sulphur Q3",
+            "distilled Q4, 10Eros, or dev Q4 by preset; Q3 when VRAM says so",
         ),
         ("LTX 2.5", "ltx25_t2v_i2v (default 2.5)", _LTX25[0], 12.5, "GGUF Q4 → NVFP4 → int8 → bf16; two-stage is quality"),
         ("MiniMax H3", "h3_t2v / i2v / flf / r2v", _H3[0], 13.0, "Q4_K + NVFP4 TE; ≤12s / 0.8MP / 4 steps / CFG 1.0"),
