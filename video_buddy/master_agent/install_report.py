@@ -58,6 +58,10 @@ STEP_REASONS: dict[str, str] = {
     "ComfyUI-Manager channel": "only ComfyUI-Manager's node browser uses the channel; rendering does not",
     "llama.cpp": "Buddy renders video without a local LLM; the brief / judge LLM stays off",
     "LTX 2.3 weights": "you deferred them with --skip-weights; only generate needs them",
+    "Windows Defender exclusion": (
+        "the install continues; run the printed command in an elevated PowerShell "
+        "or the first ComfyUI start can stall while Defender scans the new venv"
+    ),
 }
 
 

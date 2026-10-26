@@ -188,7 +188,8 @@ def test_automatic_install_with_skip_weights_exits_zero(env, monkeypatch, capsys
     ok = lambda name: (lambda *a, **k: ai.StepResult(name, ai.OK, "ready"))  # noqa: E731
     for fn, name in (
         ("step_env_file", ".env"), ("step_playwright", "Playwright Chromium"), ("step_ffmpeg", "ffmpeg"),
-        ("step_comfy_cli", "comfy-cli"), ("step_comfyui", "ComfyUI"), ("step_model_folders", "model folders"),
+        ("step_comfy_cli", "comfy-cli"), ("step_windows_defender_exclusion", "Windows Defender exclusion"),
+        ("step_comfyui", "ComfyUI"), ("step_model_folders", "model folders"),
         ("step_model_paths", "model paths"), ("step_nodes", "custom nodes"),
         ("step_node_requirements", "custom node requirements"), ("step_comfy_packages", "Comfy Python packages"),
         ("step_accel", "Triton + SageAttention"), ("step_vram_profile", "VRAM profile"),

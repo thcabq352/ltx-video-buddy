@@ -4,7 +4,9 @@
 first, then prints the plan. Nothing changes without ``--yes``.
 
 With ``--yes`` it installs, in order: ffmpeg, comfy-cli at the
-requirements.txt pin, ComfyUI into its own folder (``MANAGED_COMFY_ROOT`` or
+requirements.txt pin, on Windows a non-fatal Defender exclusion for the
+ComfyUI folder (never elevated; a refusal prints the PowerShell command),
+ComfyUI into its own folder (``MANAGED_COMFY_ROOT`` or
 ``PROJECT_ROOT/ComfyUI``), the custom nodes the LTX 2.3 graphs need, each
 pack's own ``requirements.txt``, then ``comfy-requirements.txt`` (gguf,
 colour-science) into the Comfy venv when they are not importable, ComfyUI-Manager's
@@ -897,6 +899,107 @@ def step_comfy_cli(apply: bool) -> StepResult:
     return StepResult("comfy-cli", OK, f"comfy-cli=={pin}")
 
 
+# Real-time scanning of a fresh ComfyUI venv stalls the first import past the
+# ready timeout (fresh-install.yml, run 39947944671). CI adds the exclusion
+# itself; this is the same step for a home install. It never elevates.
+DEFENDER_STEP = "Windows Defender exclusion"
+DEFENDER_EXCLUSION_TIMEOUT_S = 30.0
+_DEFENDER_ACCESS_DENIED = (
+    "access is denied",
+    "access denied",
+    "0x80070005",
+    "0x80041003",
+    "permissiondenied",
+    "permission denied",
+    "requires elevation",
+    "not an administrator",
+    "not administrator",
+    "administrator privilege",
+    "administrative privilege",
+)
+
+
+def _is_windows() -> bool:
+    """True when ``sys.platform`` or ``os.name`` says Windows."""
+    return sys.platform == "win32" or os.name == "nt"
+
+
+def comfy_defender_root(workspace: Path | None = None) -> Path:
+    """ComfyUI folder whose venv Defender must not scan.
+
+    Automatic install passes the workspace it already resolved
+    (``managed_workspace``, which honors ``MANAGED_COMFY_ROOT``). With no
+    workspace, ``COMFY_DIR`` is that same folder (the fresh-install workflow
+    sets both), then ``managed_workspace()``.
+    """
+    if workspace is not None:
+        return Path(workspace)
+    raw = (os.getenv("COMFY_DIR") or "").strip().strip('"')
+    if raw:
+        return Path(raw).expanduser()
+    return managed_workspace()
+
+
+def defender_exclusion_command(root: Path) -> str:
+    """Exact command to paste into an already-elevated PowerShell.
+
+    Single quotes are PowerShell's literal quotes. An apostrophe in the path
+    is doubled. This string never starts a new process and never elevates.
+    """
+    quoted = str(root).replace("'", "''")
+    return f"Add-MpPreference -ExclusionPath '{quoted}'"
+
+
+def defender_powershell_argv(root: Path) -> list[str]:
+    """``powershell -NoProfile -NonInteractive`` plus :func:`defender_exclusion_command`."""
+    return ["powershell", "-NoProfile", "-NonInteractive", "-Command", defender_exclusion_command(root)]
+
+
+def _defender_access_denied(output: str) -> bool:
+    text = output.lower()
+    return any(marker in text for marker in _DEFENDER_ACCESS_DENIED)
+
+
+def step_windows_defender_exclusion(apply: bool, *, workspace: Path | None = None) -> StepResult:
+    """Exclude the ComfyUI root from Windows Defender real-time scanning.
+
+    Non-fatal. Timeouts, a missing ``powershell``, and a nonzero exit are
+    caught and the install continues. Access denied (not an administrator)
+    is ``NEEDS-YOU``; every other failure is ``FAILED-NONFATAL``. Both print
+    the exact ``Add-MpPreference`` command. Skipped on non-Windows with no
+    subprocess call. Does not use sudo, runas, or ``Start-Process -Verb RunAs``.
+    """
+    if not _is_windows():
+        return StepResult(DEFENDER_STEP, SKIPPED, "not Windows", required=False)
+    root = comfy_defender_root(workspace)
+    manual = defender_exclusion_command(root)
+    argv = defender_powershell_argv(root)
+    if not apply:
+        return StepResult(
+            DEFENDER_STEP,
+            PLANNED,
+            f"exclude {root} from Windows Defender real-time scanning",
+            required=False,
+            lines=[manual],
+        )
+    print("$ " + " ".join(argv))
+    code, out = _run(argv, timeout=DEFENDER_EXCLUSION_TIMEOUT_S)
+    if code == 0 and not _defender_access_denied(out):
+        return StepResult(DEFENDER_STEP, OK, f"excluded {root}", required=False)
+    if _defender_access_denied(out):
+        status = NEEDS_YOU
+        lead = "access denied (not an administrator)"
+    else:
+        status = NONFATAL
+        lead = "could not add the exclusion"
+    detail = f"{lead}. Run this in an elevated PowerShell: {manual}"
+    lines = [manual]
+    extra = (out or "").strip()
+    if extra:
+        lines.append(extra[-300:])
+    return StepResult(DEFENDER_STEP, status, detail, required=False, lines=lines)
+
+
 def step_comfyui(apply: bool, *, workspace: Path, state: str, gpu_flag: str) -> StepResult:
     from master_agent.comfy.comfy_venv import probe_comfy_env
 
@@ -1296,6 +1399,9 @@ def cmd_automatic_install(args: Any) -> int:
         ("Playwright Chromium", False, lambda: step_playwright(apply)),
         ("ffmpeg", True, lambda: step_ffmpeg(apply)),
         ("comfy-cli", True, lambda: step_comfy_cli(apply)),
+        # Before ComfyUI is installed, so the fresh venv is not scanned during
+        # the first import that the ready-wait is timing.
+        ("Windows Defender exclusion", False, lambda: step_windows_defender_exclusion(apply, workspace=workspace)),
         ("ComfyUI", True, lambda: step_comfyui(
             apply, workspace=workspace, state=comfy_install_state(workspace), gpu_flag=flag
         )),
