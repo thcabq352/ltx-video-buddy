@@ -725,7 +725,7 @@
       "outputs": [],
       "title": "MickmumpitzLabel",
       "properties": {
-        "text": "FLUX KLEIN 9B",
+        "text": "FLUX.2 Klein 4B",
         "fontSize": 56,
         "fontFamily": "Arial",
         "fontColor": "#ffffff",
@@ -1162,7 +1162,7 @@
           "name": "MODEL",
           "type": "MODEL",
           "links": [
-            6559
+            6210
           ]
         }
       ],
@@ -1176,46 +1176,6 @@
         "default"
       ],
       "shape": "box"
-    },
-    {
-      "id": 6228,
-      "type": "LoraLoaderModelOnly",
-      "pos": [
-        870,
-        1080
-      ],
-      "size": [
-        359.738290454894,
-        82
-      ],
-      "flags": {},
-      "order": 31,
-      "mode": 0,
-      "inputs": [
-        {
-          "name": "model",
-          "type": "MODEL",
-          "link": 6559
-        }
-      ],
-      "outputs": [
-        {
-          "name": "MODEL",
-          "type": "MODEL",
-          "links": [
-            6210
-          ]
-        }
-      ],
-      "properties": {
-        "cnr_id": "comfy-core",
-        "ver": "0.18.1",
-        "Node name for S&R": "LoraLoaderModelOnly"
-      },
-      "widgets_values": [
-        "Flux2-Klein-9B-consistency-V2.safetensors",
-        0.7
-      ]
     },
     {
       "id": 362,
@@ -2171,7 +2131,7 @@
       "outputs": [],
       "properties": {},
       "widgets_values": [
-        "## How to use\n\nThis workflow uses **FLUX.2 [klein] 4B** to turn rough control passes into a finished image. Load your **Canny** (line/edge) image and **Depth** map plus any reference image, write a prompt describing the final look you want, then run. The model follows the combined control passes while the **consistency LoRA** keeps colors and details faithful to your references — raise or lower its strength (default `0.7`) if edits drift too far or not enough.\n\n---\n\n## Required models\n\n| File | Put it in | Download |\n|------|-----------|----------|\n| `flux-2-klein-4b-fp8.safetensors` | `models/diffusion_models/` | [black-forest-labs/FLUX.2-klein-4b-fp8](https://huggingface.co/black-forest-labs/FLUX.2-klein-4b-fp8) (Apache 2.0, ungated) |\n| `qwen_3_4b_fp4_flux2.safetensors` | `models/text_encoders/` | [Comfy-Org/Flux-2-Klein-4B](https://huggingface.co/Comfy-Org/Flux-2-Klein-4B/resolve/main/split_files/text_encoders/qwen_3_4b_fp4_flux2.safetensors) |\n| `flux2-vae.safetensors` | `models/vae/` | [Comfy-Org/flux2-dev](https://huggingface.co/Comfy-Org/flux2-dev/resolve/main/split_files/vae/flux2-vae.safetensors) |\n| `Flux2-Klein-9B-consistency-V2.safetensors` | `models/loras/` | [dx8152/Flux2-Klein-9B-Consistency]((not downloaded; FLUX.2 [klein] 4B is the only Flux)/resolve/main/Flux2-Klein-9B-consistency-V2.safetensors) |\n"
+        "## How to use\n\nThis workflow uses **FLUX.2 [klein] 4B** to turn rough control passes into a finished image. Load your **Canny** (line/edge) image and **Depth** map plus any reference image, write a prompt describing the final look you want, then run. The model follows the combined control passes.\n\nThe Klein 9B consistency LoRA node was removed. That file is 9B-only and this repo has no Klein 4B equivalent, so the sampler uses the Klein 4B UNET directly.\n\n---\n\n## Required models\n\n| File | Put it in | Download |\n|------|-----------|----------|\n| `flux-2-klein-4b-fp8.safetensors` | `models/diffusion_models/` | [black-forest-labs/FLUX.2-klein-4b-fp8](https://huggingface.co/black-forest-labs/FLUX.2-klein-4b-fp8) (Apache 2.0, ungated) |\n| `qwen_3_4b_fp4_flux2.safetensors` | `models/text_encoders/` | [Comfy-Org/Flux-2-Klein-4B](https://huggingface.co/Comfy-Org/Flux-2-Klein-4B/resolve/main/split_files/text_encoders/qwen_3_4b_fp4_flux2.safetensors) |\n| `flux2-vae.safetensors` | `models/vae/` | [Comfy-Org/Flux-2-Klein-4B](https://huggingface.co/Comfy-Org/Flux-2-Klein-4B/resolve/main/split_files/vae/flux2-vae.safetensors) |\n"
       ],
       "color": "#97651BFF",
       "bgcolor": "#B67921FF"
@@ -2292,7 +2252,7 @@
     ],
     [
       6210,
-      6228,
+      1992,
       0,
       190,
       0,
@@ -2305,14 +2265,6 @@
       7277,
       1,
       "IMAGE"
-    ],
-    [
-      6559,
-      1992,
-      0,
-      6228,
-      0,
-      "MODEL"
     ],
     [
       6568,

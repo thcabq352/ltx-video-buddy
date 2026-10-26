@@ -9669,20 +9669,6 @@
       "title": "Load Diffusion Model"
     }
   },
-  "664": {
-    "inputs": {
-      "lora_name": "Flux2-Klein-9B-consistency-V2.safetensors",
-      "strength_model": 0.35,
-      "model": [
-        "527",
-        0
-      ]
-    },
-    "class_type": "LoraLoaderModelOnly",
-    "_meta": {
-      "title": "Load LoRA"
-    }
-  },
   "2049": {
     "inputs": {
       "expression": "a * 2",
@@ -11284,7 +11270,7 @@
       "end_percent": 0.8,
       "mode": "adaptive",
       "model": [
-        "664",
+        "527",
         0
       ],
       "identity_latent": [

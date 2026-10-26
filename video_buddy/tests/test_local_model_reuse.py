@@ -63,23 +63,23 @@ def test_resolve_model_path_uses_extra_models_dirs(tmp_path: Path, monkeypatch):
 def test_hf_cache_any_repo_is_a_search_root(tmp_path: Path, monkeypatch):
     """Flux (and other non-LTX) hub snapshots must count as already-present."""
     hub = tmp_path / "hf-home" / "hub"
-    snap = hub / "models--Comfy-Org--flux1-dev" / "snapshots" / "abcd"
-    dest = _write(snap / "flux1-dev-fp8.safetensors")
+    snap = hub / "models--black-forest-labs--FLUX.2-klein-4b-fp8" / "snapshots" / "abcd"
+    dest = _write(snap / "flux-2-klein-4b-fp8.safetensors")
     monkeypatch.setenv("HF_HOME", str(tmp_path / "hf-home"))
     monkeypatch.delenv("HUGGINGFACE_HUB_CACHE", raising=False)
     monkeypatch.delenv("HF_HUB_CACHE", raising=False)
     roots = model_search_roots()
     assert any(dest.is_relative_to(root) or root == snap or snap in root.parents or root == dest.parent for root in roots) or any(
-        "flux1-dev" in str(r) or str(hub) in str(r) for r in roots
+        "FLUX.2-klein-4b-fp8" in str(r) or str(hub) in str(r) for r in roots
     )
-    found = find_weight_file("flux1-dev-fp8.safetensors")
+    found = find_weight_file("flux-2-klein-4b-fp8.safetensors")
     assert found == dest
 
 
 def test_download_hub_file_skips_comfy_copy(tmp_path: Path, monkeypatch):
     comfy = tmp_path / "ComfyUI" / "models"
-    existing = _write(comfy / "diffusion_models" / "flux1-dev-fp8.safetensors", b"already-here")
-    dest = tmp_path / "buddy-models" / "diffusion_models" / "flux1-dev-fp8.safetensors"
+    existing = _write(comfy / "diffusion_models" / "flux-2-klein-4b-fp8.safetensors", b"already-here")
+    dest = tmp_path / "buddy-models" / "diffusion_models" / "flux-2-klein-4b-fp8.safetensors"
     logs: list[str] = []
 
     def boom(*_a, **_k):
@@ -89,8 +89,8 @@ def test_download_hub_file_skips_comfy_copy(tmp_path: Path, monkeypatch):
     monkeypatch.setattr("master_agent.config.COMFYUI_ROOT", tmp_path / "ComfyUI")
     monkeypatch.setattr("huggingface_hub.hf_hub_download", boom)
     out = download_hub_file(
-        repo_id="Comfy-Org/flux1-dev",
-        repo_filename="flux1-dev-fp8.safetensors",
+        repo_id="black-forest-labs/FLUX.2-klein-4b-fp8",
+        repo_filename="flux-2-klein-4b-fp8.safetensors",
         dest=dest,
         progress=logs.append,
     )
@@ -106,13 +106,13 @@ def test_download_hub_file_skips_hf_cache(tmp_path: Path, monkeypatch):
     hub = tmp_path / "hf-home" / "hub"
     cached = _write(
         hub
-        / "models--Comfy-Org--flux1-dev"
+        / "models--black-forest-labs--FLUX.2-klein-4b-fp8"
         / "snapshots"
         / "ffff"
-        / "flux1-dev-fp8.safetensors",
+        / "flux-2-klein-4b-fp8.safetensors",
         b"cached-blob",
     )
-    dest = tmp_path / "buddy-models" / "diffusion_models" / "flux1-dev-fp8.safetensors"
+    dest = tmp_path / "buddy-models" / "diffusion_models" / "flux-2-klein-4b-fp8.safetensors"
     logs: list[str] = []
 
     def boom(*_a, **_k):
@@ -125,8 +125,8 @@ def test_download_hub_file_skips_hf_cache(tmp_path: Path, monkeypatch):
     monkeypatch.setattr("master_agent.config.COMFYUI_ROOT", tmp_path / "no-comfy")
     monkeypatch.setattr("huggingface_hub.hf_hub_download", boom)
     out = download_hub_file(
-        repo_id="Comfy-Org/flux1-dev",
-        repo_filename="flux1-dev-fp8.safetensors",
+        repo_id="black-forest-labs/FLUX.2-klein-4b-fp8",
+        repo_filename="flux-2-klein-4b-fp8.safetensors",
         dest=dest,
         progress=logs.append,
     )
@@ -152,15 +152,15 @@ def test_download_hub_file_refuses_when_roots_missing(tmp_path: Path, monkeypatc
 
     with pytest.raises(LocalModelNotFound) as exc:
         download_hub_file(
-            repo_id="Comfy-Org/flux1-dev",
-            repo_filename="flux1-dev-fp8.safetensors",
+            repo_id="black-forest-labs/FLUX.2-klein-4b-fp8",
+            repo_filename="flux-2-klein-4b-fp8.safetensors",
             dest=dest,
             progress=logs.append,
         )
     msg = str(exc.value)
     assert "missing-models" in msg
     assert "missing-comfy" in msg or "also-missing" in msg
-    assert "flux1-dev-fp8.safetensors" in msg
+    assert "flux-2-klein-4b-fp8.safetensors" in msg
     assert not dest.exists()
 
 

@@ -4806,7 +4806,7 @@
       "title": "Model download links",
       "properties": {},
       "widgets_values": [
-        "Flux2-Klein-9B-consistency-V2.safetensors\n\n[(not downloaded; FLUX.2 [klein] 4B is the only Flux)]((not downloaded; FLUX.2 [klein] 4B is the only Flux))\n\n📁 ComfyUI/models/loras"
+        "The Klein 9B consistency LoRA node was removed. No Klein 4B equivalent of Flux2-Klein-9B-consistency-V2.safetensors is in this repo, so this chain uses the FLUX.2 [klein] 4B UNET directly."
       ],
       "color": "#222",
       "bgcolor": "#000"
@@ -4830,7 +4830,7 @@
       "title": "Model download links",
       "properties": {},
       "widgets_values": [
-        "flux2-vae.safetensors\n\n[https://huggingface.co/Comfy-Org/flux2-dev/blob/main/split_files/vae/flux2-vae.safetensors](https://huggingface.co/Comfy-Org/flux2-dev/blob/main/split_files/vae/flux2-vae.safetensors)\n\n📁 ComfyUI/models/vae"
+        "flux2-vae.safetensors\n\n[https://huggingface.co/Comfy-Org/Flux-2-Klein-4B/blob/main/split_files/vae/flux2-vae.safetensors](https://huggingface.co/Comfy-Org/Flux-2-Klein-4B/blob/main/split_files/vae/flux2-vae.safetensors)\n\n📁 ComfyUI/models/vae"
       ],
       "color": "#222",
       "bgcolor": "#000"
@@ -6795,7 +6795,7 @@
       "title": "Model download links",
       "properties": {},
       "widgets_values": [
-        "flux-2-klein-9B-360-erp-outpaint-lora_V1.safetensors\n\n[(not downloaded; FLUX.2 [klein] 4B is the only Flux)]((not downloaded; FLUX.2 [klein] 4B is the only Flux))\n\n📁 ComfyUI/models/loras"
+        "flux-2-klein-4B-360-erp-outpaint-lora_V1.safetensors\n\n[https://huggingface.co/nomadoor/flux-2-klein-4B-360-erp-outpaint-lora/blob/main/flux-2-klein-4B-360-erp-outpaint-lora_V1.safetensors](https://huggingface.co/nomadoor/flux-2-klein-4B-360-erp-outpaint-lora/blob/main/flux-2-klein-4B-360-erp-outpaint-lora_V1.safetensors)\n\nNot fetched by download_models.py. The Klein 4B pack is the diffusion model, qwen_3_4b_fp4_flux2.safetensors, and flux2-vae.safetensors only.\n\n📁 ComfyUI/models/loras"
       ],
       "color": "#222",
       "bgcolor": "#000"
@@ -6846,7 +6846,7 @@
           "links": [
             8806,
             8937,
-            9130
+            9129
           ]
         }
       ],
@@ -6946,7 +6946,7 @@
         "Node name for S&R": "LoraLoaderModelOnly"
       },
       "widgets_values": [
-        "flux-2-klein-9B-360-erp-outpaint-lora_V1.safetensors",
+        "flux-2-klein-4B-360-erp-outpaint-lora_V1.safetensors",
         0.9
       ],
       "color": "#e7e7e7",
@@ -7021,48 +7021,6 @@
       ],
       "color": "#222",
       "bgcolor": "#000"
-    },
-    {
-      "id": 6228,
-      "type": "LoraLoaderModelOnly",
-      "pos": [
-        400,
-        630
-      ],
-      "size": [
-        350,
-        90
-      ],
-      "flags": {},
-      "order": 130,
-      "mode": 0,
-      "inputs": [
-        {
-          "name": "model",
-          "type": "MODEL",
-          "link": 9130
-        }
-      ],
-      "outputs": [
-        {
-          "name": "MODEL",
-          "type": "MODEL",
-          "links": [
-            9129
-          ]
-        }
-      ],
-      "properties": {
-        "cnr_id": "comfy-core",
-        "ver": "0.18.1",
-        "Node name for S&R": "LoraLoaderModelOnly"
-      },
-      "widgets_values": [
-        "Flux2-Klein-9B-consistency-V2.safetensors",
-        0.8
-      ],
-      "color": "#e7e7e7",
-      "bgcolor": "#d3d3d3"
     },
     {
       "id": 13722,
@@ -9757,17 +9715,9 @@
     ],
     [
       9129,
-      6228,
-      0,
-      190,
-      0,
-      "MODEL"
-    ],
-    [
-      9130,
       1992,
       0,
-      6228,
+      190,
       0,
       "MODEL"
     ],

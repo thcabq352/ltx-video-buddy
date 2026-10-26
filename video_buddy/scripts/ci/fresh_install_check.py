@@ -37,7 +37,7 @@ if str(VIDEO_BUDDY) not in sys.path:
 
 DEFAULT_URL = "http://127.0.0.1:8188"
 COMFY_REQUIREMENTS = VIDEO_BUDDY / "comfy-requirements.txt"
-KLEIN_WORKFLOW = VIDEO_BUDDY / "workflows" / "260615_VIDEO-BUDDY_FLUX_KLEIN_9B_V01_api.json"
+KLEIN_WORKFLOW = VIDEO_BUDDY / "workflows" / "260615_VIDEO-BUDDY_FLUX_KLEIN_4B_V01_api.json"
 
 # Packs the Klein stills graph needs beyond what automatic-install puts in
 # (ComfyUI-LTXVideo, ComfyUI-GGUF). Comfy registry ids. RES4LYF registers the

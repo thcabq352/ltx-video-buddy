@@ -737,32 +737,32 @@
     }
   },
   "9101": {
-    "class_type": "UnetLoaderGGUF",
+    "class_type": "UNETLoader",
     "inputs": {
-      "unet_name": "flux1-dev-Q4_K_S.gguf"
+      "unet_name": "flux-2-klein-4b-fp8.safetensors",
+      "weight_dtype": "default"
     },
     "_meta": {
-      "title": "Flux.1-dev GGUF (still)"
+      "title": "FLUX.2 [klein] 4B (still)"
     }
   },
   "9102": {
-    "class_type": "DualCLIPLoader",
+    "class_type": "CLIPLoader",
     "inputs": {
-      "clip_name1": "clip_l.safetensors",
-      "clip_name2": "t5xxl_fp8_e4m3fn.safetensors",
-      "type": "flux"
+      "clip_name": "qwen_3_4b_fp4_flux2.safetensors",
+      "type": "flux2"
     },
     "_meta": {
-      "title": "Flux DualCLIPLoader"
+      "title": "Klein CLIPLoader"
     }
   },
   "9103": {
     "class_type": "VAELoader",
     "inputs": {
-      "vae_name": "ae.safetensors"
+      "vae_name": "flux2-vae.safetensors"
     },
     "_meta": {
-      "title": "Flux VAE"
+      "title": "Klein VAE"
     }
   },
   "9104": {
@@ -795,7 +795,7 @@
     }
   },
   "9106": {
-    "class_type": "EmptyLatentImage",
+    "class_type": "EmptyFlux2LatentImage",
     "inputs": {
       "width": [
         "9011",
@@ -808,7 +808,7 @@
       "batch_size": 1
     },
     "_meta": {
-      "title": "Flux latent (same size as the LTX latent)"
+      "title": "Klein latent (same size as the LTX latent)"
     }
   },
   "9107": {

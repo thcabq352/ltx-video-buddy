@@ -1221,7 +1221,7 @@
       "scheduler": "simple",
       "denoise": 1,
       "model": [
-        "6228",
+        "1992",
         0
       ],
       "steps": [
@@ -1847,7 +1847,7 @@
       "scheduler": "beta57",
       "denoise": 1,
       "model": [
-        "6228",
+        "1992",
         0
       ],
       "seed": [
@@ -1914,7 +1914,7 @@
   },
   "13261": {
     "inputs": {
-      "lora_name": "flux-2-klein-9B-360-erp-outpaint-lora_V1.safetensors",
+      "lora_name": "flux-2-klein-4B-360-erp-outpaint-lora_V1.safetensors",
       "strength_model": 0.9,
       "model": [
         "1992",
@@ -1935,20 +1935,6 @@
     "class_type": "CLIPLoader",
     "_meta": {
       "title": "Load CLIP"
-    }
-  },
-  "6228": {
-    "inputs": {
-      "lora_name": "Flux2-Klein-9B-consistency-V2.safetensors",
-      "strength_model": 0.8,
-      "model": [
-        "1992",
-        0
-      ]
-    },
-    "class_type": "LoraLoaderModelOnly",
-    "_meta": {
-      "title": "Load LoRA"
     }
   },
   "13702": {

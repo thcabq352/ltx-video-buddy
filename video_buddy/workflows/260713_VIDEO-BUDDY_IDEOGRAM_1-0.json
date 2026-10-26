@@ -2692,7 +2692,7 @@
         "models": [
           {
             "name": "flux2-vae.safetensors",
-            "url": "https://huggingface.co/Comfy-Org/flux2-dev/resolve/main/split_files/vae/flux2-vae.safetensors",
+            "url": "https://huggingface.co/Comfy-Org/Flux-2-Klein-4B/resolve/main/split_files/vae/flux2-vae.safetensors",
             "directory": "vae"
           }
         ],

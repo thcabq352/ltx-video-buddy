@@ -75,20 +75,6 @@
       "title": "Load Diffusion Model"
     }
   },
-  "6228": {
-    "inputs": {
-      "lora_name": "Flux2-Klein-9B-consistency-V2.safetensors",
-      "strength_model": 0.7,
-      "model": [
-        "1992",
-        0
-      ]
-    },
-    "class_type": "LoraLoaderModelOnly",
-    "_meta": {
-      "title": "Load LoRA"
-    }
-  },
   "362": {
     "inputs": {
       "clip_name": "qwen_3_4b_fp4_flux2.safetensors",
@@ -551,7 +537,7 @@
       "scheduler": "beta57",
       "denoise": 1,
       "model": [
-        "6228",
+        "1992",
         0
       ],
       "seed": [

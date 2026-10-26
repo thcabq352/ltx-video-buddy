@@ -130,7 +130,7 @@ class TestEnsureLoraNode(unittest.TestCase):
         wf = {
             "1": {
                 "class_type": "UNETLoader",
-                "inputs": {"unet_name": "flux1-dev-fp8.safetensors"},
+                "inputs": {"unet_name": "flux-2-klein-4b-fp8.safetensors"},
             },
             "2": {
                 "class_type": "KSampler",

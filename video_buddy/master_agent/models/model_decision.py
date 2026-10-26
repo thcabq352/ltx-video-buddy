@@ -177,38 +177,17 @@ CATALOG: tuple[Candidate, ...] = (
         size_gb=4.0,
         vram_gb=8.0,
         tags=("flux", "klein", "fast"),
-        note="FLUX.2 Klein 4B fp8. The stills model current policy allows.",
+        note="FLUX.2 Klein 4B fp8. The only Flux download target.",
     ),
     _c(
-        "flux-2-klein-9b-fp8.safetensors",
+        "flux-2-klein-4b.safetensors",
         family="flux",
         kind="distilled",
         quant="other",
-        size_gb=9.0,
+        size_gb=7.2,
         vram_gb=12.0,
         tags=("flux", "klein"),
-        note="FLUX.2 Klein 9B fp8. Used only when Klein 4B is not on disk.",
-    ),
-    _c(
-        "flux1-dev-Q4_K_S.gguf",
-        family="flux",
-        kind="distilled",
-        quant="Q4_K_S",
-        size_gb=6.5,
-        vram_gb=10.0,
-        tags=("flux", "q4"),
-        note="Flux.1-dev Q4_K_S GGUF.",
-        aliases=("flux1-dev-Q4_0.gguf",),
-    ),
-    _c(
-        "flux1-dev-fp8.safetensors",
-        family="flux",
-        kind="distilled",
-        quant="other",
-        size_gb=12.0,
-        vram_gb=14.0,
-        tags=("flux",),
-        note="Flux.1-dev fp8. Heavier than Klein 4B.",
+        note="FLUX.2 Klein 4B bf16. Accepted when already on disk. Not a download target.",
     ),
 )
 
@@ -390,6 +369,11 @@ def preset_policy(variant: str) -> PresetPolicy:
     key = _preset_key(variant)
     intent = _DEFAULT_INTENT.get(key, "general_fast_distilled")
     prefer = _DEFAULT_PREFER.get(key, ())
+    if not prefer and "flux" in key:
+        prefer = (
+            "flux-2-klein-4b-fp8.safetensors",
+            "flux-2-klein-4b.safetensors",
+        )
     model: str | None = None
     try:
         import yaml
@@ -506,6 +490,12 @@ def combined_vram_gb(flux_gb: float, video_gb: float) -> float:
     return round(big + 0.4 * small, 1)
 
 
+def _is_klein_4b_diffusion(name: str) -> bool:
+    """Klein 4B diffusion safetensors only. Other Flux names are not selectable."""
+    low = Path(name).name.lower()
+    return "flux-2-klein-4b" in low and low.endswith(".safetensors") and "lora" not in low
+
+
 def _locate_all(roots: Sequence[Path]) -> dict[str, Path]:
     from master_agent.models.weights import (
         _search_name,
@@ -544,8 +534,7 @@ def _locate_all(roots: Sequence[Path]) -> dict[str, Path]:
                     is_sulphur_or_ltx23_gguf(path.name)
                     or is_ltx25_quant_gguf(path.name)
                     or "minimax_h3" in low
-                    or "flux" in low
-                    or "klein" in low
+                    or _is_klein_4b_diffusion(path.name)
                 )
                 if interesting:
                     found[low] = path
@@ -575,9 +564,11 @@ def _candidate_for_path(path: Path) -> Candidate:
     elif "minimax" in low or low.startswith("h3"):
         family = "h3"
         tags.extend(["h3", "talking", "local"])
-    elif "flux" in low or "klein" in low:
+    elif _is_klein_4b_diffusion(path.name):
         family = "flux"
-        tags.append("flux")
+        tags.extend(("flux", "klein"))
+    elif "flux" in low or "klein" in low:
+        family = "refused"
     else:
         if "sulphur" in low:
             tags.extend(["sulphur", "dev"])
