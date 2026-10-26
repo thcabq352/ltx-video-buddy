@@ -1161,4 +1161,17 @@ def cmd_models_select(args: Any) -> int:
         return 1
     if getattr(args, "json", False):
         print(json.dumps(plan.to_dict(), indent=2))
+    else:
+        _print_generation_decision(str(version))
     return code
+
+
+def _print_generation_decision(version: str) -> None:
+    """Same route + model text the director and doctor print. Never raises."""
+    try:
+        from master_agent.models.model_decision import decide_generation
+
+        variant = "base" if version.startswith("2.3") else "ltx25_t2v_i2v"
+        print(decide_generation(variant).text)
+    except Exception as exc:
+        print(f"model decision unavailable: {exc}")

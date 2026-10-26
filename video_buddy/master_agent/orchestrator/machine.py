@@ -77,6 +77,11 @@ class Orchestrator:
             attach_recipe=st.attach_recipe,
             hands=LiveHands(client=self.client),
         )
+        decision = getattr(choose_variant, "last_decision", None)
+        if decision is not None:
+            st.model_decision = decision.to_dict()
+            if decision.text:
+                st.log(decision.text)
         if source not in ("forced", "input"):
             st.log(f"director routed variant={variant} ({source})")
         return variant
@@ -111,6 +116,7 @@ class Orchestrator:
                 i2v_strength=st.i2v_strength,
                 lightx2v=st.lightx2v,
                 lightx2v_strength=st.lightx2v_strength,
+                request=st.request or "",
             )
         except Exception as e:
             st.fail(f"patch failed: {e}")
@@ -154,6 +160,20 @@ class Orchestrator:
                 )
                 return False
         st.workflow_meta = meta
+        decision = meta.get("model_decision") if isinstance(meta, dict) else None
+        if isinstance(decision, dict) and decision:
+            st.model_decision = decision
+            text = decision.get("text")
+            if text:
+                st.log(str(text))
+            error = decision.get("error")
+            if (
+                error
+                and (st.variant or "") in {"base", "eros", "directors"}
+                and not st.dry_run
+            ):
+                st.fail(str(error))
+                return False
         st.seed = meta.get("seed")
         self._workflow = workflow
         if st.attach_recipe:

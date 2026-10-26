@@ -101,11 +101,11 @@ New tests, no GPU:
 ## Checklist
 
 - [x] Write this plan and push it on `cursor/10eros-v15-gguf-a523`.
-- [ ] Write `docs/MODEL_SELECTION_AUDIT.md` (file, line, current logic, silent or not, planned change, Flux and H3 notes) and push it on its own.
-- [ ] Add the candidate catalog and `select_model` / `decide_generation` with structured reasons.
-- [ ] Declare intent, optional `model`, and `prefer` on the three presets.
-- [ ] Route patcher, `resolve_ltx23_gguf`, director, doctor, and the selector report through the decision. Leave the audit's exemptions alone.
-- [ ] Fail the job before ComfyUI when no GGUF fits. Override still wins, with a VRAM warning.
-- [ ] Surface the same text in the director log, run JSON, patch meta, and doctor.
-- [ ] Tests listed above. Full `video_buddy` pytest suite green.
-- [ ] Update `docs/WEIGHTS.md` and the README weights pointer. Update draft PR #70's body. Confirm the PR is still draft and unmerged.
+- [x] Write `docs/MODEL_SELECTION_AUDIT.md` (file, line, current logic, silent or not, planned change, Flux and H3 notes) and push it on its own.
+- [x] Add the candidate catalog and `select_model` / `decide_generation` with structured reasons.
+- [x] Declare intent, optional `model`, and `prefer` on the three presets.
+- [x] Route patcher, `resolve_ltx23_gguf`, director, doctor, and the selector report through the decision. Leave the audit's exemptions alone.
+- [x] Fail the job before ComfyUI when no GGUF fits. Override still wins, with a VRAM warning. Dry-run records the error and still builds the graph.
+- [x] Surface the same text in the director log, run JSON, patch meta, and doctor.
+- [x] Tests listed above. Full `video_buddy` pytest suite green aside from the Flux fp8 assertion that already fails on `origin/main`.
+- [x] Update `docs/WEIGHTS.md` and the README weights pointer. Update draft PR #70's body. Confirm the PR is still draft and unmerged.

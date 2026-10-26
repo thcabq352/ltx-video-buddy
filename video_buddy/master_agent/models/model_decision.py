@@ -6,8 +6,9 @@ that route. Callers get the winner, a reason for every loser, and the
 pairwise lines Scott asked for (Sulphur vs base, Eros vs 10Eros, Q4 vs Q3,
 dev vs distilled, MiniMax H3 vs LTX).
 
-``workflows/flux_ltx_i2v_api.json`` is not in this tree. It lives on draft
-PR #92. This module only detects the file. It does not copy that graph.
+``workflows/flux_ltx_i2v_api.json`` is used when that file is on disk
+(it arrived with PR #92). This module only detects it. It does not copy
+a graph from another branch.
 """
 
 from __future__ import annotations
@@ -1054,7 +1055,10 @@ def decide_generation(
         search = [Path(path) for path in roots]
     budget, source = vram_budget(vram_gb)
     located = _locate_all(search)
-    workflow = flux_workflow if flux_workflow is not None else flux_i2v_workflow()
+    if flux_workflow is not None:
+        workflow = flux_workflow if Path(flux_workflow).is_file() else None
+    else:
+        workflow = flux_i2v_workflow()
     flux_hit = _first_flux(located)
     animator = _animator(located)
     installed = workflow is not None

@@ -258,8 +258,16 @@ def choose_variant(
     )
     head_variant, head_source = ranked[0]
     if head_source in ("forced", "input"):
+        choose_variant.last_decision = _route_decision(
+            head_variant,
+            request,
+            has_image=has_image,
+            has_audio=has_audio,
+            forced=True,
+        )
         return head_variant, head_source
     checker = hands if hands is not None else default_hands()
+    picked: tuple[str, str] | None = None
     for variant, source in ranked:
         spec = contract or contract_from_variant(variant)
         if spec.variant != variant:
@@ -274,8 +282,46 @@ def choose_variant(
             )
         fit: FitResult = checker.can_fulfill(spec)
         if fit.ok:
-            return variant, source
-    return ranked[-1]
+            picked = (variant, source)
+            break
+    if picked is None:
+        picked = ranked[-1]
+    variant, source = picked
+    locked = source in ("forced", "input", "preset", "attach")
+    decision = _route_decision(
+        variant,
+        request,
+        has_image=has_image,
+        has_audio=has_audio,
+        forced=locked,
+    )
+    choose_variant.last_decision = decision
+    if decision.apply_route and decision.variant in _allowed_variants():
+        spec = contract_from_variant(decision.variant)
+        if checker.can_fulfill(spec).ok:
+            return decision.variant, "route"
+    return variant, source
+
+
+def _route_decision(
+    variant: str,
+    request: str,
+    *,
+    has_image: bool,
+    has_audio: bool,
+    forced: bool,
+):
+    """Route, then model. Import stays inside the function to avoid a cycle."""
+    from master_agent.models.model_decision import decide_generation
+
+    return decide_generation(
+        variant,
+        request=request,
+        has_image=has_image,
+        has_audio=has_audio,
+        forced=forced,
+        allowed=_allowed_variants(),
+    )
 
 
 def _llm_variant(request: str, *, fallback: str) -> Optional[str]:

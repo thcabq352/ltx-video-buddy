@@ -986,41 +986,20 @@ def resolve_ltx23_gguf(
 ) -> Path | None:
     """Best on-disk LTX 2.3 GGUF for ``variant``, or None.
 
-    Independent of ``FORCE_LOADER`` and ``VRAM_GB``. fp8 / bf16 / EROS are
-    not returned here — callers keep those as the fallback when this is None.
+    Scores intent, quality tier, and VRAM via ``select_model``. Does not
+    raise. fp8 / bf16 stay out of this function — callers keep those when
+    this returns None.
     """
-    search = list(roots) if roots is not None else model_search_roots()
-    for name in ltx23_gguf_names(variant):
-        found = _search_name(name, search)
-        if found is not None:
-            return found
-    folders = frozenset({"diffusion_models", "unet", "checkpoints", "gguf"})
-    hits: list[Path] = []
-    for path in _iter_weight_files(search):
-        parts = {part.lower() for part in path.parts}
-        parent = path.parent.name.lower()
-        if not (parts & folders or parent in folders or parent == "models"):
-            continue
-        if is_sulphur_or_ltx23_gguf(path.name):
-            hits.append(path)
-    if not hits:
-        return None
-    want_dev = (variant or "").strip().lower() == "directors"
+    from master_agent.models.model_decision import select_model
 
-    def _sort_key(path: Path) -> tuple[int, int, str]:
-        name = path.name.lower()
-        slot = 0 if (want_dev and "dev" in name) or (not want_dev and "distill" in name) else 1
-        return (slot, _gguf_quant_rank(name), name)
-
-    hits.sort(key=_sort_key)
-    return hits[0]
+    return select_model(variant or "base", roots).chosen_path
 
 
 def find_ltx23_compatible(roots: Iterable[Path] | None = None) -> Path | None:
     """On-disk LTX 2.3 GGUF, including Sulphur Q3_K_S. None if the scan is empty.
 
-    The file returned is the one base/eros would load (QuantStack Q4 before
-    Sulphur). Directors use :func:`resolve_ltx23_gguf` with ``variant='directors'``.
+    The file returned is the one the base preset would load. Directors use
+    :func:`resolve_ltx23_gguf` with ``variant='directors'``.
     """
     return resolve_ltx23_gguf("base", roots)
 

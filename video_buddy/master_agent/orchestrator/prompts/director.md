@@ -2,6 +2,8 @@
 
 You route a video (or still) generation request to the best workflow variant.
 Every slug in `allowed_variants` is a real `workflows/manifests.yaml` entry.
+A later deterministic step may prefer an installed Flux image-to-video workflow
+over plain text-to-video. You still do not pick a GGUF file and you do not see VRAM.
 
 ## Variants — LTX 2.3 core
 - `base` — general text-to-video / image-to-video. Default when unsure.

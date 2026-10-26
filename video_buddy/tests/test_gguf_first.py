@@ -105,7 +105,7 @@ def test_quantstack_q4_beats_sulphur_and_eros(tmp_path: Path):
     _write(tmp_path / "unet" / SULPHUR)
     _write(tmp_path / "diffusion_models" / EROS)
     assert resolve_ltx23_gguf("base", [tmp_path]) == q4
-    assert resolve_ltx23_gguf("eros", [tmp_path]) == q4
+    assert resolve_ltx23_gguf("eros", [tmp_path]) == tmp_path / "diffusion_models" / EROS
 
 
 def test_directors_prefers_dev_q4_over_sulphur(tmp_path: Path):
@@ -143,7 +143,7 @@ def _patch(variant: str, roots: list[Path]):
     ("variant", "gguf_name"),
     (
         ("base", Q4_DISTILLED),
-        ("eros", Q4_DISTILLED),
+        ("eros", EROS),
         ("directors", Q4_DEV),
     ),
 )
@@ -159,8 +159,7 @@ def test_ltx23_graph_uses_gguf_for_model_and_keeps_eros_for_vae(variant: str, gg
     ]
     assert len(gguf_nodes) == 1
     assert gguf_nodes[0]["class_type"] == "UnetLoaderGGUF"
-    assert gguf_nodes[0]["inputs"] == {"unet_name": EROS}
-    assert gguf_nodes[0]["inputs"]["unet_name"] != gguf_name
+    assert gguf_nodes[0]["inputs"] == {"unet_name": gguf_name}
     assert "dequant_dtype" not in gguf_nodes[0]["inputs"]
     assert workflow["4"]["inputs"]["model"] == ["1", 0]
     assert workflow["1"]["class_type"] == "UnetLoaderGGUF"
@@ -173,8 +172,9 @@ def test_ltx23_graph_uses_gguf_for_model_and_keeps_eros_for_vae(variant: str, gg
     assert workflow["70"]["inputs"] == {"samples": ["60", 0], "vae": ["5", 0]}
     assert workflow["71"]["inputs"]["audio_vae"] == ["3", 0]
     assert OLD_BAKE not in str(workflow)
-    assert meta["gguf_unet"] == EROS
-    assert meta["checkpoint"] == EROS
+    assert meta["gguf_unet"] == gguf_name
+    assert meta["checkpoint"] == gguf_name
+    assert "Sulphur vs base" in meta["model_decision"]["text"]
     assert not any(
         isinstance(node, dict) and "fp8" in str(node.get("class_type") or "").lower()
         for node in workflow.values()

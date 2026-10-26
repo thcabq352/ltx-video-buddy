@@ -87,11 +87,24 @@ def test_base_uses_sulphur_and_heretic_when_literals_are_missing(tmp_path: Path)
     assert FP4 not in blob
 
 
-def test_eros_checkpoint_stays_when_the_file_exists(tmp_path: Path):
+def test_base_prefers_sulphur_over_10eros_when_distilled_q4_is_absent(tmp_path: Path):
     _write(tmp_path / "diffusion_models" / EROS)
     _write(tmp_path / "unet" / SULPHUR)
     _write(tmp_path / "text_encoders" / HERETIC)
     workflow, meta = _patch("base", tmp_path)
+    assert meta["checkpoint"] == SULPHUR
+    assert workflow["1"]["class_type"] == "UnetLoaderGGUF"
+    assert workflow["1"]["inputs"]["unet_name"] == SULPHUR
+    text = meta["model_decision"]["text"]
+    assert "Eros vs 10Eros" in text
+    assert "intent mismatch" in text or "10Eros" in text
+
+
+def test_eros_preset_keeps_10eros_when_the_file_exists(tmp_path: Path):
+    _write(tmp_path / "diffusion_models" / EROS)
+    _write(tmp_path / "unet" / SULPHUR)
+    _write(tmp_path / "text_encoders" / HERETIC)
+    workflow, meta = _patch("eros", tmp_path)
     assert meta["checkpoint"] == EROS
     assert workflow["1"]["class_type"] == "UnetLoaderGGUF"
     assert workflow["1"]["inputs"]["unet_name"] == EROS

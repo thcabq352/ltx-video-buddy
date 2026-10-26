@@ -859,25 +859,16 @@ def _fresh_node_id(workflow: dict[str, Any]) -> str:
 def _apply_ltx23_gguf_model(workflow: dict[str, Any], variant: str) -> str | None:
     """Point the MODEL edge at a local LTX 2.3 GGUF when one matches the slot.
 
-    An UnetLoaderGGUF that already names 10Eros_v1.5-Q4_K_M.gguf stays on that
-    file when it is on disk (quantized ops; no dequant dtype, no fp8 cast).
-    Lipsync and in/outpaint are not rewritten. Text projection and VAEs are
-    not retargeted.
+    The name comes from the reasoned selector (intent, tier, VRAM). An
+    on-disk 10Eros file does not win by itself. Lipsync and in/outpaint are
+    not rewritten. Text projection and VAEs are not retargeted. The loader
+    stays UnetLoaderGGUF with only ``unet_name`` (no dequant dtype).
     """
     if variant not in _LTX23_GGUF_VARIANTS:
         return None
     from master_agent.comfy.loader_names import name_from_local_path
     from master_agent.config import EROS_GGUF
     from master_agent.models.weights import resolve_ltx23_gguf
-
-    for class_type in ("UnetLoaderGGUF", "GGUFLoaderKJ"):
-        for _nid, node in _find_nodes_by_class(workflow, class_type):
-            inputs = node.get("inputs") or {}
-            current = str(inputs.get("unet_name") or inputs.get("model_name") or "")
-            if Path(current.replace("\\", "/")).name != EROS_GGUF:
-                continue
-            if resolve_model_path(current) is not None:
-                return current
 
     def _named_gguf() -> str | None:
         for class_type in ("UnetLoaderGGUF", "GGUFLoaderKJ"):
@@ -1818,15 +1809,13 @@ def _loader_name(path: Path) -> str:
 
 
 def _prefer_on_disk_checkpoint(name: Optional[str], variant: str) -> Optional[str]:
-    """Keep an on-disk 10Eros v1.5 GGUF. Otherwise use another local LTX 2.3 GGUF.
+    """Use the reasoned LTX 2.3 GGUF for base / eros / directors.
 
-    base / eros / directors only. Lipsync and the dev-fp8 render variants are
-    not rewritten. The returned name is the diffusion model (UnetLoaderGGUF).
+    Lipsync and the dev-fp8 render variants are not rewritten. When nothing
+    on disk fits, the authored name stays so the graph shape is unchanged.
     Text projection and the VAEs are not retargeted here.
     """
     if not name or variant not in _LTX23_GGUF_VARIANTS:
-        return name
-    if resolve_model_path(name) is not None:
         return name
     from master_agent.models.weights import model_search_roots, resolve_ltx23_gguf
 
@@ -1891,6 +1880,8 @@ def load_and_patch_workflow(
     vae: Optional[str] = None,
     lightx2v: Optional[bool] = None,
     lightx2v_strength: Optional[float] = None,
+    request: str = "",
+    model_override: Optional[str] = None,
 ) -> tuple[dict[str, Any], dict[str, Any]]:
     """
     Returns (workflow_api_dict, meta) where meta has resolved generation params.
@@ -2227,6 +2218,19 @@ def load_and_patch_workflow(
         warn = prepare_warning(resolved_id or variant)
         if warn:
             meta["prepare_warning"] = warn
+    except Exception:
+        pass
+    try:
+        from master_agent.models.model_decision import decide_generation
+
+        decision = decide_generation(
+            resolved_id or variant,
+            request=request or (prompt or ""),
+            has_image=bool(image_name or first_image),
+            has_audio=bool(audio_name),
+            override=model_override,
+        )
+        meta["model_decision"] = decision.to_dict()
     except Exception:
         pass
     return workflow, meta
