@@ -6,8 +6,8 @@ Short plan for the reasoned route + GGUF decision on branch `cursor/10eros-v15-g
 
 - Commit and push only to `cursor/10eros-v15-gguf-a523`.
 - PR #70 stays a draft. Do not merge it and do not mark it ready.
-- Do not merge or modify PR #92 or `cursor/gguf-vram-flux-ltx`.
-- Do not rebase onto main or force-push unless a normal push is rejected.
+- Do not merge or modify PR #92 or `cursor/gguf-vram-flux-ltx`. (PR #92 later merged to `main`; this branch only received that work by rebasing onto `origin/main`.)
+- Rebased onto `origin/main` `d738e6776f68565026b6da29ea40c3fb6c7603bd` after that merge, with `--force-with-lease`. Later commits are normal pushes.
 
 ## What is wrong today
 
@@ -53,7 +53,7 @@ No eligible file: raise before ComfyUI is queued. The message lists what is miss
 
 ## Flux I2V hook
 
-`workflows/flux_ltx_i2v_api.json` and the `flux_ltx_i2v` manifest slug live on draft PR #92 (`cursor/gguf-vram-flux-ltx`). They are not on this branch. The detector looks for that filename (or any manifest slug whose file name contains both `flux` and `i2v`) and for a Flux diffusion weight. Preference order for the still: `flux-2-klein-4b-fp8.safetensors` (main's PR #100, the only Flux stills model in current policy), then another on-disk Klein or Flux GGUF/fp8 already named in this tree (`flux-2-klein-9b-fp8`, `flux1-dev-Q4_K_S`, `flux1-dev-fp8`). If the workflow file is absent, the route reason says so and names the PR #92 dependency. No graph is copied from that branch.
+`workflows/flux_ltx_i2v_api.json` and the `flux_ltx_i2v` manifest slug arrived on this branch when it was rebased onto `origin/main` after PR #92 merged. The detector uses that file when it is present. It does not copy a graph. Preference order for the still: `flux-2-klein-4b-fp8.safetensors` (main's PR #100), then Klein 9B, then `flux1-dev-Q4_K_S`, then `flux1-dev-fp8`. If the workflow file is absent, the route reason says so and names `flux_ltx_i2v_api.json`.
 
 Combined VRAM is the Flux still plus the LTX (or H3) model that would animate it. If that sum exceeds free VRAM, Flux I2V is rejected and T2V (or the user's image route) is why.
 
