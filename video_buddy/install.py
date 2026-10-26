@@ -15,7 +15,11 @@ only reports (``setup``): no venv, no pip, no installs. It needs an existing .ve
 
 runs automatic install instead (pre-flight, then ComfyUI + LTX 2.3 + llama.cpp).
 Without --yes it prints the pre-flight and the plan and changes nothing.
-Also forwards --preflight-only, --dry-run, --skip-weights, --skip-sage, --skip-llm, --gpu X.
+Also forwards --preflight-only, --dry-run, --skip-weights, --skip-sage, --skip-llm,
+--klein-4b, --with-qwen-encoder, --with-360-lora, and --gpu X.
+``--with-qwen-encoder`` and ``--with-360-lora`` are opt-in downloads. Automatic
+install leaves them out unless the flag is present. The Qwen encoder is already
+part of the default Klein 4B pack; the flag fetches that file on its own.
 """
 
 from __future__ import annotations
@@ -38,6 +42,8 @@ AUTOMATIC_INSTALL_FLAGS = (
     "--skip-sage",
     "--skip-llm",
     "--klein-4b",
+    "--with-qwen-encoder",
+    "--with-360-lora",
 )
 
 

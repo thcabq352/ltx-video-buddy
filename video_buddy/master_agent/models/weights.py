@@ -403,6 +403,13 @@ WEIGHT_FILES["h3_ref2v_turbo"] = WeightFile(
 )
 
 # --- other 16GB-class families (attested names only; scan-first) -----------
+from master_agent.models.klein import (
+    PACK_REPO as HF_FLUX_KLEIN_PACK,
+    TEXT_BYTES as KLEIN_QWEN_ENCODER_BYTES,
+    TEXT_FILE as KLEIN_QWEN_ENCODER_FILE,
+    TEXT_REPO_FILE as KLEIN_QWEN_ENCODER_REPO_FILE,
+    TEXT_SHA256 as KLEIN_QWEN_ENCODER_SHA256,
+)
 from master_agent.models.vram_policy import (
     FLUX_PREFERENCE,
     KREA_PREFERENCE,
@@ -417,7 +424,12 @@ HF_WAN22_GGUF = "QuantStack/Wan2.2-T2V-A14B-GGUF"
 HF_VACE_GGUF = "mickmumpitz/VACE_Skyreels_V3_R2V_Merge-GGUF"
 HF_KREA = "Comfy-Org/Krea-2"
 HF_FLUX_KLEIN = "black-forest-labs/FLUX.2-klein-4b-fp8"
+HF_KLEIN_360_LORA = "nomadoor/flux-2-klein-4B-360-erp-outpaint-lora"
 HF_QWEN_EDIT = "QuantStack/Qwen-Image-Edit-2509-GGUF"
+# Hub paths-info 2026-10-26. Starts 567cc22d, ends de166.
+KLEIN_360_LORA_FILE = "flux-2-klein-4B-360-erp-outpaint-lora_V1.safetensors"
+KLEIN_360_LORA_BYTES = 46_224_184
+KLEIN_360_LORA_SHA256 = "567cc22de03800d2c9d4309e0cf6f971cc00da6b39fb26b0311031f2563de166"
 
 WEIGHT_FILES["wan22_high"] = WeightFile(
     key="wan22_high",
@@ -495,6 +507,43 @@ WEIGHT_FILES["flux"] = WeightFile(
     license_url="https://huggingface.co/black-forest-labs/FLUX.2-klein-4b-fp8",
     note="FLUX.2 [klein] 4B fp8, Apache 2.0, ungated. The only Flux. bf16 counts when already on disk.",
     accepts=FLUX_PREFERENCE,
+)
+# Same file as klein.FILES text encoder. mandatory=False so a bundle scan does
+# not fetch it. automatic-install still downloads it inside the Klein 4B pack,
+# because CLIPLoader on the Klein stills needs it. --with-qwen-encoder fetches
+# this entry on its own (size + SHA256 + .partial resume).
+WEIGHT_FILES["klein_qwen_encoder"] = WeightFile(
+    key="klein_qwen_encoder",
+    filename=KLEIN_QWEN_ENCODER_FILE,
+    dest_folder="text_encoders",
+    repo_id=HF_FLUX_KLEIN_PACK,
+    repo_filename=KLEIN_QWEN_ENCODER_REPO_FILE,
+    size_bytes=KLEIN_QWEN_ENCODER_BYTES,
+    mandatory=False,
+    gated=False,
+    license_url="https://huggingface.co/Comfy-Org/Flux-2-Klein-4B",
+    sha256=KLEIN_QWEN_ENCODER_SHA256,
+    note=(
+        "Qwen3 4B fp4 text encoder for FLUX.2 [klein] 4B. Required by the default "
+        "Klein stills pack (download-flux / automatic-install). This row is the "
+        "standalone opt-in so the file can be fetched without the rest of a bundle."
+    ),
+)
+WEIGHT_FILES["klein_360_lora"] = WeightFile(
+    key="klein_360_lora",
+    filename=KLEIN_360_LORA_FILE,
+    dest_folder="loras",
+    repo_id=HF_KLEIN_360_LORA,
+    repo_filename=KLEIN_360_LORA_FILE,
+    size_bytes=KLEIN_360_LORA_BYTES,
+    mandatory=False,
+    gated=False,
+    license_url="https://huggingface.co/nomadoor/flux-2-klein-4B-360-erp-outpaint-lora",
+    sha256=KLEIN_360_LORA_SHA256,
+    note=(
+        "Movie Builder 360 ERP outpaint LoRA. Opt-in via --with-360-lora. "
+        "Apache 2.0, ungated. Absent from the default Klein pack and from automatic install."
+    ),
 )
 WEIGHT_FILES["qwen_edit"] = WeightFile(
     key="qwen_edit",
@@ -651,6 +700,8 @@ _WAN22 = ("wan22_high", "wan22_low", "wan22_lightx2v")
 _VACE = ("vace",)
 _KREA2 = ("krea2",)
 _FLUX = ("flux",)
+_KLEIN_QWEN_ENCODER = ("klein_qwen_encoder",)
+_KLEIN_360_LORA = ("klein_360_lora",)
 _QWEN_EDIT = ("qwen_edit",)
 _LTX23_CORE = (
     "ltx23_checkpoint",
@@ -677,6 +728,8 @@ BUNDLES: dict[str, tuple[str, ...]] = {
     "vace": _VACE,
     "krea2": _KREA2,
     "flux": _FLUX,
+    "klein_qwen_encoder": _KLEIN_QWEN_ENCODER,
+    "klein_360_lora": _KLEIN_360_LORA,
     "qwen_edit": _QWEN_EDIT,
     "ltx23_core": _LTX23_CORE,
 }
@@ -1794,6 +1847,8 @@ def format_ask(status: WeightStatus) -> str:
             "flux": "--flux-pack",
             "qwen_edit": "--qwen",
             "ltx23_core": "--ltx23",
+            "klein_qwen_encoder": "--with-qwen-encoder",
+            "klein_360_lora": "--with-360-lora",
         }.get(status.bundle or "", f"--bundle {status.bundle}")
         lines.append(f"  python -m master_agent download-models {flag} --yes")
     return "\n".join(lines)
@@ -1813,6 +1868,62 @@ def require_weights(variant: str, *, roots: Iterable[Path] | None = None) -> Wei
     if status is None or status.ok:
         return status
     raise MissingWeightsError(format_ask(status), status.missing_mandatory, bundle=status.bundle)
+
+
+def weight_destination(weight: WeightFile, root: Path | None = None) -> Path:
+    """``MODELS_DIR/<dest_folder>/<filename>`` for a weight row."""
+    from master_agent.models.layout import model_folder
+
+    return model_folder(weight.dest_folder, root) / weight.filename
+
+
+def hub_resolve_url(weight: WeightFile) -> str:
+    repo_file = weight.repo_filename.replace("\\", "/")
+    return f"https://huggingface.co/{weight.repo_id}/resolve/main/{repo_file}"
+
+
+def download_verified_file(
+    weight: WeightFile,
+    *,
+    dest_root: Path | None = None,
+    progress: Callable[[str], None] = print,
+    yes: bool = False,
+) -> Path | None:
+    """Fetch one pinned file with size, SHA256, and ``.partial`` resume.
+
+    A local copy that is already at least ``size_bytes`` is skipped. A short
+    file at the destination is resumed. Nothing is fetched unless ``yes`` is
+    true. The write stays under Buddy ``MODELS_DIR``.
+    """
+    from master_agent.config import MODELS_DIR
+    from master_agent.models.download import assert_pack_download_destination
+    from master_agent.models.llm_gguf import download_resolve, size_ok
+
+    root = Path(dest_root) if dest_root is not None else Path(MODELS_DIR)
+    dest = weight_destination(weight, root)
+    found = resolve_weight(weight)
+    if found is not None and size_ok(found, weight.size_bytes):
+        progress(
+            f"SKIP download of {weight.filename} — local file found at {found} "
+            "(not re-downloading)"
+        )
+        return found
+    if not yes:
+        progress(
+            f"{weight.filename} → models/{weight.dest_folder}/ ({weight.size_label}). "
+            "Nothing downloaded."
+        )
+        return None
+    if not weight.sha256:
+        raise RuntimeError(f"{weight.filename} has no pinned SHA256; refusing to fetch.")
+    assert_pack_download_destination(dest)
+    return download_resolve(
+        hub_resolve_url(weight),
+        dest,
+        int(weight.size_bytes),
+        sha256=weight.sha256,
+        progress=progress,
+    )
 
 
 def download_named_file(

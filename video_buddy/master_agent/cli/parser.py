@@ -77,6 +77,24 @@ def main(argv: list[str] | None = None) -> int:
         action="store_true",
         help="download FLUX.2 [klein] 4B stills (also the default; no 9B and no FLUX.3)",
     )
+    p.add_argument(
+        "--with-qwen-encoder",
+        dest="with_qwen_encoder",
+        action="store_true",
+        help=(
+            "opt-in: also fetch qwen_3_4b_fp4_flux2.safetensors into text_encoders. "
+            "The default Klein 4B pack already includes this file"
+        ),
+    )
+    p.add_argument(
+        "--with-360-lora",
+        dest="with_360_lora",
+        action="store_true",
+        help=(
+            "opt-in: fetch flux-2-klein-4B-360-erp-outpaint-lora_V1.safetensors into loras. "
+            "Left out of the default install"
+        ),
+    )
     p.set_defaults(func=cmd_automatic_install)
 
     p = sub.add_parser(
@@ -586,7 +604,25 @@ def main(argv: list[str] | None = None) -> int:
     )
     p.add_argument(
         "--bundle",
-        help="weight bundle id (ltx25_*|ltx23_core|h3_*|wan22|vace|krea2|flux|qwen_edit)",
+        help=(
+            "weight bundle id (ltx25_*|ltx23_core|h3_*|wan22|vace|krea2|flux|qwen_edit|"
+            "klein_qwen_encoder|klein_360_lora)"
+        ),
+    )
+    p.add_argument(
+        "--with-qwen-encoder",
+        dest="with_qwen_encoder",
+        action="store_true",
+        help=(
+            "opt-in: qwen_3_4b_fp4_flux2.safetensors → text_encoders "
+            "(same file as the default Klein pack; this flag fetches it alone)"
+        ),
+    )
+    p.add_argument(
+        "--with-360-lora",
+        dest="with_360_lora",
+        action="store_true",
+        help="opt-in: flux-2-klein-4B-360-erp-outpaint-lora_V1.safetensors → loras",
     )
     p.add_argument("--yes", action="store_true", help="consent: download the missing mandatory set")
     p.add_argument("--optional", action="store_true", help="also fetch optional Hub files (distilled LoRA 450, temporal upscaler)")
