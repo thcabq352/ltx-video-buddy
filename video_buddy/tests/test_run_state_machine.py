@@ -184,6 +184,18 @@ def rig(tmp_path, monkeypatch, object_info):
     monkeypatch.setattr("master_agent.provenance.OUTPUTS_DIR", tmp_path / "outputs")
     monkeypatch.setattr("master_agent.models.weights.require_weights", lambda *_a, **_k: None)
     monkeypatch.setattr("master_agent.models.weights.resolve_ltx23_gguf", lambda *_a, **_k: None)
+    models = tmp_path / "models"
+    q4 = models / "unet" / "LTX-2.3-22B-distilled-1.1-Q4_K_S.gguf"
+    q4.parent.mkdir(parents=True)
+    q4.write_bytes(b"gguf")
+    monkeypatch.setattr("master_agent.models.weights.model_search_roots", lambda: [models])
+    # base/eros/directors now load 10Eros through UnetLoaderGGUF. That name is
+    # not in the tower object_info cache, so the validator asks the disk.
+    # Weight presence is stubbed for this machine: a named file counts.
+    monkeypatch.setattr(
+        "master_agent.models.weights.find_weight_file",
+        lambda name, *_a, **_k: Path(str(name)) if name else None,
+    )
     monkeypatch.setattr("master_agent.judge.probe.probe_video", lambda *_a, **_k: {})
     monkeypatch.setattr("master_agent.orchestrator.machine.analyze", lambda *a, **k: (0.95, []))
     monkeypatch.setattr("master_agent.judge.judge._vision_review_safe", lambda *a, **k: None)

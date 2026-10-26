@@ -341,11 +341,11 @@ def _with_h3_us(detail: str) -> str:
 
 
 def check_ltx23_weights() -> dict[str, Any]:
-    """Scan for an LTX 2.3 GGUF (including Sulphur Q3_K_S). Never downloads."""
+    """Scan for an LTX 2.3 GGUF and print the reasoned pick. Never downloads."""
     try:
-        from master_agent.models.weights import find_ltx23_compatible
+        from master_agent.models.model_decision import decide_generation
 
-        found = find_ltx23_compatible()
+        decision = decide_generation("base")
     except Exception as exc:
         return _row(
             "ltx23-weights",
@@ -353,12 +353,8 @@ def check_ltx23_weights() -> dict[str, Any]:
             f"scan failed: {exc}",
             fix="python -m master_agent inventory",
         )
-    if found is not None:
-        return _row(
-            "ltx23-weights",
-            True,
-            f"GGUF-first {found.name} at {found} — fp8/EROS only if no GGUF matches",
-        )
+    if decision.chosen and not decision.error:
+        return _row("ltx23-weights", True, decision.text)
     from master_agent.models.deferred import DOWNLOAD_CMD, REGISTER_CMD, read_marker
 
     marker = read_marker()
@@ -373,12 +369,15 @@ def check_ltx23_weights() -> dict[str, Any]:
         )
         row["deferred"] = True
         return row
+    detail = decision.text or (
+        "no compatible LTX 2.3 GGUF after inventory "
+        "(sulphur_dev-Q3_K_S.gguf and other LTX 2.3 Q3/Q4/Q5 GGUF count). "
+        f"It goes in {dest_dir('diffusion_models')}"
+    )
     return _row(
         "ltx23-weights",
         False,
-        "no compatible LTX 2.3 GGUF after inventory "
-        "(sulphur_dev-Q3_K_S.gguf and other LTX 2.3 Q3/Q4/Q5 GGUF count). "
-        f"It goes in {dest_dir('diffusion_models')}",
+        detail,
         fix="python -m master_agent download-models --ltx23   # lists the LTX 2.3 pack; --yes fetches. Doctor does not download",
     )
 

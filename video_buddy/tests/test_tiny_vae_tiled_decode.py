@@ -69,14 +69,33 @@ def test_plain_vaedecode_keeps_tiny_preview():
     assert workflow["1"]["inputs"]["vae_name"] == TINY
 
 
-def test_explicit_override_on_base_template_raises():
+def test_explicit_tiny_vae_on_plain_base_template_stays():
+    """base shares ltx23_av.json. Node 70 is plain VAEDecode, so taeltx2_3 stays."""
+    with patch(
+        "master_agent.comfy.workflow_patcher.resolve_model_path",
+        return_value=Path("fake.safetensors"),
+    ):
+        workflow, _meta = load_and_patch_workflow(
+            "base",
+            prompt="neon rain",
+            seed=1,
+            duration_s=1.0,
+            vae=TINY,
+        )
+    assert workflow["70"]["class_type"] == "VAEDecode"
+    assert workflow["5"]["inputs"]["vae_name"] == TINY
+    assert "LTXVTiledVAEDecode" not in str(workflow)
+    assert "VAEDecodeTiled" not in str(workflow)
+
+
+def test_explicit_tiny_vae_on_lipsync_tiled_template_raises():
     with patch(
         "master_agent.comfy.workflow_patcher.resolve_model_path",
         return_value=Path("fake.safetensors"),
     ):
         with pytest.raises(TinyVAETiledDecodeError):
             load_and_patch_workflow(
-                "base",
+                "lipsync",
                 prompt="neon rain",
                 seed=1,
                 duration_s=1.0,

@@ -41,10 +41,10 @@ LTX_AUDIO_CLASSES = frozenset({"LTXVEmptyLatentAudio"})
 FLUX_LTX_VARIANT = "flux_ltx_i2v"
 FLUX_LTX_DEFAULT_FRAMES = 25
 
-# Preferred all-in-one checkpoint names (first that exists on disk wins as fallback)
+# Safetensors checkpoint fallbacks. 10Eros diffusion is a GGUF
+# (config.EROS_GGUF) and is not listed here — CheckpointLoaderSimple cannot
+# load it. Text projection stays on a real checkpoint.
 CHECKPOINT_FALLBACKS = [
-    "LTX2.3_DISTILLED-1.1_BAKED_LTX_10Eros_v14_r768.safetensors",
-    "ltx-2.3-22b-distilled-10-eros_fp8.safetensors",
     "ltx-2.3-22b-dev.safetensors",  # optional official full model if user installs later
     "ltx-2.3-22b-distilled-1.1.safetensors",
 ]
@@ -126,6 +126,54 @@ def _expected_template_path(variant: str) -> Path:
     return WORKFLOWS_DIR / f"{variant}.json"
 
 
+def ltx23_av_preset(variant: str) -> dict[str, str] | None:
+    """Unet name, positive prompt, and save prefix for the shared AV graph.
+
+    Only variants whose manifest names ``ltx23_av_presets.yaml`` have a row.
+    """
+    meta = variant_manifest(variant)
+    preset_name = meta.get("preset")
+    if not isinstance(preset_name, str) or not preset_name.strip():
+        return None
+    path = WORKFLOWS_DIR / preset_name.replace("\\", "/")
+    if not path.is_file():
+        return None
+    with path.open(encoding="utf-8") as f:
+        data = yaml.safe_load(f) or {}
+    row = data.get(variant) if isinstance(data, dict) else None
+    if not isinstance(row, dict):
+        return None
+    out: dict[str, str] = {}
+    for key in ("unet_name", "prompt", "filename_prefix"):
+        value = row.get(key)
+        if isinstance(value, str) and value:
+            out[key] = value
+    return out or None
+
+
+def _apply_ltx23_av_preset(workflow: dict[str, Any], variant: str) -> None:
+    """Write the three preset fields onto the shared chain. Other nodes stay."""
+    row = ltx23_av_preset(variant)
+    if not row:
+        return
+    unet = row.get("unet_name")
+    node1 = workflow.get("1")
+    if unet and isinstance(node1, dict) and node1.get("class_type") == "UnetLoaderGGUF":
+        node1.setdefault("inputs", {})["unet_name"] = unet
+    prompt = row.get("prompt")
+    node10 = workflow.get("10")
+    if prompt and isinstance(node10, dict):
+        inputs = node10.get("inputs") or {}
+        if isinstance(inputs.get("text"), str):
+            inputs["text"] = prompt
+    prefix = row.get("filename_prefix")
+    node90 = workflow.get("90")
+    if prefix and isinstance(node90, dict):
+        inputs = node90.get("inputs") or {}
+        if "filename_prefix" in inputs and isinstance(inputs.get("filename_prefix"), str):
+            inputs["filename_prefix"] = prefix
+
+
 def load_workflow_template(variant: str) -> dict[str, Any]:
     path: Path | None = None
     try:
@@ -147,7 +195,9 @@ def load_workflow_template(variant: str) -> dict[str, Any]:
     with path.open(encoding="utf-8") as f:
         data = json.load(f)
     if isinstance(data, dict) and "prompt" in data and isinstance(data["prompt"], dict):
-        return data["prompt"]
+        data = data["prompt"]
+    if isinstance(data, dict):
+        _apply_ltx23_av_preset(data, variant)
     return data
 
 
@@ -809,18 +859,29 @@ def _fresh_node_id(workflow: dict[str, Any]) -> str:
 def _apply_ltx23_gguf_model(workflow: dict[str, Any], variant: str) -> str | None:
     """Point the MODEL edge at a local LTX 2.3 GGUF when one matches the slot.
 
-    CheckpointLoaderSimple stays in the graph for VAE (output 2) and the
-    text-projection checkpoint. fp8 / EROS remain the MODEL source only when
-    no compatible GGUF is on disk. Lipsync and in/outpaint are not rewritten.
+    The name comes from the reasoned selector (intent, tier, VRAM). An
+    on-disk 10Eros file does not win by itself. Lipsync and in/outpaint are
+    not rewritten. Text projection and VAEs are not retargeted. The loader
+    stays UnetLoaderGGUF with only ``unet_name`` (no dequant dtype).
     """
     if variant not in _LTX23_GGUF_VARIANTS:
         return None
     from master_agent.comfy.loader_names import name_from_local_path
+    from master_agent.config import EROS_GGUF
     from master_agent.models.weights import resolve_ltx23_gguf
+
+    def _named_gguf() -> str | None:
+        for class_type in ("UnetLoaderGGUF", "GGUFLoaderKJ"):
+            for _nid, node in _find_nodes_by_class(workflow, class_type):
+                inputs = node.get("inputs") or {}
+                current = str(inputs.get("unet_name") or inputs.get("model_name") or "")
+                if current.lower().endswith(".gguf"):
+                    return current
+        return None
 
     found = resolve_ltx23_gguf(variant)
     if found is None:
-        return None
+        return _named_gguf()
     unet_name = name_from_local_path(found) or found.name
     wired = False
     for src, node in list(workflow.items()):
@@ -854,15 +915,31 @@ def _apply_ltx23_gguf_model(workflow: dict[str, Any], variant: str) -> str | Non
     for class_type in ("UNETLoader", "UnetLoaderGGUF", "DiffusionModelLoader"):
         for _nid, node in _find_nodes_by_class(workflow, class_type):
             inputs = node.get("inputs") or {}
-            current = str(inputs.get("unet_name") or inputs.get("ckpt_name") or "")
+            current = str(inputs.get("unet_name") or inputs.get("ckpt_name") or inputs.get("model_name") or "")
             lowered = current.lower()
-            if not current or lowered.endswith(".gguf"):
+            current_name = Path(current.replace("\\", "/")).name
+            if current_name == unet_name:
+                wired = True
+                continue
+            # A GGUF loader that still names the missing 10Eros file takes the
+            # on-disk GGUF. Only the name field changes, so the ops stay quantized.
+            if lowered.endswith(".gguf"):
+                if current_name == EROS_GGUF or any(
+                    tok in lowered for tok in ("ltx-2.3", "ltx2.3", "10eros", "sulphur")
+                ):
+                    if "unet_name" in inputs:
+                        inputs["unet_name"] = unet_name
+                    elif "model_name" in inputs:
+                        inputs["model_name"] = unet_name
+                    wired = True
+                continue
+            if not current:
                 continue
             if "ltx-2.3" not in lowered and "ltx2.3" not in lowered and "sulphur" not in lowered:
                 continue
             _set_family_unet_loader(node, unet_name, "LTX 2.3 GGUF (preferred)")
             wired = True
-    return unet_name if wired else None
+    return unet_name if wired else _named_gguf()
 
 
 def _apply_local_family_weights(workflow: dict[str, Any], variant: str) -> None:
@@ -1110,7 +1187,12 @@ def _ensure_lora_node(workflow: dict[str, Any], lora_name: str) -> Optional[str]
         if _find_nodes_by_class(workflow, class_type):
             return None
     src_id: Optional[str] = None
-    for class_type in ("UNETLoader", "CheckpointLoaderSimple", "DiffusionModelLoader"):
+    for class_type in (
+        "UnetLoaderGGUF",
+        "UNETLoader",
+        "CheckpointLoaderSimple",
+        "DiffusionModelLoader",
+    ):
         matches = _find_nodes_by_class(workflow, class_type)
         if matches:
             src_id = matches[0][0]
@@ -1466,8 +1548,11 @@ def _heuristic_patch(
 
     # Checkpoint / LoRA / VAE names come only from this variant's MODEL_FILES.
     # Write them onto loaders of the same family. A dedicated audio-VAE file
-    # (LTX23_audio_vae_*) is not an all-in-one checkpoint slot.
-    if ckpt:
+    # (LTX23_audio_vae_*) is not an all-in-one checkpoint slot. A .gguf name
+    # is the diffusion model (UnetLoaderGGUF, quantized ops). Do not write it
+    # onto the text-projection checkpoint or the audio VAE, and do not add an
+    # fp8 cast on the audio VAE.
+    if ckpt and not str(ckpt).lower().endswith(".gguf"):
         ckpt_l = str(ckpt).lower()
         spray_unet = "ltx-2.5" in ckpt_l or "ltx2.5" in ckpt_l
         for class_type in (
@@ -1500,9 +1585,9 @@ def _heuristic_patch(
                     current_unet = inputs.get("unet_name") if isinstance(inputs.get("unet_name"), str) else ""
                     if _same_weight_family(current_unet, str(ckpt)):
                         _set_input(node, "unet_name", ckpt)
-        if text_encoder:
-            for _nid, node in _find_nodes_by_class(workflow, "LTXAVTextEncoderLoader"):
-                _set_input(node, "text_encoder", text_encoder)
+    if text_encoder:
+        for _nid, node in _find_nodes_by_class(workflow, "LTXAVTextEncoderLoader"):
+            _set_input(node, "text_encoder", text_encoder)
 
     if clip_l or t5xxl:
         for _nid, node in _find_nodes_by_class(workflow, "DualCLIPLoader"):
@@ -1724,15 +1809,13 @@ def _loader_name(path: Path) -> str:
 
 
 def _prefer_on_disk_checkpoint(name: Optional[str], variant: str) -> Optional[str]:
-    """Point the checkpoint slot at a local LTX 2.3 GGUF when the literal is absent.
+    """Use the reasoned LTX 2.3 GGUF for base / eros / directors.
 
-    base / eros / directors only. An on-disk all-in-one (EROS, dev fp8) stays
-    put so VAE and text projection keep a real checkpoint. Lipsync and the
-    dev-fp8 render variants are not rewritten.
+    Lipsync and the dev-fp8 render variants are not rewritten. When nothing
+    on disk fits, the authored name stays so the graph shape is unchanged.
+    Text projection and the VAEs are not retargeted here.
     """
     if not name or variant not in _LTX23_GGUF_VARIANTS:
-        return name
-    if resolve_model_path(name) is not None:
         return name
     from master_agent.models.weights import model_search_roots, resolve_ltx23_gguf
 
@@ -1797,6 +1880,8 @@ def load_and_patch_workflow(
     vae: Optional[str] = None,
     lightx2v: Optional[bool] = None,
     lightx2v_strength: Optional[float] = None,
+    request: str = "",
+    model_override: Optional[str] = None,
 ) -> tuple[dict[str, Any], dict[str, Any]]:
     """
     Returns (workflow_api_dict, meta) where meta has resolved generation params.
@@ -1904,6 +1989,14 @@ def load_and_patch_workflow(
     # LTX 2.5 is a split pack: never resolve a 2.3 all-in-one onto UNETLoader.
     if is_ltx25_variant(variant):
         checkpoint = None
+    elif (
+        preferred
+        and str(preferred).lower().endswith(".gguf")
+        and (resolved_id or variant) in _LTX23_GGUF_VARIANTS
+    ):
+        # Do not let a safetensors scan replace the 10Eros GGUF before the
+        # on-disk GGUF check. Missing file falls through to QuantStack / Sulphur.
+        checkpoint = _prefer_on_disk_checkpoint(preferred, resolved_id or variant)
     else:
         checkpoint = resolve_checkpoint_name(preferred) if preferred else None
         checkpoint = _prefer_on_disk_checkpoint(checkpoint, resolved_id or variant)
@@ -2125,6 +2218,19 @@ def load_and_patch_workflow(
         warn = prepare_warning(resolved_id or variant)
         if warn:
             meta["prepare_warning"] = warn
+    except Exception:
+        pass
+    try:
+        from master_agent.models.model_decision import decide_generation
+
+        decision = decide_generation(
+            resolved_id or variant,
+            request=request or (prompt or ""),
+            has_image=bool(image_name or first_image),
+            has_audio=bool(audio_name),
+            override=model_override,
+        )
+        meta["model_decision"] = decision.to_dict()
     except Exception:
         pass
     return workflow, meta

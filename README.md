@@ -44,6 +44,7 @@ Loader order and the rule that doctor does not download weights: [Weights](docs/
 | [Features](docs/FEATURES.md) | Catalog, lipdub, HeartMuLa, music video, Pack C |
 | [Audit](docs/AUDIT.md) | Wired, unwired, retired |
 | [Agents](docs/AGENTS.md) | Stop-lines |
+| [Model selection](docs/MODEL_SELECTION_PLAN.md) | Route, then GGUF, with the reason for every loser |
 
 Package README: [`video_buddy/README.md`](video_buddy/README.md). Shared memory: [`knowledge/`](knowledge/). Contributing: [`CONTRIBUTING.md`](CONTRIBUTING.md).
 

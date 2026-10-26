@@ -35,6 +35,8 @@ class RunState:
 
     # Selection
     variant: Optional[str] = None
+    # Route + GGUF decision (winner, losers, pairwise lines). Job JSON includes it.
+    model_decision: dict[str, Any] = field(default_factory=dict)
 
     # Generation params (judge rewrite/retune mutates these between rounds)
     prompt: str = ""

@@ -1,26 +1,33 @@
 {
   "1": {
-    "class_type": "CheckpointLoaderSimple",
+    "class_type": "UnetLoaderGGUF",
     "inputs": {
-      "ckpt_name": "LTX2.3_DISTILLED-1.1_BAKED_LTX_10Eros_v14_r768.safetensors"
+      "unet_name": "10Eros_v1.5-Q4_K_M.gguf"
     },
-    "_meta": { "title": "Load Checkpoint" }
+    "_meta": { "title": "Load 10Eros GGUF" }
   },
   "2": {
     "class_type": "LTXAVTextEncoderLoader",
     "inputs": {
       "text_encoder": "gemma_3_12B_it_fp4_mixed.safetensors",
-      "ckpt_name": "LTX2.3_DISTILLED-1.1_BAKED_LTX_10Eros_v14_r768.safetensors",
+      "ckpt_name": "ltx-2.3-22b-dev-fp8.safetensors",
       "device": "default"
     },
     "_meta": { "title": "Load Gemma + Projection" }
   },
   "3": {
-    "class_type": "LTXVAudioVAELoader",
+    "class_type": "VAELoader",
     "inputs": {
-      "ckpt_name": "LTX2.3_DISTILLED-1.1_BAKED_LTX_10Eros_v14_r768.safetensors"
+      "vae_name": "LTX23_audio_vae_bf16.safetensors"
     },
     "_meta": { "title": "Load Audio VAE" }
+  },
+  "5": {
+    "class_type": "VAELoader",
+    "inputs": {
+      "vae_name": "taeltx2_3.safetensors"
+    },
+    "_meta": { "title": "Load Video VAE" }
   },
   "4": {
     "class_type": "LoraLoaderModelOnly",
@@ -169,16 +176,10 @@
     "_meta": { "title": "Separate AV" }
   },
   "70": {
-    "class_type": "LTXVTiledVAEDecode",
+    "class_type": "VAEDecode",
     "inputs": {
-      "vae": ["1", 2],
-      "latents": ["60", 0],
-      "horizontal_tiles": 2,
-      "vertical_tiles": 2,
-      "overlap": 2,
-      "last_frame_fix": false,
-      "working_device": "auto",
-      "working_dtype": "auto"
+      "samples": ["60", 0],
+      "vae": ["5", 0]
     },
     "_meta": { "title": "VAE Decode Video" }
   },

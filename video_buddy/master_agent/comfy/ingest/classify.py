@@ -65,6 +65,7 @@ OFFLINE_NODE_CATALOG = frozenset(
         "SaveImage",
         "SaveVideo",
         "UNETLoader",
+        "UnetLoaderGGUF",
         "VAEDecode",
         "VAEDecodeTiled",
         "VAELoader",
@@ -88,6 +89,7 @@ _PACKS = {
     "LTXVSeparateAVLatent": "ComfyUI-LTXVideo",
     "LTXVTiledVAEDecode": "ComfyUI-LTXVideo",
     "MultimodalGuider": "ComfyUI-LTXVideo",
+    "UnetLoaderGGUF": "ComfyUI-GGUF",
     "LTXAddVideoICLoRAGuide": "ComfyUI-LTXVideo",
     "LTX2SamplingPreviewOverride": "ComfyUI-LTXVideo",
     "VHS_VideoCombine": "VideoHelperSuite",
@@ -505,6 +507,21 @@ def _infer_size(workflow: dict[str, Any]) -> list[RoleGuess]:
 
 def _infer_checkpoint(workflow: dict[str, Any]) -> RoleGuess | None:
     found = _first_unbound(workflow, frozenset({"CheckpointLoaderSimple"}), "ckpt_name")
+    if found is not None:
+        node_id, node = found
+        return _guess_widget(
+            workflow,
+            "checkpoint",
+            node_id,
+            node,
+            "ckpt_name",
+            confidence="high",
+            detail="CheckpointLoaderSimple.ckpt_name",
+        )
+    # Shared ltx23_av.json (base / eros / directors) has no all-in-one loader.
+    # Diffusion is UnetLoaderGGUF.unet_name. The text-projection ckpt_name on
+    # LTXAVTextEncoderLoader is not this role.
+    found = _first_unbound(workflow, frozenset({"UnetLoaderGGUF"}), "unet_name")
     if found is None:
         return None
     node_id, node = found
@@ -513,9 +530,9 @@ def _infer_checkpoint(workflow: dict[str, Any]) -> RoleGuess | None:
         "checkpoint",
         node_id,
         node,
-        "ckpt_name",
+        "unet_name",
         confidence="high",
-        detail="CheckpointLoaderSimple.ckpt_name",
+        detail="UnetLoaderGGUF.unet_name",
     )
 
 

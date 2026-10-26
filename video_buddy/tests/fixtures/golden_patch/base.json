@@ -10,11 +10,11 @@
  "graph": {
   "1": {
    "_meta": {
-    "title": "Load Checkpoint"
+    "title": "Load 10Eros GGUF"
    },
-   "class_type": "CheckpointLoaderSimple",
+   "class_type": "UnetLoaderGGUF",
    "inputs": {
-    "ckpt_name": "<weight>"
+    "unet_name": "<weight>"
    }
   },
   "10": {
@@ -118,9 +118,9 @@
    "_meta": {
     "title": "Load Audio VAE"
    },
-   "class_type": "LTXVAudioVAELoader",
+   "class_type": "VAELoader",
    "inputs": {
-    "ckpt_name": "<weight>"
+    "vae_name": "<weight>"
    }
   },
   "30": {
@@ -233,6 +233,15 @@
     "noise_seed": 11
    }
   },
+  "5": {
+   "_meta": {
+    "title": "Load Video VAE"
+   },
+   "class_type": "VAELoader",
+   "inputs": {
+    "vae_name": "<weight>"
+   }
+  },
   "50": {
    "_meta": {
     "title": "Sample"
@@ -277,22 +286,16 @@
    "_meta": {
     "title": "VAE Decode Video"
    },
-   "class_type": "LTXVTiledVAEDecode",
+   "class_type": "VAEDecode",
    "inputs": {
-    "horizontal_tiles": 2,
-    "last_frame_fix": false,
-    "latents": [
+    "samples": [
      "60",
      0
     ],
-    "overlap": 2,
     "vae": [
-     "1",
-     2
-    ],
-    "vertical_tiles": 2,
-    "working_device": "auto",
-    "working_dtype": "auto"
+     "5",
+     0
+    ]
    }
   },
   "71": {
