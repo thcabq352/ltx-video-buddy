@@ -151,7 +151,8 @@ DOWNLOADS = [
      "Z-Image-Turbo-Fun-Controlnet-Union-2.1-2601-8steps.safetensors",
      "models/model_patches/Z-Image-Turbo-Fun-Controlnet-Union-2.1-2601-8steps.safetensors"),
     # --- BATCH4: Mickmumpitz MOVIE-BUILDER workflow (260507) ---
-    # flux-2-klein-4B-360-erp-outpaint-lora_V1.safetensors is not downloaded.
+    # flux-2-klein-4B-360-erp-outpaint-lora_V1.safetensors is not in this list.
+    # Opt in with: python -m master_agent download-models --with-360-lora --yes
     # The Klein 4B pack is diffusion, qwen_3_4b_fp4_flux2, and flux2-vae only.
     ("QuantStack/LTX-2.3-GGUF",
      "LTX-2.3-dev/LTX-2.3-dev-Q4_K_S.gguf",

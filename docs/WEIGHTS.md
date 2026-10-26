@@ -159,6 +159,21 @@ H3 CFG stays 1.0. On a 16GB-class card the sweet spot is 0.6–0.8 MP, at most 1
 
 `download-models` bundles: `ltx25_core`, `ltx25_two_stage`, `ltx25_iclora`, `ltx25_msr`, `ltx25_all`, `h3_fl2va`, `h3_ref2va`, `h3_all`. `--optional` also lists the distilled LoRA 450 and the temporal upscaler. Family scans that only list missing files until `--yes`: `--ltx23` (`ltx23_core`, the pack automatic install fetches), `--wan`, `--vace`, `--krea`, `--qwen`, `--flux-pack`, `--heartmula`.
 
+Two Klein files have their own opt-in flags. They stay out of `ltx23_core`, the default `download-models` LTX 2.5 scan, and the automatic-install plan unless the flag is present. A finished file is skipped when it is already at least the pinned size. A short copy resumes from `<filename>.partial`. The file is kept only when the size and SHA256 match.
+
+| Flag | File | Folder | Source | Bytes | SHA256 |
+|---|---|---|---|---|---|
+| `--with-qwen-encoder` | `qwen_3_4b_fp4_flux2.safetensors` | `text_encoders/` | [`Comfy-Org/Flux-2-Klein-4B`](https://huggingface.co/Comfy-Org/Flux-2-Klein-4B/resolve/main/split_files/text_encoders/qwen_3_4b_fp4_flux2.safetensors) `split_files/text_encoders/` | 3,848,213,998 | `3eab03a77adb0ee5304a4e677d5c10ac22f9049c1d7c894adca4f8bb39206ca8` |
+| `--with-360-lora` | `flux-2-klein-4B-360-erp-outpaint-lora_V1.safetensors` | `loras/` | [`nomadoor/flux-2-klein-4B-360-erp-outpaint-lora`](https://huggingface.co/nomadoor/flux-2-klein-4B-360-erp-outpaint-lora/resolve/main/flux-2-klein-4B-360-erp-outpaint-lora_V1.safetensors) | 46,224,184 | `567cc22de03800d2c9d4309e0cf6f971cc00da6b39fb26b0311031f2563de166` |
+
+The Qwen encoder is also one of the three files in the default Klein 4B stills pack (`download-flux`, and automatic install). Klein stills load it with `CLIPLoader`. The flag is a standalone fetch of that same file. The 360 ERP outpaint LoRA is the Movie Builder 360 pass. It is a separate opt-in. `--bundle klein_qwen_encoder` and `--bundle klein_360_lora` select the same rows. `install.py --automatic-install` forwards both flags. `install.bat` passes them through.
+
+```bash
+python -m master_agent download-models --with-qwen-encoder --yes
+python -m master_agent download-models --with-360-lora --yes
+python install.py --automatic-install --yes --with-360-lora
+```
+
 Legacy Mickmumpitz / LTX 2.3 filenames still used by older graphs are installed with `python state/download_models.py` from `video_buddy/`. That script is not LTX 2.5 and is not part of `install.py`. On-disk layout notes from before this slim live in [`docs/archive/video_buddy/models/README.md`](archive/video_buddy/models/README.md).
 
 ### Pack table
@@ -178,7 +193,7 @@ Legacy Mickmumpitz / LTX 2.3 filenames still used by older graphs are installed 
 | Qwen Edit | `vb_qwen_edit_360` | Q5_0 + Lightning | ~12GB |
 | HeartMuLa | `heartmula` | heartlib 3B | ~12GB, class tight, about 8–16GB by dtype. Run it before or after LTX, not beside it |
 
-Attested Hub ids (fetch only after the ask): Wan QuantStack HighNoise/LowNoise Q4_K_S or Comfy-Org fp8; VACE `mickmumpitz/VACE_Skyreels_V3_R2V_Merge-GGUF`; Krea `Comfy-Org/Krea-2`; Flux `black-forest-labs/FLUX.2-klein-4b-fp8` plus `Comfy-Org/Flux-2-Klein-4B` text encoder and VAE (the only Flux); Qwen `QuantStack/Qwen-Image-Edit-2509-GGUF`; H3 [`unsloth/MiniMax-H3-GGUF`](https://huggingface.co/unsloth/MiniMax-H3-GGUF) and [`Comfy-Org/MiniMax-H3`](https://huggingface.co/Comfy-Org/MiniMax-H3). LTX 2.3 (`ltx23_core`, fetched by automatic install or `download-models --ltx23 --yes`): `Lightricks/LTX-2.3` distilled 1.1 checkpoint, QuantStack `LTX-2.3-22B-distilled-1.1-Q4_K_S.gguf` from `QuantStack/LTX-2.3-GGUF`, `Comfy-Org/ltx-2` Gemma 3 12B fp4 text encoder, and the `Kijai/LTX2.3_comfy` distilled LoRA plus full and tiny VAEs. File-by-folder list: [`video_buddy/models/README.md`](../video_buddy/models/README.md#the-ltx-23-pack).
+Attested Hub ids (fetch only after the ask): Wan QuantStack HighNoise/LowNoise Q4_K_S or Comfy-Org fp8; VACE `mickmumpitz/VACE_Skyreels_V3_R2V_Merge-GGUF`; Krea `Comfy-Org/Krea-2`; Flux fp8 UNET `black-forest-labs/FLUX.2-klein-4b-fp8` (`flux-2-klein-4b-fp8.safetensors`, 4,070,624,520 bytes) plus `Comfy-Org/Flux-2-Klein-4B` text encoder and VAE (`flux2-vae.safetensors`, 336,211,292 bytes). That Comfy-Org repo has no fp8 UNET. The only Flux is FLUX.2 [klein] 4B. Qwen `QuantStack/Qwen-Image-Edit-2509-GGUF`; H3 [`unsloth/MiniMax-H3-GGUF`](https://huggingface.co/unsloth/MiniMax-H3-GGUF) and [`Comfy-Org/MiniMax-H3`](https://huggingface.co/Comfy-Org/MiniMax-H3). LTX 2.3 (`ltx23_core`, fetched by automatic install or `download-models --ltx23 --yes`): `Lightricks/LTX-2.3` distilled 1.1 checkpoint, QuantStack `LTX-2.3-22B-distilled-1.1-Q4_K_S.gguf` from `QuantStack/LTX-2.3-GGUF`, `Comfy-Org/ltx-2` Gemma 3 12B fp4 text encoder, and the `Kijai/LTX2.3_comfy` distilled LoRA plus full and tiny VAEs. The 360 LoRA is opt-in from `nomadoor/flux-2-klein-4B-360-erp-outpaint-lora` (`--with-360-lora`). File-by-folder list: [`video_buddy/models/README.md`](../video_buddy/models/README.md#the-ltx-23-pack).
 
 ### Skipping or registering the LTX 2.3 pack
 

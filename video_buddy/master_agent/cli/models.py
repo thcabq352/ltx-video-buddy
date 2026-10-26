@@ -5,6 +5,122 @@ from __future__ import annotations
 import argparse
 import json
 
+_FAMILY_FLAGS = (
+    ("wan", "wan22"),
+    ("vace", "vace"),
+    ("krea", "krea2"),
+    ("qwen", "qwen_edit"),
+    ("flux_pack", "flux"),
+    ("ltx23", "ltx23_core"),
+    ("h3", "h3_all"),
+)
+_OPT_IN_BUNDLE_IDS = frozenset({"klein_qwen_encoder", "klein_360_lora"})
+
+
+def _opt_in_keys(args: argparse.Namespace) -> list[str]:
+    keys: list[str] = []
+    if getattr(args, "with_qwen_encoder", False):
+        keys.append("klein_qwen_encoder")
+    if getattr(args, "with_360_lora", False):
+        keys.append("klein_360_lora")
+    bundle = getattr(args, "bundle", None)
+    if bundle in _OPT_IN_BUNDLE_IDS and bundle not in keys:
+        keys.append(bundle)
+    return keys
+
+
+def _explicit_family(args: argparse.Namespace) -> str | None:
+    bundle = getattr(args, "bundle", None)
+    if bundle and bundle not in _OPT_IN_BUNDLE_IDS:
+        return str(bundle)
+    for flag, name in _FAMILY_FLAGS:
+        if getattr(args, flag, False):
+            return name
+    return None
+
+
+def _download_opt_in(args: argparse.Namespace, keys: list[str]) -> int:
+    """Fetch the requested opt-in rows. They are not part of the default pack."""
+    from master_agent.models.llm_gguf import size_ok
+    from master_agent.models.weights import (
+        WEIGHT_FILES,
+        download_verified_file,
+        resolve_weight,
+        weight_destination,
+    )
+
+    files = [WEIGHT_FILES[key] for key in keys]
+    missing = []
+    rows = []
+    for weight in files:
+        dest = weight_destination(weight)
+        found = resolve_weight(weight)
+        ready = found is not None and size_ok(found, weight.size_bytes)
+        rows.append(
+            {
+                "key": weight.key,
+                "filename": weight.filename,
+                "dest_folder": weight.dest_folder,
+                "dest": str(dest),
+                "repo_id": weight.repo_id,
+                "repo_filename": weight.repo_filename,
+                "size_bytes": weight.size_bytes,
+                "sha256": weight.sha256,
+                "mandatory": weight.mandatory,
+                "present": ready,
+            }
+        )
+        if not ready:
+            missing.append(weight)
+    if args.json:
+        print(json.dumps({"opt_in": rows, "missing": [w.key for w in missing]}, indent=1))
+    else:
+        if not rows:
+            print("OK    no opt-in files requested")
+        for row in rows:
+            if row["present"]:
+                print(f"OK    {row['filename']} already on disk")
+            else:
+                print(
+                    f"NEED  {row['filename']} → models/{row['dest_folder']}/ "
+                    f"({row['size_bytes']} bytes)  [{row['repo_id']}]"
+                )
+                print(f"      {row['dest']}")
+                print(f"      sha256: {row['sha256']}")
+    if not missing:
+        print("OK    opt-in weights already present")
+        return 0
+    if getattr(args, "scan_only", False):
+        print("\n--scan-only: nothing downloaded.")
+        return 2
+    if getattr(args, "use_existing", False):
+        print("\n--use-existing: keeping files already on disk. Nothing downloaded.")
+        return 0
+    if not args.yes and not getattr(args, "download", False):
+        print("\nNothing downloaded. Re-run with --yes after you agree, or pass --download to confirm.")
+        return 2
+    if not args.yes:
+        from master_agent.setup import confirm_prompt
+
+        if not confirm_prompt("Download the confirmed-missing set? [y/N] "):
+            print("\nNothing downloaded.")
+            return 2
+    paths = []
+    for weight in missing:
+        try:
+            got = download_verified_file(weight, yes=True)
+        except Exception as exc:
+            print(f"FAIL  {weight.filename}: {exc}")
+            return 1
+        if got is None:
+            print(f"FAIL  {weight.filename}: not downloaded")
+            return 1
+        paths.append(got)
+        print(f"OK    {got}")
+    print(f"OK    {len(paths)} file(s) downloaded")
+    return 0
+
+
 def cmd_download_flux(args: argparse.Namespace) -> int:
     from master_agent.models.download import download_flux_weights
 
@@ -25,13 +141,33 @@ def cmd_download_models(args: argparse.Namespace) -> int:
         if getattr(args, "heartmula", False):
             args.soundtrack = True
         return cmd_models_select(args)
-    from master_agent.setup import print_inventory_preamble
-
-    print_inventory_preamble()
     if getattr(args, "heartmula", False):
         from master_agent.heartmula.doctor import cmd_download_heartmula
 
         return cmd_download_heartmula(args)
+    opt_in = _opt_in_keys(args)
+    family = _explicit_family(args)
+    if opt_in and family is None:
+        from master_agent.setup import print_inventory_preamble
+
+        print_inventory_preamble()
+        return _download_opt_in(args, opt_in)
+    rc = _download_selected_bundle(args)
+    if not opt_in or family is None:
+        return rc
+    rc2 = _download_opt_in(args, opt_in)
+    if 1 in (rc, rc2):
+        return 1
+    if 2 in (rc, rc2):
+        return 2
+    return 0
+
+
+def _download_selected_bundle(args: argparse.Namespace) -> int:
+    """One family pack. Opt-in Klein rows are handled by ``_download_opt_in``."""
+    from master_agent.setup import print_inventory_preamble
+
+    print_inventory_preamble()
     from master_agent.models.weights import (
         WEIGHT_FILES,
         MissingWeightsError,
@@ -42,7 +178,7 @@ def cmd_download_models(args: argparse.Namespace) -> int:
         scan_bundle,
     )
 
-    if args.bundle:
+    if args.bundle and args.bundle not in _OPT_IN_BUNDLE_IDS:
         bundle = args.bundle
     elif getattr(args, "wan", False):
         bundle = "wan22"
