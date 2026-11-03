@@ -285,8 +285,8 @@ def test_dry_run_plan_lists_both_new_steps(tmp_path, monkeypatch, capsys):
     for name in ("step_env_file", "step_playwright", "step_ffmpeg", "step_comfy_cli", "step_model_folders",
                  "step_model_paths", "step_weights", "step_vram_profile", "step_klein_4b", "step_llm_models"):
         monkeypatch.setattr(ai, name, lambda *a, _n=name, **k: seen.append(_n) or ai.StepResult(_n, ai.SKIPPED, ""))
-    for name in ("step_comfyui", "step_nodes", "step_node_requirements", "step_comfy_packages",
-                 "step_manager_config", "step_accel", "step_llamacpp"):
+    for name in ("step_windows_defender_exclusion", "step_comfyui", "step_nodes", "step_node_requirements",
+                 "step_comfy_packages", "step_manager_config", "step_accel", "step_llamacpp"):
         monkeypatch.setattr(ai, name, lambda *a, _n=name, **k: seen.append(_n) or ai.StepResult(_n, ai.SKIPPED, ""))
     monkeypatch.setattr(ai, "run_preflight", lambda **k: ai.Preflight(checks=[], gpu={"vendor": "cpu"}))
     monkeypatch.setattr(ai, "print_preflight", lambda pf: None)
@@ -296,5 +296,6 @@ def test_dry_run_plan_lists_both_new_steps(tmp_path, monkeypatch, capsys):
 
     assert ai.cmd_automatic_install(Namespace(yes=False, gpu="cpu")) == 0
     i = seen.index
+    assert i("step_windows_defender_exclusion") < i("step_comfyui")
     assert i("step_nodes") < i("step_node_requirements") < i("step_comfy_packages")
     assert i("step_comfy_packages") < i("step_manager_config") < i("step_accel")

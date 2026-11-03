@@ -116,7 +116,8 @@ def test_automatic_install_makes_folders_before_weights(models, monkeypatch, cap
 
     for fn, name in (
         ("step_env_file", ".env"), ("step_playwright", "Playwright Chromium"), ("step_ffmpeg", "ffmpeg"),
-        ("step_comfy_cli", "comfy-cli"), ("step_comfyui", "ComfyUI"), ("step_model_paths", "model paths"),
+        ("step_comfy_cli", "comfy-cli"), ("step_windows_defender_exclusion", "Windows Defender exclusion"),
+        ("step_comfyui", "ComfyUI"), ("step_model_paths", "model paths"),
         ("step_nodes", "custom nodes"), ("step_accel", "Triton + SageAttention"),
         ("step_weights", "LTX 2.3 weights"), ("step_vram_profile", "VRAM profile"),
         ("step_klein_4b", "Klein 4B stills"), ("step_llamacpp", "llama.cpp"), ("step_llm_models", "LLM models"),
