@@ -11,9 +11,10 @@ Pinned from the public Hugging Face Hub API on 2026-10-22 (no token):
 - ``Comfy-Org/Flux-2-Klein-4B`` — ``gated: false``, ``license: apache-2.0``.
   Text encoder ``split_files/text_encoders/qwen_3_4b_fp4_flux2.safetensors``
   (3,848,213,998 bytes) and VAE ``split_files/vae/flux2-vae.safetensors``
-  (336,211,292 bytes). The same repo also has the bf16 diffusion file
-  ``flux-2-klein-4b.safetensors`` (7,751,105,712 bytes), accepted when it
-  is already on disk and not downloaded.
+  (336,211,292 bytes). This repo has no fp8 UNET. Its diffusion sibling is
+  the bf16 file ``flux-2-klein-4b.safetensors`` (7,751,105,712 bytes),
+  accepted when it is already on disk and not downloaded. The fp8 UNET
+  stays on ``black-forest-labs/FLUX.2-klein-4b-fp8``.
 
 9B, FLUX.3, Flux.1 dev/schnell/pro/fill/depth/canny/kontext, and any gated
 Klein repo are not offered. A gated payload bails before any token is used.
@@ -26,18 +27,22 @@ from pathlib import Path
 from typing import Any, Callable
 
 # Hub API 2026-10-22. Do not point this at a 9B or Flux.1 repo.
+# fp8 lives on black-forest-labs. Comfy-Org/Flux-2-Klein-4B publishes no fp8 file.
 DIFFUSION_REPO = "black-forest-labs/FLUX.2-klein-4b-fp8"
 DIFFUSION_FILE = "flux-2-klein-4b-fp8.safetensors"
 DIFFUSION_BYTES = 4_070_624_520
+DIFFUSION_SHA256 = "97ed34fe0567e436200f2faee3939b88f2b5d99f8af2a4dc16532c4245c0ccb6"
 
 PACK_REPO = "Comfy-Org/Flux-2-Klein-4B"
 TEXT_FILE = "qwen_3_4b_fp4_flux2.safetensors"
 TEXT_REPO_FILE = "split_files/text_encoders/qwen_3_4b_fp4_flux2.safetensors"
 TEXT_BYTES = 3_848_213_998
+TEXT_SHA256 = "3eab03a77adb0ee5304a4e677d5c10ac22f9049c1d7c894adca4f8bb39206ca8"
 
 VAE_FILE = "flux2-vae.safetensors"
 VAE_REPO_FILE = "split_files/vae/flux2-vae.safetensors"
 VAE_BYTES = 336_211_292
+VAE_SHA256 = "868fe7b343cc8f3a19dbcfcafbc3d5f888802be3f89bd81b65b3621a066ce8f3"
 
 # Same 4B model, higher precision. Local copies count. Not an install target.
 BF16_FILE = "flux-2-klein-4b.safetensors"

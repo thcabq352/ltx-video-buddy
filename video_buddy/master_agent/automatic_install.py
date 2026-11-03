@@ -1252,6 +1252,30 @@ def step_vram_profile(apply: bool, gpu: dict[str, Any] | None = None) -> StepRes
     return StepResult("VRAM profile", status, plan.summary(), required=False)
 
 
+def step_verified_opt_in(apply: bool, key: str) -> StepResult:
+    """One opt-in weight. Off unless automatic-install was given its flag."""
+    from master_agent.models.weights import WEIGHT_FILES, download_verified_file, weight_destination
+
+    weight = WEIGHT_FILES[key]
+    dest = weight_destination(weight)
+    name = {
+        "klein_qwen_encoder": "Qwen Klein encoder",
+        "klein_360_lora": "Klein 360 LoRA",
+    }.get(key, weight.filename)
+    line = f"{weight.filename} → {dest.parent} ({weight.size_label})  [{weight.repo_id}]"
+    if not apply:
+        return StepResult(name, PLANNED, "opt-in download", lines=[line], required=False)
+    try:
+        path = download_verified_file(weight, yes=True, progress=print)
+    except Exception as exc:
+        return StepResult(
+            name, NONFATAL, f"{type(exc).__name__}: {exc}"[:400], lines=[line], required=False
+        )
+    if path is None:
+        return StepResult(name, NONFATAL, "not downloaded", lines=[line], required=False)
+    return StepResult(name, OK, str(path), lines=[line], required=False)
+
+
 def step_klein_4b(apply: bool, *, requested: bool = False) -> StepResult:
     """FLUX.2 [klein] 4B is the default stills pack. No 9B and no FLUX.3."""
     from master_agent.models.klein import LICENSE_LINE, download_klein_4b
@@ -1311,6 +1335,18 @@ def cmd_automatic_install(args: Any) -> int:
         ("llama.cpp", False, lambda: step_llamacpp(apply, plan=pf.llama, skip=skip_llm)),
         ("LLM models", False, lambda: step_llm_models(apply, skip=skip_llm)),
     ]
+    opt_in_steps: list[tuple[str, bool, Callable[[], StepResult]]] = []
+    if getattr(args, "with_qwen_encoder", False):
+        opt_in_steps.append(
+            ("Qwen Klein encoder", False, lambda: step_verified_opt_in(apply, "klein_qwen_encoder"))
+        )
+    if getattr(args, "with_360_lora", False):
+        opt_in_steps.append(
+            ("Klein 360 LoRA", False, lambda: step_verified_opt_in(apply, "klein_360_lora"))
+        )
+    if opt_in_steps:
+        llama_at = next(i for i, (name, _req, _fn) in enumerate(steps) if name == "llama.cpp")
+        steps[llama_at:llama_at] = opt_in_steps
     results: list[StepResult] = []
     for name, required, make in steps:
         try:
