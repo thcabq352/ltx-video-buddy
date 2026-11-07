@@ -41,7 +41,7 @@ def _seat(monkeypatch):
     monkeypatch.setenv("SEAT_MIN_FREE_GB", "0")
 
 
-def test_gpu_llm_is_stopped_and_low_vram_refuses():
+def test_gpu_llm_is_left_running_and_low_vram_refuses():
     stopped = []
     view = ServerView(running=True, gpu_layers=32, owned=True, argv=["llama-server", "-ngl", "32"])
     with pytest.raises(SeatRefused) as exc:
@@ -51,43 +51,45 @@ def test_gpu_llm_is_stopped_and_low_vram_refuses():
             free_gb=1.5,
             stop=lambda current: stopped.append(current.gpu_layers),
         )
-    assert stopped == [32]
+    assert stopped == []
     assert "SEAT RULE:" in str(exc.value)
+    assert "No server was stopped" in str(exc.value)
     assert "Nothing was queued" in str(exc.value)
 
 
-def test_missing_nvidia_smi_still_unloads_and_allows():
+def test_missing_nvidia_smi_with_a_gpu_llm_refuses_without_unload():
     stopped = []
     view = ServerView(running=True, gpu_layers=None, owned=True)
-    line = acquire_for_submit(
-        purpose="clip",
-        view=view,
-        free_gb=None,
-        free_probe=lambda: None,
-        stop=lambda current: stopped.append(current),
-    )
-    assert stopped and "nvidia-smi did not report" in line
+    with pytest.raises(SeatRefused, match="No server was stopped"):
+        acquire_for_submit(
+            purpose="clip",
+            view=view,
+            free_gb=None,
+            free_probe=lambda: None,
+            stop=lambda current: stopped.append(current),
+        )
+    assert stopped == []
 
 
-def test_restart_is_cpu_when_card_is_under_20gb(monkeypatch):
+def test_release_does_not_restart_under_20gb(monkeypatch):
     started = []
     monkeypatch.delenv("LLAMACPP_NGL", raising=False)
     monkeypatch.setattr("master_agent.config.VRAM_GB", 12)
     view = ServerView(running=True, gpu_layers=24, owned=True)
-    acquire_for_submit(view=view, free_gb=10, stop=lambda _v: None)
+    acquire_for_submit(view=view, free_gb=10, stop=lambda _v: started.append("stop"))
     note = release_after_render(start=lambda ngl: started.append(ngl), free_probe=lambda: 10)
-    assert started == [0]
-    assert "CPU" in (note or "")
+    assert started == []
+    assert "no server was restarted" in (note or "")
 
 
-def test_restart_keeps_gpu_layers_on_a_20gb_card(monkeypatch):
+def test_release_does_not_restart_on_a_20gb_card(monkeypatch):
     started = []
     monkeypatch.delenv("LLAMACPP_NGL", raising=False)
     monkeypatch.setattr("master_agent.config.VRAM_GB", 24)
     view = ServerView(running=True, gpu_layers=16, owned=True)
-    acquire_for_submit(view=view, free_gb=20, stop=lambda _v: None)
+    acquire_for_submit(view=view, free_gb=20, stop=lambda _v: started.append("stop"))
     release_after_render(start=lambda ngl: started.append(ngl), free_probe=lambda: 12)
-    assert started == [16]
+    assert started == []
     assert layers_use_gpu(16) and not layers_use_gpu(0)
 
 
@@ -162,19 +164,27 @@ def test_first_gate_blocks_until_judge_and_clip(tmp_path, monkeypatch):
             judge_probe=lambda: {"fired": True},
             vram_free_gb=1.0,
         )
-    with pytest.raises(first_gate.FirstGateBlocked, match="did not fire"):
+    with pytest.raises(first_gate.FirstGateBlocked, match="off"):
         first_gate.run_first_gate(
             still_runner=lambda: {"judge_fired": True},
             clip_runner=lambda: {"ok": True},
-            judge_probe=lambda: {"fired": False, "reason": "off"},
+            judge_probe=lambda: {"fired": True, "ready": False, "reason": "off"},
             vram_free_gb=12,
         )
     with pytest.raises(first_gate.FirstGateBlocked):
         first_gate.assert_submit_allowed({"1": {"class_type": "KSampler"}})
     result = first_gate.run_first_gate(
-        still_runner=lambda: {"judge_fired": True},
+        still_runner=lambda: {
+            "visual": {
+                "accepted": True,
+                "saw_image": True,
+                "score": 0.9,
+                "image_sha256": "abc",
+                "reason": "ceramic cup on a wood table",
+            }
+        },
         clip_runner=lambda: {"ok": True},
-        judge_probe=lambda: {"fired": True, "provider": "llamacpp"},
+        judge_probe=lambda: {"ready": True, "fired": False, "provider": "llamacpp"},
         vram_free_gb=12,
     )
     assert result["status"] == "passed"
@@ -200,11 +210,26 @@ def test_look_check_uses_llamacpp_and_records_a_fire(monkeypatch):
     monkeypatch.setattr("master_agent.config.JUDGE_ENABLED", True)
     monkeypatch.setattr("master_agent.config.VISION_ENABLED", True)
     monkeypatch.setattr("master_agent.config.VISION_MODEL", "qwen3-vl-heretic")
-    seen = []
-    result = local_look.fire_look_check(kind="still", ping=lambda kind: seen.append(kind) or {"fired": True})
-    assert result["fired"] is True and result["provider"] == "llamacpp"
-    assert seen == ["still"]
+    seen = {}
+
+    def chat(backend, system, user_text, images):
+        del system, user_text
+        seen["backend"] = backend
+        seen["images"] = images
+        return (
+            '{"score": 0.9, "pass": true, "reason": "ceramic cup on a wood table", '
+            '"artifacts": "none visible", "subject_lock": "cup"}'
+        )
+
+    monkeypatch.setattr("master_agent.judge.vision._vision_chat", chat)
+    result = local_look.fire_look_check(kind="still", image=b"png-bytes", filename="cup.png", prompt="cup")
+    assert result["accepted"] is True and result["saw_image"] is True
+    assert result["provider"] == "llamacpp"
+    assert seen["backend"] == "llamacpp"
+    assert seen["images"][0][0] == "image/png"
     assert local_look.look_provider_spec().startswith("llamacpp:")
+    refused = local_look.fire_look_check(kind="still", ping=lambda kind: {"fired": True})
+    assert refused["accepted"] is False and refused["saw_image"] is False
 
 
 def test_license_line_is_in_the_install_banner():
