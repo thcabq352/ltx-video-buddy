@@ -1,13 +1,12 @@
-"""Seat rule: the local LLM is off the GPU before a ComfyUI render is queued.
+"""Seat rule: a ComfyUI submit needs free VRAM and does not take it by force.
 
-Every submit goes through :func:`acquire_for_submit`. When llama-server is
-running with GPU layers (``-ngl`` / ``--n-gpu-layers`` missing or not 0),
-Buddy stops it, then reads free VRAM from ``nvidia-smi``. Under the budget,
-the submit is refused with a loud message. The server is started again only
-after the render, and only on CPU when the card is under 20 GB or
-``LLAMACPP_NGL=0``.
+Every submit goes through :func:`acquire_for_submit`. Buddy reads free VRAM
+from ``nvidia-smi`` and refuses when the card is under the budget. A running
+llama-server is left alone. Buddy does not stop, kill, unload, or restart it
+to free the GPU. If the server is on the GPU and free VRAM is unknown or too
+low, the submit is refused and nothing is queued.
 
-The probe and the server controls are replaceable so tests never need a GPU.
+The probe is replaceable so tests never need a GPU.
 """
 
 from __future__ import annotations
@@ -19,8 +18,6 @@ from dataclasses import dataclass, field
 
 _LOCK = threading.Lock()
 _holds = 0
-_restore_ngl: int | None = None
-_restore = False
 
 REFUSAL_PREFIX = "SEAT RULE:"
 
@@ -40,11 +37,9 @@ class ServerView:
 
 def reset_state() -> None:
     """Drop hold bookkeeping. Tests only. Does not signal a process."""
-    global _holds, _restore_ngl, _restore
+    global _holds
     with _LOCK:
         _holds = 0
-        _restore_ngl = None
-        _restore = False
 
 
 def holds() -> int:
@@ -147,34 +142,6 @@ def _default_view() -> ServerView:
     )
 
 
-def _default_stop(view: ServerView) -> None:
-    from master_agent import llamacpp_server as srv
-
-    if view.owned:
-        srv.stop()
-        return
-    if view.pid:
-        srv.stop_pid(int(view.pid))
-
-
-def _default_start(ngl: int) -> None:
-    from master_agent import llamacpp_server as srv
-
-    srv.start_with_layers(ngl)
-
-
-def _cpu_after_render() -> bool:
-    raw = (os.getenv("LLAMACPP_NGL") or "").strip()
-    if raw == "0":
-        return True
-    try:
-        from master_agent import config as cfg
-
-        return float(cfg.VRAM_GB) < 20.0
-    except Exception:
-        return True
-
-
 def acquire_for_submit(
     *,
     purpose: str = "ComfyUI render",
@@ -184,81 +151,79 @@ def acquire_for_submit(
     stop=None,
     inspect=None,
 ) -> str:
-    """Unload a GPU LLM, then refuse when free VRAM is under the budget.
+    """Refuse when free VRAM is under the budget. Never stop a server.
 
     Returns a one-line status. Raises :class:`SeatRefused` when the card is
-    still too full to queue. A missing ``nvidia-smi`` does not refuse (there
-    is no free-memory reading to compare); the LLM is still unloaded when
-    Buddy can see GPU layers.
+    too full, when a GPU llama-server is running and free VRAM cannot be
+    read, or when the probe fails. ``stop`` is ignored: a caller cannot
+    inject a process kill on this path.
     """
-    global _holds, _restore, _restore_ngl
+    global _holds
+    del stop
     look = inspect or _default_view
     current = view if view is not None else look()
-    stopper = stop or _default_stop
+    gpu_resident = bool(current.running and layers_use_gpu(current.gpu_layers))
     notes: list[str] = []
+    if gpu_resident:
+        shown = "default GPU layers" if current.gpu_layers is None else f"-ngl {current.gpu_layers}"
+        notes.append(f"llama-server stays running ({shown}); Buddy will not stop it")
+    elif current.running:
+        notes.append("llama-server is already CPU-only (-ngl 0)")
+    else:
+        notes.append("llama-server is not running")
     with _LOCK:
-        if current.running and layers_use_gpu(current.gpu_layers):
-            stopper(current)
-            _restore = True
-            _restore_ngl = 0 if current.gpu_layers is None else int(current.gpu_layers)
-            shown = "default GPU layers" if current.gpu_layers is None else f"-ngl {current.gpu_layers}"
-            notes.append(f"stopped llama-server ({shown}) so the render can use the GPU")
-        elif current.running:
-            notes.append("llama-server is already CPU-only (-ngl 0)")
-        else:
-            notes.append("llama-server is not running")
-        if free_gb is None and free_probe is not None:
-            free_gb = free_probe()
-        elif free_gb is None and free_probe is None and view is None:
-            free_gb = probe_free_vram_gb()
+        try:
+            measured = free_gb
+            if measured is None and free_probe is not None:
+                measured = free_probe()
+            elif measured is None and view is None:
+                measured = probe_free_vram_gb()
+        except Exception as exc:
+            raise SeatRefused(
+                f"{REFUSAL_PREFIX} refusing {purpose}. Free VRAM could not be read "
+                f"({type(exc).__name__}: {exc}). No server was stopped. Nothing was queued."
+            ) from exc
         need = required_free_gb()
-        if free_gb is None:
+        if measured is None and gpu_resident:
+            raise SeatRefused(
+                f"{REFUSAL_PREFIX} refusing {purpose}. llama-server is using the GPU and "
+                "nvidia-smi did not report free VRAM, so Buddy cannot prove the card has room "
+                "without stopping that server. No server was stopped. Nothing was queued. "
+                "Move the LLM to CPU (LLAMACPP_NGL=0) or free VRAM yourself, then retry."
+            )
+        if measured is None:
             require = (os.getenv("SEAT_REQUIRE_PROBE") or "").strip().lower() in {"1", "true", "yes"}
             if require:
                 raise SeatRefused(
                     f"{REFUSAL_PREFIX} refusing {purpose}. nvidia-smi did not report free VRAM, "
-                    "so Buddy cannot prove the GPU is free. Nothing was queued."
+                    "so Buddy cannot prove the GPU is free. No server was stopped. Nothing was queued."
                 )
             notes.append("nvidia-smi did not report free VRAM; queued without a free-memory reading")
-        elif free_gb < need:
+        elif float(measured) < need:
             detail = "; ".join(notes)
             raise SeatRefused(
-                f"{REFUSAL_PREFIX} refusing {purpose}. Free VRAM is {free_gb:.2f} GB and this "
-                f"render needs at least {need:.1f} GB after the LLM leaves the GPU. {detail}. "
-                "Nothing was queued. Buddy will not ask you to unload it."
+                f"{REFUSAL_PREFIX} refusing {purpose}. Free VRAM is {float(measured):.2f} GB and this "
+                f"render needs at least {need:.1f} GB. {detail}. No server was stopped. "
+                "Nothing was queued."
             )
         else:
-            notes.append(f"free VRAM {free_gb:.2f} GB meets the {need:.1f} GB budget")
+            notes.append(f"free VRAM {float(measured):.2f} GB meets the {need:.1f} GB budget")
         _holds += 1
     return f"{REFUSAL_PREFIX} {purpose} seated. " + "; ".join(notes)
 
 
 def release_after_render(*, start=None, free_probe=None) -> str | None:
-    """After the render finishes, bring the LLM back if this submit stopped it.
+    """Drop one seat hold. Does not start, stop, or restart any server.
 
-    CPU (``-ngl 0``) when the card is under 20 GB, ``LLAMACPP_NGL=0``, or the
-    card is still tight. The previous GPU layer count is used only when the
-    card is in the 20 GB class and free memory still has room.
+    ``start`` and ``free_probe`` are ignored so this path cannot restart a
+    service that was left running.
     """
-    global _holds, _restore, _restore_ngl
+    del start, free_probe
+    global _holds
     with _LOCK:
         if _holds <= 0:
             return None
         _holds -= 1
-        if _holds > 0 or not _restore:
+        if _holds > 0:
             return None
-        _restore = False
-        previous = _restore_ngl
-        _restore_ngl = None
-    ngl = 0
-    if previous and not _cpu_after_render():
-        free = free_probe() if free_probe is not None else probe_free_vram_gb()
-        if free is None or free >= 4.0:
-            ngl = int(previous)
-    starter = start or _default_start
-    try:
-        starter(ngl)
-    except Exception as exc:
-        return f"{REFUSAL_PREFIX} render finished; llama-server was not restarted ({exc})."
-    where = "CPU (-ngl 0)" if ngl == 0 else f"GPU (-ngl {ngl})"
-    return f"{REFUSAL_PREFIX} render finished; llama-server restarted on {where}."
+    return f"{REFUSAL_PREFIX} render finished; no server was restarted."

@@ -142,6 +142,26 @@ class ComfyClient:
             if seated:
                 release_after_render()
 
+    def fetch_image_bytes(self, info: dict[str, str]) -> bytes:
+        """GET ``/view`` for one history image. Returns the exact response body."""
+        filename = info.get("filename") or ""
+        if not filename:
+            raise ComfyClientError("ComfyUI history image has no filename")
+        response = self._http().get(
+            self._url("/view"),
+            params={
+                "filename": filename,
+                "subfolder": info.get("subfolder") or "",
+                "type": info.get("type") or "output",
+            },
+            timeout=self.timeout,
+        )
+        response.raise_for_status()
+        body = response.content or b""
+        if not body:
+            raise ComfyClientError(f"ComfyUI /view returned an empty image for {filename}")
+        return body
+
     def get_history(self, prompt_id: str) -> dict[str, Any]:
         r = self._http().get(self._url(f"/history/{prompt_id}"), timeout=self.timeout)
         r.raise_for_status()
