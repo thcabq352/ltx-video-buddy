@@ -90,6 +90,77 @@ def test_out_of_range_score_does_not_pass(score):
 
 
 @pytest.mark.parametrize(
+    "token",
+    [
+        "ready,",
+        "ready?",
+        "ready!",
+        "(ready)",
+        "ready:",
+        "ready;",
+        "'ready'",
+        '"ready"',
+        "ready…",
+        "ready？",
+        "ready，",
+        "  Ready?  ",
+        "ready???",
+        "…ready…",
+        "ready—",
+        "\nready\n",
+        "«ready»",
+        "ｒｅａｄｙ",
+        "ready\u0301",
+        "???",
+        "...",
+    ],
+)
+@pytest.mark.parametrize(
+    "field",
+    ["reason", "artifacts", "subject_lock", "temporal_consistency", "temporal"],
+)
+def test_punctuated_ready_is_not_a_description(field, token):
+    accepted, _reason, _score = _visual_verdict(
+        _body({"score": 0.99, "pass": True, field: token})
+    )
+    assert accepted is False
+
+
+@pytest.mark.parametrize(
+    "issues",
+    [
+        ["ready,"],
+        ["ready?"],
+        ["ready!", "(ready)"],
+        [" READY？ "],
+        ["«ready»", "ready…"],
+        ["???"],
+    ],
+)
+def test_punctuated_ready_issues_are_not_a_description(issues):
+    accepted, _reason, _score = _visual_verdict(
+        _body({"score": 0.99, "pass": True, "issues": issues})
+    )
+    assert accepted is False
+
+
+def test_sentence_that_contains_ready_still_counts():
+    accepted, reason, score = _visual_verdict(
+        _body(
+            {
+                "score": 0.9,
+                "pass": True,
+                "reason": "the ceramic cup looks ready to photograph on the wood table",
+                "issues": ["ready?"],
+            }
+        )
+    )
+    assert accepted is True
+    assert score == pytest.approx(0.9)
+    assert "wood table" in reason
+
+
+@pytest.mark.parametrize(
     "issues",
     [["ready"], ["Ready."], ["READY"], ["ready", "ready."], ["  ready  "]],
 )

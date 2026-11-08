@@ -62,6 +62,8 @@ _CUP = {
 }
 NAN_SCORE = json.dumps({"score": "NaN", "pass": True, **_CUP})
 READY_ISSUES = json.dumps({"score": 0.99, "pass": True, "issues": ["ready"]})
+READY_COMMA = json.dumps({"score": 0.99, "pass": True, "issues": ["ready,"]})
+READY_QUESTION = json.dumps({"score": 0.99, "pass": True, "reason": "ready?"})
 MISSING_PASS = json.dumps({"score": 0.91, **_CUP})
 PASS_AS_STRING = json.dumps({"score": 0.91, "pass": "true", **_CUP})
 
@@ -330,6 +332,8 @@ def test_clip_failure_leaves_gate_closed(tmp_path, monkeypatch):
         LOW_SCORE,
         NAN_SCORE,
         READY_ISSUES,
+        READY_COMMA,
+        READY_QUESTION,
         MISSING_PASS,
         PASS_AS_STRING,
     ],

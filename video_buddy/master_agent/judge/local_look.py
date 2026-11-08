@@ -3,9 +3,10 @@
 SuperGrok is not this path. A look check sends the generated image to
 llama.cpp's OpenAI-compatible vision route and accepts only a visual JSON
 verdict. The score must be a finite number in range, ``pass`` must be a
-JSON boolean, and some field must describe the image. The word "ready" by
-itself, including as the only issue, is not that description. This module
-does not start, stop, or restart llama-server.
+JSON boolean, and some field must describe the image. A field whose only
+word is "ready", once case, whitespace, and surrounding punctuation are
+ignored, is not that description. This module does not start, stop, or
+restart llama-server.
 """
 
 from __future__ import annotations
@@ -13,6 +14,8 @@ from __future__ import annotations
 import base64
 import hashlib
 import math
+import re
+import unicodedata
 from typing import Any
 
 
@@ -184,16 +187,34 @@ def assess_still(
     }
 
 
-def _ready_word(text: str) -> bool:
-    token = (text or "").strip().lower().strip(".! ")
-    return token == "ready"
+# Letters only. Digits and underscore are not words, so "ready 2" is still just ready.
+_LETTERS = re.compile(r"[^\W\d_]+")
+# Decorations that must not split or disguise the same token.
+_SKIP_CATEGORIES = frozenset({"Cf", "Cc", "Mn", "Me"})
+
+
+def _ready_only(text: str) -> bool:
+    """True when no word remains, or every remaining word is ``ready``.
+
+    Case, whitespace, ASCII and Unicode punctuation, fullwidth letters, and
+    combining marks are ignored. Other words, including a sentence that
+    merely contains "ready", stay. This is a token check, not a reading of
+    the prose.
+    """
+    # NFKD folds fullwidth letters. A second decompose catches accents that
+    # casefold or composition had glued onto the word "ready".
+    folded = unicodedata.normalize("NFKD", text or "").casefold()
+    folded = unicodedata.normalize("NFD", folded)
+    cleaned = "".join(ch for ch in folded if unicodedata.category(ch) not in _SKIP_CATEGORIES)
+    words = _LETTERS.findall(cleaned)
+    return not words or all(word == "ready" for word in words)
 
 
 def _meaningful_text(value: object) -> str | None:
     if not isinstance(value, str):
         return None
     text = value.strip()
-    if not text or _ready_word(text):
+    if not text or _ready_only(text):
         return None
     return text
 
@@ -225,7 +246,7 @@ def _visual_verdict(raw: str) -> tuple[bool, str, float | None]:
     text = (raw or "").strip()
     if not text:
         return False, "local judge returned an empty response", None
-    if _ready_word(text):
+    if _ready_only(text):
         return False, "local judge replied with the word ready and did not assess the image", None
     data = _extract_json(text)
     if not isinstance(data, dict):
