@@ -2,15 +2,17 @@
 
 SuperGrok is not this path. A look check sends the generated image to
 llama.cpp's OpenAI-compatible vision route and accepts only a visual JSON
-verdict. The single word "ready", an empty body, or a reply that never
-describes the image is not a pass. This module does not start, stop, or
-restart llama-server.
+verdict. The score must be a finite number in range, ``pass`` must be a
+JSON boolean, and some field must describe the image. The word "ready" by
+itself, including as the only issue, is not that description. This module
+does not start, stop, or restart llama-server.
 """
 
 from __future__ import annotations
 
 import base64
 import hashlib
+import math
 from typing import Any
 
 
@@ -149,7 +151,10 @@ def assess_still(
         f"filename: {filename}\n"
         f"sha256: {digest}\n"
         f"brief: {prompt or kind}\n"
-        "Return the vision JSON with score, pass, issues, artifacts, subject_lock, and reason."
+        "Return one JSON object. score must be a finite number from 0 to 1 "
+        "(or 0 to 100). pass must be the JSON boolean true or false, not a word or number. "
+        "Describe what is visible in reason, artifacts, subject_lock, or issues. "
+        "The word ready alone is not a verdict."
     )
     try:
         raw = _vision_chat("llamacpp", system, user_text, [(mime, encoded)])
@@ -184,6 +189,36 @@ def _ready_word(text: str) -> bool:
     return token == "ready"
 
 
+def _meaningful_text(value: object) -> str | None:
+    if not isinstance(value, str):
+        return None
+    text = value.strip()
+    if not text or _ready_word(text):
+        return None
+    return text
+
+
+def _finite_score(value: object) -> float | None:
+    """A real confidence. Booleans, NaN, infinities, and non-numbers are not scores."""
+    if isinstance(value, bool) or value is None:
+        return None
+    if isinstance(value, (int, float)):
+        number = float(value)
+    elif isinstance(value, str):
+        token = value.strip()
+        if not token:
+            return None
+        try:
+            number = float(token)
+        except ValueError:
+            return None
+    else:
+        return None
+    if not math.isfinite(number):
+        return None
+    return number
+
+
 def _visual_verdict(raw: str) -> tuple[bool, str, float | None]:
     from master_agent.judge.vision import _extract_json
 
@@ -195,24 +230,29 @@ def _visual_verdict(raw: str) -> tuple[bool, str, float | None]:
     data = _extract_json(text)
     if not isinstance(data, dict):
         return False, "local judge did not return a visual JSON verdict", None
-    try:
-        score = float(data.get("score"))
-    except (TypeError, ValueError):
-        return False, "local judge JSON has no numeric score", None
+    score = _finite_score(data.get("score"))
+    if score is None:
+        return False, "local judge score is not a finite number", None
     if score > 1.0:
         score = score / 100.0
-    if score < 0.0 or score > 1.0:
-        return False, "local judge score is outside 0-1", None
+    if score < 0.0 or score > 1.0 or not math.isfinite(score):
+        return False, "local judge score is outside 0-1", score
     described: list[str] = []
     for key in ("reason", "artifacts", "subject_lock", "temporal_consistency", "temporal"):
-        value = data.get(key)
-        if isinstance(value, str) and value.strip() and not _ready_word(value):
-            described.append(value.strip())
+        meaningful = _meaningful_text(data.get(key))
+        if meaningful:
+            described.append(meaningful)
     issues = data.get("issues")
-    if isinstance(issues, list) and any(str(item).strip() for item in issues):
-        described.append("issues")
+    if isinstance(issues, list):
+        for item in issues:
+            meaningful = _meaningful_text(item)
+            if meaningful:
+                described.append(meaningful)
     if not described:
         return False, "local judge did not describe the image", score
-    if data.get("pass") is False or score < 0.75:
+    flag = data.get("pass")
+    if not isinstance(flag, bool):
+        return False, "local judge pass flag is missing or not a boolean", score
+    if flag is False or score < 0.75:
         return False, f"local judge rejected the still ({described[0]}; score={score:.2f})", score
     return True, described[0], score
