@@ -55,6 +55,17 @@ LOW_SCORE = json.dumps(
         "subject_lock": "cup",
     }
 )
+_CUP = {
+    "reason": "soft window light on a ceramic cup sitting on a wood table",
+    "artifacts": "none visible",
+    "subject_lock": "the ceramic cup stays one object",
+}
+NAN_SCORE = json.dumps({"score": "NaN", "pass": True, **_CUP})
+READY_ISSUES = json.dumps({"score": 0.99, "pass": True, "issues": ["ready"]})
+READY_COMMA = json.dumps({"score": 0.99, "pass": True, "issues": ["ready,"]})
+READY_QUESTION = json.dumps({"score": 0.99, "pass": True, "reason": "ready?"})
+MISSING_PASS = json.dumps({"score": 0.91, **_CUP})
+PASS_AS_STRING = json.dumps({"score": 0.91, "pass": "true", **_CUP})
 
 
 class _LLM:
@@ -311,7 +322,21 @@ def test_clip_failure_leaves_gate_closed(tmp_path, monkeypatch):
 
 @pytest.mark.parametrize(
     "reply",
-    ["ready", "Ready.", "", "not-json", READY_JSON, REJECTED, LOW_SCORE],
+    [
+        "ready",
+        "Ready.",
+        "",
+        "not-json",
+        READY_JSON,
+        REJECTED,
+        LOW_SCORE,
+        NAN_SCORE,
+        READY_ISSUES,
+        READY_COMMA,
+        READY_QUESTION,
+        MISSING_PASS,
+        PASS_AS_STRING,
+    ],
 )
 def test_non_visual_judge_never_passes_or_queues_ltx(tmp_path, monkeypatch, seat, reply):
     outcome = _run_command(tmp_path, monkeypatch, seat, vision=reply)
